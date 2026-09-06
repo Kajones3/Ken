@@ -27,15 +27,19 @@ and runs the alert job. No API key, no database, no network. Expect something li
    1. Walt Disney World        $ 6,076  flights $  557  tickets $ 1714  hotel $ 1624  food $ 2181
    ...
 3. save a trip and run the alert job
-   1 trip checked, 1 alert(s), 0 provider calls
-   -> [crossed_your_number] You said $400 a night at Walt Disney World. It is now $268.
+[email:console] to=you@example.com subject="Parkfare: your trip just got $495 cheaper"
+Walt Disney World fell to $6311 for arrival 2027-03-04
+...
+   1 trip checked, 1 alert(s), 1 emailed, 0 provider calls
+   -> [total_drop] Walt Disney World fell to $6311 for arrival 2027-03-04 (7.3% better)
 ```
 
-That last line is the product: the alert job re-priced a saved trip and made
-**zero** provider calls doing it.
+That last block is the product: the alert job re-priced a saved trip, decided it
+crossed the threshold, and sent the email — all **zero** provider calls. With no
+`RESEND_API_KEY` set it prints instead of sending, so this runs with no account.
 
 ```bash
-npm test         # 20 tests, no database needed
+npm test         # 23 tests, no database needed
 npm run typecheck
 ```
 
@@ -65,8 +69,9 @@ Cron, once you deploy:
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
 | `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. |
-| `src/jobs/alerts.ts` | Re-prices saved trips from the cache. Never calls a provider. |
-| `src/server.ts` | The API. `node:http` and nothing else. |
+| `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop emails. Never calls a provider. |
+| `src/email/` | `console.ts` prints instead of sending, works today; `resend.ts` needs an API key. Same interface. |
+| `src/server.ts` | The API. `node:http` and nothing else, also serves `public/prototype.html`. |
 
 ### Why pricing.ts is shared
 
@@ -105,6 +110,12 @@ rate you found.
 large share of trips move by a large amount in one run, that is a data error, not
 a sale, and nothing is sent.
 
+**A failed email send never loses the alert.** `price_alerts` is inserted *before*
+the send is attempted; a successful send stamps `notified_at`, a failed one leaves
+it null. The next run of `runAlerts` retries every row still sitting at
+`notified_at is null` before it looks for anything new — so an email outage delays
+an alert, it doesn't drop it.
+
 ## What is not done
 
 - **`TravelpayoutsProvider.hotelMonth` throws.** Flights are wired to the documented
@@ -117,11 +128,12 @@ a sale, and nothing is sent.
   resort whose rows go stale. When Disney's dynamic ticket pricing lands, this table
   needs the same tiered refresh as flights.
 - **No auth.** `saved_trips.user_id` is a foreign key waiting for whatever you choose.
-- **No email send.** The alert job writes the `price_alerts` row (the durable record)
-  and leaves a marked spot to hand off to a provider, so a send failure can be
-  retried without losing the alert.
 - **Verify the Travelpayouts response shapes** against current docs. This was written
   to the documented shape, not against a live key.
+- **Verify the Resend request shape** against current docs before relying on it — it
+  was written to the documented shape (a single `POST /emails` call), not run against
+  a live account. `ALERT_FROM_EMAIL` needs a domain verified in Resend before it will
+  send to anyone but the account owner.
 
 ## Currency
 

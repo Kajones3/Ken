@@ -17,9 +17,12 @@ import { getDb, type Db } from "../db.js";
 import { loadBook } from "../book.js";
 import { bucketFor } from "../config.js";
 import { cheapestIn, poolFor, type Overrides, type TripParams } from "../pricing.js";
+import type { EmailSender } from "../email/types.js";
+import { pickEmailSender } from "../email/pick.js";
+import { buildAlertEmail } from "../email/message.js";
 
 export interface Candidate {
-  tripId: string; userId: string; resortId: string;
+  tripId: string; userId: string; email: string; resortId: string;
   oldTotal: number; newTotal: number; dropPct: number;
   kind: "total_drop" | "crossed_your_number"; detail: string;
 }
@@ -51,7 +54,7 @@ export function applyCap(cands: Candidate[], cap = CAP): Candidate[] {
 
 export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidates: Candidate[]; checked: number }> {
   const { rows } = await db.query(
-    `select t.id, t.user_id, t.params, t.overrides, t.baseline_total, t.threshold_pct
+    `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct
        from saved_trips t
        join users u on u.id = t.user_id
       where t.active and (u.plus_until is null or u.plus_until >= $1)`,
@@ -82,7 +85,7 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
 
     if (dropPct >= threshold) {
       candidates.push({
-        tripId: row.id, userId: row.user_id, resortId: resort.id,
+        tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
         oldTotal, newTotal: best.total, dropPct,
         kind: "total_drop",
         detail: `${resort.name} fell to $${Math.round(best.total)} for arrival ${best.start}`,
@@ -101,7 +104,7 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
         (m, h) => (m === null || h.nightly < m ? h.nightly : m), null);
       if (cheapest !== null && cheapest < ov.nightly) {
         candidates.push({
-          tripId: row.id, userId: row.user_id, resortId: resort.id,
+          tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
           oldTotal, newTotal: best.total,
           dropPct: ((ov.nightly - cheapest) / ov.nightly) * 100,
           kind: "crossed_your_number",
@@ -113,34 +116,78 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
   return { candidates, checked: rows.length };
 }
 
-export async function runAlerts(db: Db) {
+/**
+ * Alerts inserted on a previous run whose send failed sit with notified_at
+ * null — a durable retry queue that costs zero provider calls to drain,
+ * same as everything else here.
+ */
+async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ retried: number; sent: number }> {
+  const { rows } = await db.query(
+    `select a.id, a.detail, a.old_total, a.new_total, u.email
+       from price_alerts a
+       join saved_trips t on t.id = a.trip_id
+       join users u on u.id = t.user_id
+      where a.notified_at is null
+      order by a.fired_at
+      limit $1`,
+    [limit],
+  );
+  let sent = 0;
+  for (const row of rows) {
+    try {
+      await sender.send(buildAlertEmail(
+        { detail: row.detail, oldTotal: Number(row.old_total), newTotal: Number(row.new_total) }, row.email));
+      await db.query(`update price_alerts set notified_at = now() where id = $1`, [row.id]);
+      sent++;
+    } catch (e) {
+      console.error(`retry send failed for alert ${row.id} (${sender.name}):`, (e as Error).message);
+    }
+  }
+  return { retried: rows.length, sent };
+}
+
+export interface AlertsOptions { sender?: EmailSender }
+
+export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
+  const sender = opts.sender ?? pickEmailSender();
   const runId = randomUUID();
   await db.query(`insert into fetch_runs (id, job) values ($1,'alerts')`, [runId]);
+
+  const retry = await retryUnsent(db, sender);
 
   const { candidates, checked } = await findAlerts(db);
   const { keep, reason } = suppressAnomalies(candidates, checked);
   const final = applyCap(keep);
 
+  let sent = 0;
   for (const c of final) {
+    const id = randomUUID();
+    // The row below is the durable record — insert it before sending, so a
+    // send failure can be retried next run without losing the alert.
     await db.query(
       `insert into price_alerts (id, trip_id, kind, resort_id, old_total, new_total, detail)
        values ($1,$2,$3,$4,$5,$6,$7)`,
-      [randomUUID(), c.tripId, c.kind, c.resortId, c.oldTotal, c.newTotal, c.detail],
+      [id, c.tripId, c.kind, c.resortId, c.oldTotal, c.newTotal, c.detail],
     );
-    // Hand off to your email provider here; the row above is the durable record,
-    // so a send failure can be retried without losing the alert.
+    try {
+      await sender.send(buildAlertEmail(c, c.email));
+      await db.query(`update price_alerts set notified_at = now() where id = $1`, [id]);
+      sent++;
+    } catch (e) {
+      console.error(`send failed for alert ${id} (${sender.name}):`, (e as Error).message);
+    }
   }
 
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,
-    [runId, final.length, reason || `${checked} trips checked`],
+    [runId, final.length, reason || `${checked} trips checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`],
   );
-  return { checked, fired: final.length, suppressed: reason };
+  return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const db = await getDb();
   const r = await runAlerts(db);
-  console.log(`alerts: ${r.fired} fired from ${r.checked} trips ${r.suppressed}`);
+  console.log(`alerts: ${r.fired} fired from ${r.checked} trips (${r.sent} sent, ${r.retriedSent}/${r.retried} retried) ${r.suppressed}`);
   await db.close();
 }

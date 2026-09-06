@@ -12,7 +12,7 @@
     "refresh": "tsx src/jobs/refresh.ts",
     "alerts": "tsx src/jobs/alerts.ts",
     "migrate": "tsx src/migrate.ts",
-    "test": "tsx --test src/**/*.test.ts",
+    "test": "tsx --test $(find src -name '*.test.ts')",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke.ts"
   },

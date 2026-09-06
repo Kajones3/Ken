@@ -16,10 +16,11 @@ say when something is a guess.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 20 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 23 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
-| Auth, email send, payments | Not built. Stripe is stubbed in the prototype. |
+| Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. |
+| Auth, payments | Not built. Stripe is stubbed in the prototype. |
 
 **Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
 the data source:
@@ -40,9 +41,22 @@ the data source:
 - Calendar/board cells can now show a real gap (`total: null` — no cached price for that
   date) instead of a fabricated number; rendered as a muted cell / "no cached price" row.
 
-Next task in the build order is **step 5: accounts and saved trips** (schema exists, no
-auth) — or step 6, the alert email send, if that's more useful first. Both are independent
-of each other.
+**Step 6 (alert email send) is done.** `src/email/` mirrors `src/providers/`: an
+`EmailSender` interface, `console.ts` (default, prints instead of sending) and
+`resend.ts` (used when `RESEND_API_KEY` is set), picked by `pickEmailSender()`.
+`runAlerts` inserts the `price_alerts` row *before* attempting the send, stamps
+`notified_at` on success, and retries every still-unnotified row on its next run
+before looking for new drops — a send failure delays an alert, never drops it.
+Along the way: fixed `npm test` silently running only 3 of 20 tests (the shell glob
+`src/**/*.test.ts` doesn't recurse under a plain POSIX shell, which is what `npm`
+actually invokes it with) — it now runs `tsx --test $(find src -name '*.test.ts')`.
+Also caught that `smoke.ts` had been calling `findAlerts`/`applyCap` directly,
+bypassing `suppressAnomalies` entirely — the demo fixture's 33% "your number"
+override was itself exactly the kind of single-trip wild swing that rail exists to
+catch. Now `smoke.ts` calls the real `runAlerts()` and uses a believable override.
+
+Next task in the build order is **step 5: accounts and saved trips** (schema exists,
+no auth) — the only piece left before this stops being a single-demo-user tool.
 
 ---
 
@@ -120,6 +134,9 @@ than it is — this is the comparison people get wrong.
 - **Tokyo Disney age bands** (official): Adult 18+, Junior 12–17, Child 4–11, free 3 and under.
 - **Disneyland Paris**: child ticket 3–11, adult 12+.
 - **TouringPlans** charges $24.97/yr — the pricing benchmark to sit under.
+- **Resend**: free to 3,000 emails/month, capped at 100/day, one verified sending domain.
+  ([Resend](https://resend.com/blog/new-free-tier), [Automation Atlas](https://automationatlas.io/answers/resend-free-tier-explained-2026/))
+  Fits the same "free, no minimums, solo-developer" bar Travelpayouts was picked on.
 
 ## NOT verified — check before relying on these
 
@@ -130,6 +147,9 @@ than it is — this is the comparison people get wrong.
   largest commission line and the least certain number in the business case.
 - **Travelpayouts response shapes.** `providers/travelpayouts.ts` was written to the
   documented shape, never run against a live key.
+- **Resend request shape.** `email/resend.ts` was written to the documented shape (one
+  `POST /emails` call), never run against a live account. `ALERT_FROM_EMAIL` needs a
+  domain verified in Resend before it can send to anyone but the account owner.
 - **Vendor hosting prices** (~$25–50/month total). Indicative only.
 - **Off-property hotel base rates** are informed estimates, not published rates.
 - **Food rates** are from budget guides. No API will ever give you food exactly.
@@ -175,6 +195,11 @@ than it is — this is the comparison people get wrong.
   the same refresh traffic.
 - Alerts have two rails: a per-user daily cap, and anomaly suppression (if a large share of
   trips move a large amount in one run, that's a data error, not a sale — send nothing).
+  Always run alerts through `runAlerts()`, never `findAlerts()` + `applyCap()` directly —
+  skipping `suppressAnomalies()` is exactly how `smoke.ts` shipped a demo that looked fine
+  but bypassed the anomaly rail.
+- `price_alerts` is inserted **before** the email is sent, and `notified_at` is only stamped
+  on a successful send. A failed send is retried on the next `runAlerts()` call, not lost.
 - Store the affiliate deep link **in the same row as the price**. Reconstructing links at
   render time is how tracking parameters go missing and commissions vanish.
 - Prices are stored in USD. Currency display is a presentation concern.
@@ -188,10 +213,11 @@ than it is — this is the comparison people get wrong.
 3. ~~Point the frontend at the cache~~ — done
 4. ~~Tier the refresh~~ — done
 5. Accounts and saved trips (schema exists, no auth) ← next
-6. Alert job and email (job works; no send wired)
+6. ~~Alert job and email~~ — done, console by default, Resend if configured
 
 Then: Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
-deploy (Neon/Supabase + a cron worker), and a "prices as of ..." line in the UI.
+Resend domain verification, deploy (Neon/Supabase + a cron worker), and a
+"prices as of ..." line in the UI.
 
 ## Known gaps in the code
 
@@ -200,7 +226,9 @@ deploy (Neon/Supabase + a cron worker), and a "prices as of ..." line in the UI.
   half-configured deploy breaks at the refresh job instead of quietly showing users nothing.
 - `seedTickets()` fills `ticket_prices` from a placeholder curve. Replace with maintained
   rows and **alarm on any resort whose rows are >30 days old** — nothing fails loudly here.
-- No auth. `saved_trips.user_id` is a foreign key waiting for a decision.
-- No email send. The alert job writes the durable `price_alerts` row and leaves a marked
-  handoff point, so a send failure can be retried without losing the alert.
+- No auth. `saved_trips.user_id` is a foreign key waiting for a decision — this is what
+  makes "saved trips" not really usable yet: nothing creates a `users` row today.
+- `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
+  been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
+  console sender prints every alert instead, so the job still runs end to end.
 - Shanghai height-based ticket banding is not modelled.

@@ -5,7 +5,7 @@
  */
 import { memoryDb } from "./db.js";
 import { runRefresh } from "./jobs/refresh.js";
-import { findAlerts, applyCap } from "./jobs/alerts.js";
+import { runAlerts } from "./jobs/alerts.js";
 import { loadBook } from "./book.js";
 import { cheapestIn, type TripParams } from "./pricing.js";
 import { RESORTS, bucketFor } from "./config.js";
@@ -62,13 +62,15 @@ const baseline = top.best.total * 1.12;   // pretend prices were 12% higher when
 await db.query(
   `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
    values ($1,$2,$3,$4,$5,5)`,
+  // A modest, believable "your number" — a wild one would (correctly) trip the
+  // anomaly rail below: with only one trip in the sample, one huge swing looks
+  // exactly like bad data, so runAlerts sends nothing rather than guess.
   [tripId, userId, JSON.stringify({ ...params, month: MONTH, resortId: top.resort.id }),
-   JSON.stringify({ [top.resort.id]: { nightly: 400 } }), baseline],
+   JSON.stringify({ [top.resort.id]: { nightly: 310 } }), baseline],
 );
-const { candidates, checked } = await findAlerts(db);
-const fired = applyCap(candidates);
-console.log(`   ${checked} trip checked, ${fired.length} alert(s), 0 provider calls`);
-for (const c of fired) console.log(`   -> [${c.kind}] ${c.detail} (${c.dropPct.toFixed(1)}% better)`);
+const alertResult = await runAlerts(db);
+console.log(`   ${alertResult.checked} trip checked, ${alertResult.fired} alert(s), ${alertResult.sent} emailed, 0 provider calls`);
+for (const c of alertResult.candidates) console.log(`   -> [${c.kind}] ${c.detail} (${c.dropPct.toFixed(1)}% better)`);
 
 const runs = await db.query(`select job, calls, rows_written, errors from fetch_runs order by started_at`);
 console.log("\n4. run log");
