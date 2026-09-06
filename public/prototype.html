@@ -351,9 +351,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
   <div class="demo">
     <span class="dot"></span>
-    <div><b>Prototype build — every figure on this page is simulated.</b> Fares, ticket prices and hotel rates come from a
-    seasonality model, not from live airline or hotel data. The layout, the pricing logic and the paywall are real; the numbers are placeholders
-    until the data feeds described at the bottom of the page are connected.</div>
+    <div><b>Prototype build — prices are real, pulled from the cache.</b> Every figure comes from <code>/api/compare</code> and
+    <code>/api/calendar</code>, backed by whatever the refresh job last cached — the mock provider until a Travelpayouts token is
+    configured. The pricing logic, the paywall and this fare data are real; only the flight and hotel <em>source</em> is a stand-in
+    until the live feeds described at the bottom of the page are connected.</div>
   </div>
 
   <section class="panel">
@@ -499,200 +500,52 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 (function(){
 "use strict";
 
-/* ============================ reference data ============================ */
+/* ============================ API ============================ */
 
-const ORIGINS = [
-  ["ATL","Atlanta",33.64,-84.43],["BOS","Boston",42.36,-71.01],["BWI","Baltimore",39.18,-76.67],
-  ["CLT","Charlotte",35.21,-80.94],["DEN","Denver",39.86,-104.67],["DFW","Dallas–Fort Worth",32.90,-97.04],
-  ["DTW","Detroit",42.21,-83.35],["IAH","Houston",29.98,-95.34],["JFK","New York JFK",40.64,-73.78],
-  ["LAS","Las Vegas",36.08,-115.15],["LAX","Los Angeles",33.94,-118.41],["MIA","Miami",25.79,-80.29],
-  ["MSP","Minneapolis",44.88,-93.22],["ORD","Chicago O'Hare",41.98,-87.90],["PHL","Philadelphia",39.87,-75.24],
-  ["PHX","Phoenix",33.43,-112.01],["SEA","Seattle",47.45,-122.31],["SFO","San Francisco",37.62,-122.38]
-];
+async function apiGet(path, params){
+  const q = new URLSearchParams();
+  for(const k in params){
+    const v = params[k];
+    if(v !== undefined && v !== null && v !== "") q.set(k, v);
+  }
+  const qs = q.toString();
+  const res = await fetch(path + (qs ? "?"+qs : ""));
+  if(!res.ok) throw new Error("API error "+res.status+" on "+path);
+  return res.json();
+}
+
+/* ============================ reference data (loaded from /api/meta) ============================ */
+
+let ORIGINS = [];        // [{iata,name,lat,lon}]
+let RESORTS = [];        // the six resorts, same shape as src/config.ts
+let RESORT_BY_ID = new Map();
 
 const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
 
-const RESORTS = [
-  {
-    id:"wdw", name:"Walt Disney World", city:"Orlando, Florida", iata:"MCO", lat:28.43, lon:-81.31,
-    cur:"USD", parks:4, note:"4 parks · park-hopper priced separately", region:"dom",
-    ticket:{ base:132, child:0.93, slope:0.058, floor:0.58 },
-    bands:{ freeUnder:3, child:[3,9], adult:10 },
-    food:{ grocery:38, qs:62, mix:96, ts:158 },
-    plans:[["Disney Dining Plan · Quick Service",62.78,25.82],
-           ["Disney Dining Plan · Table Service",99.87,31.94],
-           ["Disney Dining Plan · Deluxe",163.01,46.85]],
-    airlines:["Delta","Southwest","JetBlue","American","Spirit"],
-    ticketUrl:"https://disneyworld.disney.go.com/admission/tickets/",
-    transport:{on:0, off:35},
-    on:[["Disney's All-Star Movies","Value resort",178,"value"],["Disney's Pop Century","Value resort",265,"value"],
-        ["Disney's Caribbean Beach","Moderate resort",271,"moderate"],["Port Orleans Riverside","Moderate resort",268,"moderate"],
-        ["Coronado Springs · Gran Destino","Moderate resort",328,"moderate"],
-        ["Animal Kingdom Lodge","Deluxe resort",509,"deluxe"],["Wilderness Lodge","Deluxe resort",533,"deluxe"],
-        ["Contemporary Resort","Deluxe resort",608,"deluxe"],["Grand Floridian","Deluxe resort",729,"deluxe"]],
-    off:[["Kissimmee value chain","Off property · 20 min",195,"budget"],["Lake Buena Vista 3-star","Off property · 15 min",215,"budget"],
-         ["Bonnet Creek area","Off property · 10 min",265,"mid"],["Disney Springs area hotel","Off property · 5 min",310,"mid"],
-         ["Waldorf Astoria Orlando","Off property · 10 min",465,"upscale"],["Four Seasons Orlando","Off property · on WDW land",820,"upscale"]],
-    season:[["01-01","01-04",1.68,"New Year week"],["01-05","02-12",0.84,"Post-holiday lull"],
-      ["02-13","02-23",1.16,"Presidents week"],["02-24","03-07",1.00,""],
-      ["03-08","04-21",1.40,"Spring break & Easter"],["04-22","05-24",0.98,""],
-      ["05-25","08-10",1.26,"Summer"],["08-11","09-24",0.80,"Late-summer lull"],
-      ["09-25","11-19",1.04,"Food & Wine season"],["11-20","11-30",1.48,"Thanksgiving"],
-      ["12-01","12-17",0.94,"Early December"],["12-18","12-31",1.72,"Christmas"]]
-  },
-  {
-    id:"dlr", name:"Disneyland Resort", city:"Anaheim, California", iata:"SNA", lat:33.68, lon:-117.87,
-    cur:"USD", parks:2, note:"2 parks · walkable resort", region:"dom",
-    ticket:{ base:148, child:0.94, slope:0.050, floor:0.62 },
-    bands:{ freeUnder:3, child:[3,9], adult:10 },
-    food:{ grocery:40, qs:66, mix:100, ts:162 },
-    plans:[],
-    airlines:["Alaska","United","Southwest","Delta","American"],
-    ticketUrl:"https://disneyland.disney.go.com/tickets/",
-    transport:{on:0, off:40},
-    on:[["Pixar Place Hotel","On property · walkable",410,"moderate"],["Disneyland Hotel","On property · walkable",548,"deluxe"],
-        ["Grand Californian","On property · park entrance",675,"deluxe"]],
-    off:[["Harbor Blvd 3-star","Off property · walkable",185,"budget"],["Good Neighbor mid-tier","Off property · shuttle",265,"mid"],
-         ["Convention Center hotel","Off property · 15 min walk",320,"mid"],["JW Marriott Anaheim","Off property · 10 min",425,"upscale"]],
-    season:[["01-01","01-04",1.55,"New Year week"],["01-05","02-10",0.86,"January low"],
-      ["02-11","02-22",1.14,"Presidents week"],["02-23","03-14",1.00,""],
-      ["03-15","04-20",1.34,"Spring break"],["04-21","05-25",1.00,""],
-      ["05-26","08-15",1.24,"Summer"],["08-16","09-20",0.88,"Back-to-school lull"],
-      ["09-21","10-31",1.10,"Halloween season"],["11-01","11-21",0.96,""],
-      ["11-22","11-30",1.42,"Thanksgiving"],["12-01","12-16",1.02,""],["12-17","12-31",1.62,"Christmas"]]
-  },
-  {
-    id:"dlp", name:"Disneyland Paris", city:"Marne-la-Vallée, France", iata:"CDG", lat:49.01, lon:2.55,
-    cur:"EUR", parks:2, note:"2 parks · already on dynamic pricing", region:"atl",
-    ticket:{ base:78, child:0.84, slope:0.070, floor:0.55 },
-    bands:{ freeUnder:3, child:[3,11], adult:12 },
-    food:{ grocery:30, qs:49, mix:80, ts:128 },
-    plans:[["Half Board Plus meal plan",46,26],["Full Board Plus meal plan",70,39]],
-    airlines:["Air France","Delta","United","Norse Atlantic","American"],
-    ticketUrl:"https://www.disneylandparis.com/en-gb/tickets/",
-    transport:{on:0, off:12},
-    on:[["Disney Hotel Santa Fe","Value · shuttle",165,"value"],["Disney Hotel Cheyenne","Value · shuttle",198,"value"],
-        ["Disney Sequoia Lodge","Moderate · walkable",252,"moderate"],["Disney Newport Bay Club","Moderate · walkable",285,"moderate"],
-        ["Disneyland Hotel","Deluxe · park gates",820,"deluxe"]],
-    off:[["Bussy-Saint-Georges hotel","Off property · 12 min",135,"budget"],["Val d'Europe hotel","Off property · 8 min",178,"mid"],
-         ["Paris centre (RER A)","Off property · 45 min",245,"upscale"]],
-    season:[["01-01","01-05",1.45,"New Year"],["01-06","02-06",0.82,"January low"],
-      ["02-07","03-08",1.22,"French winter holidays"],["03-09","04-04",0.96,""],
-      ["04-05","04-27",1.30,"Easter holidays"],["04-28","05-12",1.10,"May bank holidays"],
-      ["05-13","07-04",1.00,""],["07-05","08-31",1.34,"Summer holidays"],
-      ["09-01","10-17",0.88,"Autumn low"],["10-18","11-03",1.28,"Toussaint holidays"],
-      ["11-04","12-05",0.86,"November low"],["12-06","12-31",1.50,"Christmas season"]]
-  },
-  {
-    id:"tdr", name:"Tokyo Disney Resort", city:"Urayasu, Japan", iata:"NRT", lat:35.76, lon:140.39,
-    cur:"JPY", parks:2, note:"2 parks · run by Oriental Land Co. under licence", region:"pac",
-    ticket:{ base:63, child:0.55, junior:0.83, slope:0.028, floor:0.82 },
-    bands:{ freeUnder:4, child:[4,11], junior:[12,17], adult:18 },
-    food:{ grocery:22, qs:35, mix:56, ts:94 },
-    plans:[],
-    airlines:["ANA","Japan Airlines","United","Delta","ZIPAIR"],
-    ticketUrl:"https://www.tokyodisneyresort.jp/en/ticket/",
-    transport:{on:0, off:14},
-    on:[["Tokyo Disney Celebration Hotel","Value · shuttle",172,"value"],["Toy Story Hotel","Value · monorail",285,"value"],
-        ["Tokyo Disneyland Hotel","Deluxe · park gates",495,"deluxe"],["Hotel MiraCosta","Deluxe · inside DisneySea",640,"deluxe"],
-        ["Fantasy Springs Hotel","Deluxe · inside DisneySea",720,"deluxe"]],
-    off:[["Shin-Urayasu business hotel","Off property · 10 min",138,"budget"],["Tokyo Bay Ariake","Off property · 30 min",178,"mid"],
-         ["Maihama partner hotel","Off property · monorail",215,"mid"],["Tokyo city 4-star","Off property · 40 min",285,"upscale"]],
-    season:[["01-01","01-03",1.70,"New Year"],["01-04","02-28",0.84,"Winter low"],
-      ["03-01","03-19",1.00,""],["03-20","04-08",1.36,"Cherry blossom & spring break"],
-      ["04-09","04-27",1.02,""],["04-28","05-06",1.62,"Golden Week"],
-      ["05-07","07-17",0.94,"Rainy season"],["07-18","08-10",1.24,"Summer holidays"],
-      ["08-11","08-17",1.44,"Obon"],["08-18","09-30",0.92,""],
-      ["10-01","11-30",1.08,"Autumn"],["12-01","12-24",1.00,""],["12-25","12-31",1.66,"Year end"]]
-  },
-  {
-    id:"shdr", name:"Shanghai Disney Resort", city:"Pudong, Shanghai", iata:"PVG", lat:31.14, lon:121.81,
-    cur:"CNY", parks:1, note:"1 park · tiered date pricing", region:"pac",
-    ticket:{ base:82, child:0.75, slope:0.040, floor:0.70 },
-    bands:{ freeUnder:3, child:[3,11], adult:12 },
-    food:{ grocery:18, qs:31, mix:49, ts:82 },
-    plans:[],
-    airlines:["China Eastern","United","Delta","Air China"],
-    ticketUrl:"https://www.shanghaidisneyresort.com/en/tickets/",
-    transport:{on:0, off:10},
-    on:[["Toy Story Hotel","Value · shuttle",165,"value"],["Shanghai Disneyland Hotel","Deluxe · lakeside",305,"deluxe"]],
-    off:[["Pudong business hotel","Off property · 20 min",98,"budget"],["Resort-adjacent hotel","Off property · 10 min",148,"mid"],
-         ["Shanghai city 5-star","Off property · 45 min",225,"upscale"]],
-    season:[["01-01","01-03",1.30,"New Year"],["01-04","02-09",0.82,"Winter low"],
-      ["02-10","02-22",1.55,"Chinese New Year"],["02-23","04-02",0.94,""],
-      ["04-03","04-06",1.20,"Qingming"],["04-07","04-30",1.00,""],
-      ["05-01","05-05",1.50,"Labour Day holiday"],["05-06","06-20",0.92,""],
-      ["06-21","08-31",1.30,"Summer holidays"],["09-01","09-30",0.80,"September low"],
-      ["10-01","10-07",1.66,"National Day golden week"],["10-08","12-20",0.84,"Autumn low"],
-      ["12-21","12-31",1.28,"Year end"]]
-  },
-  {
-    id:"hkdl", name:"Hong Kong Disneyland", city:"Lantau Island, Hong Kong", iata:"HKG", lat:22.31, lon:113.91,
-    cur:"HKD", parks:1, note:"1 park · smallest of the six", region:"pac",
-    ticket:{ base:88, child:0.72, slope:0.045, floor:0.68 },
-    bands:{ freeUnder:3, child:[3,11], adult:12 },
-    food:{ grocery:20, qs:34, mix:53, ts:87 },
-    plans:[],
-    airlines:["Cathay Pacific","United","Delta","Hong Kong Airlines"],
-    ticketUrl:"https://www.hongkongdisneyland.com/book/tickets/",
-    transport:{on:0, off:12},
-    on:[["Disney Hollywood Hotel","Value · shuttle",178,"value"],["Disney Explorers Lodge","Moderate · shuttle",232,"moderate"],
-        ["Hong Kong Disneyland Hotel","Deluxe · walkable",348,"deluxe"]],
-    off:[["Kowloon hotel","Off property · 30 min MTR",148,"budget"],["Tung Chung hotel","Off property · 10 min",188,"mid"],
-         ["Hong Kong Island 4-star","Off property · 40 min",275,"upscale"]],
-    season:[["01-01","01-03",1.32,"New Year"],["01-04","02-09",0.84,"Winter low"],
-      ["02-10","02-22",1.50,"Chinese New Year"],["02-23","03-28",0.92,""],
-      ["03-29","04-12",1.34,"Easter"],["04-13","06-30",0.86,"Low season"],
-      ["07-01","08-25",1.28,"Summer holidays"],["08-26","09-30",0.80,"September low"],
-      ["10-01","10-07",1.34,"Golden Week visitors"],["10-08","11-30",0.94,""],
-      ["12-01","12-18",1.02,""],["12-19","12-31",1.46,"Christmas & New Year"]]
-  }
-];
-
-const DOW = [0.99,0.95,0.95,1.00,1.08,1.09,1.02]; // Mon-index shifted below; index by getUTCDay()
-const DOWBYDAY = {0:1.02,1:0.99,2:0.95,3:0.95,4:1.00,5:1.08,6:1.09};
+const ON_TIERS  = ["value","moderate","deluxe"];
+const OFF_TIERS = ["budget","mid","upscale"];
+const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
+                     budget:"Budget", mid:"Mid-range", upscale:"Upscale" };
 
 /* ============================ helpers ============================ */
 
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
-const mdKey = d => pad(d.getUTCMonth()+1)+"-"+pad(d.getUTCDate());
-const addDays = (d,n) => new Date(d.getTime()+n*86400000);
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
 const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 function local(r, usdAmount){
-  const [rate,sym] = FX[r.cur];
+  const [rate,sym] = FX[r.currency];
   const v = usdAmount*rate;
-  if(r.cur==="JPY") return sym+Math.round(v/100)*100;
-  if(r.cur==="CNY"||r.cur==="HKD") return sym+Math.round(v).toLocaleString("en-US");
-  if(r.cur==="EUR") return sym+Math.round(v).toLocaleString("en-US");
+  if(r.currency==="JPY") return sym+Math.round(v/100)*100;
+  if(r.currency==="CNY"||r.currency==="HKD") return sym+Math.round(v).toLocaleString("en-US");
+  if(r.currency==="EUR") return sym+Math.round(v).toLocaleString("en-US");
   return "$"+Math.round(v).toLocaleString("en-US");
 }
 
-function seasonOf(r, d){
-  const k = mdKey(d);
-  for(const [a,b,m,label] of r.season){ if(k>=a && k<=b) return {m,label}; }
-  return {m:1, label:""};
-}
-
-function haversine(a1,o1,a2,o2){
-  const R=3958.8, t=x=>x*Math.PI/180;
-  const dLat=t(a2-a1), dLon=t(o2-o1);
-  const h=Math.sin(dLat/2)**2 + Math.cos(t(a1))*Math.cos(t(a2))*Math.sin(dLon/2)**2;
-  return 2*R*Math.asin(Math.sqrt(h));
-}
-
-// deterministic pseudo-random in [-1,1] from a string
-function jitter(str){
-  let h=2166136261;
-  for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619); }
-  return ((h>>>0)/4294967295)*2-1;
-}
-
-/* ============================ party & age bands ============================ */
+/* ============================ party & age bands (display only — same rules the API applies) ============================ */
 
 function paxList(p){
   const out = [];
@@ -707,165 +560,34 @@ function bandOf(r, age){
   return "adult";
 }
 const BANDNAME = { infant:"free", child:"child", junior:"junior", adult:"adult" };
-function ticketMult(r, band){
-  if(band==="infant") return 0;
-  if(band==="child") return r.ticket.child;
-  if(band==="junior") return r.ticket.junior || 0.9;
-  return 1;
-}
-function foodMult(band){
-  return band==="infant" ? 0 : band==="child" ? 0.55 : band==="junior" ? 0.9 : 1;
-}
-const flightMult = age => age < 2 ? 0.10 : 1;   // under 2 travels as a lap infant
 function bandLine(r){
   const b = r.bands;
-  let t = "free under "+b.freeUnder+" · child "+b.child[0]+"\u2013"+b.child[1];
-  if(b.junior) t += " · junior "+b.junior[0]+"\u2013"+b.junior[1];
+  let t = "free under "+b.freeUnder+" · child "+b.child[0]+"–"+b.child[1];
+  if(b.junior) t += " · junior "+b.junior[0]+"–"+b.junior[1];
   return t + " · adult "+b.adult+"+";
 }
 
-/* ============================ pricing model ============================ */
-
-function distFor(origin, r){
-  const o = ORIGINS.find(x=>x[0]===origin);
-  return haversine(o[2],o[3], r.lat, r.lon);
+/**
+ * Ticket and flight totals from the API are party-wide sums — the API prices
+ * per calendar day, not per person. The ratios below (same numbers pricing.ts
+ * uses) split a real total across band groups exactly: each day contributes
+ * total = Σ ratio(band) · dayRate, so a person's share is total × ratio / ΣratioΣ,
+ * with no re-guessing of the underlying day rate.
+ */
+function ticketRatio(r, band){
+  if(band==="infant") return 0;
+  if(band==="child") return r.ticket.child;
+  if(band==="junior") return r.ticket.junior ?? 0.9;
+  return 1;
 }
-
-function flightPerPerson(origin, r, dOut, dBack){
-  const dist = distFor(origin,r);
-  let base;
-  if(r.region==="dom") base = 78 + dist*0.082;
-  else if(r.region==="atl") base = 245 + dist*0.062;
-  else base = 330 + dist*0.058;
-  const s = (seasonOf(r,dOut).m + seasonOf(r,dBack).m)/2;
-  const seasonAdj = 1 + (s-1)*0.72;
-  const j = 1 + jitter(origin+r.id+dOut.toISOString().slice(0,10))*0.07;
-  return Math.max(r.region==="dom"?98:420, base*seasonAdj*j);
-}
-
-function flightShape(origin, r){
-  const dist = distFor(origin,r);
-  const hours = dist/495 + 1.1;
-  const hubs = ["ATL","JFK","ORD","DFW","LAX","SFO","SEA","IAH","DTW","MSP"];
-  const nonstop = dist < 1350 || (hubs.includes(origin) && dist < 7200);
-  return {dist, hours, nonstop};
-}
-
-const ON_TIERS  = ["value","moderate","deluxe"];
-const OFF_TIERS = ["budget","mid","upscale"];
-const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
-                     budget:"Budget", mid:"Mid-range", upscale:"Upscale" };
-const toHotel = (h,on) => ({ n:h[0], t:h[1], b:h[2], tier:h[3], on });
-
-// Hotels matching the requested stay + category. Not every resort has every
-// category — Tokyo has no on-property moderate, Shanghai has two hotels in
-// total — so step outward to the nearest one and report the swap.
-function hotelPool(r, stay, tier){
-  const gather = t => {
-    let out = [];
-    if(stay !== "off") out = out.concat(r.on.filter(h=>h[3]===ON_TIERS[t]).map(h=>toHotel(h,true)));
-    if(stay !== "on")  out = out.concat(r.off.filter(h=>h[3]===OFF_TIERS[t]).map(h=>toHotel(h,false)));
-    return out;
-  };
-  let pool = gather(tier);
-  if(pool.length) return { pool, actual:tier, swapped:false };
-  for(let d=1; d<3; d++){
-    for(const t of [tier-d, tier+d]){
-      if(t < 0 || t > 2) continue;
-      pool = gather(t);
-      if(pool.length) return { pool, actual:t, swapped:true };
-    }
-  }
-  return { pool:r.on.map(h=>toHotel(h,true)).concat(r.off.map(h=>toHotel(h,false))), actual:tier, swapped:true };
-}
-
-function nightlyOn(r, h, d){
-  // A hotel's seasonal swing has a floor — published low-season rates bottom out
-  // well above "base minus the deepest discount", which is what stacking the
-  // season and weekday multipliers used to produce.
-  const s = Math.max(0.86, seasonOf(r,d).m);
-  return h.b * (1 + (s-1)*1.0) * DOWBYDAY[d.getUTCDay()];
-}
-
-function ticketPerDay(r, d, days){
-  const t = r.ticket;
-  const perDay = t.base * Math.max(t.floor, 1 - t.slope*(days-1));
-  const s = seasonOf(r,d).m;
-  return perDay * (1 + (s-1)*0.55);
-}
-
-function planFor(r, p){
-  if(p.food !== "plan") return null;
-  if(!r.plans || !r.plans.length) return null;
-  if(p.stay === "off") return null;               // every Disney dining plan needs an on-property stay
-  const t = r.plans[Math.min(1, r.plans.length-1)];
-  return { label:t[0], a:t[1], c:t[2] };
-}
-
-function foodCost(r, p){
-  const list = paxList(p);
-  const plan = planFor(r, p);
-  if(plan){
-    let c = 0;
-    for(const age of list){
-      const band = bandOf(r, age);
-      if(band === "infant") continue;             // under-3s eat from an adult's plate
-      c += (band === "child" ? plan.c : plan.a) * p.nights;
-    }
-    return { cost:c, plan, days:p.nights };
-  }
-  const style = p.food === "plan" ? "qs" : p.food;
-  const rate = r.food[style];
-  const days = p.nights + 0.4;                    // arrival and departure are part-days
-  let c = 0;
-  for(const age of list) c += rate * foodMult(bandOf(r, age)) * days;
-  return { cost:c, plan:null, days, rate, style };
-}
-
-function priceTrip(r, start, p){
-  const back = addDays(start, p.nights);
-  const list = paxList(p);
-
-  const ov = ovOf(r.id);
-  const perSeat = ov.fare ? Math.max(ov.fare, FLOORS[r.id] || 0)
-                          : flightPerPerson(p.origin, r, start, back);
-  let flights = 0;
-  for(const age of list) flights += perSeat * flightMult(age);
-
-  let tickets = 0;
-  for(let i=0;i<p.parkDays;i++){
-    const d = addDays(start, Math.min(i, p.nights));
-    const perDay = ticketPerDay(r, d, p.parkDays);
-    for(const age of list) tickets += perDay * ticketMult(r, bandOf(r, age));
-  }
-
-  const fd = foodCost(r, p);
-  const stay = (fd.plan && p.stay === "both") ? "on" : p.stay;   // a dining plan requires a Disney hotel
-  let hp, bestHotel = null, bestRooms = Infinity;
-  if(ov.nightly){
-    // a rate you set is a rate you've found — it doesn't flex with the season
-    hp = { pool:[], actual:+p.tier, swapped:false, custom:true };
-    bestRooms = ov.nightly * p.nights;
-    bestHotel = { n:"Your rate", t:"Your estimate", b:ov.nightly, tier:null, on:(stay !== "off") };
-  } else {
-    hp = hotelPool(r, stay, +p.tier);
-    for(const h of hp.pool){
-      let c = 0;
-      for(let i=0;i<p.nights;i++) c += nightlyOn(r, h, addDays(start,i));
-      if(c < bestRooms){ bestRooms = c; bestHotel = h; }
-    }
-  }
-  // off-property looks cheaper than it is: park parking and getting there are real money
-  const transport = (bestHotel && !bestHotel.on ? r.transport.off : r.transport.on) * (p.nights + 1);
-
-  // day-level noise: real inventory never lands on identical totals two weeks running
-  const nz = 1 + jitter("t"+r.id+"|"+start.toISOString().slice(0,10))*0.021;
-  tickets *= nz; if(!ov.nightly) bestRooms *= nz;
-  const food = fd.cost * nz;
-  const hotel = bestRooms + transport;
-
-  return { flights, tickets, hotel, rooms:bestRooms, transport, food, foodInfo:fd,
-           hotelPick:bestHotel, hotelTier:hp, total: flights+tickets+hotel+food, start, perSeat };
+function splitByBand(r, list, total){
+  const groups = {};
+  for(const age of list){ const b = bandOf(r, age); (groups[b] = groups[b] || []).push(age); }
+  let w = 0;
+  for(const b in groups) w += ticketRatio(r, b) * groups[b].length;
+  const perGroup = {};
+  for(const b in groups) perGroup[b] = w>0 ? total * (ticketRatio(r,b) * groups[b].length) / w : 0;
+  return { groups, perGroup };
 }
 
 /* ============================ state ============================ */
@@ -875,14 +597,16 @@ const store = {
   set(k,v){ try{ localStorage.setItem("pf_"+k, JSON.stringify(v)); }catch(e){} }
 };
 
-const OV = store.get("ov", {});      // { resortId: {nightly, fare} } — your numbers, not the model's
-const FLOORS = {};                   // cheapest per-seat fare found for the chosen month
+const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?} } — your numbers, not the model's
 const ovOf = id => OV[id] || {};
-const hasOv = id => { const o = ovOf(id); return o.nightly || o.fare; };
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat); };
 
 let plus = store.get("plus", false);
-let params = null, results = [], selected = 0, view = "board";
-let calCache = null;
+let params = null;
+let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
+let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
+let selected = 0, view = "board";
+let searchToken = 0, detailToken = 0;
 
 /* ============================ form ============================ */
 
@@ -894,20 +618,28 @@ for(let i=1;i<=12;i++){
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+i, 1));
   monthOpts.push([d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1), MONTHSFULL[d.getUTCMonth()]+" "+d.getUTCFullYear()]);
 }
+const CAL_FROM = monthOpts[0][0]+"-01";
+const CAL_TO = (()=>{
+  const [y,m] = monthOpts[monthOpts.length-1][0].split("-").map(Number);
+  const last = new Date(Date.UTC(y,m,0)).getUTCDate();
+  return monthOpts[monthOpts.length-1][0]+"-"+pad(last);
+})();
 
-fillSelect($("#origin"), ORIGINS.map(o=>[o[0], o[0]+" — "+o[1]]));
-fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
-fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
-fillSelect($("#nights"), [3,4,5,6,7,8,9,10,12,14].map(n=>[n,n+" nights"]));
-fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
-fillSelect($("#month"), monthOpts);
+function fillFormOptions(){
+  fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.iata+" — "+o.name]));
+  fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#nights"), [3,4,5,6,7,8,9,10,12,14].map(n=>[n,n+" nights"]));
+  fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
+  fillSelect($("#month"), monthOpts);
 
-$("#origin").value = "ATL";
-$("#adults").value = "2";
-$("#kids").value = "3";
-$("#nights").value = "6";
-$("#parkdays").value = "4";
-$("#month").value = monthOpts[5][0];
+  $("#origin").value = "ATL";
+  $("#adults").value = "2";
+  $("#kids").value = "3";
+  $("#nights").value = "6";
+  $("#parkdays").value = "4";
+  $("#month").value = monthOpts[5][0];
+}
 
 const DEFAULT_AGES = [11,8,2];   // 11 is the age the resorts actually disagree about
 function buildAges(){
@@ -921,7 +653,6 @@ function buildAges(){
   }).join("");
   box.hidden = n === 0;
 }
-buildAges();
 $("#kids").addEventListener("change", buildAges);
 
 function readParams(){
@@ -940,95 +671,133 @@ function readParams(){
   };
 }
 
-/* ============================ search ============================ */
+/* ============================ search — everything below reads the cache ============================ */
 
-function fareFloor(r, p, ym){
-  const [y,m] = ym.split("-").map(Number);
-  const last = new Date(Date.UTC(y,m,0)).getUTCDate();
-  let mn = Infinity;
-  for(let day=1; day<=last; day++){
-    const st = new Date(Date.UTC(y,m-1,day));
-    mn = Math.min(mn, flightPerPerson(p.origin, r, st, addDays(st, p.nights)));
-  }
-  return mn;
+function tripQuery(){
+  return {
+    origin: params.origin, adults: params.adults, childAges: params.ages.join(","),
+    nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
+  };
+}
+function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV) }; }
+function calendarQuery(resortId, from, to, tierOverride){
+  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV) };
+  if(tierOverride !== undefined) q.tier = tierOverride;
+  return q;
 }
 
-function cheapestInMonth(r, p, ym){
-  const [y,m] = ym.split("-").map(Number);
-  const last = new Date(Date.UTC(y,m,0)).getUTCDate();
-  let best = null;
-  for(let day=1; day<=last; day++){
-    const t = priceTrip(r, new Date(Date.UTC(y,m-1,day)), p);
-    if(!best || t.total < best.total) best = t;
-  }
-  return best;
+async function fetchCalendarFor(resortId){
+  const data = await apiGet("/api/calendar", calendarQuery(resortId, CAL_FROM, CAL_TO));
+  const days = data.days.map(d => ({ date:d.date, v:d.total }));
+  const priced = days.map(d=>d.v).filter(v=>v!==null).sort((a,b)=>a-b);
+  return {
+    days, pricesAsOf: data.pricesAsOf,
+    min: priced.length?priced[0]:null, med: priced.length?priced[Math.floor(priced.length/2)]:null,
+    max: priced.length?priced[priced.length-1]:null,
+  };
 }
 
-function monthlyMinima(r, p){
-  const out = [];
-  for(const [ym] of monthOpts){
-    const [y,m] = ym.split("-").map(Number);
-    let best = Infinity;
-    for(let day=1; day<=28; day+=3){
-      const t = priceTrip(r, new Date(Date.UTC(y,m-1,day)), p);
-      if(t.total < best) best = t.total;
-    }
-    out.push({ym, v:best});
-  }
-  return out;
+function monthlyMinima(cal){
+  if(!cal) return monthOpts.map(([ym])=>({ym, v:null}));
+  return monthOpts.map(([ym])=>{
+    const vals = cal.days.filter(d=>d.date.slice(0,7)===ym && d.v!==null).map(d=>d.v);
+    return { ym, v: vals.length ? Math.min(...vals) : null };
+  });
 }
 
-function priceAll(keepId){
-  results = RESORTS.map(r=>{
-    const best = cheapestInMonth(r, params, params.month);
-    return { r, ...best, spark: monthlyMinima(r, params) };
-  }).sort((a,b)=>a.total-b.total);
-  const i = keepId ? results.findIndex(y=>y.r.id === keepId) : -1;
-  selected = i < 0 ? 0 : i;
-  calCache = null;
-  render();
+/** Same-day hotel cost at a different category, without re-running the whole search:
+ *  flights/tickets/food don't change with hotel tier, so the delta comes straight
+ *  from one calendar read on the trip's own start date. */
+async function hotelAtTier(item, t){
+  if(t === +params.tier) return item.price.hotel;
+  const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t));
+  const day = data.days[0];
+  if(!day || day.total === null) return null;
+  return day.total - item.price.total + item.price.hotel;
 }
 
-function runSearch(){
+async function runSearch(keepId){
   params = readParams();
-  RESORTS.forEach(r=>{ FLOORS[r.id] = fareFloor(r, params, params.month); });
-  priceAll(null);
+  const token = ++searchToken;
+  const btn = $("#run"); if(btn) btn.disabled = true;
+  try {
+    const compareData = await apiGet("/api/compare", compareQuery());
+    if(token !== searchToken) return;
+    results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+    await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
+    if(token !== searchToken) return;
+    const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
+    selected = idx < 0 ? 0 : idx;
+    render();
+  } catch(e){
+    console.error(e);
+    $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not reach the pricing API</div>
+      <div class="rmeta">${String((e && e.message) || e)}</div></div></li>`;
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 
-// Changing your own numbers re-prices everything but never spends a search.
-function recompute(){
-  priceAll(results[selected] && results[selected].r.id);
+// Changing your own numbers re-prices everything but only refetches the one
+// resort's calendar — the other five didn't just change.
+async function recompute(changedResortId){
+  const keepId = changedResortId || (results[selected] && results[selected].resortId);
+  const token = ++searchToken;
+  const compareData = await apiGet("/api/compare", compareQuery());
+  if(token !== searchToken) return;
+  results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+  if(changedResortId) calendars[changedResortId] = await fetchCalendarFor(changedResortId);
+  if(token !== searchToken) return;
+  const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
+  selected = idx < 0 ? 0 : idx;
+  render();
 }
 
 /* ============================ render: board ============================ */
 
 function unlocked(){ return true; }   // the tool is free; Plus buys memory and watching
 
-function sparkSVG(pts, bestIdx){
+function sparkSVG(pts){
+  const known = pts.map((p,i)=>({v:p.v, i})).filter(p=>p.v!==null);
   const W=112,H=30,pad=3;
-  const vals = pts.map(p=>p.v);
+  if(!known.length) return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"></svg>`;
+  const vals = known.map(p=>p.v);
   const mn=Math.min(...vals), mx=Math.max(...vals);
-  const x = i => pad + i*(W-2*pad)/(pts.length-1);
+  const x = i => pad + i*(W-2*pad)/((pts.length-1)||1);
   const y = v => H-pad - ((v-mn)/((mx-mn)||1))*(H-2*pad);
-  const d = pts.map((p,i)=>(i?"L":"M")+x(i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
+  const d = known.map((p,k)=>(k?"L":"M")+x(p.i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
+  const best = known.reduce((b,p)=>p.v<b.v?p:b, known[0]);
   return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
     aria-label="Cheapest total by month over the next year">
     <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${x(bestIdx).toFixed(1)}" cy="${y(pts[bestIdx].v).toFixed(1)}" r="4"
+    <circle cx="${x(best.i).toFixed(1)}" cy="${y(best.v).toFixed(1)}" r="4"
       fill="var(--accent-line)" stroke="var(--surface)" stroke-width="2"/>
   </svg>`;
 }
 
 function renderBoard(){
   const board = $("#board");
-  board.innerHTML = results.map((x,i)=>{
-    const r=x.r, tot=x.total, pax=paxList(params).length;
+  board.innerHTML = results.map((item,i)=>{
+    const r = item.resort;
+    if(!item.ok){
+      return `<li class="row" data-i="${i}">
+        <div class="rank">${i+1}</div>
+        <div class="ident">
+          <div class="rname">${item.name}</div>
+          <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
+        </div>
+        <div></div><div></div>
+        <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
+        <div></div>
+      </li>`;
+    }
+    const x = item.price, tot = x.total, pax = x.partySize;
     const w = n => (n/tot*100).toFixed(2)+"%";
-    const bestIdx = x.spark.reduce((b,p,j,a)=>p.v<a[b].v?j:b,0);
+    const spark = monthlyMinima(calendars[item.resortId]);
     const perPD = tot/pax/(params.nights+1);
     const bands = params.ages.length
-      ? params.ages.map(a=>a+" \u2192 "+BANDNAME[bandOf(r,a)]).join(" · ") : "";
-    const sd = x.start;
+      ? params.ages.map(a=>a+" → "+BANDNAME[bandOf(r,a)]).join(" · ") : "";
+    const sd = new Date(x.start+"T00:00:00Z");
     const dateStr = MONTHS[sd.getUTCMonth()]+" "+sd.getUTCDate();
     const open = unlocked(i);
     return `
@@ -1043,7 +812,7 @@ function renderBoard(){
         </div>
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
-      ${sparkSVG(x.spark, bestIdx)}
+      ${sparkSVG(spark)}
       <div class="bar-wrap">
         <div class="bar" role="img" aria-label="Cost split: flights ${usd(x.flights)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}">
           <div class="seg f1" style="width:${w(x.flights)}"></div>
@@ -1069,16 +838,23 @@ function renderBoard(){
 }
 
 function renderTable(){
-  const rows = results.map((x,i)=>{
-    const open = unlocked(i);
+  const rows = results.map((item,i)=>{
+    const r = item.resort, open = unlocked(i);
+    if(!item.ok){
+      return `<tr><td>${i+1}. ${item.name}<br><small style="color:var(--muted)">No cached price</small></td>
+        <td class="n">${item.iata}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
+        <td class="n">—</td><td class="n">—</td><td>${item.reason}</td></tr>`;
+    }
+    const x = item.price;
     const cell = v => open ? `<td class="n">${usd(v)}</td>` : `<td class="n">—</td>`;
+    const sd = new Date(x.start+"T00:00:00Z");
     return `<tr>
-      <td>${i+1}. ${x.r.name}<br><small style="color:var(--muted)">${x.r.city}</small></td>
-      <td class="n">${x.r.iata}</td>
+      <td>${i+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
+      <td class="n">${r.iata}</td>
       ${cell(x.flights)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
       <td class="n"><b>${usd(x.total)}</b></td>
-      <td class="n">${MONTHS[x.start.getUTCMonth()]} ${x.start.getUTCDate()}</td>
-      <td>${open ? x.hotelPick.n : "Locked"}</td>
+      <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
+      <td>${open ? x.hotelPick.name : "Locked"}</td>
     </tr>`;
   }).join("");
   $("#tablewrap").innerHTML = `<table>
@@ -1090,59 +866,60 @@ function renderTable(){
 
 const RAMP = ["--dv-lo-4","--dv-lo-3","--dv-lo-2","--dv-lo-1","--dv-mid","--dv-hi-1","--dv-hi-2","--dv-hi-3","--dv-hi-4"];
 
-function buildCalendar(r, p){
-  const days = [];
-  const start0 = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+1, 1));
-  for(let i=0;i<365;i++){
-    const d = addDays(start0,i);
-    days.push({ d, v: priceTrip(r,d,p).total });
-  }
-  const sorted = days.map(x=>x.v).sort((a,b)=>a-b);
-  const q = f => sorted[Math.floor(f*(sorted.length-1))];
-  return { days, min:sorted[0], med:q(0.5), max:sorted[sorted.length-1], q10:q(0.1), q25:q(0.25), q75:q(0.75), q90:q(0.9) };
-}
-
-function levelOf(v, c){
-  if(v <= c.med){
-    const t = (c.med - v) / ((c.med - c.min)||1);   // 1 = cheapest
+function levelOf(v, min, med, max){
+  if(v <= med){
+    const t = (med - v) / ((med - min)||1);
     return Math.max(0, Math.min(3, 3 - Math.round(t*3)));
   }
-  const t = (v - c.med) / ((c.max - c.med)||1);
+  const t = (v - med) / ((max - med)||1);
   return Math.min(8, 4 + Math.max(1, Math.round(t*4)));
 }
 
-function renderDetail(){
-  const x = results[selected], r = x.r, p = params;
-  const open = unlocked(selected);
-  if(!calCache || calCache.id !== r.id) calCache = Object.assign({id:r.id}, buildCalendar(r,p));
-  const c = calCache;
+async function renderDetail(){
+  const token = ++detailToken;
+  const item = results[selected];
+  const box = $("#detail");
+  if(!item){ box.innerHTML = ""; return; }
+  if(!item.ok){
+    box.innerHTML = `<div class="dhead"><div><h3>${item.name}</h3>
+      <p>No cached price for the selected dates and party — ${item.reason}. Try a different month
+      or check back after the next refresh.</p></div></div>`;
+    return;
+  }
 
-  // group days by month
+  const r = item.resort, x = item.price, p = params;
+  const cal = calendars[item.resortId];
+  const list = paxList(p);
+  const pax = list.length;
+
+  const tierRows = await Promise.all([0,1,2].map(t => hotelAtTier(item, t)));
+  if(token !== detailToken) return;
+
+  // group calendar days by month
   const byMonth = {};
-  for(const day of c.days){
-    const k = day.d.getUTCFullYear()+"-"+pad(day.d.getUTCMonth()+1);
+  for(const day of (cal ? cal.days : [])){
+    const k = day.date.slice(0,7);
     (byMonth[k] = byMonth[k] || []).push(day);
   }
-  const keys = Object.keys(byMonth).slice(0,12);
-  // the free plan prices the month the traveller actually asked about
-  const freeKey = x.start.getUTCFullYear()+"-"+pad(x.start.getUTCMonth()+1);
+  const keys = Object.keys(byMonth).sort().slice(0,12);
+  const min = cal ? cal.min : null, med = cal ? cal.med : null, max = cal ? cal.max : null;
 
-  const cal = keys.map((k,mi)=>{
+  const calHtml = keys.map(k=>{
     const arr = byMonth[k];
-    const first = arr[0].d;
+    const first = new Date(arr[0].date+"T00:00:00Z");
     const lead = (first.getUTCDay()+6)%7; // Monday-first
-    const mn = Math.min(...arr.map(a=>a.v));
-    const gated = false;
+    const priced = arr.map(a=>a.v).filter(v=>v!==null);
+    const mn = priced.length ? Math.min(...priced) : null;
     const cells = Array(lead).fill('<span class="cell empty"></span>')
       .concat(arr.map(a=>{
-        const lv = levelOf(a.v,c);
-        const iso = a.d.toISOString().slice(0,10);
-        return `<button class="cell${(!gated && a.d.getTime()===x.start.getTime())?" sel":""}"
-          style="background:var(${RAMP[lv]})" data-date="${iso}" data-v="${Math.round(a.v)}"
-          aria-label="${iso}: ${usd(a.v)}"></button>`;
+        if(a.v === null) return `<span class="cell" style="background:var(--dv-mid);opacity:.35" aria-label="${a.date}: no cached price"></span>`;
+        const lv = (min===null) ? 4 : levelOf(a.v, min, med, max);
+        return `<button class="cell${a.date===x.start?" sel":""}"
+          style="background:var(${RAMP[lv]})" data-date="${a.date}" data-v="${Math.round(a.v)}"
+          aria-label="${a.date}: ${usd(a.v)}"></button>`;
       })).join("");
-    return `<div class="mon${gated?" gated":""}">
-      <h4>${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()} <em>${gated?"—":usdK(mn)}</em></h4>
+    return `<div class="mon">
+      <h4>${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()} <em>${mn===null?"—":usdK(mn)}</em></h4>
       <div class="days">
         ${["M","T","W","T","F","S","S"].map(d=>`<span class="dow">${d}</span>`).join("")}
         ${cells}
@@ -1151,110 +928,101 @@ function renderDetail(){
   }).join("");
 
   // cheapest start dates
-  const cheapest = [...c.days].sort((a,b)=>a.v-b.v).slice(0,5);
-  const cheapRows = cheapest.map(a=>{
-    const s = seasonOf(r,a.d);
-    return `<div class="li"><div class="l"><b>${a.d.toUTCString().slice(0,11)}</b>
-      <small>${s.label || "Shoulder season"} · ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][a.d.getUTCDay()]} arrival</small></div>
+  const allDays = (cal ? cal.days : []).filter(d=>d.v!==null).sort((a,b)=>a.v-b.v).slice(0,5);
+  const cheapRows = allDays.map(a=>{
+    const d = new Date(a.date+"T00:00:00Z");
+    return `<div class="li"><div class="l"><b>${d.toUTCString().slice(0,11)}</b>
+      <small>${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()]} arrival</small></div>
       <div class="p">${usd(a.v)}</div></div>`;
   }).join("");
 
-  // flights
-  const sh = flightShape(p.origin, r);
-  const list = paxList(p);
-  const pax = list.length;
-  const laps = list.filter(a=>a<2).length;
-  const per = x.perSeat;
-  const flightOpts = r.airlines.slice(0,3).map((al,i)=>{
-    const mult = [1,1.09,0.88][i];
-    const stops = sh.nonstop && i<2 ? 0 : 1;
-    const h = sh.hours + (stops?1.7:0);
-    return `<div class="li"><div class="l"><b>${al}</b>
-      <small>${stops?"1 stop":"Nonstop"} · ${Math.floor(h)}h ${Math.round((h%1)*60)}m · ${p.origin}→${r.iata}</small></div>
-      <div class="p">${usd(per*mult)}</div></div>`;
-  }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
-      <small>${pax-laps} seat${pax-laps===1?"":"s"}${laps?` · ${laps} lap infant under 2 at 10%`:""}</small></div>
-      <div class="p">${usd(x.flights)}</div></div>`;
+  // flights — the one cached fare this trip actually priced against
+  const fp = x.flightPick;
+  const floor = fp ? fp.price : x.perSeatFare;
+  const flightRows = (fp
+    ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>
+        <small>${fp.stops===0?"Nonstop":fp.stops+" stop"+(fp.stops>1?"s":"")} · ${p.origin}→${r.iata} · round trip, per person</small></div>
+        <div class="p">${usd(x.perSeatFare)}</div></div>`
+    : `<div class="li"><div class="l"><b>Your fare</b><small>No cached fare for this route — priced entirely from your number</small></div>
+        <div class="p">${usd(x.perSeatFare)}</div></div>`)
+    + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+        <small>${list.filter(a=>a>=2).length} seat${list.filter(a=>a>=2).length===1?"":"s"}${list.some(a=>a<2)?` · ${list.filter(a=>a<2).length} lap infant under 2 at 10%`:""}</small></div>
+        <div class="p">${usd(x.flights)}</div></div>`;
+  const flightLink = (fp && fp.deepLink) ||
+    `https://www.google.com/travel/flights?q=${encodeURIComponent("Flights from "+p.origin+" to "+r.iata+" on "+x.start)}`;
 
-  // hotels in the chosen category, plus what the other categories would cost
-  const nights = p.nights;
-  const stayNow = (x.foodInfo.plan && p.stay === "both") ? "on" : p.stay;
-  const nzD = 1 + jitter("t"+r.id+"|"+x.start.toISOString().slice(0,10))*0.021;   // same noise the total uses
-  const costOf = h => { let c=0; for(let i=0;i<nights;i++) c += nightlyOn(r,h,addDays(x.start,i)); return c*nzD; };
-  const hotelRows = (x.hotelTier.custom
-    ? [`<div class="li"><div class="l"><b>Your rate</b><small>${usd(x.hotelPick.b)} / night \u00d7 ${nights} nights</small></div>
-        <div class="p">${usd(x.rooms)}</div></div>`].join("")
-    : "") + (x.hotelTier.custom ? "" : x.hotelTier.pool.map(h=>({h, cst:costOf(h)}))
-    .sort((a,b)=>a.cst-b.cst).slice(0,5).map(({h,cst})=>
-      `<div class="li"><div class="l"><b>${h.n}</b><small>${h.t} · ${local(r,cst/nights)} / night</small></div>
-       <div class="p">${usd(cst)}</div></div>`).join(""))
-    + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
-        <small>${usd(r.transport.off)} per day off property</small></div>
-        <div class="p">${usd(x.transport)}</div></div>` : "")
-    + `<div class="li"><div class="l"><b>Hotel total</b>
-       <small>${x.hotelPick.n}${x.transport?" + parking and transfers":""}</small></div>
-       <div class="p">${usd(x.hotel)}</div></div>`;
-
-  const tierCompare = [0,1,2].map(t=>{
-    const hp = hotelPool(r, stayNow, t);
-    const best = hp.pool.map(costOf).sort((a,b)=>a-b)[0];
-    const lbl = TIER_LABEL[(stayNow === "off" ? OFF_TIERS : ON_TIERS)[hp.actual]];
-    return `<div class="li"><div class="l"><b>${lbl}${hp.swapped?" (nearest available)":""}</b>
-      <small>${usd(best/nights)} / night</small></div>
-      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${usd(best)}</div></div>`;
-  }).join("");
-
-  const tierNote = x.hotelTier.swapped
-    ? `${r.name} has no ${TIER_LABEL[(stayNow==="off"?OFF_TIERS:ON_TIERS)[+p.tier]].toLowerCase()} option — priced at ${TIER_LABEL[(stayNow==="off"?OFF_TIERS:ON_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
-    : "";
-
-  // tickets, grouped by this resort's own age bands
-  const tperday = ticketPerDay(r, x.start, p.parkDays);
-  const groups = {};
-  for(const age of list){
-    const b = bandOf(r, age);
-    (groups[b] = groups[b] || []).push(age);
-  }
+  // tickets, grouped by this resort's own age bands — split from the real total
+  const { groups, perGroup } = splitByBand(r, list, x.tickets);
   const ORDER = ["adult","junior","child","infant"];
-  const ticketRows = ORDER.filter(b=>groups[b]).map(b=>{
-    const n = groups[b].length, m = ticketMult(r,b);
-    const each = tperday * p.parkDays * m;
+  const ticketRowsHtml = ORDER.filter(b=>groups[b]).map(b=>{
+    const n = groups[b].length;
     const who = b === "adult" ? `Adult (${r.bands.adult}+)`
-      : b === "junior" ? `Junior (${r.bands.junior[0]}\u2013${r.bands.junior[1]})`
-      : b === "child" ? `Child (${r.bands.child[0]}\u2013${r.bands.child[1]})`
+      : b === "junior" ? `Junior (${r.bands.junior[0]}–${r.bands.junior[1]})`
+      : b === "child" ? `Child (${r.bands.child[0]}–${r.bands.child[1]})`
       : `Under ${r.bands.freeUnder}`;
-    const detail = b === "infant" ? "No admission charged"
-      : (m === 1 ? `${local(r,tperday)} per day` : `${Math.round((1-m)*100)}% below adult · ${local(r,tperday*m)} per day`);
-    return `<div class="li"><div class="l"><b>${who} \u00d7 ${n}</b><small>${detail}</small></div>
-      <div class="p">${b==="infant"?"Free":usd(each*n)}</div></div>`;
+    const detail = b === "infant" ? "No admission charged" : `${p.parkDays}-day ticket × ${n}`;
+    return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
+      <div class="p">${b==="infant"?"Free":usd(perGroup[b])}</div></div>`;
   }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
       <small>${p.parkDays}-day ticket${p.parkDays>1?"s":""}</small></div>
       <div class="p">${usd(x.tickets)}</div></div>`;
 
-  // food
-  const fi = x.foodInfo;
-  const foodRows = fi.plan
-    ? ORDER.filter(b=>groups[b] && b!=="infant").map(b=>{
-        const n = groups[b].length, rate = b === "child" ? fi.plan.c : fi.plan.a;
-        return `<div class="li"><div class="l"><b>${b==="child"?"Child":"Adult"} \u00d7 ${n}</b>
-          <small>${usd(rate)} per night \u00d7 ${p.nights}</small></div>
-          <div class="p">${usd(rate*p.nights*n)}</div></div>`;
-      }).join("") + (groups.infant ? `<div class="li"><div class="l"><b>Under ${r.bands.freeUnder} \u00d7 ${groups.infant.length}</b>
-          <small>Eats from an adult's plate \u2014 no plan needed</small></div><div class="p">Free</div></div>` : "")
-      + `<div class="li"><div class="l"><b>${fi.plan.label}</b><small>Requires an on-property stay</small></div>
-         <div class="p">${usd(x.food)}</div></div>`
-    : ORDER.filter(b=>groups[b]).map(b=>{
-        const n = groups[b].length, m = foodMult(b);
-        return `<div class="li"><div class="l"><b>${b==="infant"?"Under "+r.bands.freeUnder:b[0].toUpperCase()+b.slice(1)} \u00d7 ${n}</b>
-          <small>${b==="infant" ? "Eats from an adult's plate" : usd(fi.rate*m)+" per day"}</small></div>
-          <div class="p">${b==="infant" ? "Free" : usd(fi.rate*m*fi.days*n)}</div></div>`;
-      }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
-        <small>${fi.days} eating days \u00b7 ${local(r, x.food/fi.days/pax)} per person per day</small></div>
-        <div class="p">${usd(x.food)}</div></div>`;
+  // hotel — the real pick, plus what the other categories would cost at the same date
+  const stayNow = x.hotelPick.onProperty;
+  const hp = x.hotelPick;
+  const hotelPickRow = x.hotelTier.custom
+    ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights</small></div>
+        <div class="p">${usd(x.rooms)}</div></div>`
+    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night</small></div>
+        <div class="p">${usd(x.rooms)}</div></div>`;
+  const hotelRows = hotelPickRow
+    + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
+        <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":" off property"}</small></div>
+        <div class="p">${usd(x.transport)}</div></div>` : "")
+    + `<div class="li"><div class="l"><b>Hotel total</b>
+       <small>${hp.name}${x.transport?" + parking and transfers":""}</small></div>
+       <div class="p">${usd(x.hotel)}</div></div>`;
 
-  const planNote = p.food === "plan"
-    ? (fi.plan ? "" : (r.plans && r.plans.length ? "No dining plan on an off-property stay — priced as counter service."
-                                                 : r.name + " has no dining plan; priced as counter service."))
+  const tierCompare = [0,1,2].map(t=>{
+    const cost = tierRows[t];
+    const label = TIER_LABEL[(stayNow ? ON_TIERS : OFF_TIERS)[t]];
+    return `<div class="li"><div class="l"><b>${label}</b>
+      <small>${cost===null?"no cached rate for this date":usd(cost/p.nights)+" / night"}</small></div>
+      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${cost===null?"—":usd(cost)}</div></div>`;
+  }).join("");
+  const tierNote = x.hotelTier.swapped
+    ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
+    : "";
+
+  // food — computed the same way pricing.ts does, using the resort's own rates
+  const fi = x.foodPlan;
+  const foodRows = fi
+    ? ORDER.filter(b=>groups[b] && b!=="infant").map(b=>{
+        const n = groups[b].length, rate = b === "child" ? fi.child : fi.adult;
+        return `<div class="li"><div class="l"><b>${b==="child"?"Child":"Adult"} × ${n}</b>
+          <small>${usd(rate)} per night × ${p.nights}</small></div>
+          <div class="p">${usd(rate*p.nights*n)}</div></div>`;
+      }).join("") + (groups.infant ? `<div class="li"><div class="l"><b>Under ${r.bands.freeUnder} × ${groups.infant.length}</b>
+          <small>Eats from an adult's plate — no plan needed</small></div><div class="p">Free</div></div>` : "")
+      + `<div class="li"><div class="l"><b>${fi.label}</b><small>Requires an on-property stay</small></div>
+         <div class="p">${usd(x.food)}</div></div>`
+    : (()=>{
+        const style = p.food === "plan" ? "qs" : p.food;
+        const rate = r.food[style];
+        const foodMult = b => b==="infant"?0:b==="child"?0.55:b==="junior"?0.9:1;
+        const days = p.nights + 0.4;
+        return ORDER.filter(b=>groups[b]).map(b=>{
+          const n = groups[b].length, m = foodMult(b);
+          return `<div class="li"><div class="l"><b>${b==="infant"?"Under "+r.bands.freeUnder:b[0].toUpperCase()+b.slice(1)} × ${n}</b>
+            <small>${b==="infant" ? "Eats from an adult's plate" : usd(rate*m)+" per day"}</small></div>
+            <div class="p">${b==="infant" ? "Free" : usd(rate*m*days*n)}</div></div>`;
+        }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+          <small>${days} eating days · ${local(r, x.food/days/pax)} per person per day</small></div>
+          <div class="p">${usd(x.food)}</div></div>`;
+      })();
+  const planNote = p.food === "plan" && !fi
+    ? (r.plans && r.plans.length ? "No dining plan on an off-property stay — priced as counter service."
+                                 : r.name + " has no dining plan; priced as counter service.")
     : "";
 
   // age bands at this resort
@@ -1270,8 +1038,7 @@ function renderDetail(){
 
   // ---- your numbers: free to set and use, Plus to save and watch ----
   const ovR = ovOf(r.id);
-  const floor = FLOORS[r.id] || 0;
-  const fareNow = ovR.fare ? Math.max(ovR.fare, floor) : x.perSeat;
+  const fareNow = ovR.farePerSeat ? Math.max(ovR.farePerSeat, floor) : x.perSeatFare;
   const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
   const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
   const fareCtl = `<div class="ovcell">
@@ -1279,65 +1046,63 @@ function renderDetail(){
     <input type="range" id="fareSlider" min="${Math.round(floor)}" max="${Math.round(floor*2.6)}" step="5"
            value="${Math.round(fareNow)}" aria-label="Airfare you expect per person">
     <div class="ovends"><span>${usd(floor)} cheapest found</span><span>${usd(floor*2.6)}</span></div>
-    <div class="ovhint">The slider stops at ${usd(floor)} — the cheapest ${monthName} fare the app can find for this route.
+    <div class="ovhint">The slider stops at ${usd(floor)} — the cheapest fare the cache has for this route near ${monthName}.
       You can assume more than that, never less. ${overPct > 0 ? `Right now you're ${overPct}% above it.` : ""}</div>
-    ${ovR.fare ? `<div class="ovacts"><button class="btn btn-sm" data-reset="fare">Back to the model</button>
+    ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
   </div>`;
 
-  const modelPool = hotelPool(r, stayNow, +p.tier);
-  const modelNightly = modelPool.pool.length ? Math.min(...modelPool.pool.map(costOf))/nights : 0;
+  const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
   const hotelCtl = `<div class="ovcell">
     <div class="lab"><span>Hotel, per night</span><b>${ovR.nightly ? usd(ovR.nightly) : usd(modelNightly)}</b></div>
     <input type="number" id="hotelOv" step="5" min="0" value="${ovR.nightly || ""}"
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
     <div class="ovhint">${ovR.nightly
-      ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The model would have said " + usd(modelNightly) + "."
-      : "Type what you know you can get. Blank uses the modelled " + usd(modelNightly) + " a night."}</div>
+      ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The cache says " + usd(modelNightly) + "."
+      : "Type what you know you can get. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
   </div>`;
 
-  const gwrap = inner => inner;
+  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.city)}&checkin=${x.start}`;
+  const sd = new Date(x.start+"T00:00:00Z");
 
-  const gfUrl = `https://www.google.com/travel/flights?q=${encodeURIComponent("Flights from "+p.origin+" to "+r.iata+" on "+x.start.toISOString().slice(0,10))}`;
-  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.city)}&checkin=${x.start.toISOString().slice(0,10)}`;
-
-  $("#detail").innerHTML = `
+  box.innerHTML = `
     <div class="dhead">
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
-        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${x.start.toUTCString().slice(0,16)} ·
-           ${seasonOf(r,x.start).label || "shoulder season"} · prices in ${r.cur}</p>
+        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)} ·
+           prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
       </div>
       <div class="legend">${results.map((y,i)=>
-        `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.r.iata}</button>`).join("")}</div>
+        `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.iata}</button>`).join("")}</div>
     </div>
     <div class="dbody">
       <div class="ovpanel">
         <div class="ovhead">
           <span class="t">Your numbers</span>
-          <span class="d">Know a better rate than the model? Set it here — free, and only for ${r.name}.</span>
+          <span class="d">Know a better rate than the cache? Set it here — free, and only for ${r.name}.</span>
           <button class="btn btn-sm" id="saveOv">${plus ? "Save these numbers" : "Save · Plus"}</button>
         </div>
         <div class="ovgrid">${hotelCtl}${fareCtl}</div>
       </div>
       <p class="sec-lab">Fare calendar — total trip cost by arrival date</p>
-      <div class="calgrid">${cal}</div>
+      <div class="calgrid">${calHtml}</div>
       <div class="calscale">
         <span>Cheaper</span>
         <span class="ramp">${RAMP.map(v=>`<i style="background:var(${v})"></i>`).join("")}</span>
         <span>Pricier</span>
-        <span style="margin-left:8px" class="mono">${usd(c.min)} · median ${usd(c.med)} · ${usd(c.max)}</span>
+        <span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>
       </div>
 
       ${(()=>{
-        const save = x.total - c.min;
+        if(min===null) return "";
+        const save = x.total - min;
         if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
-          <span>Plus keeps watching, and tells you if it drops below ${usd(c.min)}.</span></div>
+          <span>Plus keeps watching, and tells you if it drops below ${usd(min)}.</span></div>
           <button class="btn btn-sm ${plus?"":"openpw"}">${plus?"Alerts on":"Get Plus — $9"}</button></div>`;
-        const best = [...c.days].sort((a,b)=>a.v-b.v)[0].d;
-        return `<div class="upsell"><div><b>Want to make it cheaper? Arriving ${best.toUTCString().slice(0,11)} costs ${usd(c.min)} — ${usd(save)} less than your dates.</b>
+        const best = allDays[0] ? new Date(allDays[0].date+"T00:00:00Z") : null;
+        return `<div class="upsell"><div><b>Want to make it cheaper?${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
           <span>Plus saves this trip with your own rates and tells you when it drops further. $9 for 90 days.</span></div>
           <button class="btn btn-sm ${plus?"":"openpw"}">${plus?"Alerts on":"Get Plus — $9"}</button></div>`;
       })()}
@@ -1345,30 +1110,30 @@ function renderDetail(){
         <div class="card">
           <h5>Cheapest arrival dates</h5>
           <p class="sub">Across the next twelve months</p>
-          ${cheapRows}
+          ${cheapRows || `<div class="li"><div class="l"><b>No cached dates yet</b><small>Run the refresh job to populate the calendar</small></div><div class="p">—</div></div>`}
         </div>
         <div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
-          <p class="sub">Round trip per person · ${Math.round(sh.dist).toLocaleString()} mi each way</p>
-          ${gwrap(flightOpts + `<a class="book" href="${gfUrl}" target="_blank" rel="noopener">Check live fares →</a>`, "See flight options")}
+          <p class="sub">Round trip per person</p>
+          ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
         </div>
         <div class="card">
           <h5><i style="background:var(--s2)"></i>Park tickets</h5>
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
-          ${gwrap(ticketRows + `<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>`, "See ticket pricing")}
+          ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
         </div>
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
-          <p class="sub">${TIER_LABEL[(stayNow==="off"?OFF_TIERS:ON_TIERS)[x.hotelTier.actual]]} · ${stayNow==="on"?"on property":stayNow==="off"?"off property":"on and off property"}</p>
-          ${gwrap(hotelRows + (tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:"")
-            + `<p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>`
-            + tierCompare
-            + `<a class="book" href="${bkUrl}" target="_blank" rel="noopener">Check live rates →</a>`, "Compare on vs off property")}
+          <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
+          ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
+          <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
+          ${tierCompare}
+          <a class="book" href="${hp.deepLink || bkUrl}" target="_blank" rel="noopener">Check live rates →</a>
         </div>
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
-          <p class="sub">${fi.plan ? fi.plan.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[fi.style]}</p>
-          ${gwrap(foodRows + (planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""), "See the food estimate")}
+          <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
         </div>
         <div class="card">
           <h5>Age bands here</h5>
@@ -1376,8 +1141,8 @@ function renderDetail(){
           ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
         </div>
       </div>
-      <p class="hint" style="margin-top:16px">Outbound links go to public search pages and carry no affiliate tag yet — they are the
-      slots where your Travelpayouts or reseller links would sit.</p>
+      <p class="hint" style="margin-top:16px">Outbound links go to public search pages and carry no affiliate tag yet, except where the cache already
+      has a real booking link — those are the slots your Travelpayouts or reseller links fill in.</p>
     </div>`;
 }
 
@@ -1400,14 +1165,14 @@ function render(){
 
 /* ============================ events ============================ */
 
-$("#run").addEventListener("click", runSearch);
+$("#run").addEventListener("click", ()=>runSearch(null));
 
 document.addEventListener("click", e=>{
   const o = e.target.closest("[data-open]");
   if(o){
     const i = +o.dataset.open;
     if(!unlocked(i)){ openPw(); return; }
-    selected = i; calCache = null; renderDetail();
+    selected = i; renderDetail();
     $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
     return;
   }
@@ -1438,34 +1203,35 @@ $("#planYearly").addEventListener("click", ()=>{
 $("#payBtn").addEventListener("click", ()=>{
   plus = true; store.set("plus",true);
   $("#paywall").classList.remove("on");
-  calCache = null; render();
+  render();
 });
 
 /* your-numbers controls */
 function setOv(id, key, val){
   const o = OV[id] || (OV[id] = {});
   if(val) o[key] = val; else delete o[key];
-  if(!o.nightly && !o.fare) delete OV[id];
-  recompute();
+  if(!o.nightly && !o.farePerSeat) delete OV[id];
+  store.set("ov", OV);
+  recompute(id);
 }
 
 document.addEventListener("input", e=>{
   if(e.target.id === "fareSlider"){
     const el = document.getElementById("fareVal");
-    if(el) el.textContent = usd(+e.target.value);          // live label, no re-render mid-drag
+    if(el) el.textContent = usd(+e.target.value);          // live label, no re-fetch mid-drag
   }
 });
 document.addEventListener("change", e=>{
-  const rid = results[selected] && results[selected].r.id;
+  const rid = results[selected] && results[selected].resortId;
   if(!rid) return;
-  if(e.target.id === "fareSlider") setOv(rid, "fare", +e.target.value);
+  if(e.target.id === "fareSlider") setOv(rid, "farePerSeat", +e.target.value);
   if(e.target.id === "hotelOv")    setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
 });
 document.addEventListener("click", e=>{
   const rs = e.target.closest("[data-reset]");
   if(rs){
-    const rid = results[selected] && results[selected].r.id;
-    if(rid) setOv(rid, rs.dataset.reset === "fare" ? "fare" : "nightly", 0);
+    const rid = results[selected] && results[selected].resortId;
+    if(rid) setOv(rid, rs.dataset.reset, 0);
     return;
   }
   if(e.target.id === "saveOv"){
@@ -1480,11 +1246,9 @@ document.addEventListener("click", e=>{
 const tip = $("#tip");
 document.addEventListener("mouseover", e=>{
   const c = e.target.closest(".cell[data-date]");
-  if(!c || c.closest(".mon.gated")){ tip.classList.remove("on"); return; }
+  if(!c){ tip.classList.remove("on"); return; }
   const d = new Date(c.dataset.date+"T00:00:00Z");
-  const r = results[selected].r;
-  const s = seasonOf(r,d);
-  tip.innerHTML = `<b>${d.toUTCString().slice(0,16)}</b>${usd(+c.dataset.v)} total${s.label?" · "+s.label:""}`;
+  tip.innerHTML = `<b>${d.toUTCString().slice(0,16)}</b>${usd(+c.dataset.v)} total`;
   tip.classList.add("on");
 });
 document.addEventListener("mousemove", e=>{
@@ -1500,21 +1264,32 @@ document.addEventListener("mouseout", e=>{
   if(e.target.closest(".cell[data-date]")) tip.classList.remove("on");
 });
 
-/* calendar cell click -> reprice for that date */
-document.addEventListener("click", e=>{
+/* calendar cell click -> reprice the detail panel for that exact arrival date */
+document.addEventListener("click", async e=>{
   const c = e.target.closest(".cell[data-date]");
-  if(!c) return;
-  if(c.closest(".mon.gated")){ openPw(); return; }
-  const d = new Date(c.dataset.date+"T00:00:00Z");
-  const r = results[selected].r;
-  const t = priceTrip(r, d, params);
-  results[selected] = Object.assign({}, results[selected], t);
-  renderDetail(); renderBoard(); renderTable();
+  if(!c || !c.dataset.v) return;
+  const item = results[selected];
+  if(!item || !item.ok) return;
+  const priced = await apiGet("/api/compare", { ...compareQuery(), date: c.dataset.date });
+  const mine = priced.results.find(y=>y.resortId===item.resortId);
+  if(mine && mine.ok){
+    results[selected] = { ...item, price: mine.price };
+    renderDetail(); renderBoard(); renderTable();
+  }
 });
 
-/* boot with a realistic worked example already on screen */
-runSearch();
-syncView();
+/* boot */
+async function boot(){
+  const meta = await apiGet("/api/meta", {});
+  ORIGINS = meta.origins;
+  RESORTS = meta.resorts;
+  RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
+  fillFormOptions();
+  buildAges();
+  await runSearch(null);
+  syncView();
+}
+boot();
 
 })();
 </script>

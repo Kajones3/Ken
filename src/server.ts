@@ -6,6 +6,8 @@
  */
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
@@ -14,6 +16,8 @@ import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricin
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
+const PUBLIC_DIR = new URL("../public/", import.meta.url);
+const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
 function paramsFrom(q: URLSearchParams): TripParams {
   const ages = (q.get("childAges") ?? "").split(",").map((s) => s.trim()).filter(Boolean).map(Number);
@@ -44,14 +48,17 @@ async function compare(q: URLSearchParams) {
   const overrides = overridesFrom(q);
   const month = q.get("month") ?? todayISO().slice(0, 7);
   const [from, to] = monthBounds(month);
+  // An explicit date prices exactly that day instead of scanning the month for
+  // the cheapest one — how a calendar-cell click asks for that date's full breakdown.
+  const explicitDate = q.get("date");
   const book = await loadBook(db, {
     origin: params.origin,
     destinations: RESORTS.map((r) => r.iata),
     resortIds: RESORTS.map((r) => r.id),
-    from, to: addDaysISO(to, params.nights + 1),
+    from: explicitDate ?? from, to: addDaysISO(explicitDate ?? to, params.nights + 1),
     tripLength: bucketFor(params.nights),
   });
-  const dates = range(from, to);
+  const dates = explicitDate ? [explicitDate] : range(from, to);
   const results = RESORTS.map((resort) => {
     const { best, skipped } = cheapestIn(book, resort, params, overrides, dates);
     return best
@@ -87,6 +94,17 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(body));
   };
   try {
+    if (url.pathname === "/" || url.pathname === "/prototype.html") {
+      const file = await readFile(new URL("prototype.html", PUBLIC_DIR));
+      res.writeHead(200, { "content-type": MIME[".html"] });
+      return res.end(file);
+    }
+    if (url.pathname.startsWith("/public/")) {
+      const name = url.pathname.slice("/public/".length);
+      const file = await readFile(new URL(name, PUBLIC_DIR));
+      res.writeHead(200, { "content-type": MIME[extname(name)] ?? "application/octet-stream" });
+      return res.end(file);
+    }
     if (url.pathname === "/health") {
       const { rows } = await db.query(
         `select max(finished_at) as last_refresh,

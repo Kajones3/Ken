@@ -61,6 +61,8 @@ export interface TripPrice {
   transport: number;
   food: number;
   perSeatFare: number;
+  /** The cached flight this fare came from — price is the real floor, even when an override raised it. */
+  flightPick: { price: number; carrier?: string; stops: number; deepLink?: string } | null;
   hotelPick: HotelNight | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
   foodPlan: { label: string; adult: number; child: number } | null;
@@ -254,7 +256,9 @@ export function priceTrip(
     ok: true,
     price: {
       start, total, flights, tickets, hotel, rooms, transport, food,
-      perSeatFare, hotelPick, hotelTier, foodPlan, partySize: ages.length,
+      perSeatFare,
+      flightPick: row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null,
+      hotelPick, hotelTier, foodPlan, partySize: ages.length,
     },
   };
 }

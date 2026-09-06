@@ -17,13 +17,32 @@ say when something is a guess.
 | Piece | State |
 |---|---|
 | Backend (`src/`, `db/`) | **Working.** 20 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline with no accounts or network. |
-| Frontend (`public/prototype.html`) | Working prototype, self-contained HTML, **still on simulated data**. Not yet wired to the API. |
-| Live provider data | Not connected. Mock provider only. |
+| Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
+| Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
 | Auth, email send, payments | Not built. Stripe is stubbed in the prototype. |
 
-Next task in the build order is **step 3: point the prototype at `/api/compare` and
-`/api/calendar`**, replacing its in-browser pricing model. Nothing user-facing should
-change except that the numbers get real.
+**Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
+the data source:
+- `pricing.ts`'s `TripPrice` gained `flightPick` (`{price, carrier, stops, deepLink}` from
+  the cached flight row) — it existed in the cache but was never surfaced, so the Flights
+  card had nothing real to show beyond the fare total.
+- `/api/compare` gained an optional `date` query param that prices one exact date instead
+  of scanning a month for the cheapest — what a calendar-cell click needs (the full
+  breakdown for a specific day), which neither existing endpoint provided on its own.
+- The frontend's override key was renamed `fare` → `farePerSeat` to match `Overrides` —
+  the prototype's local-only version had never actually sent overrides in a shape the API
+  would recognize.
+- Dropped from the prototype because the API has nothing to back them with: the three
+  fictional airline options (only one real cached fare exists per date/route), and the
+  ranked top-5 alternate-hotel list (only the best pick is exposed, not the full pool).
+  The hotel card keeps a same-date "every category" comparison instead, computed from two
+  extra `/api/calendar` reads with a `tier` override.
+- Calendar/board cells can now show a real gap (`total: null` — no cached price for that
+  date) instead of a fabricated number; rendered as a muted cell / "no cached price" row.
+
+Next task in the build order is **step 5: accounts and saved trips** (schema exists, no
+auth) — or step 6, the alert email send, if that's more useful first. Both are independent
+of each other.
 
 ---
 
@@ -166,9 +185,9 @@ than it is — this is the comparison people get wrong.
 
 1. ~~Schema and one route~~ — done
 2. ~~Refresh job~~ — done, tiered, logged
-3. **Point the frontend at the cache** ← next
+3. ~~Point the frontend at the cache~~ — done
 4. ~~Tier the refresh~~ — done
-5. Accounts and saved trips (schema exists, no auth)
+5. Accounts and saved trips (schema exists, no auth) ← next
 6. Alert job and email (job works; no send wired)
 
 Then: Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
