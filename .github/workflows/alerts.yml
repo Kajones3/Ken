@@ -1,0 +1,26 @@
+name: Parkfare alerts
+
+# Runs after the refresh job so it re-prices saved trips against the day's
+# fresh cache. Never calls a provider itself — see src/jobs/alerts.ts.
+on:
+  schedule:
+    - cron: "20 4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run alerts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
+          ALERT_MAX_PER_USER_PER_DAY: "3"
+          ALERT_ANOMALY_SHARE: "0.4"
+          ALERT_ANOMALY_MOVE_PCT: "25"

@@ -64,14 +64,60 @@ npm run grant-plus -- friend@example.com 90    # Plus for 90 days
 `npm start` before running any script against the same `.pgdata` directory** —
 `migrate`, `refresh`, `grant-plus`, `seed-promos`, all of them. PGlite doesn't support
 two processes sharing one data directory; at best the running server never sees the
-write, at worst the store corrupts. A real Postgres doesn't have this limitation.
+write, at worst the store corrupts. A real Postgres doesn't have this limitation, so
+none of this applies once you're pointed at Neon below.
 
-Cron, once you deploy:
+## Deploy for free, so friends can actually sign in
 
-```
-0 4 * * *   npm run refresh
-20 4 * * *  npm run alerts
-```
+This is the whole app, live, with real accounts — $0/month. Three free
+services, none needing a credit card, checked against their current (2026)
+terms rather than assumed:
+
+- **[Neon](https://neon.tech)** — free Postgres, no card, never expires,
+  0.5 GB storage. This is `DATABASE_URL`, replacing PGlite.
+- **[Render](https://render.com)** — free web service for the API itself.
+  512 MB RAM, 750 free hours/month. The one real trade-off: it spins down
+  after 15 minutes with no traffic and takes about a minute to wake back up
+  on the next visit — fine for a friends demo, not for anything you'd want
+  instant. (Render's *own* free Postgres expires after 30 days, which is
+  why Neon is doing the database instead.)
+- **GitHub Actions**, already part of this repo — runs the twice-daily
+  refresh and alert jobs on a schedule, for free, instead of needing a
+  separate always-on cron worker.
+
+Steps:
+
+1. **Create a Neon project** at neon.tech (email sign-up, no card). Copy
+   the connection string it gives you — it already includes
+   `?sslmode=require`, which Postgres needs for a remote connection. That
+   string is your `DATABASE_URL`.
+2. **Deploy to Render**: New → Blueprint → point it at this repo/branch.
+   Render reads `render.yaml` (already in this repo) and creates the web
+   service automatically. When it asks for environment variables, paste
+   your Neon connection string in as `DATABASE_URL`. Leave
+   `TRAVELPAYOUTS_TOKEN`/`RESEND_API_KEY` blank for now — mock pricing data
+   and console-logged alert emails still work fine over a real deploy.
+   First deploy runs `npm run migrate` automatically (see `render.yaml`),
+   so the schema is ready before the app starts.
+3. **Add the same `DATABASE_URL` as a GitHub Actions secret**: this repo's
+   Settings → Secrets and variables → Actions → New repository secret. The
+   two workflows in `.github/workflows/` (`refresh.yml`, `alerts.yml`) need
+   it to populate the *same* cache Render's app reads from — same cron
+   schedule this project has always documented (`0 4 * * *` refresh,
+   `20 4 * * *` alerts, both UTC).
+4. **Run the refresh workflow once by hand** (Actions tab → "Parkfare
+   refresh" → Run workflow) right after setting the secret — otherwise the
+   site shows "no cached price" everywhere until the next 4am UTC run.
+5. **Grant friends Plus** the same way as local dev, just pointed at Neon
+   instead of PGlite — and unlike PGlite, there's no "stop the server
+   first" step, since real Postgres allows more than one process at a time:
+   ```bash
+   DATABASE_URL="<your neon connection string>" npm run grant-plus -- friend@example.com 90
+   ```
+
+Nothing here needs Stripe, a domain, or a paid tier — everyone signs in
+with just an email (see "Accounts have no password" in What is not done
+below before treating this as more than a friends demo).
 
 ## Layout
 

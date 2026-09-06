@@ -16,13 +16,14 @@ say when something is a guess.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 23 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 36 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. |
 | Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Airport transport, promos | **Wired, Plus-only.** Parking/rideshare/transit cost and curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
+| Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + two GitHub Actions cron workflows (`refresh`, `alerts`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
 
 **Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
 the data source:
@@ -228,7 +229,13 @@ than it is — this is the comparison people get wrong.
 - **Resend request shape.** `email/resend.ts` was written to the documented shape (one
   `POST /emails` call), never run against a live account. `ALERT_FROM_EMAIL` needs a
   domain verified in Resend before it can send to anyone but the account owner.
-- **Vendor hosting prices** (~$25–50/month total). Indicative only.
+- ~~Vendor hosting prices (~$25–50/month total). Indicative only.~~ Superseded:
+  the app now deploys for **$0/month** on Neon (free Postgres) + Render (free
+  web service) + GitHub Actions (free scheduled refresh/alerts) — checked
+  against each vendor's current 2026 terms, not guessed. See README.md's
+  "Deploy for free" section. The one real trade-off: Render's free web
+  service sleeps after 15 minutes idle and takes ~1 minute to wake on the
+  next visit.
 - **Off-property hotel base rates** are informed estimates, not published rates.
 - **Food rates** are from budget guides. No API will ever give you food exactly.
 - **All 18 origin airports' parking/rideshare/transit costs** (`AIRPORT_TRANSPORT_GUESSES`
@@ -313,11 +320,16 @@ than it is — this is the comparison people get wrong.
    (see "Step 5" above)
 6. ~~Alert job and email~~ — done, console by default, Resend if configured
 
+7. ~~Deploy for free~~ — done: `render.yaml` (Render free web service) +
+   `.github/workflows/{refresh,alerts}.yml` (free scheduled cron via GitHub
+   Actions) + Neon (free Postgres) for `DATABASE_URL`. Steps for the owner
+   to actually go live are in README.md's "Deploy for free" section — signing
+   up for Neon/Render is a human step, not something done from inside this repo.
+
 Then: a day-by-day trip planner (itinerary, checklist, dining tracker, budget,
 per-day notes, special-event floor pricing — deliberately deferred, see above),
 Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
-Resend domain verification, deploy (Neon/Supabase + a cron worker), and a
-"prices as of ..." line in the UI.
+Resend domain verification, and a "prices as of ..." line in the UI.
 
 ## Known gaps in the code
 
