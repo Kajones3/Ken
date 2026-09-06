@@ -12,6 +12,8 @@
     "refresh": "tsx src/jobs/refresh.ts",
     "alerts": "tsx src/jobs/alerts.ts",
     "migrate": "tsx src/migrate.ts",
+    "grant-plus": "tsx src/grantPlus.ts",
+    "seed-promos": "tsx src/seedPromos.ts",
     "test": "tsx --test $(find src -name '*.test.ts')",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke.ts"

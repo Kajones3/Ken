@@ -207,6 +207,38 @@ export const ORIGINS: Origin[] = [
 ];
 export const ORIGIN_BY_IATA = new Map(ORIGINS.map((o) => [o.iata, o]));
 
+/**
+ * Getting to your home airport: parking there vs. Uber/Lyft/taxi vs.
+ * transit where it exists. No live API for any of this either — same
+ * situation as ticket prices. These are rough placeholder guesses for a
+ * friends demo, not verified against current rates. Refine per-airport
+ * before relying on them for anything real.
+ */
+export interface AirportTransportGuess {
+  parkingPerDayUsd: number; rideshareRoundTripUsd: number;
+  transitAvailable: boolean; transitRoundTripUsd?: number; note: string;
+}
+export const AIRPORT_TRANSPORT_GUESSES: Record<string, AirportTransportGuess> = {
+  ATL: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 60, transitAvailable: true, transitRoundTripUsd: 6, note: "MARTA runs straight to the terminal — guess" },
+  BOS: { parkingPerDayUsd: 25, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 5, note: "Blue Line + free Silver Line bus — guess" },
+  BWI: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 60, transitAvailable: true, transitRoundTripUsd: 12, note: "MARC/Amtrak from BWI station — guess" },
+  CLT: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 45, transitAvailable: false, note: "no useful rail transit — guess" },
+  DEN: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 70, transitAvailable: true, transitRoundTripUsd: 20, note: "A-Line commuter rail to Union Station — guess" },
+  DFW: { parkingPerDayUsd: 11, rideshareRoundTripUsd: 65, transitAvailable: false, note: "TEXRail only reaches part of the metro — guess" },
+  DTW: { parkingPerDayUsd: 9, rideshareRoundTripUsd: 55, transitAvailable: false, note: "no rail transit — guess" },
+  IAH: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 65, transitAvailable: false, note: "no rail transit — guess" },
+  JFK: { parkingPerDayUsd: 20, rideshareRoundTripUsd: 145, transitAvailable: true, transitRoundTripUsd: 17, note: "AirTrain + subway/LIRR — guess" },
+  LAS: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 45, transitAvailable: false, note: "no direct rail to the strip — guess" },
+  LAX: { parkingPerDayUsd: 15, rideshareRoundTripUsd: 100, transitAvailable: true, transitRoundTripUsd: 8, note: "LAX FlyAway bus / Metro C Line via shuttle — guess" },
+  MIA: { parkingPerDayUsd: 15, rideshareRoundTripUsd: 70, transitAvailable: true, transitRoundTripUsd: 5, note: "MIA Mover to Metrorail — guess" },
+  MSP: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 55, transitAvailable: true, transitRoundTripUsd: 5, note: "Blue Line light rail straight to the terminal — guess" },
+  ORD: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 10, note: "CTA Blue Line direct — guess" },
+  PHL: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 55, transitAvailable: true, transitRoundTripUsd: 14, note: "SEPTA Airport Line direct — guess" },
+  PHX: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 45, transitAvailable: true, transitRoundTripUsd: 4, note: "PHX Sky Train to Valley Metro light rail — guess" },
+  SEA: { parkingPerDayUsd: 18, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 6, note: "Link light rail direct — guess" },
+  SFO: { parkingPerDayUsd: 22, rideshareRoundTripUsd: 100, transitAvailable: true, transitRoundTripUsd: 20, note: "BART direct — guess" },
+};
+
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [
   { name: "near", fromDay: 0, toDay: 60, everyDays: 1 },

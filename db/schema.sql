@@ -44,12 +44,55 @@ create table if not exists ticket_prices (
   primary key (resort_id, park_date)
 );
 
+-- No live API for airport parking / rideshare / transit costs either.
+-- Static per-origin reference data (not a time series like the tables
+-- above), seeded from placeholder guesses — see config.ts. Plus-only.
+create table if not exists airport_transport (
+  origin                  char(3)      primary key,
+  parking_per_day_usd     numeric(7,2) not null,
+  rideshare_roundtrip_usd numeric(7,2) not null,
+  transit_available       boolean      not null default false,
+  transit_roundtrip_usd   numeric(7,2),
+  source_note             text         not null default '',
+  updated_at              timestamptz  not null default now()
+);
+
+-- No official Disney promo API — fan sites and memory are the only source,
+-- and nothing here is guaranteed to repeat. Hand-maintained by the owner,
+-- same precedent as ticket_prices. Plus-only to apply; free to browse.
+create table if not exists promos (
+  id            uuid primary key,
+  resort_id     text,                 -- null = applies to all resorts
+  label         text not null,
+  effect_kind   text not null check (effect_kind in
+                  ('room_pct_off','room_flat_off','free_dining','ticket_pct_off','flat_off_total')),
+  effect_value  numeric(8,3) not null default 0,
+  starts_on     date not null,
+  ends_on       date not null,
+  historical    boolean not null default true,
+  source_note   text not null default '',
+  active        boolean not null default true,
+  created_at    timestamptz not null default now()
+);
+create index if not exists promos_lookup on promos (resort_id, starts_on, ends_on) where active;
+
 create table if not exists users (
   id            uuid primary key,
   email         text unique not null,
   plus_until    date,
   created_at    timestamptz not null default now()
 );
+
+-- No password, no OAuth — an email identifies a session. Right call for a
+-- friends demo, not for a public launch: anyone who knows a friend's email
+-- can sign in as them. Cheap to upgrade later to a one-time emailed link.
+create table if not exists sessions (
+  token       text primary key,
+  user_id     uuid not null references users(id) on delete cascade,
+  created_at  timestamptz not null default now(),
+  expires_at  timestamptz not null default now() + interval '90 days'
+);
+create index if not exists sessions_user on sessions (user_id);
 
 create table if not exists saved_trips (
   id             uuid primary key,

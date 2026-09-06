@@ -9,7 +9,7 @@ import { runAlerts } from "./jobs/alerts.js";
 import { loadBook } from "./book.js";
 import { cheapestIn, type TripParams } from "./pricing.js";
 import { RESORTS, bucketFor } from "./config.js";
-import { monthBounds, range, addDaysISO } from "./dates.js";
+import { monthBounds, range, addDaysISO, todayISO } from "./dates.js";
 import { randomUUID } from "node:crypto";
 
 const MONTH = "2027-03";
@@ -55,7 +55,10 @@ for (const [i, row] of ranked.entries()) {
 
 console.log("\n3. save a trip and run the alert job");
 const userId = randomUUID(), tripId = randomUUID();
-await db.query(`insert into users (id,email) values ($1,$2)`, [userId, "you@example.com"]);
+// Alerts are Plus-only — the demo user needs a current plus_until or runAlerts
+// correctly ignores their trip, same as a real never-upgraded account would be.
+await db.query(`insert into users (id,email,plus_until) values ($1,$2,$3)`,
+  [userId, "you@example.com", addDaysISO(todayISO(), 90)]);
 const top = ranked[0]!;
 if (!top.best) { console.error("nothing priceable:", top.skipped.slice(0, 3)); process.exit(1); }
 const baseline = top.best.total * 1.12;   // pretend prices were 12% higher when saved

@@ -20,7 +20,9 @@ say when something is a guess.
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. |
-| Auth, payments | Not built. Stripe is stubbed in the prototype. |
+| Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Airport transport, promos | **Wired, Plus-only.** Parking/rideshare/transit cost and curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. |
+| Payments | Not built. Stripe is stubbed in the prototype. |
 
 **Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
 the data source:
@@ -55,8 +57,62 @@ bypassing `suppressAnomalies` entirely — the demo fixture's 33% "your number"
 override was itself exactly the kind of single-trip wild swing that rail exists to
 catch. Now `smoke.ts` calls the real `runAlerts()` and uses a believable override.
 
-Next task in the build order is **step 5: accounts and saved trips** (schema exists,
-no auth) — the only piece left before this stops being a single-demo-user tool.
+**Step 5 (Plus foundation: accounts, airport transport, discounts/promos, two free
+filters) is done.** This was scoped as a phase after the owner asked to slow down and
+confirm exactly how the paywall and pricing should behave before building more —
+see the "Plus and paywall" decisions below for what was actually decided.
+
+- **Accounts** (`src/auth.ts`, new): email-only sign-in, no password — explicitly the
+  right trade-off for a friends demo, explicitly not enough for a public launch
+  (anyone who knows a friend's email can sign in as them). A `pf_session` cookie ties
+  a browser to a `sessions` row; `isPlus(plusUntil)` is the one real entitlement check,
+  used everywhere Plus matters. Fixed a real bug found while wiring this up:
+  `findAlerts()` treated a brand-new user with no `plus_until` as alert-eligible
+  (`plus_until is null OR ...`) — flipped to require a real, current date.
+- **`npm run grant-plus -- email [days=90]`** (`src/grantPlus.ts`, new) is the one
+  mechanism for granting Plus — comping a friend or the owner's own testing. No coupon
+  codes, no dev-only API endpoint. **Important with the default embedded PGlite
+  database: stop the server before running this** (see "PGlite is single-process"
+  below) — running it while the server is live silently doesn't reach the server's
+  view of the data and can corrupt the store if both write at once.
+- **Airport transport** (Plus-only): a new real cost line in `pricing.ts`
+  (`TripPrice.airportTransport`), sibling to flights/tickets/hotel/food — parking vs.
+  rideshare vs. transit vs. "my own way," auto-picking the cheaper one by trip length.
+  `airport_transport` is a new hand-maintained table (same "no live API" pattern as
+  ticket prices), seeded with **unverified placeholder guesses for all 18 origins** —
+  see "NOT verified" below.
+- **Discounts & promos** (Plus-only): a curated `promos` table (owner hand-maintains,
+  same pattern as tickets) is public to *browse* — "let friends see what Plus would
+  unlock" — but *applying* one is Plus. A personal discount (Annual Passholder, DVC,
+  military, Florida resident, or custom) reuses the existing `ResortOverride` shape
+  rather than a new table, since it's the same "free to try, Plus to save" thing
+  overrides already are. The composition rule, in order: (1) a curated room discount
+  is skipped if you've typed your own nightly rate — a guess shouldn't second-guess a
+  rate you already found; (2) ticket/dining effects aren't blocked by that; (3) a
+  personal discount always applies, even on top of your own nightly rate, since it's
+  your own claim about your own price; (4) `flat_off_total` clamps the trip at $0,
+  never negative. All five rules have a test in `pricing.test.ts`.
+- **Two free filters**: a domestic/international board filter (client-side, using the
+  `region` field every resort already has) and a "jump straight to one resort" entry
+  point (reuses the existing `runSearch(resortId)` path the per-row Details button
+  already took).
+- **A day-by-day trip planner** (itinerary, checklist, dining tracker, budget, per-day
+  notes, and a realistic price floor for special hard-ticket events like Mickey's Not
+  So Scary) was requested but **deliberately deferred** to its own follow-up — it needs
+  real saved trips (built here) and is large enough to deserve its own design pass once
+  the owner has seen friends actually use this foundation.
+
+### PGlite is single-process — a real constraint, not a bug
+
+The embedded dev database (used whenever `DATABASE_URL` is unset) does not support two
+processes touching the same `.pgdata` directory at once. Running any script
+(`grant-plus`, `refresh`, `migrate`, `seed-promos`) while `npm start` is running against
+the same directory is unsafe: at best the running server never sees the write, at worst
+the store corrupts and the next `npm start` fails with a PGlite `RuntimeError`. **Stop
+the server first, run the script, then restart it.** This has always been true of every
+script in this project — it just hadn't come up until `grant-plus` became something
+you'd plausibly want to run while the server was live. A real Postgres (`DATABASE_URL`
+set) doesn't have this limitation.
 
 ---
 
@@ -87,6 +143,28 @@ alerts, multiple trips.
   hard paywall that blocks booking clicks is counterproductive.
 - Alerts are cheap to serve (the alert job reads the cache, zero API calls), which is what
   makes this pricing viable.
+
+**Plus is comped by email for friends, not sold — for now.** The owner does not want
+friends to pay to test the app, but does want them to see what's actually behind the
+paywall (not have it faked or hidden). So: no search quota on free comparisons
+(explicitly rejected — see below), the paywall UI stays honest about what's locked,
+and `npm run grant-plus` grants real Plus status without a payment step. This is a
+demo-stage decision, not a permanent pricing change.
+
+**No search quota on free comparisons — considered and rejected.** A "N free searches
+a day" limit was floated to nudge Plus conversion. Rejected because it contradicts the
+app's own thesis: comparisons read a cache that's already been paid for, so a quota
+saves no money, it would only be a psychological lever — and the paywall copy already
+promises "you should never have to pay to see what a trip costs." If growth ever
+requires revisiting this, it needs its own conversation, not a quiet default.
+
+**Airport transport and promos are new cost/discount categories, not folded into
+existing ones.** Airport transport is a sibling line to flights/tickets/hotel/food
+(`TripPrice.airportTransport`), not part of the existing resort-side `transport` field
+— they're different things (getting to your home airport vs. parking at the resort).
+Promos are not a new resort-scoped override type invented from scratch — a personal
+discount reuses `ResortOverride` because it's exactly the same shape of thing overrides
+already are (a personal correction, free to try, Plus to persist).
 
 **User overrides are free, per resort.**
 Hotel estimates are the model's weakest line. A free user who sees a wrong number and
@@ -153,6 +231,11 @@ than it is — this is the comparison people get wrong.
 - **Vendor hosting prices** (~$25–50/month total). Indicative only.
 - **Off-property hotel base rates** are informed estimates, not published rates.
 - **Food rates** are from budget guides. No API will ever give you food exactly.
+- **All 18 origin airports' parking/rideshare/transit costs** (`AIRPORT_TRANSPORT_GUESSES`
+  in `config.ts`) are rough placeholder guesses for the demo, not checked against current
+  rates. Refine per-airport before relying on them for anything real.
+- **The three example promo rows** (`seedPromos.ts`) are illustrative, not real offers —
+  replace with actual, dated promotions before this means anything to a user.
 
 ---
 
@@ -180,6 +263,10 @@ than it is — this is the comparison people get wrong.
   `dateStr()` in `src/book.ts`.
 - The alert job compared against the cheapest hotel of *any* category — it would have
   emailed someone about a Value resort when they'd chosen Moderate.
+- `findAlerts()` treated a user with no `plus_until` as alert-eligible
+  (`plus_until is null OR plus_until >= today`) — a brand-new, never-upgraded account
+  would have gotten real Plus alert emails. Caught while wiring real accounts; a test
+  (`alerts.test.ts`) now pins a never-Plus user to zero candidates.
 
 ---
 
@@ -203,6 +290,15 @@ than it is — this is the comparison people get wrong.
 - Store the affiliate deep link **in the same row as the price**. Reconstructing links at
   render time is how tracking parameters go missing and commissions vanish.
 - Prices are stored in USD. Currency display is a presentation concern.
+- **Plus gating happens server-side, in `compare()`/`calendar()`/`overridesFrom()`, not
+  just in the UI.** A non-Plus request never gets airport-transport pricing or promo
+  effects even if the query string asks for them — hiding the control in
+  `prototype.html` is only the cosmetic half. Never trust a client-supplied
+  `isPlus`/`plus` flag; always resolve it from the session cookie against the database.
+- A curated promo's *effect* (`effectKind`/`effectValue`) is always looked up
+  server-side from `promosFor()` — only its `id` is ever taken from the client. A
+  `personalPromo`'s value/kind *are* client-supplied, and that's fine: it's the user's
+  own unverified claim about their own price, never shared with anyone else.
 
 ---
 
@@ -212,10 +308,14 @@ than it is — this is the comparison people get wrong.
 2. ~~Refresh job~~ — done, tiered, logged
 3. ~~Point the frontend at the cache~~ — done
 4. ~~Tier the refresh~~ — done
-5. Accounts and saved trips (schema exists, no auth) ← next
+5. ~~Accounts and saved trips~~ — done: real email-only accounts, real Plus
+   entitlement, plus airport transport, discounts/promos, and two free filters
+   (see "Step 5" above)
 6. ~~Alert job and email~~ — done, console by default, Resend if configured
 
-Then: Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
+Then: a day-by-day trip planner (itinerary, checklist, dining tracker, budget,
+per-day notes, special-event floor pricing — deliberately deferred, see above),
+Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
 Resend domain verification, deploy (Neon/Supabase + a cron worker), and a
 "prices as of ..." line in the UI.
 
@@ -226,9 +326,23 @@ Resend domain verification, deploy (Neon/Supabase + a cron worker), and a
   half-configured deploy breaks at the refresh job instead of quietly showing users nothing.
 - `seedTickets()` fills `ticket_prices` from a placeholder curve. Replace with maintained
   rows and **alarm on any resort whose rows are >30 days old** — nothing fails loudly here.
-- No auth. `saved_trips.user_id` is a foreign key waiting for a decision — this is what
-  makes "saved trips" not really usable yet: nothing creates a `users` row today.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.
 - Shanghai height-based ticket banding is not modelled.
+- **Accounts have no password and no email verification.** Anyone who knows a friend's
+  email can sign in as them. Correct trade-off for a friends demo where the owner is
+  comping accounts by hand; needs a real verification step (e.g. a one-time emailed
+  link through the existing `EmailSender` interface) before any public launch.
+- **No admin UI for `airport_transport` or `promos`.** Both are hand-maintained
+  directly in the database (or via `seedPromos.ts`'s example rows) — same pattern as
+  `ticket_prices`, and just as easy to let go stale silently. No alarm-on-staleness
+  exists for these two yet either.
+- **The promo effect vocabulary is deliberately small** (`room_pct_off`,
+  `room_flat_off`, `free_dining`, `ticket_pct_off`, `flat_off_total`) — enough for the
+  discounts discussed, but a genuinely unusual promo (e.g. a free park-hopper upgrade)
+  has nowhere to go yet.
+- **The day-by-day trip planner is not built** — itinerary, checklist, dining tracker,
+  budget breakdown, per-day notes, and special hard-ticket-event floor pricing (like
+  Mickey's Not So Scary) are confirmed, wanted scope, deliberately deferred to its own
+  follow-up plan once this foundation has been used.

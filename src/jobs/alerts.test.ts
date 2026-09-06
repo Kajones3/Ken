@@ -39,7 +39,8 @@ test("a normal day passes through", () => {
 test("a failed send leaves the alert for next run to retry — it is not lost", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email) values ($1,$2)`, [userId, "flaky@example.com"]);
+  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "flaky@example.com"]);
   await db.query(
     `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
      values ('ATL','MCO','2027-03-01',4,100,0)`);
@@ -96,6 +97,37 @@ test("a failed send leaves the alert for next run to retry — it is not lost", 
 
   const { rows: after } = await db.query(`select notified_at from price_alerts where id = $1`, [alertId]);
   assert.ok(after[0].notified_at, "the originally-failed alert is now marked notified");
+
+  await db.close();
+});
+
+test("a user who has never been Plus gets no alerts, however far the price drops", async () => {
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  // No plus_until at all — a brand-new user, never granted Plus.
+  await db.query(`insert into users (id, email) values ($1,$2)`, [userId, "free@example.com"]);
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
+     values ('ATL','MCO','2027-03-01',4,100,0)`);
+  await db.query(
+    `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property)
+     values ('h1','wdw','Test Hotel','','2027-03-01',150,'value',true)`);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  const params: TripParams = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs",
+  };
+  await db.query(
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
+     values ($1,$2,$3,'{}',100000,0)`,   // a baseline this high guarantees a huge drop, if it were even checked
+    [tripId, userId, JSON.stringify({ ...params, month: "2027-03", resortId: "wdw" })],
+  );
+
+  const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
+  assert.equal(result.checked, 0, "a never-Plus user's trip is not even considered");
+  assert.equal(result.fired, 0);
 
   await db.close();
 });

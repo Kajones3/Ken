@@ -4,15 +4,19 @@
  *
  * Every endpoint reads the cache. None of them calls a provider.
  */
-import { createServer } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
-import { loadBook } from "./book.js";
-import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { loadBook, dateStr } from "./book.js";
+import { cheapestIn, priceTrip, type AirportTransportChoice, type Overrides, type TripParams } from "./pricing.js";
+import {
+  currentUser, createSession, sessionTokenFrom, destroySession,
+  sessionCookieHeader, clearCookieHeader, isPlus, type SessionUser,
+} from "./auth.js";
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
@@ -36,16 +40,51 @@ function paramsFrom(q: URLSearchParams): TripParams {
 function clamp(n: number, lo: number, hi: number): number {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : lo;
 }
-function overridesFrom(q: URLSearchParams): Overrides {
+/** Strips promo fields for anyone not Plus — the server-side gate; hiding the UI control is only the cosmetic half. */
+function overridesFrom(q: URLSearchParams, allowPromos: boolean): Overrides {
+  let overrides: Overrides;
   try {
     const raw = q.get("overrides");
-    return raw ? (JSON.parse(raw) as Overrides) : {};
+    overrides = raw ? (JSON.parse(raw) as Overrides) : {};
   } catch { return {}; }
+  if (allowPromos) return overrides;
+  const stripped: Overrides = {};
+  for (const [resortId, ov] of Object.entries(overrides)) {
+    if (!ov) continue;
+    const { promoId, personalPromo, ...rest } = ov;
+    stripped[resortId] = rest;
+  }
+  return stripped;
 }
 
-async function compare(q: URLSearchParams) {
+/** Defaults to "auto" — a Plus user sees the real cost without an opt-in toggle they might miss. */
+function airportTransportFrom(q: URLSearchParams): AirportTransportChoice {
+  const raw = q.get("airportTransport");
+  if (!raw) return { mode: "auto" };
+  try {
+    const parsed = JSON.parse(raw);
+    const mode = (["auto", "parking", "rideshare", "transit", "custom"].includes(parsed.mode) ? parsed.mode : "auto") as AirportTransportChoice["mode"];
+    const customAmount = Number.isFinite(parsed.customAmount) ? Number(parsed.customAmount) : undefined;
+    return { mode, customAmount };
+  } catch { return { mode: "auto" }; }
+}
+
+async function readBody(req: IncomingMessage): Promise<any> {
+  const raw = await new Promise<string>((resolve) => {
+    let s = "";
+    req.on("data", (c) => (s += c));
+    req.on("end", () => resolve(s));
+  });
+  try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
+
+async function compare(q: URLSearchParams, user: SessionUser | null) {
+  const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
-  const overrides = overridesFrom(q);
+  // Server-side gate, not just a hidden UI control: a non-Plus request never
+  // gets airport-transport pricing or promos, whatever the query string asks for.
+  if (plus) params.airportTransport = airportTransportFrom(q);
+  const overrides = overridesFrom(q, plus);
   const month = q.get("month") ?? todayISO().slice(0, 7);
   const [from, to] = monthBounds(month);
   // An explicit date prices exactly that day instead of scanning the month for
@@ -69,9 +108,11 @@ async function compare(q: URLSearchParams) {
   return { month, pricesAsOf: book.oldestFetchedAt, params, results };
 }
 
-async function calendar(q: URLSearchParams) {
+async function calendar(q: URLSearchParams, user: SessionUser | null) {
+  const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
-  const overrides = overridesFrom(q);
+  if (plus) params.airportTransport = airportTransportFrom(q);
+  const overrides = overridesFrom(q, plus);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
   const from = q.get("from") ?? addDaysISO(todayISO(), 1);
@@ -87,12 +128,37 @@ async function calendar(q: URLSearchParams) {
   return { resortId: resort.id, pricesAsOf: book.oldestFetchedAt, days };
 }
 
+/**
+ * Public and free — browsing what Plus would unlock is exactly the "let
+ * friends see what's behind the paywall" surface. Applying one to move a
+ * number (via an override's promoId) is the Plus part, gated elsewhere.
+ */
+async function listPromos(q: URLSearchParams) {
+  const resortId = q.get("resortId");
+  const on = q.get("on") ?? todayISO();
+  const params: unknown[] = [on, on];
+  let where = "active and starts_on <= $1 and ends_on >= $2";
+  if (resortId) { where += " and (resort_id = $3 or resort_id is null)"; params.push(resortId); }
+  const { rows } = await db.query(
+    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note
+       from promos where ${where} order by starts_on`,
+    params,
+  );
+  return rows.map((r) => ({
+    id: r.id, resortId: r.resort_id ?? null, label: r.label,
+    effectKind: r.effect_kind, effectValue: Number(r.effect_value),
+    startsOn: dateStr(r.starts_on), endsOn: dateStr(r.ends_on),
+    historical: Boolean(r.historical), sourceNote: r.source_note ?? "",
+  }));
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-  const send = (code: number, body: unknown) => {
-    res.writeHead(code, { "content-type": "application/json", "cache-control": "public, max-age=300" });
+  const send = (code: number, body: unknown, opts: { cache?: string; headers?: Record<string, string> } = {}) => {
+    res.writeHead(code, { "content-type": "application/json", "cache-control": opts.cache ?? "no-store", ...opts.headers });
     res.end(JSON.stringify(body));
   };
+  const withCookie = (setCookie: string) => ({ headers: { "set-cookie": setCookie } });
   try {
     if (url.pathname === "/" || url.pathname === "/prototype.html") {
       const file = await readFile(new URL("prototype.html", PUBLIC_DIR));
@@ -111,23 +177,84 @@ const server = createServer(async (req, res) => {
                 (select count(*) from flight_prices) as flights,
                 (select count(*) from hotel_rates) as hotels
            from fetch_runs where job = 'refresh' and errors = 0`);
-      return send(200, { ok: true, db: db.kind, ...rows[0] });
+      return send(200, { ok: true, db: db.kind, ...rows[0] }, { cache: "no-store" });
     }
-    if (url.pathname === "/api/meta") return send(200, { origins: ORIGINS, resorts: RESORTS });
-    if (url.pathname === "/api/compare") return send(200, await compare(url.searchParams));
-    if (url.pathname === "/api/calendar") return send(200, await calendar(url.searchParams));
+    if (url.pathname === "/api/meta") return send(200, { origins: ORIGINS, resorts: RESORTS }, { cache: "public, max-age=300" });
+
+    // --- auth: an email and nothing else. Real enough to make Plus real; ---
+    // --- explicitly not enough for a public launch (see src/auth.ts).    ---
+    if (url.pathname === "/api/auth/signin" && req.method === "POST") {
+      const body = await readBody(req);
+      const email = String(body.email ?? "").trim().toLowerCase();
+      if (!email || !email.includes("@")) return send(400, { error: "a valid email is required" });
+      const { rows } = await db.query(
+        `insert into users (id, email) values ($1,$2)
+         on conflict (email) do update set email = excluded.email
+         returning id, email, plus_until`,
+        [randomUUID(), email],
+      );
+      const row = rows[0];
+      const token = await createSession(db, row.id);
+      const plusUntil = row.plus_until ? dateStr(row.plus_until) : null;
+      return send(200, { email: row.email, plus: isPlus(plusUntil), plusUntil }, withCookie(sessionCookieHeader(token)));
+    }
+    if (url.pathname === "/api/auth/me") {
+      const user = await currentUser(db, req);
+      if (!user) return send(200, { authenticated: false });
+      return send(200, { authenticated: true, email: user.email, plus: isPlus(user.plusUntil), plusUntil: user.plusUntil });
+    }
+    if (url.pathname === "/api/auth/signout" && req.method === "POST") {
+      const token = sessionTokenFrom(req);
+      if (token) await destroySession(db, token);
+      return send(200, { ok: true }, withCookie(clearCookieHeader()));
+    }
+
+    // --- pricing: reads the cache, personalized only by what the signed-in ---
+    // --- user is entitled to (compare()/calendar() decide that internally). ---
+    if (url.pathname === "/api/compare" || url.pathname === "/api/calendar") {
+      const user = await currentUser(db, req);
+      const body = url.pathname === "/api/compare" ? await compare(url.searchParams, user) : await calendar(url.searchParams, user);
+      return send(200, body, { cache: "private, max-age=60" });
+    }
+    if (url.pathname === "/api/promos") {
+      return send(200, await listPromos(url.searchParams), { cache: "public, max-age=300" });
+    }
+    // --- saved trips: signed in and Plus, always the caller's own rows. ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
-      const body = await new Promise<string>((r) => { let s = ""; req.on("data", (c) => (s += c)); req.on("end", () => r(s)); });
-      const t = JSON.parse(body || "{}");
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required", message: "Saved trips and alerts are a Plus feature." });
+      const t = await readBody(req);
       const id = randomUUID();
       await db.query(
         `insert into saved_trips (id,user_id,label,params,overrides,baseline_total,threshold_pct)
          values ($1,$2,$3,$4,$5,$6,$7)`,
-        [id, t.userId, t.label ?? "", JSON.stringify(t.params ?? {}), JSON.stringify(t.overrides ?? {}),
+        [id, user.id, t.label ?? "", JSON.stringify(t.params ?? {}), JSON.stringify(t.overrides ?? {}),
          Number(t.baselineTotal ?? 0), Number(t.thresholdPct ?? 5)],
       );
       return send(201, { id });
     }
+    if (url.pathname === "/api/trips" && req.method === "GET") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      const { rows } = await db.query(
+        `select id, label, params, baseline_total, active, created_at from saved_trips
+          where user_id = $1 order by created_at desc`, [user.id]);
+      return send(200, rows.map((r) => ({
+        id: r.id, label: r.label, resortId: r.params?.resortId ?? null,
+        baselineTotal: Number(r.baseline_total), active: r.active, createdAt: r.created_at,
+      })));
+    }
+    const tripMatch = url.pathname.match(/^\/api\/trips\/([^/]+)$/);
+    if (tripMatch && req.method === "DELETE") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      await db.query(`delete from saved_trips where id = $1 and user_id = $2`, [tripMatch[1], user.id]);
+      return send(200, { ok: true });
+    }
+
     send(404, { error: "not found" });
   } catch (e) {
     console.error(e);

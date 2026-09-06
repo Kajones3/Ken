@@ -39,7 +39,7 @@ crossed the threshold, and sent the email — all **zero** provider calls. With 
 `RESEND_API_KEY` set it prints instead of sending, so this runs with no account.
 
 ```bash
-npm test         # 23 tests, no database needed
+npm test         # 36 tests, no database needed
 npm run typecheck
 ```
 
@@ -49,8 +49,22 @@ npm run typecheck
 cp .env.example .env       # set DATABASE_URL; leave the token unset to stay on mock data
 npm run migrate
 npm run refresh
+npm run seed-promos        # a few illustrative example promos, optional
 npm start                  # API on :8080
 ```
+
+To let someone in as Plus (no payment processor exists yet — this is how the owner
+comps friends, and how you'd grant your own account for testing):
+
+```bash
+npm run grant-plus -- friend@example.com 90    # Plus for 90 days
+```
+
+**If you're on the default embedded PGlite database (no `DATABASE_URL` set), stop
+`npm start` before running any script against the same `.pgdata` directory** —
+`migrate`, `refresh`, `grant-plus`, `seed-promos`, all of them. PGlite doesn't support
+two processes sharing one data directory; at best the running server never sees the
+write, at worst the store corrupts. A real Postgres doesn't have this limitation.
 
 Cron, once you deploy:
 
@@ -63,14 +77,17 @@ Cron, once you deploy:
 
 | Path | What it is |
 |---|---|
-| `db/schema.sql` | Five tables. Safe to re-run. |
-| `src/config.ts` | The six resorts: age bands, ticket rules, food rates, hotels, transport. |
+| `db/schema.sql` | Ten tables. Safe to re-run. |
+| `src/config.ts` | The six resorts: age bands, ticket rules, food rates, hotels, transport, airport-transport guesses. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
 | `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. |
 | `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop emails. Never calls a provider. |
 | `src/email/` | `console.ts` prints instead of sending, works today; `resend.ts` needs an API key. Same interface. |
+| `src/auth.ts` | Email-only sign-in, session cookies, the one real `isPlus()` entitlement check. |
+| `src/grantPlus.ts` | `npm run grant-plus` — the one way to grant Plus (comping a friend, or your own testing). |
+| `src/seedPromos.ts` | A few illustrative example promo rows. Not wired into the daily refresh — promos are sparse, hand-curated content. |
 | `src/server.ts` | The API. `node:http` and nothing else, also serves `public/prototype.html`. |
 
 ### Why pricing.ts is shared
@@ -116,6 +133,20 @@ it null. The next run of `runAlerts` retries every row still sitting at
 `notified_at is null` before it looks for anything new — so an email outage delays
 an alert, it doesn't drop it.
 
+**Plus gating happens server-side.** `compare()`, `calendar()` and `overridesFrom()`
+all resolve the caller's session from the cookie and decide what to honor from the
+query string — a non-Plus request never gets airport-transport pricing or promo
+effects, whatever it asks for. The UI hiding those controls for a free user is only
+the cosmetic half; never trust a client-supplied "am I Plus" flag.
+
+**A curated promo's effect is looked up server-side, never trusted from the client
+beyond its id.** A personal promo's value *is* client-supplied — that's fine, it's
+the user's own unverified claim about their own price, and it never affects anyone
+else's number. Composition order, in case you touch this: a curated room discount is
+skipped if the user has typed their own nightly rate (a guess shouldn't second-guess
+a rate they already found); a personal discount always applies, even on top of that
+rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
+
 ## What is not done
 
 - **`TravelpayoutsProvider.hotelMonth` throws.** Flights are wired to the documented
@@ -127,13 +158,22 @@ an alert, it doesn't drop it.
   with rows you maintain against each resort's published calendar, and alarm on any
   resort whose rows go stale. When Disney's dynamic ticket pricing lands, this table
   needs the same tiered refresh as flights.
-- **No auth.** `saved_trips.user_id` is a foreign key waiting for whatever you choose.
 - **Verify the Travelpayouts response shapes** against current docs. This was written
   to the documented shape, not against a live key.
 - **Verify the Resend request shape** against current docs before relying on it — it
   was written to the documented shape (a single `POST /emails` call), not run against
   a live account. `ALERT_FROM_EMAIL` needs a domain verified in Resend before it will
   send to anyone but the account owner.
+- **Accounts have no password or email verification.** Signing in is just typing an
+  email. Fine for a friends demo where the owner grants Plus by hand; needs a real
+  verification step (e.g. a one-time link through the existing `EmailSender`
+  interface) before a public launch.
+- **Airport-transport and promo data have no admin UI.** Both are hand-maintained
+  directly in the database, same as `ticket_prices` — and just as easy to let go
+  stale silently; no alarm-on-staleness exists for either yet.
+- **A day-by-day trip planner is not built** (itinerary, checklist, dining tracker,
+  budget, per-day notes, special-event floor pricing) — confirmed scope, deliberately
+  deferred to its own follow-up.
 
 ## Currency
 

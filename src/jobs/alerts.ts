@@ -57,7 +57,7 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
     `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct
        from saved_trips t
        join users u on u.id = t.user_id
-      where t.active and (u.plus_until is null or u.plus_until >= $1)`,
+      where t.active and u.plus_until is not null and u.plus_until >= $1`,
     [today],
   );
 

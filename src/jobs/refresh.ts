@@ -9,7 +9,7 @@
  */
 import { randomUUID } from "node:crypto";
 import {
-  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID,
+  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, AIRPORT_TRANSPORT_GUESSES,
 } from "../config.js";
 import { addDaysISO, monthKey, todayISO, range, monthBounds } from "../dates.js";
 import { getDb, type Db } from "../db.js";
@@ -119,6 +119,33 @@ export async function seedTickets(db: Db, months: string[]): Promise<number> {
   return n;
 }
 
+/**
+ * Airport parking/rideshare/transit costs, same "no live API, hand-maintained"
+ * situation as tickets — but static reference data, not a time series, so
+ * this is 18 rows upserted on origin, no date loop.
+ */
+export async function seedAirportTransport(db: Db): Promise<number> {
+  const rows = Object.entries(AIRPORT_TRANSPORT_GUESSES);
+  if (!rows.length) return 0;
+  const vals: unknown[] = [];
+  const tuples = rows.map(([origin, g], i) => {
+    const b = i * 6;
+    vals.push(origin, g.parkingPerDayUsd, g.rideshareRoundTripUsd, g.transitAvailable, g.transitRoundTripUsd ?? null, g.note);
+    return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now())`;
+  });
+  await db.query(
+    `insert into airport_transport
+       (origin,parking_per_day_usd,rideshare_roundtrip_usd,transit_available,transit_roundtrip_usd,source_note,updated_at)
+     values ${tuples.join(",")}
+     on conflict (origin) do update set
+       parking_per_day_usd = excluded.parking_per_day_usd, rideshare_roundtrip_usd = excluded.rideshare_roundtrip_usd,
+       transit_available = excluded.transit_available, transit_roundtrip_usd = excluded.transit_roundtrip_usd,
+       source_note = excluded.source_note, updated_at = excluded.updated_at`,
+    vals,
+  );
+  return rows.length;
+}
+
 export interface RefreshOptions {
   months?: string[]; origins?: string[]; resorts?: string[]; provider?: Provider;
 }
@@ -159,6 +186,7 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
     }
   }
   rows += await seedTickets(db, months);
+  rows += await seedAirportTransport(db);
 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4 where id = $1`,

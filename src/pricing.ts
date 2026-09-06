@@ -17,6 +17,9 @@ import { addDaysISO, type ISODate } from "./dates.js";
 
 // ---------------------------------------------------------------- inputs
 
+export type AirportTransportMode = "auto" | "parking" | "rideshare" | "transit" | "custom";
+export interface AirportTransportChoice { mode: AirportTransportMode; customAmount?: number }
+
 export interface TripParams {
   origin: string;
   adults: number;
@@ -26,10 +29,20 @@ export interface TripParams {
   stay: Stay;
   tier: TierIndex;
   food: FoodStyle;
+  /** Undefined = feature off, adds $0 — every existing caller is unaffected. Plus-only; gated in server.ts. */
+  airportTransport?: AirportTransportChoice;
 }
 
+export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
+
 /** A rate or fare the user supplied themselves. Never below the cheapest known fare. */
-export interface ResortOverride { nightly?: number; farePerSeat?: number }
+export interface ResortOverride {
+  nightly?: number; farePerSeat?: number;
+  /** Picks a row from the curated promos table — its effect is always looked up server-side, never trusted from the client. */
+  promoId?: string;
+  /** The user's own claim (Annual Passholder, DVC, a code they found) — unverified, affects only their own price. */
+  personalPromo?: { kind: PromoEffectKind; value: number; label: string };
+}
 export type Overrides = Record<string, ResortOverride | undefined>;
 
 // ---------------------------------------------------------------- cache view
@@ -40,11 +53,26 @@ export interface HotelNight {
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
 }
 export interface TicketRow { adult: number; child: number; junior?: number }
+export interface AirportTransportRow {
+  origin: string; parkingPerDayUsd: number; rideshareRoundTripUsd: number;
+  transitAvailable: boolean; transitRoundTripUsd?: number; sourceNote: string;
+}
+export interface PromoRow {
+  id: string; resortId: string | null; label: string;
+  effectKind: PromoEffectKind; effectValue: number;
+  startsOn: ISODate; endsOn: ISODate; historical: boolean; sourceNote: string;
+}
+export interface AppliedPromo {
+  source: "global" | "personal"; label: string; kind: PromoEffectKind;
+  amountUsd: number; historical: boolean; skipped?: string;
+}
 
 export interface PriceBook {
   flight(origin: string, dest: string, date: ISODate, tripLength: number): FlightRow | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
+  airportTransport(origin: string): AirportTransportRow | undefined;
+  promosFor(resortId: string, date: ISODate): PromoRow[];
   /** Oldest row backing this book, so the UI can say "prices as of ...". */
   oldestFetchedAt: Date | null;
 }
@@ -67,6 +95,11 @@ export interface TripPrice {
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
   foodPlan: { label: string; adult: number; child: number } | null;
   partySize: number;
+  /** Getting to the home airport — parking/rideshare/transit/your own plan. $0 unless requested. */
+  airportTransport: number;
+  airportTransportPick: { mode: Exclude<AirportTransportMode, "auto">; amountUsd: number } | null;
+  /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
+  appliedPromos: AppliedPromo[];
 }
 export type PriceResult = { ok: true; price: TripPrice } | { ok: false; reason: string };
 
@@ -244,12 +277,85 @@ export function priceTrip(
     hotelTier = { requested: params.tier, actual: pick.actual, swapped: pick.swapped, custom: false };
   }
 
+  // --- promos: a curated guess (looked up server-side, never trusted from --
+  // --- the client beyond its id) and the user's own claimed discount -------
+  const appliedPromos: AppliedPromo[] = [];
+  const clampPct = (v: number) => Math.min(100, Math.max(0, v));
+  let flatOffTotal = 0;
+
+  const applyPromoEffect = (
+    source: "global" | "personal", label: string, kind: PromoEffectKind, value: number, historical: boolean,
+  ) => {
+    if (kind === "room_pct_off" || kind === "room_flat_off") {
+      // A curated guess shouldn't second-guess a rate the user already found
+      // themselves — but the user's own claim about their own price may.
+      if (source === "global" && ov.nightly !== undefined) {
+        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "you set your own nightly rate" });
+        return;
+      }
+      const before = rooms;
+      rooms = kind === "room_pct_off" ? rooms * (1 - clampPct(value) / 100) : Math.max(0, rooms - value);
+      appliedPromos.push({ source, label, kind, amountUsd: before - rooms, historical });
+    } else if (kind === "ticket_pct_off") {
+      const before = tickets;
+      tickets = tickets * (1 - clampPct(value) / 100);
+      appliedPromos.push({ source, label, kind, amountUsd: before - tickets, historical });
+    } else if (kind === "free_dining") {
+      if (foodPlan) {
+        appliedPromos.push({ source, label, kind, amountUsd: food, historical });
+        food = 0;
+      } else {
+        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "no dining plan on this trip" });
+      }
+    } else if (kind === "flat_off_total") {
+      const amountUsd = Math.max(0, value);
+      flatOffTotal += amountUsd;
+      appliedPromos.push({ source, label, kind, amountUsd, historical });
+    }
+  };
+
+  if (ov.promoId) {
+    const promo = book.promosFor(resort.id, start).find((candidate) => candidate.id === ov.promoId);
+    if (promo) applyPromoEffect("global", promo.label, promo.effectKind, promo.effectValue, promo.historical);
+    // An unknown/expired promoId is silently ignored — never a hard failure over a stale id.
+  }
+  if (ov.personalPromo) {
+    applyPromoEffect("personal", ov.personalPromo.label, ov.personalPromo.kind, ov.personalPromo.value, false);
+  }
+
   // Off-property looks cheaper than it is until you pay to park at the parks.
   const perDay = hotelPick.onProperty ? resort.transport.on : resort.transport.off;
   const transport = perDay * (params.nights + 1);
   const hotel = rooms + transport;
 
-  const total = flights + tickets + hotel + food;
+  // --- airport transport (Plus-only; off unless the caller asked) --------
+  let airportTransport = 0;
+  let airportTransportPick: TripPrice["airportTransportPick"] = null;
+  const atChoice = params.airportTransport;
+  if (atChoice) {
+    if (atChoice.mode === "custom") {
+      airportTransport = Math.max(0, atChoice.customAmount ?? 0);
+      airportTransportPick = { mode: "custom", amountUsd: airportTransport };
+    } else {
+      const at = book.airportTransport(params.origin);
+      if (at) {
+        const options: NonNullable<TripPrice["airportTransportPick"]>[] = [
+          { mode: "parking", amountUsd: at.parkingPerDayUsd * (params.nights + 1) },
+          { mode: "rideshare", amountUsd: at.rideshareRoundTripUsd },
+        ];
+        if (at.transitAvailable && at.transitRoundTripUsd != null) {
+          options.push({ mode: "transit", amountUsd: at.transitRoundTripUsd });
+        }
+        const forced = atChoice.mode !== "auto" ? options.find((o) => o.mode === atChoice.mode) : undefined;
+        airportTransportPick = forced ?? options.reduce((a, b) => (b.amountUsd < a.amountUsd ? b : a));
+        airportTransport = airportTransportPick.amountUsd;
+      }
+      // No cached row for this origin: stays $0/null. Additive/optional —
+      // unlike a missing fare or ticket row, this never fails the whole trip.
+    }
+  }
+
+  const total = Math.max(0, flights + tickets + hotel + food + airportTransport - flatOffTotal);
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
   return {
@@ -259,6 +365,7 @@ export function priceTrip(
       perSeatFare,
       flightPick: row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
+      airportTransport, airportTransportPick, appliedPromos,
     },
   };
 }

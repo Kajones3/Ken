@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
 import { bandOf, cheapestIn, poolFor, priceTrip, resortById, type Overrides, type TripParams } from "./pricing.js";
-import type { HotelNight } from "./pricing.js";
+import type { HotelNight, PromoRow } from "./pricing.js";
 
 const START = "2027-03-01";
 
@@ -13,6 +13,8 @@ function night(id: string, name: string, nightly: number, tier: string, on: bool
 /** A book with everything a 2-night trip needs, for one resort. */
 function fullBook(resortId: string, iata: string, opts: {
   fare?: number; nights?: HotelNight[]; days?: number; adult?: number; child?: number; junior?: number;
+  origin?: string; airportTransport?: { parkingPerDayUsd: number; rideshareRoundTripUsd: number; transitAvailable: boolean; transitRoundTripUsd?: number };
+  promos?: PromoRow[];
 } = {}) {
   const days = opts.days ?? 6;
   const hotels = opts.nights ?? [
@@ -32,7 +34,20 @@ function fullBook(resortId: string, iata: string, opts: {
       resortId, date,
       row: { adult: opts.adult ?? 130, child: opts.child ?? 120, junior: opts.junior },
     })),
+    airportTransport: opts.airportTransport
+      ? [{ origin: opts.origin ?? "ATL", row: { origin: opts.origin ?? "ATL", sourceNote: "", ...opts.airportTransport } }]
+      : [],
+    promos: opts.promos ?? [],
   });
+}
+
+function promo(over: Partial<PromoRow> = {}): PromoRow {
+  return {
+    id: "p1", resortId: "wdw", label: "Summer room discount",
+    effectKind: "room_pct_off", effectValue: 20,
+    startsOn: "2027-01-01", endsOn: "2027-12-31", historical: true, sourceNote: "",
+    ...over,
+  };
 }
 
 const base: TripParams = {
@@ -201,4 +216,122 @@ test("off-property and on-property pools do not bleed into each other", () => {
   assert.deepEqual(poolFor(nights, "on", 0).pool.map((h) => h.hotelId), ["v"]);
   assert.deepEqual(poolFor(nights, "off", 0).pool.map((h) => h.hotelId), ["b"]);
   assert.equal(poolFor(nights, "both", 0).pool.length, 2);
+});
+
+test("airport transport: off by default, adds $0", () => {
+  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 60, transitAvailable: false } });
+  const r = priceTrip(book, resortById("wdw"), base, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.airportTransport, 0);
+  assert.equal(r.price.airportTransportPick, null);
+});
+
+test("airport transport: auto picks the cheaper of parking and rideshare", () => {
+  // 4 nights -> parking is 5 days * $12 = $60, cheaper than a $200 rideshare round trip.
+  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 200, transitAvailable: false } });
+  const params: TripParams = { ...base, airportTransport: { mode: "auto" } };
+  const r = priceTrip(book, resortById("wdw"), params, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.airportTransportPick?.mode, "parking");
+  assert.equal(r.price.airportTransport, 12 * 5);
+
+  // A short trip flips the pick: 1 night -> parking is 2 * $12 = $24, still cheaper than $10 rideshare? no —
+  // use a cheap rideshare to prove the flip the other way.
+  const cheapRideshareBook = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 30, transitAvailable: false } });
+  const r2 = priceTrip(cheapRideshareBook, resortById("wdw"), params, {}, START);
+  assert.ok(r2.ok);
+  assert.equal(r2.price.airportTransportPick?.mode, "rideshare");
+  assert.equal(r2.price.airportTransport, 30);
+});
+
+test("airport transport: a forced mode is honored even when it's not the cheapest", () => {
+  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 30, transitAvailable: true, transitRoundTripUsd: 6 } });
+  const params: TripParams = { ...base, airportTransport: { mode: "rideshare" } };
+  const r = priceTrip(book, resortById("wdw"), params, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.airportTransportPick?.mode, "rideshare");
+  assert.equal(r.price.airportTransport, 30);
+});
+
+test("airport transport: custom is your own number, clamped at zero", () => {
+  const book = fullBook("wdw", "MCO");
+  const params: TripParams = { ...base, airportTransport: { mode: "custom", customAmount: -50 } };
+  const r = priceTrip(book, resortById("wdw"), params, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.airportTransport, 0, "never negative");
+  assert.equal(r.price.airportTransportPick?.mode, "custom");
+});
+
+test("airport transport: no cached row for the origin is a soft $0, not a failed trip", () => {
+  const book = fullBook("wdw", "MCO"); // no airportTransport row at all
+  const params: TripParams = { ...base, airportTransport: { mode: "auto" } };
+  const r = priceTrip(book, resortById("wdw"), params, {}, START);
+  assert.ok(r.ok, "missing airport-transport data must never fail the whole trip");
+  assert.equal(r.price.airportTransport, 0);
+  assert.equal(r.price.airportTransportPick, null);
+});
+
+test("promos: a curated room discount applies to the cache-derived rate", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_pct_off", effectValue: 20 })] });
+  const withoutPromo = priceTrip(book, resortById("wdw"), base, {}, START);
+  const withPromo = priceTrip(book, resortById("wdw"), base, { wdw: { promoId: "p1" } }, START);
+  assert.ok(withoutPromo.ok && withPromo.ok);
+  assert.equal(withPromo.price.rooms, withoutPromo.price.rooms * 0.8);
+  assert.equal(withPromo.price.appliedPromos.length, 1);
+  assert.equal(withPromo.price.appliedPromos[0]!.amountUsd, withoutPromo.price.rooms * 0.2);
+  assert.ok(withPromo.price.total < withoutPromo.price.total);
+});
+
+test("promos: a curated room discount is suppressed once you've typed your own nightly rate", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_flat_off", effectValue: 50 })] });
+  const r = priceTrip(book, resortById("wdw"), base, { wdw: { nightly: 150, promoId: "p1" } }, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.rooms, 150 * base.nights, "your own rate is not second-guessed by a curated guess");
+  assert.equal(r.price.appliedPromos[0]!.amountUsd, 0);
+  assert.match(r.price.appliedPromos[0]!.skipped ?? "", /own nightly rate/);
+});
+
+test("promos: a ticket discount applies regardless of any hotel override", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "ticket_pct_off", effectValue: 10 })] });
+  const without = priceTrip(book, resortById("wdw"), base, { wdw: { nightly: 150 } }, START);
+  const withPromo = priceTrip(book, resortById("wdw"), base, { wdw: { nightly: 150, promoId: "p1" } }, START);
+  assert.ok(without.ok && withPromo.ok);
+  assert.equal(Math.round(withPromo.price.tickets * 100), Math.round(without.price.tickets * 0.9 * 100));
+});
+
+test("promos: free dining only has an effect when a plan actually resolved", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "free_dining", effectValue: 0 })] });
+  const noPlan = priceTrip(book, resortById("wdw"), { ...base, food: "mix" }, { wdw: { promoId: "p1" } }, START);
+  assert.ok(noPlan.ok);
+  assert.equal(noPlan.price.appliedPromos[0]!.amountUsd, 0);
+  assert.match(noPlan.price.appliedPromos[0]!.skipped ?? "", /no dining plan/);
+
+  const withPlan = priceTrip(book, resortById("wdw"), { ...base, food: "plan", stay: "on" }, { wdw: { promoId: "p1" } }, START);
+  assert.ok(withPlan.ok);
+  assert.equal(withPlan.price.food, 0, "free dining zeroes out the food total");
+  assert.ok(withPlan.price.appliedPromos[0]!.amountUsd > 0);
+});
+
+test("promos: a personal discount stacks on top of your own nightly rate", () => {
+  const book = fullBook("wdw", "MCO");
+  const overrides: Overrides = { wdw: { nightly: 200, personalPromo: { kind: "room_pct_off", value: 15, label: "DVC member" } } };
+  const r = priceTrip(book, resortById("wdw"), base, overrides, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.rooms, 200 * base.nights * 0.85);
+  assert.equal(r.price.appliedPromos[0]!.source, "personal");
+});
+
+test("promos: flat-off-total is clamped so the trip never prices negative", () => {
+  const book = fullBook("wdw", "MCO");
+  const overrides: Overrides = { wdw: { personalPromo: { kind: "flat_off_total", value: 999999, label: "Huge discount" } } };
+  const r = priceTrip(book, resortById("wdw"), base, overrides, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.total, 0);
+});
+
+test("promos: an unknown promoId is ignored, not a hard failure", () => {
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, resortById("wdw"), base, { wdw: { promoId: "does-not-exist" } }, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.appliedPromos.length, 0);
 });
