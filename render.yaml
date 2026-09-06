@@ -1,0 +1,32 @@
+# Render Blueprint — deploys the API as a free web service.
+# https://render.com/docs/blueprint-spec
+#
+# Render's own free Postgres expires after 30 days, so this deploys the app
+# only; point DATABASE_URL (set in the Render dashboard, not here) at a free
+# Neon project instead — see README.md's "Deploy for free" section.
+services:
+  - type: web
+    name: parkfare
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run migrate
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: TRAVELPAYOUTS_TOKEN
+        sync: false
+      - key: TRAVELPAYOUTS_MARKER
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: ALERT_FROM_EMAIL
+        value: alerts@parkfare.app
+      - key: MAX_REQUESTS_PER_MINUTE
+        value: "240"
+      - key: ALERT_MAX_PER_USER_PER_DAY
+        value: "3"
+      - key: ALERT_ANOMALY_SHARE
+        value: "0.4"
+      - key: ALERT_ANOMALY_MOVE_PCT
+        value: "25"

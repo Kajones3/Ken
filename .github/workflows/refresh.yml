@@ -1,0 +1,25 @@
+name: Parkfare refresh
+
+# Tiered per CLAUDE.md: this is the once-a-morning cache refresh. It talks to
+# the same Neon database the deployed app reads from — the DATABASE_URL
+# secret here must match the one set in the Render dashboard.
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run refresh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+          TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          MAX_REQUESTS_PER_MINUTE: "240"

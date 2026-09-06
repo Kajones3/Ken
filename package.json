@@ -1,0 +1,31 @@
+{
+  "name": "parkfare",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "refresh": "tsx src/jobs/refresh.ts",
+    "alerts": "tsx src/jobs/alerts.ts",
+    "migrate": "tsx src/migrate.ts",
+    "grant-plus": "tsx src/grantPlus.ts",
+    "seed-promos": "tsx src/seedPromos.ts",
+    "test": "tsx --test $(find src -name '*.test.ts')",
+    "typecheck": "tsc --noEmit",
+    "smoke": "tsx src/smoke.ts"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

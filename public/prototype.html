@@ -1,0 +1,1580 @@
+<title>Parkfare</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Karla:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<style>
+/* ---------- tokens: light is the base, both dark scopes override ---------- */
+:root{
+  color-scheme: light;
+  --plane:#F1F2F6;
+  --surface:#FBFBFD;
+  --surface-2:#F6F7FA;
+  --ink:#14161F;
+  --ink-2:#565B6B;
+  --muted:#878DA0;
+  --rule:#E1E3EB;
+  --rule-strong:#C9CCD8;
+  --accent:#9A6A00;        /* amber, ink-safe on light */
+  --accent-bg:#F6E7C4;
+  --accent-line:#D9A22B;
+  --s1:#2a78d6;            /* flights  */
+  --s2:#eb6834;            /* tickets  */
+  --s3:#1baf7a;            /* hotel    */
+  --s4:#4a3aa7;            /* food     */
+  --s5:#0f8f7c;            /* airport transport */
+  --dv-lo-4:#0d366b; --dv-lo-3:#256abf; --dv-lo-2:#6da7ec; --dv-lo-1:#b7d3f6;
+  --dv-mid:#E6E6E2;
+  --dv-hi-1:#f7c9c5; --dv-hi-2:#eb8b85; --dv-hi-3:#cf3f3f; --dv-hi-4:#8c2323;
+  --lock:rgba(20,22,31,.055);
+  --shadow:0 1px 2px rgba(20,22,31,.05), 0 8px 24px -12px rgba(20,22,31,.14);
+  --ring:rgba(20,22,31,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --plane:#0B0D13;
+    --surface:#14171F;
+    --surface-2:#1A1E27;
+    --ink:#F4F5FA;
+    --ink-2:#A8AEC0;
+    --muted:#7C8296;
+    --rule:#252935;
+    --rule-strong:#39404F;
+    --accent:#E8B23E;
+    --accent-bg:#2B2412;
+    --accent-line:#E8B23E;
+    --s1:#3987e5;
+    --s2:#d95926;
+    --s3:#199e70;
+    --s4:#9085e9;
+    --s5:#2dd4c4;
+    --dv-lo-4:#cde2fb; --dv-lo-3:#86b6ef; --dv-lo-2:#2a78d6; --dv-lo-1:#1c4478;
+    --dv-mid:#3A3F49;
+    --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
+    --lock:rgba(255,255,255,.05);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+    --ring:rgba(255,255,255,.11);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --plane:#0B0D13;
+  --surface:#14171F;
+  --surface-2:#1A1E27;
+  --ink:#F4F5FA;
+  --ink-2:#A8AEC0;
+  --muted:#7C8296;
+  --rule:#252935;
+  --rule-strong:#39404F;
+  --accent:#E8B23E;
+  --accent-bg:#2B2412;
+  --accent-line:#E8B23E;
+  --s1:#3987e5;
+  --s2:#d95926;
+  --s3:#199e70;
+  --s4:#9085e9;
+  --s5:#2dd4c4;
+  --dv-lo-4:#cde2fb; --dv-lo-3:#86b6ef; --dv-lo-2:#2a78d6; --dv-lo-1:#1c4478;
+  --dv-mid:#3A3F49;
+  --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
+  --lock:rgba(255,255,255,.05);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+  --ring:rgba(255,255,255,.11);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--plane); color:var(--ink);
+  font-family:"Karla",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.disp{font-family:"Archivo",ui-sans-serif,system-ui,sans-serif; text-wrap:balance; margin:0}
+.mono,.num{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums}
+button{font:inherit; color:inherit; cursor:pointer}
+a{color:var(--ink)}
+:focus-visible{outline:2px solid var(--accent-line); outline-offset:2px; border-radius:3px}
+
+.wrap{max-width:1180px; margin:0 auto; padding:20px 20px 72px}
+
+/* ---------- masthead ---------- */
+.masthead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:6px 0 18px}
+.brand{display:flex; align-items:center; gap:12px}
+.mark{
+  width:38px; height:38px; display:grid; place-items:center; flex:none;
+  background:var(--ink); color:var(--plane); border-radius:9px;
+  font-family:"Archivo"; font-weight:800; font-size:15px; letter-spacing:-.04em;
+}
+.brand h1{font-size:23px; font-weight:800; letter-spacing:-.035em; line-height:1.05}
+.tag{margin:1px 0 0; color:var(--ink-2); font-size:12.5px}
+.acct{display:flex; align-items:center; gap:9px}
+.chip{
+  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+  padding:5px 9px; border-radius:999px; border:1px solid var(--rule-strong); color:var(--ink-2);
+  white-space:nowrap;
+}
+.chip.plus{background:var(--accent-bg); border-color:var(--accent-line); color:var(--accent)}
+.btn{border:1px solid var(--rule-strong); background:var(--surface); border-radius:9px; padding:8px 14px; font-weight:600; font-size:13.5px}
+.btn:hover{border-color:var(--ink-2)}
+.btn-primary{background:var(--ink); color:var(--plane); border:1px solid var(--ink); border-radius:9px; padding:11px 20px; font-weight:700; font-size:14px; letter-spacing:-.01em}
+.btn-primary:hover{opacity:.88}
+.btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
+.signin{display:flex; gap:6px; align-items:center}
+.signin[hidden]{display:none}
+.signin input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px; width:168px}
+
+/* ---------- demo banner ---------- */
+.demo{
+  display:flex; gap:10px; align-items:flex-start;
+  border:1px dashed var(--accent-line); background:var(--accent-bg);
+  color:var(--ink); border-radius:10px; padding:10px 13px; margin-bottom:18px; font-size:13px;
+}
+.demo b{font-weight:700}
+.demo .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-line);margin-top:7px;flex:none}
+
+/* ---------- search panel ---------- */
+.panel{
+  background:var(--surface); border:1px solid var(--rule); border-radius:14px;
+  padding:16px 16px 14px; box-shadow:var(--shadow); margin-bottom:22px;
+}
+.panel-lab{font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:12px}
+.fields{display:grid; grid-template-columns:repeat(3,1fr); gap:12px 16px; align-items:end}
+@media (max-width:760px){ .fields{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:460px){ .fields{grid-template-columns:1fr} }
+.f{display:flex; flex-direction:column; gap:5px; min-width:0}
+.f label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2)}
+.f select,.f input{
+  width:100%; background:var(--surface-2); color:var(--ink);
+  border:1px solid var(--rule-strong); border-radius:8px; padding:9px 10px;
+  font-family:"JetBrains Mono",monospace; font-size:13px; font-variant-numeric:tabular-nums;
+}
+.f select{font-family:"Karla",sans-serif; font-size:13.5px}
+.ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:14px; padding-top:13px; border-top:1px solid var(--rule)}
+.ages[hidden]{display:none}
+.ages .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); align-self:center; margin-right:2px}
+.agef{display:flex; flex-direction:column; gap:4px}
+.agef label{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+.agef select{width:92px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:7px 8px; font-family:"JetBrains Mono",monospace; font-size:12.5px}
+.bandnote{font-size:11px; color:var(--muted); margin-top:3px}
+.panel-foot{display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap}
+.hint{font-size:12px; color:var(--muted)}
+
+/* ---------- results ---------- */
+.res-head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:10px}
+.res-head h2{font-size:17px; font-weight:700; letter-spacing:-.02em}
+.res-sub{font-size:12.5px; color:var(--ink-2); margin-top:2px}
+.legend{display:flex; gap:14px; align-items:center; flex-wrap:wrap}
+.lg{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-2)}
+.sw{width:11px; height:11px; border-radius:3px; flex:none}
+.viewtog{display:flex; border:1px solid var(--rule-strong); border-radius:8px; overflow:hidden}
+.viewtog button{background:var(--surface); border:0; padding:6px 11px; font-size:12px; font-weight:600; color:var(--ink-2)}
+.viewtog button[aria-pressed="true"]{background:var(--ink); color:var(--plane)}
+
+.jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
+.jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
+
+.board{list-style:none; margin:0; padding:0; background:var(--surface); border:1px solid var(--rule); border-radius:14px; overflow:hidden; box-shadow:var(--shadow)}
+.row{
+  display:grid; grid-template-columns:34px minmax(190px,1.35fr) 116px minmax(200px,1.5fr) 150px 96px;
+  gap:16px; align-items:center; padding:15px 16px; border-top:1px solid var(--rule);
+  position:relative;
+}
+.row:first-child{border-top:0}
+.row.best{background:linear-gradient(90deg,var(--accent-bg) 0%, transparent 62%)}
+.row.best::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent-line)}
+.rank{font-family:"Archivo"; font-weight:800; font-size:19px; color:var(--muted); letter-spacing:-.03em}
+.row.best .rank{color:var(--accent)}
+.ident{min-width:0}
+.rname{font-family:"Archivo"; font-weight:700; font-size:15.5px; letter-spacing:-.02em; line-height:1.2}
+.rmeta{font-size:11.5px; color:var(--ink-2); margin-top:3px; display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.code{font-family:"JetBrains Mono",monospace; font-size:10.5px; font-weight:600; letter-spacing:.04em; border:1px solid var(--rule-strong); border-radius:4px; padding:1px 4px; color:var(--ink)}
+.bestflag{display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 7px}
+
+.spark{display:block}
+.bar-wrap{min-width:0}
+.bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
+.seg{height:100%}
+.seg.f1{background:var(--s1)} .seg.f2{background:var(--s2)} .seg.f3{background:var(--s3)} .seg.f4{background:var(--s4)} .seg.f5{background:var(--s5)}
+.barlabs{display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap}
+.barlabs span{display:flex; align-items:center; gap:5px; white-space:nowrap}
+.barlabs i{width:7px;height:7px;border-radius:2px; display:block; flex:none}
+
+.total{text-align:right}
+.tnum{font-family:"Archivo"; font-weight:800; font-size:21px; letter-spacing:-.035em; font-variant-numeric:tabular-nums}
+.tsub{font-size:11px; color:var(--ink-2); margin-top:2px; font-variant-numeric:tabular-nums}
+.rowbtn{justify-self:end}
+
+/* locked rows */
+.row.locked .ident,.row.locked .spark,.row.locked .bar-wrap,.row.locked .total{filter:blur(4.5px); opacity:.5; user-select:none}
+.lockover{
+  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px;
+  background:var(--lock); backdrop-filter:blur(1px);
+}
+.lockover span{font-size:12.5px; font-weight:600; color:var(--ink)}
+
+/* table view */
+.tablewrap{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow)}
+table{border-collapse:collapse; width:100%; font-size:13px}
+th,td{padding:10px 14px; text-align:right; white-space:nowrap; border-top:1px solid var(--rule)}
+th{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; border-top:0}
+th:first-child,td:first-child{text-align:left}
+td.n{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
+tbody tr:hover{background:var(--surface-2)}
+
+/* ---------- detail ---------- */
+.detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+.dhead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:16px 18px; border-bottom:1px solid var(--rule)}
+.dhead h3{font-size:16px; font-weight:700; letter-spacing:-.02em}
+.dhead p{margin:3px 0 0; font-size:12.5px; color:var(--ink-2)}
+.dbody{padding:18px}
+.sec-lab{font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
+
+/* fare calendar */
+.calgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:14px}
+.mon{position:relative}
+.mon h4{font-size:11.5px; font-weight:700; letter-spacing:.04em; margin:0 0 6px; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:6px}
+.mon h4 em{font-style:normal; font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--muted)}
+.days{display:grid; grid-template-columns:repeat(7,1fr); gap:2px}
+.dow{font-size:8.5px; text-align:center; color:var(--muted); font-weight:700; letter-spacing:.03em}
+.cell{aspect-ratio:1; border-radius:3px; border:0; padding:0; font-family:"JetBrains Mono",monospace; font-size:8.5px; color:var(--ink); display:grid; place-items:center; background:var(--dv-mid)}
+.cell.empty{background:transparent}
+.cell.sel{outline:2px solid var(--accent-line); outline-offset:1px}
+.mon.gated .days{filter:blur(3.5px); opacity:.5}
+.mon.gated::after{content:"Plus"; position:absolute; inset:auto 0 34% 0; text-align:center; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2)}
+.calscale{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--ink-2); margin-top:14px; flex-wrap:wrap}
+.calscale .ramp{display:flex; gap:2px}
+.calscale .ramp i{width:20px; height:11px; border-radius:2px; display:block}
+
+/* line items */
+.upsell{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  border:1px solid var(--accent-line); background:var(--accent-bg); border-radius:12px; padding:13px 16px; margin-top:22px}
+.upsell b{display:block; font-family:"Archivo"; font-weight:700; font-size:13.5px; letter-spacing:-.01em}
+.upsell span{font-size:12.5px; color:var(--ink-2)}
+.cols{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:26px; align-items:start}
+@media (max-width:1040px){ .cols{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:620px){ .cols{grid-template-columns:1fr} }
+.card{border:1px solid var(--rule); border-radius:11px; padding:14px; background:var(--surface-2)}
+.card h5{margin:0 0 2px; font-family:"Archivo"; font-size:13.5px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:7px}
+.card h5 i{width:9px;height:9px;border-radius:2px;display:block;flex:none}
+.card .sub{font-size:11.5px; color:var(--muted); margin:0 0 10px}
+.li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--rule); font-size:12.5px; align-items:baseline}
+.li:first-of-type{border-top:0}
+.li .l{min-width:0}
+.li .l b{font-weight:600; display:block}
+.li .l small{color:var(--muted); font-size:11px}
+.li .p{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
+.book{display:inline-block; margin-top:11px; font-size:11.5px; font-weight:700; color:var(--ink); border-bottom:1.5px solid var(--accent-line); text-decoration:none; padding-bottom:1px}
+.ovpanel{border:1px solid var(--accent-line); background:var(--accent-bg); border-radius:12px; padding:14px 16px 16px; margin-bottom:22px}
+.ovhead{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:13px}
+.ovhead .t{font-family:"Archivo"; font-weight:700; font-size:13.5px; letter-spacing:-.01em}
+.ovhead .d{font-size:12px; color:var(--ink-2); flex:1; min-width:180px}
+.ovgrid{display:grid; grid-template-columns:1fr 1.35fr; gap:20px}
+@media (max-width:720px){ .ovgrid{grid-template-columns:1fr} }
+.ovcell{display:grid; gap:7px; align-content:start}
+.ovcell .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
+.ovcell .lab b{font-family:"JetBrains Mono",monospace; font-size:15px; color:var(--ink); letter-spacing:0}
+.ovcell input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink)}
+.ovcell input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:99px; background:var(--rule-strong); outline:none; margin:7px 0 2px; cursor:pointer}
+.ovcell input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); box-shadow:0 1px 5px rgba(0,0,0,.32); cursor:pointer}
+.ovcell input[type=range]::-moz-range-thumb{width:16px; height:16px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); cursor:pointer}
+.ovends{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); font-family:"JetBrains Mono",monospace}
+.ovrow{margin-top:13px; padding-top:12px; border-top:1px dashed var(--rule-strong); display:grid; gap:8px}
+.ovrow .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
+.ovrow .lab b{font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink); letter-spacing:0}
+.ovrow input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:8px 10px; font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--ink)}
+.ovrow input[type=range]{width:100%; accent-color:var(--accent-line); margin:0; height:20px}
+.ovhint{font-size:11px; color:var(--muted); line-height:1.45}
+.ovacts{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+.yourchip{display:inline-flex; align-items:center; font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 6px}
+.gate{position:relative}
+.gate .inner{filter:blur(4px); opacity:.45; pointer-events:none}
+.gate .g-over{position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:10px}
+.gate .g-over p{margin:0 0 8px; font-size:12.5px; font-weight:600}
+
+/* ---------- paywall ---------- */
+.back{position:fixed; inset:0; background:rgba(8,9,13,.62); display:none; place-items:center; padding:20px; z-index:50}
+.back.on{display:grid}
+.modal{background:var(--surface); border:1px solid var(--rule-strong); border-radius:16px; max-width:640px; width:100%; box-shadow:0 24px 60px -18px rgba(0,0,0,.5); overflow:hidden; max-height:92vh; overflow-y:auto}
+.mhead{padding:22px 22px 16px; border-bottom:1px solid var(--rule)}
+.mhead h3{font-size:21px; font-weight:800; letter-spacing:-.03em}
+.mhead p{margin:6px 0 0; color:var(--ink-2); font-size:13.5px}
+.plans{display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:18px 22px}
+.plan{border:1px solid var(--rule-strong); border-radius:12px; padding:15px; text-align:left; background:var(--surface-2)}
+.plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
+.plan .pn{font-size:11px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2)}
+.plan .pp{font-family:"Archivo"; font-weight:800; font-size:25px; letter-spacing:-.035em; margin-top:5px}
+.plan .pp small{font-size:12px; font-weight:600; color:var(--ink-2); letter-spacing:0}
+.plan .ps{font-size:11.5px; color:var(--ink-2); margin-top:3px}
+.feat{list-style:none; margin:0; padding:0 22px 6px; display:grid; gap:7px}
+.feat li{display:flex; gap:9px; font-size:13px; align-items:flex-start; color:var(--ink-2)}
+.feat li b{color:var(--ink); font-weight:600}
+.feat .tick{color:var(--accent); font-weight:800; flex:none}
+.mfoot{padding:16px 22px 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); margin-top:12px}
+.stub{font-size:11.5px; color:var(--muted); flex:1; min-width:180px}
+
+/* ---------- tooltip ---------- */
+.tip{
+  position:fixed; z-index:60; pointer-events:none; opacity:0; transition:opacity .09s;
+  background:var(--ink); color:var(--plane); border-radius:7px; padding:7px 9px; font-size:11.5px;
+  font-family:"JetBrains Mono",monospace; white-space:nowrap; box-shadow:0 6px 20px -6px rgba(0,0,0,.5);
+}
+.tip.on{opacity:1}
+.tip b{font-family:"Karla",sans-serif; font-size:12px; display:block; margin-bottom:2px}
+
+/* ---------- footer ---------- */
+footer{margin-top:34px; border-top:1px solid var(--rule); padding-top:18px; color:var(--ink-2); font-size:12.5px}
+footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+.srcs{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:16px}
+.srcs p{margin:0 0 6px}
+.srcs b{color:var(--ink); font-weight:600}
+
+@media (max-width:940px){
+  .row{grid-template-columns:26px 1fr 130px; grid-template-areas:"rank ident total" ". bar bar" ". btn btn"; gap:10px 12px}
+  .rank{grid-area:rank} .ident{grid-area:ident} .total{grid-area:total}
+  .bar-wrap{grid-area:bar} .rowbtn{grid-area:btn; justify-self:start}
+  .spark{display:none}
+}
+@media (max-width:560px){
+  .plans{grid-template-columns:1fr}
+  .wrap{padding:14px 13px 60px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="brand">
+      <span class="mark">PF</span>
+      <div>
+        <h1>Parkfare</h1>
+        <p class="tag">Six Disney resorts, priced side by side.</p>
+      </div>
+    </div>
+    <div class="acct">
+      <span class="chip" id="planChip">Free plan</span>
+      <span class="chip" id="searchChip" hidden></span>
+      <span class="signin" id="signinBox">
+        <input type="email" id="signinEmail" placeholder="you@example.com" aria-label="Email">
+        <button class="btn btn-sm" id="signinBtn">Sign in</button>
+      </span>
+      <span class="signin" id="signedinBox" hidden>
+        <span class="chip" id="emailChip"></span>
+        <button class="btn btn-sm" id="signoutBtn">Sign out</button>
+      </span>
+      <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
+    </div>
+  </header>
+
+  <div class="demo">
+    <span class="dot"></span>
+    <div><b>Prototype build — prices are real, pulled from the cache.</b> Every figure comes from <code>/api/compare</code> and
+    <code>/api/calendar</code>, backed by whatever the refresh job last cached — the mock provider until a Travelpayouts token is
+    configured. The pricing logic, the paywall and this fare data are real; only the flight and hotel <em>source</em> is a stand-in
+    until the live feeds described at the bottom of the page are connected.</div>
+  </div>
+
+  <section class="panel">
+    <p class="panel-lab">Trip parameters</p>
+    <div class="fields">
+      <div class="f">
+        <label for="origin">Departing from</label>
+        <select id="origin"></select>
+      </div>
+      <div class="f">
+        <label for="adults">Adults (10+)</label>
+        <select id="adults"></select>
+      </div>
+      <div class="f">
+        <label for="kids">Children</label>
+        <select id="kids"></select>
+      </div>
+      <div class="f">
+        <label for="nights">Nights</label>
+        <select id="nights"></select>
+      </div>
+      <div class="f">
+        <label for="parkdays">Park days</label>
+        <select id="parkdays"></select>
+      </div>
+      <div class="f">
+        <label for="stay">Where you stay</label>
+        <select id="stay">
+          <option value="on" selected>On property</option>
+          <option value="off">Off property</option>
+          <option value="both">Compare both</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="tier">Resort category</label>
+        <select id="tier">
+          <option value="0">Value / budget</option>
+          <option value="1" selected>Moderate / mid-range</option>
+          <option value="2">Deluxe / upscale</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="food">Food</label>
+        <select id="food">
+          <option value="grocery">Groceries + counter service</option>
+          <option value="qs">Counter service</option>
+          <option value="mix" selected>Mix of counter &amp; table service</option>
+          <option value="ts">Table service &amp; character meals</option>
+          <option value="plan">Resort dining plan where offered</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="month">Arriving</label>
+        <select id="month"></select>
+      </div>
+    </div>
+    <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
+    <div class="panel-foot">
+      <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo.</p>
+      <button class="btn-primary" id="run">Compare six resorts</button>
+    </div>
+    <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
+  </section>
+
+  <section class="panel" id="savedTripsPanel" hidden>
+    <p class="panel-lab">Your saved trips</p>
+    <div id="savedTripsList"></div>
+  </section>
+
+  <div class="res-head">
+    <div>
+      <h2 id="resTitle">Six resorts, cheapest first</h2>
+      <p class="res-sub" id="resSub"></p>
+    </div>
+    <div class="legend">
+      <span class="lg"><i class="sw" style="background:var(--s1)"></i>Flights</span>
+      <span class="lg"><i class="sw" style="background:var(--s2)"></i>Tickets</span>
+      <span class="lg"><i class="sw" style="background:var(--s3)"></i>Hotel</span>
+      <span class="lg"><i class="sw" style="background:var(--s4)"></i>Food</span>
+      <span class="viewtog">
+        <button id="rAll" aria-pressed="true">All</button>
+        <button id="rDom" aria-pressed="false">Domestic</button>
+        <button id="rIntl" aria-pressed="false">International</button>
+      </span>
+      <span class="viewtog">
+        <button id="vBoard" aria-pressed="true">Board</button>
+        <button id="vTable" aria-pressed="false">Table</button>
+      </span>
+    </div>
+  </div>
+
+  <ol class="board" id="board"></ol>
+  <div class="tablewrap" id="tablewrap" hidden></div>
+
+  <section class="detail" id="detail"></section>
+
+  <footer>
+    <h4>What it would take to make these numbers real</h4>
+    <div class="srcs">
+      <p><b>Flights.</b> Travelpayouts / Aviasales gives fare search plus affiliate booking links and is open to solo
+      developers at no cost. Duffel is the alternative if you ever want to sell the ticket yourself — $3 per confirmed
+      order, no IATA accreditation needed. Amadeus is no longer an option: its self-service developer portal was
+      decommissioned on 17 July 2026.</p>
+      <p><b>Hotels.</b> Travelpayouts covers both on-property and off-property inventory through Booking.com and Agoda.
+      Expedia Rapid has better Disney-resort coverage but requires a corporate entity and a trading history.</p>
+      <p><b>Tickets.</b> No Disney park has a public pricing API, at any of the six resorts. The practical route is a
+      maintained price table per resort, refreshed against each resort's published date-based calendar, plus affiliate
+      feeds from authorized resellers. Disney has confirmed airline-style dynamic ticket pricing is coming to Walt Disney
+      World and Disneyland after its trial at Disneyland Paris — which makes a stored price table go stale faster, and
+      makes the "when should we go" question this app answers considerably more valuable.</p>
+      <p><b>Currency.</b> Local prices are converted at illustrative rates. A live FX feed replaces them.</p>
+    </div>
+  </footer>
+</div>
+
+<div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <div class="modal">
+    <div class="mhead">
+      <h3 id="pwTitle">Want to make it cheaper?</h3>
+      <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
+      you should never have to pay to see what a trip costs. Plus is for what happens after you close the tab: your trip
+      saved with your numbers, and a message when the price falls.</p>
+    </div>
+    <div class="plans">
+      <button class="plan" id="planMonthly" aria-pressed="true">
+        <div class="pn">Trip pass</div>
+        <div class="pp">$9<small> / 90 days</small></div>
+        <div class="ps">Covers a normal planning window. No renewal.</div>
+      </button>
+      <button class="plan" id="planYearly" aria-pressed="false">
+        <div class="pn">Yearly</div>
+        <div class="pp">$19<small> / year</small></div>
+        <div class="ps">For planning more than one trip</div>
+      </button>
+    </div>
+    <ul class="feat">
+      <li><span class="tick">✓</span><span><b>Price-drop alerts</b> — told when a fare or rate falls below what you saw</span></li>
+      <li><span class="tick">✓</span><span><b>Your trips saved</b> with the hotel rates and fares you set yourself</span></li>
+      <li><span class="tick">✓</span><span><b>Compare several trips</b> side by side, not one at a time</span></li>
+      <li><span class="tick">✓</span><span><b>Watch all six resorts at once</b> and hear which one drops first</span></li>
+      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else stays free</span></li>
+    </ul>
+    <div class="mfoot">
+      <span class="stub" id="pwFootMsg"></span>
+      <button class="btn" id="closePw">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============================ API ============================ */
+
+async function apiGet(path, params){
+  const q = new URLSearchParams();
+  for(const k in params){
+    const v = params[k];
+    if(v !== undefined && v !== null && v !== "") q.set(k, v);
+  }
+  const qs = q.toString();
+  const res = await fetch(path + (qs ? "?"+qs : ""));
+  if(!res.ok) throw new Error("API error "+res.status+" on "+path);
+  return res.json();
+}
+
+/* ============================ reference data (loaded from /api/meta) ============================ */
+
+let ORIGINS = [];        // [{iata,name,lat,lon}]
+let RESORTS = [];        // the six resorts, same shape as src/config.ts
+let RESORT_BY_ID = new Map();
+
+const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
+
+const ON_TIERS  = ["value","moderate","deluxe"];
+const OFF_TIERS = ["budget","mid","upscale"];
+const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
+                     budget:"Budget", mid:"Mid-range", upscale:"Upscale" };
+
+/* ============================ helpers ============================ */
+
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,"0");
+const usd = n => "$"+Math.round(n).toLocaleString("en-US");
+const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+function local(r, usdAmount){
+  const [rate,sym] = FX[r.currency];
+  const v = usdAmount*rate;
+  if(r.currency==="JPY") return sym+Math.round(v/100)*100;
+  if(r.currency==="CNY"||r.currency==="HKD") return sym+Math.round(v).toLocaleString("en-US");
+  if(r.currency==="EUR") return sym+Math.round(v).toLocaleString("en-US");
+  return "$"+Math.round(v).toLocaleString("en-US");
+}
+
+/* ============================ party & age bands (display only — same rules the API applies) ============================ */
+
+function paxList(p){
+  const out = [];
+  for(let i=0;i<p.adults;i++) out.push(30);
+  return out.concat(p.ages);
+}
+function bandOf(r, age){
+  const b = r.bands;
+  if(age < b.freeUnder) return "infant";
+  if(b.junior && age >= b.junior[0] && age <= b.junior[1]) return "junior";
+  if(age >= b.child[0] && age <= b.child[1]) return "child";
+  return "adult";
+}
+const BANDNAME = { infant:"free", child:"child", junior:"junior", adult:"adult" };
+function bandLine(r){
+  const b = r.bands;
+  let t = "free under "+b.freeUnder+" · child "+b.child[0]+"–"+b.child[1];
+  if(b.junior) t += " · junior "+b.junior[0]+"–"+b.junior[1];
+  return t + " · adult "+b.adult+"+";
+}
+
+/**
+ * Ticket and flight totals from the API are party-wide sums — the API prices
+ * per calendar day, not per person. The ratios below (same numbers pricing.ts
+ * uses) split a real total across band groups exactly: each day contributes
+ * total = Σ ratio(band) · dayRate, so a person's share is total × ratio / ΣratioΣ,
+ * with no re-guessing of the underlying day rate.
+ */
+function ticketRatio(r, band){
+  if(band==="infant") return 0;
+  if(band==="child") return r.ticket.child;
+  if(band==="junior") return r.ticket.junior ?? 0.9;
+  return 1;
+}
+function splitByBand(r, list, total){
+  const groups = {};
+  for(const age of list){ const b = bandOf(r, age); (groups[b] = groups[b] || []).push(age); }
+  let w = 0;
+  for(const b in groups) w += ticketRatio(r, b) * groups[b].length;
+  const perGroup = {};
+  for(const b in groups) perGroup[b] = w>0 ? total * (ticketRatio(r,b) * groups[b].length) / w : 0;
+  return { groups, perGroup };
+}
+
+/* ============================ state ============================ */
+
+const store = {
+  get(k,f){ try{ const v=localStorage.getItem("pf_"+k); return v===null?f:JSON.parse(v); }catch(e){ return f; } },
+  set(k,v){ try{ localStorage.setItem("pf_"+k, JSON.stringify(v)); }catch(e){} }
+};
+
+const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?} } — your numbers, not the model's
+const ovOf = id => OV[id] || {};
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat); };
+
+let session = { authenticated:false, email:null, plus:false, plusUntil:null };
+let params = null;
+let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
+let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
+let selected = 0, view = "board";
+let searchToken = 0, detailToken = 0;
+let regionFilter = "all";    // "all" | "dom" | "intl" — free, client-side only
+let airportTransportChoice = { mode:"auto" };   // Plus-only; server ignores this unless signed in as Plus
+
+function matchesRegion(item){
+  if(regionFilter === "all") return true;
+  return regionFilter === "dom" ? item.resort.region === "dom" : item.resort.region !== "dom";
+}
+
+/* ============================ form ============================ */
+
+function fillSelect(el, items){ el.innerHTML = items.map(([v,l])=>`<option value="${v}">${l}</option>`).join(""); }
+
+const today = new Date();
+const monthOpts = [];
+for(let i=1;i<=12;i++){
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+i, 1));
+  monthOpts.push([d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1), MONTHSFULL[d.getUTCMonth()]+" "+d.getUTCFullYear()]);
+}
+const CAL_FROM = monthOpts[0][0]+"-01";
+const CAL_TO = (()=>{
+  const [y,m] = monthOpts[monthOpts.length-1][0].split("-").map(Number);
+  const last = new Date(Date.UTC(y,m,0)).getUTCDate();
+  return monthOpts[monthOpts.length-1][0]+"-"+pad(last);
+})();
+
+function fillFormOptions(){
+  fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.iata+" — "+o.name]));
+  fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#nights"), [3,4,5,6,7,8,9,10,12,14].map(n=>[n,n+" nights"]));
+  fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
+  fillSelect($("#month"), monthOpts);
+
+  $("#origin").value = "ATL";
+  $("#adults").value = "2";
+  $("#kids").value = "3";
+  $("#nights").value = "6";
+  $("#parkdays").value = "4";
+  $("#month").value = monthOpts[5][0];
+}
+
+const DEFAULT_AGES = [11,8,2];   // 11 is the age the resorts actually disagree about
+function buildAges(){
+  const n = +$("#kids").value, box = $("#ages"), prev = {};
+  box.querySelectorAll("select").forEach(el => prev[el.id] = el.value);
+  box.innerHTML = '<span class="cap">Ages at travel</span>' + Array.from({length:n}, (_,i)=>{
+    const cur = prev["age"+i] !== undefined ? +prev["age"+i] : (DEFAULT_AGES[i] !== undefined ? DEFAULT_AGES[i] : 7);
+    const opts = Array.from({length:18}, (_,a)=>
+      `<option value="${a}"${a===cur?" selected":""}>${a===0?"under 1":a+(a===1?" yr":" yrs")}</option>`).join("");
+    return `<div class="agef"><label for="age${i}">Child ${i+1}</label><select id="age${i}">${opts}</select></div>`;
+  }).join("");
+  box.hidden = n === 0;
+}
+$("#kids").addEventListener("change", buildAges);
+
+function readParams(){
+  return {
+    origin: $("#origin").value,
+    adults: +$("#adults").value,
+    ages: Array.from({length:+$("#kids").value}, (_,i)=>{
+      const el = document.getElementById("age"+i); return el ? +el.value : 7;
+    }),
+    nights: +$("#nights").value,
+    parkDays: Math.min(+$("#parkdays").value, +$("#nights").value+1),
+    stay: $("#stay").value,
+    tier: $("#tier").value,
+    food: $("#food").value,
+    month: $("#month").value
+  };
+}
+
+/* ============================ search — everything below reads the cache ============================ */
+
+function tripQuery(){
+  const q = {
+    origin: params.origin, adults: params.adults, childAges: params.ages.join(","),
+    nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
+  };
+  if(session.plus) q.airportTransport = JSON.stringify(airportTransportChoice);
+  return q;
+}
+function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV) }; }
+function calendarQuery(resortId, from, to, tierOverride){
+  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV) };
+  if(tierOverride !== undefined) q.tier = tierOverride;
+  return q;
+}
+
+let promosByResort = {};   // "resortId|date" -> PromoRow[] — public/free to browse, applying is Plus
+async function fetchPromosFor(resortId, on){
+  const key = resortId+"|"+(on||"");
+  if(promosByResort[key]) return promosByResort[key];
+  const list = await apiGet("/api/promos", { resortId, on });
+  promosByResort[key] = Array.isArray(list) ? list : [];
+  return promosByResort[key];
+}
+function describePromoEffect(kind, value){
+  if(kind==="room_pct_off") return Math.round(value)+"% off the room rate";
+  if(kind==="room_flat_off") return usd(value)+" off the room rate";
+  if(kind==="free_dining") return "Free dining plan";
+  if(kind==="ticket_pct_off") return Math.round(value)+"% off tickets";
+  if(kind==="flat_off_total") return usd(value)+" off the total";
+  return "";
+}
+
+async function fetchCalendarFor(resortId){
+  const data = await apiGet("/api/calendar", calendarQuery(resortId, CAL_FROM, CAL_TO));
+  const days = data.days.map(d => ({ date:d.date, v:d.total }));
+  const priced = days.map(d=>d.v).filter(v=>v!==null).sort((a,b)=>a-b);
+  return {
+    days, pricesAsOf: data.pricesAsOf,
+    min: priced.length?priced[0]:null, med: priced.length?priced[Math.floor(priced.length/2)]:null,
+    max: priced.length?priced[priced.length-1]:null,
+  };
+}
+
+function monthlyMinima(cal){
+  if(!cal) return monthOpts.map(([ym])=>({ym, v:null}));
+  return monthOpts.map(([ym])=>{
+    const vals = cal.days.filter(d=>d.date.slice(0,7)===ym && d.v!==null).map(d=>d.v);
+    return { ym, v: vals.length ? Math.min(...vals) : null };
+  });
+}
+
+/** Same-day hotel cost at a different category, without re-running the whole search:
+ *  flights/tickets/food don't change with hotel tier, so the delta comes straight
+ *  from one calendar read on the trip's own start date. */
+async function hotelAtTier(item, t){
+  if(t === +params.tier) return item.price.hotel;
+  const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t));
+  const day = data.days[0];
+  if(!day || day.total === null) return null;
+  return day.total - item.price.total + item.price.hotel;
+}
+
+async function runSearch(keepId){
+  params = readParams();
+  const token = ++searchToken;
+  const btn = $("#run"); if(btn) btn.disabled = true;
+  try {
+    const compareData = await apiGet("/api/compare", compareQuery());
+    if(token !== searchToken) return;
+    results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+    await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
+    if(token !== searchToken) return;
+    const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
+    selected = idx < 0 ? 0 : idx;
+    render();
+  } catch(e){
+    console.error(e);
+    $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not reach the pricing API</div>
+      <div class="rmeta">${String((e && e.message) || e)}</div></div></li>`;
+  } finally {
+    if(btn) btn.disabled = false;
+  }
+}
+
+// Changing your own numbers re-prices everything but only refetches the one
+// resort's calendar — the other five didn't just change.
+async function recompute(changedResortId){
+  const keepId = changedResortId || (results[selected] && results[selected].resortId);
+  const token = ++searchToken;
+  const compareData = await apiGet("/api/compare", compareQuery());
+  if(token !== searchToken) return;
+  results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+  if(changedResortId) calendars[changedResortId] = await fetchCalendarFor(changedResortId);
+  if(token !== searchToken) return;
+  const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
+  selected = idx < 0 ? 0 : idx;
+  render();
+}
+
+/* ============================ render: board ============================ */
+
+function unlocked(){ return true; }   // the tool is free; Plus buys memory and watching
+
+function sparkSVG(pts){
+  const known = pts.map((p,i)=>({v:p.v, i})).filter(p=>p.v!==null);
+  const W=112,H=30,pad=3;
+  if(!known.length) return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"></svg>`;
+  const vals = known.map(p=>p.v);
+  const mn=Math.min(...vals), mx=Math.max(...vals);
+  const x = i => pad + i*(W-2*pad)/((pts.length-1)||1);
+  const y = v => H-pad - ((v-mn)/((mx-mn)||1))*(H-2*pad);
+  const d = known.map((p,k)=>(k?"L":"M")+x(p.i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
+  const best = known.reduce((b,p)=>p.v<b.v?p:b, known[0]);
+  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Cheapest total by month over the next year">
+    <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${x(best.i).toFixed(1)}" cy="${y(best.v).toFixed(1)}" r="4"
+      fill="var(--accent-line)" stroke="var(--surface)" stroke-width="2"/>
+  </svg>`;
+}
+
+function renderBoard(){
+  const board = $("#board");
+  const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
+  board.innerHTML = list.map(({item,i},pos)=>{
+    const r = item.resort;
+    if(!item.ok){
+      return `<li class="row" data-i="${i}">
+        <div class="rank">${pos+1}</div>
+        <div class="ident">
+          <div class="rname">${item.name}</div>
+          <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
+        </div>
+        <div></div><div></div>
+        <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
+        <div></div>
+      </li>`;
+    }
+    const x = item.price, tot = x.total, pax = x.partySize;
+    const w = n => (n/tot*100).toFixed(2)+"%";
+    const spark = monthlyMinima(calendars[item.resortId]);
+    const perPD = tot/pax/(params.nights+1);
+    const bands = params.ages.length
+      ? params.ages.map(a=>a+" → "+BANDNAME[bandOf(r,a)]).join(" · ") : "";
+    const sd = new Date(x.start+"T00:00:00Z");
+    const dateStr = MONTHS[sd.getUTCMonth()]+" "+sd.getUTCDate();
+    const open = unlocked(i);
+    return `
+    <li class="row${pos===0?" best":""}${open?"":" locked"}" data-i="${i}">
+      <div class="rank">${pos+1}</div>
+      <div class="ident">
+        <div class="rname">${r.name}</div>
+        <div class="rmeta">
+          <span class="code">${r.iata}</span>${r.city} · ${r.note}
+          ${pos===0?'<span class="bestflag">Cheapest</span>':""}
+          ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
+        </div>
+        ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
+      </div>
+      ${sparkSVG(spark)}
+      <div class="bar-wrap">
+        <div class="bar" role="img" aria-label="Cost split: flights ${usd(x.flights)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}${x.airportTransport?`, airport ${usd(x.airportTransport)}`:""}">
+          <div class="seg f1" style="width:${w(x.flights)}"></div>
+          <div class="seg f2" style="width:${w(x.tickets)}"></div>
+          <div class="seg f3" style="width:${w(x.hotel)}"></div>
+          <div class="seg f4" style="width:${w(x.food)}"></div>
+          ${x.airportTransport?`<div class="seg f5" style="width:${w(x.airportTransport)}"></div>`:""}
+        </div>
+        <div class="barlabs">
+          <span><i style="background:var(--s1)"></i>Flights ${usd(x.flights)}</span>
+          <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
+          <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
+          <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
+          ${x.airportTransport?`<span><i style="background:var(--s5)"></i>Airport ${usd(x.airportTransport)}</span>`:""}
+        </div>
+      </div>
+      <div class="total">
+        <div class="tnum">${usd(tot)}</div>
+        <div class="tsub">${usd(perPD)} / person / day · from ${dateStr}</div>
+      </div>
+      <button class="btn btn-sm rowbtn" data-open="${i}">${open?"Details":"Unlock"}</button>
+      ${open?"":`<div class="lockover"><span>Locked on the free plan</span></div>`}
+    </li>`;
+  }).join("");
+  if(!list.length) board.innerHTML = `<li class="row"><div class="ident"><div class="rname">No resorts in this filter</div>
+    <div class="rmeta">Try "All" instead.</div></div></li>`;
+}
+
+function renderTable(){
+  const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
+  const rows = list.map(({item,i},pos)=>{
+    const r = item.resort, open = unlocked(i);
+    if(!item.ok){
+      return `<tr><td>${pos+1}. ${item.name}<br><small style="color:var(--muted)">No cached price</small></td>
+        <td class="n">${item.iata}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
+        <td class="n">—</td><td class="n">—</td><td>${item.reason}</td></tr>`;
+    }
+    const x = item.price;
+    const cell = v => open ? `<td class="n">${usd(v)}</td>` : `<td class="n">—</td>`;
+    const sd = new Date(x.start+"T00:00:00Z");
+    return `<tr>
+      <td>${pos+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
+      <td class="n">${r.iata}</td>
+      ${cell(x.flights)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
+      <td class="n"><b>${usd(x.total)}</b></td>
+      <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
+      <td>${open ? x.hotelPick.name : "Locked"}</td>
+    </tr>`;
+  }).join("");
+  $("#tablewrap").innerHTML = `<table>
+    <thead><tr><th>Resort</th><th>Airport</th><th>Flights</th><th>Tickets</th><th>Hotel</th><th>Food</th><th>Total</th><th>Best start</th><th>Cheapest stay</th></tr></thead>
+    <tbody>${rows}</tbody></table>`;
+}
+
+/* ============================ render: detail + calendar ============================ */
+
+const RAMP = ["--dv-lo-4","--dv-lo-3","--dv-lo-2","--dv-lo-1","--dv-mid","--dv-hi-1","--dv-hi-2","--dv-hi-3","--dv-hi-4"];
+
+function levelOf(v, min, med, max){
+  if(v <= med){
+    const t = (med - v) / ((med - min)||1);
+    return Math.max(0, Math.min(3, 3 - Math.round(t*3)));
+  }
+  const t = (v - med) / ((max - med)||1);
+  return Math.min(8, 4 + Math.max(1, Math.round(t*4)));
+}
+
+const AT_LABEL = { parking:"Parking", rideshare:"Rideshare (Uber/Lyft/taxi)", transit:"Transit", custom:"Your own way" };
+
+function airportTransportCard(x, p){
+  const pick = x.airportTransportPick;
+  const inner = `
+    <div class="li"><div class="l"><b>${pick ? AT_LABEL[pick.mode] : "No cached estimate"}</b>
+      <small>${pick ? "for this trip's length, round trip" : "no parking/rideshare data cached for "+p.origin+" yet"}</small></div>
+      <div class="p">${pick ? usd(pick.amountUsd) : "—"}</div></div>
+    <div class="li"><div class="l"><b>How you'll get there</b>
+      <small>Auto picks whichever's cheaper for ${p.nights} night${p.nights===1?"":"s"}</small></div>
+      <div class="p"><select id="atMode" aria-label="How you'll get to the airport">
+        <option value="auto"${airportTransportChoice.mode==="auto"?" selected":""}>Auto (cheapest)</option>
+        <option value="parking"${airportTransportChoice.mode==="parking"?" selected":""}>Parking</option>
+        <option value="rideshare"${airportTransportChoice.mode==="rideshare"?" selected":""}>Rideshare</option>
+        <option value="transit"${airportTransportChoice.mode==="transit"?" selected":""}>Transit</option>
+        <option value="custom"${airportTransportChoice.mode==="custom"?" selected":""}>My own way — enter $</option>
+      </select></div></div>
+    ${airportTransportChoice.mode==="custom" ? `<div class="li"><div class="l"><b>Your amount, round trip</b></div>
+      <div class="p"><input type="number" id="atCustom" min="0" step="5" value="${airportTransportChoice.customAmount||0}" style="width:80px"></div></div>` : ""}
+  `;
+  return `<div class="card">
+    <h5>Getting to the airport</h5>
+    <p class="sub">Parking, rideshare, or your own way there</p>
+    ${session.plus ? inner : `<div class="gate"><div class="inner">${inner}</div>
+      <div class="g-over"><p>See parking vs. rideshare vs. transit, and set your own way there</p>
+      <button class="btn btn-sm openpw">Ask for Plus</button></div></div>`}
+  </div>`;
+}
+
+const PERSONAL_PROMO_OPTIONS = [
+  ["room_pct_off|Annual Passholder", "Annual Passholder — % off room"],
+  ["room_pct_off|DVC member", "DVC member — % off room"],
+  ["room_pct_off|Military discount", "Military — % off room"],
+  ["room_pct_off|Florida Resident", "Florida Resident — % off room"],
+  ["room_pct_off|Custom room discount", "Custom — % off room"],
+  ["ticket_pct_off|Custom ticket discount", "Custom — % off tickets"],
+  ["flat_off_total|Custom discount", "Custom — $ off total"],
+];
+
+function promosCard(item, x, promoList){
+  const ov = ovOf(item.resortId);
+  const rows = promoList.map(promo=>{
+    const applied = ov.promoId === promo.id;
+    return `<div class="li"><div class="l"><b>${promo.label}</b>
+      <small>${describePromoEffect(promo.effectKind, promo.effectValue)} · ${promo.startsOn} to ${promo.endsOn}
+      ${promo.historical?" · historical pattern, not confirmed for your dates":""}</small></div>
+      <div class="p">${session.plus
+        ? `<button class="btn btn-sm" data-applypromo="${applied?"":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button>`
+        : `<button class="btn btn-sm openpw">Apply · Plus</button>`}</div></div>`;
+  }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
+
+  const personalForm = session.plus ? `
+    <div class="li"><div class="l" style="width:100%">
+      <b>Have your own discount?</b>
+      <small>Annual Passholder, DVC, military, Florida resident, or your own code — your claim, not verified</small>
+      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
+        <select id="ppKind">${PERSONAL_PROMO_OPTIONS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
+        <input type="number" id="ppValue" min="0" step="1" placeholder="amount" style="width:76px">
+        <button class="btn btn-sm" id="ppApply" data-resort="${item.resortId}">Apply</button>
+      </div>
+    </div></div>`
+    : `<div class="li"><div class="l"><b>Have your own discount?</b><small>Annual Passholder, DVC, military, and more</small></div>
+      <div class="p"><button class="btn btn-sm openpw">Plus</button></div></div>`;
+
+  const appliedNote = x.appliedPromos.length
+    ? x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label}: ${usd(a.amountUsd)} off${a.historical?" (historical, not confirmed)":""}`).join(" · ")
+    : "";
+
+  return `<div class="card">
+    <h5>Promos &amp; discounts</h5>
+    <p class="sub">Historical patterns, not guarantees — plus your own codes</p>
+    ${rows}${personalForm}
+    ${appliedNote?`<p class="sub" style="margin:10px 0 0; color:var(--accent)">Applied: ${appliedNote}</p>`:""}
+  </div>`;
+}
+
+async function renderDetail(){
+  const token = ++detailToken;
+  const item = results[selected];
+  const box = $("#detail");
+  if(!item){ box.innerHTML = ""; return; }
+  if(!item.ok){
+    box.innerHTML = `<div class="dhead"><div><h3>${item.name}</h3>
+      <p>No cached price for the selected dates and party — ${item.reason}. Try a different month
+      or check back after the next refresh.</p></div></div>`;
+    return;
+  }
+
+  const r = item.resort, x = item.price, p = params;
+  const cal = calendars[item.resortId];
+  const list = paxList(p);
+  const pax = list.length;
+
+  const [tierRows, promoList] = await Promise.all([
+    Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
+    fetchPromosFor(item.resortId, x.start),
+  ]);
+  if(token !== detailToken) return;
+
+  // group calendar days by month
+  const byMonth = {};
+  for(const day of (cal ? cal.days : [])){
+    const k = day.date.slice(0,7);
+    (byMonth[k] = byMonth[k] || []).push(day);
+  }
+  const keys = Object.keys(byMonth).sort().slice(0,12);
+  const min = cal ? cal.min : null, med = cal ? cal.med : null, max = cal ? cal.max : null;
+
+  const calHtml = keys.map(k=>{
+    const arr = byMonth[k];
+    const first = new Date(arr[0].date+"T00:00:00Z");
+    const lead = (first.getUTCDay()+6)%7; // Monday-first
+    const priced = arr.map(a=>a.v).filter(v=>v!==null);
+    const mn = priced.length ? Math.min(...priced) : null;
+    const cells = Array(lead).fill('<span class="cell empty"></span>')
+      .concat(arr.map(a=>{
+        if(a.v === null) return `<span class="cell" style="background:var(--dv-mid);opacity:.35" aria-label="${a.date}: no cached price"></span>`;
+        const lv = (min===null) ? 4 : levelOf(a.v, min, med, max);
+        return `<button class="cell${a.date===x.start?" sel":""}"
+          style="background:var(${RAMP[lv]})" data-date="${a.date}" data-v="${Math.round(a.v)}"
+          aria-label="${a.date}: ${usd(a.v)}"></button>`;
+      })).join("");
+    return `<div class="mon">
+      <h4>${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()} <em>${mn===null?"—":usdK(mn)}</em></h4>
+      <div class="days">
+        ${["M","T","W","T","F","S","S"].map(d=>`<span class="dow">${d}</span>`).join("")}
+        ${cells}
+      </div>
+    </div>`;
+  }).join("");
+
+  // cheapest start dates
+  const allDays = (cal ? cal.days : []).filter(d=>d.v!==null).sort((a,b)=>a.v-b.v).slice(0,5);
+  const cheapRows = allDays.map(a=>{
+    const d = new Date(a.date+"T00:00:00Z");
+    return `<div class="li"><div class="l"><b>${d.toUTCString().slice(0,11)}</b>
+      <small>${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()]} arrival</small></div>
+      <div class="p">${usd(a.v)}</div></div>`;
+  }).join("");
+
+  // flights — the one cached fare this trip actually priced against
+  const fp = x.flightPick;
+  const floor = fp ? fp.price : x.perSeatFare;
+  const flightRows = (fp
+    ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>
+        <small>${fp.stops===0?"Nonstop":fp.stops+" stop"+(fp.stops>1?"s":"")} · ${p.origin}→${r.iata} · round trip, per person</small></div>
+        <div class="p">${usd(x.perSeatFare)}</div></div>`
+    : `<div class="li"><div class="l"><b>Your fare</b><small>No cached fare for this route — priced entirely from your number</small></div>
+        <div class="p">${usd(x.perSeatFare)}</div></div>`)
+    + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+        <small>${list.filter(a=>a>=2).length} seat${list.filter(a=>a>=2).length===1?"":"s"}${list.some(a=>a<2)?` · ${list.filter(a=>a<2).length} lap infant under 2 at 10%`:""}</small></div>
+        <div class="p">${usd(x.flights)}</div></div>`;
+  const flightLink = (fp && fp.deepLink) ||
+    `https://www.google.com/travel/flights?q=${encodeURIComponent("Flights from "+p.origin+" to "+r.iata+" on "+x.start)}`;
+
+  // tickets, grouped by this resort's own age bands — split from the real total
+  const { groups, perGroup } = splitByBand(r, list, x.tickets);
+  const ORDER = ["adult","junior","child","infant"];
+  const ticketRowsHtml = ORDER.filter(b=>groups[b]).map(b=>{
+    const n = groups[b].length;
+    const who = b === "adult" ? `Adult (${r.bands.adult}+)`
+      : b === "junior" ? `Junior (${r.bands.junior[0]}–${r.bands.junior[1]})`
+      : b === "child" ? `Child (${r.bands.child[0]}–${r.bands.child[1]})`
+      : `Under ${r.bands.freeUnder}`;
+    const detail = b === "infant" ? "No admission charged" : `${p.parkDays}-day ticket × ${n}`;
+    return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
+      <div class="p">${b==="infant"?"Free":usd(perGroup[b])}</div></div>`;
+  }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+      <small>${p.parkDays}-day ticket${p.parkDays>1?"s":""}</small></div>
+      <div class="p">${usd(x.tickets)}</div></div>`;
+
+  // hotel — the real pick, plus what the other categories would cost at the same date
+  const stayNow = x.hotelPick.onProperty;
+  const hp = x.hotelPick;
+  const hotelPickRow = x.hotelTier.custom
+    ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights</small></div>
+        <div class="p">${usd(x.rooms)}</div></div>`
+    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night</small></div>
+        <div class="p">${usd(x.rooms)}</div></div>`;
+  const hotelRows = hotelPickRow
+    + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
+        <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":" off property"}</small></div>
+        <div class="p">${usd(x.transport)}</div></div>` : "")
+    + `<div class="li"><div class="l"><b>Hotel total</b>
+       <small>${hp.name}${x.transport?" + parking and transfers":""}</small></div>
+       <div class="p">${usd(x.hotel)}</div></div>`;
+
+  const tierCompare = [0,1,2].map(t=>{
+    const cost = tierRows[t];
+    const label = TIER_LABEL[(stayNow ? ON_TIERS : OFF_TIERS)[t]];
+    return `<div class="li"><div class="l"><b>${label}</b>
+      <small>${cost===null?"no cached rate for this date":usd(cost/p.nights)+" / night"}</small></div>
+      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${cost===null?"—":usd(cost)}</div></div>`;
+  }).join("");
+  const tierNote = x.hotelTier.swapped
+    ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
+    : "";
+
+  // food — computed the same way pricing.ts does, using the resort's own rates
+  const fi = x.foodPlan;
+  const foodRows = fi
+    ? ORDER.filter(b=>groups[b] && b!=="infant").map(b=>{
+        const n = groups[b].length, rate = b === "child" ? fi.child : fi.adult;
+        return `<div class="li"><div class="l"><b>${b==="child"?"Child":"Adult"} × ${n}</b>
+          <small>${usd(rate)} per night × ${p.nights}</small></div>
+          <div class="p">${usd(rate*p.nights*n)}</div></div>`;
+      }).join("") + (groups.infant ? `<div class="li"><div class="l"><b>Under ${r.bands.freeUnder} × ${groups.infant.length}</b>
+          <small>Eats from an adult's plate — no plan needed</small></div><div class="p">Free</div></div>` : "")
+      + `<div class="li"><div class="l"><b>${fi.label}</b><small>Requires an on-property stay</small></div>
+         <div class="p">${usd(x.food)}</div></div>`
+    : (()=>{
+        const style = p.food === "plan" ? "qs" : p.food;
+        const rate = r.food[style];
+        const foodMult = b => b==="infant"?0:b==="child"?0.55:b==="junior"?0.9:1;
+        const days = p.nights + 0.4;
+        return ORDER.filter(b=>groups[b]).map(b=>{
+          const n = groups[b].length, m = foodMult(b);
+          return `<div class="li"><div class="l"><b>${b==="infant"?"Under "+r.bands.freeUnder:b[0].toUpperCase()+b.slice(1)} × ${n}</b>
+            <small>${b==="infant" ? "Eats from an adult's plate" : usd(rate*m)+" per day"}</small></div>
+            <div class="p">${b==="infant" ? "Free" : usd(rate*m*days*n)}</div></div>`;
+        }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+          <small>${days} eating days · ${local(r, x.food/days/pax)} per person per day</small></div>
+          <div class="p">${usd(x.food)}</div></div>`;
+      })();
+  const planNote = p.food === "plan" && !fi
+    ? (r.plans && r.plans.length ? "No dining plan on an off-property stay — priced as counter service."
+                                 : r.name + " has no dining plan; priced as counter service.")
+    : "";
+
+  // age bands at this resort
+  const bandRows = list.filter((a,i)=>i>=p.adults).map(age=>{
+    const b = bandOf(r, age);
+    return `<div class="li"><div class="l"><b>Age ${age}</b>
+      <small>${b==="infant" ? "Free admission · eats from an adult's plate"
+        : b==="child" ? "Child ticket · child dining rate"
+        : b==="junior" ? "Junior ticket · adult dining rate"
+        : "Adult ticket · adult dining rate"}</small></div>
+      <div class="p">${BANDNAME[b]}</div></div>`;
+  }).join("");
+
+  // ---- your numbers: free to set and use, Plus to save and watch ----
+  const ovR = ovOf(r.id);
+  const fareNow = ovR.farePerSeat ? Math.max(ovR.farePerSeat, floor) : x.perSeatFare;
+  const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
+  const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
+  const fareCtl = `<div class="ovcell">
+    <div class="lab"><span>Airfare you expect, per person</span><b id="fareVal">${usd(fareNow)}</b></div>
+    <input type="range" id="fareSlider" min="${Math.round(floor)}" max="${Math.round(floor*2.6)}" step="5"
+           value="${Math.round(fareNow)}" aria-label="Airfare you expect per person">
+    <div class="ovends"><span>${usd(floor)} cheapest found</span><span>${usd(floor*2.6)}</span></div>
+    <div class="ovhint">The slider stops at ${usd(floor)} — the cheapest fare the cache has for this route near ${monthName}.
+      You can assume more than that, never less. ${overPct > 0 ? `Right now you're ${overPct}% above it.` : ""}</div>
+    ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
+      <span class="yourchip">Your number</span></div>` : ""}
+  </div>`;
+
+  const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
+  const hotelCtl = `<div class="ovcell">
+    <div class="lab"><span>Hotel, per night</span><b>${ovR.nightly ? usd(ovR.nightly) : usd(modelNightly)}</b></div>
+    <input type="number" id="hotelOv" step="5" min="0" value="${ovR.nightly || ""}"
+           placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
+    <div class="ovhint">${ovR.nightly
+      ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The cache says " + usd(modelNightly) + "."
+      : "Type what you know you can get. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
+    ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
+      <span class="yourchip">Your number</span></div>` : ""}
+  </div>`;
+
+  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.city)}&checkin=${x.start}`;
+  const sd = new Date(x.start+"T00:00:00Z");
+
+  box.innerHTML = `
+    <div class="dhead">
+      <div>
+        <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
+        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)} ·
+           prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
+        ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
+          Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
+      </div>
+      <div class="legend">
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this trip & watch it" : "Save & watch · Plus"}</button>
+        ${results.map((y,i)=>
+        `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.iata}</button>`).join("")}</div>
+    </div>
+    <div class="dbody">
+      <div class="ovpanel">
+        <div class="ovhead">
+          <span class="t">Your numbers</span>
+          <span class="d">Know a better rate than the cache? Set it here — free, and only for ${r.name}.</span>
+          <button class="btn btn-sm" id="saveOv">Save these numbers</button>
+        </div>
+        <div class="ovgrid">${hotelCtl}${fareCtl}</div>
+      </div>
+      <p class="sec-lab">Fare calendar — total trip cost by arrival date</p>
+      <div class="calgrid">${calHtml}</div>
+      <div class="calscale">
+        <span>Cheaper</span>
+        <span class="ramp">${RAMP.map(v=>`<i style="background:var(${v})"></i>`).join("")}</span>
+        <span>Pricier</span>
+        <span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>
+      </div>
+
+      ${(()=>{
+        if(min===null) return "";
+        const save = x.total - min;
+        if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
+          <span>Plus keeps watching, and tells you if it drops below ${usd(min)}.</span></div>
+          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+        const best = allDays[0] ? new Date(allDays[0].date+"T00:00:00Z") : null;
+        return `<div class="upsell"><div><b>Want to make it cheaper?${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
+          <span>Plus saves this trip with your own rates and tells you when it drops further.</span></div>
+          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+      })()}
+      <div class="cols">
+        <div class="card">
+          <h5>Cheapest arrival dates</h5>
+          <p class="sub">Across the next twelve months</p>
+          ${cheapRows || `<div class="li"><div class="l"><b>No cached dates yet</b><small>Run the refresh job to populate the calendar</small></div><div class="p">—</div></div>`}
+        </div>
+        <div class="card">
+          <h5><i style="background:var(--s1)"></i>Flights</h5>
+          <p class="sub">Round trip per person</p>
+          ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
+        </div>
+        ${airportTransportCard(x, p)}
+        ${promosCard(item, x, promoList)}
+        <div class="card">
+          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
+          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
+          ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+        </div>
+        <div class="card">
+          <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
+          <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
+          ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
+          <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
+          ${tierCompare}
+          <a class="book" href="${hp.deepLink || bkUrl}" target="_blank" rel="noopener">Check live rates →</a>
+        </div>
+        <div class="card">
+          <h5><i style="background:var(--s4)"></i>Food</h5>
+          <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
+        </div>
+        <div class="card">
+          <h5>Age bands here</h5>
+          <p class="sub">${bandLine(r)}</p>
+          ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
+        </div>
+      </div>
+      <p class="hint" style="margin-top:16px">Outbound links go to public search pages and carry no affiliate tag yet, except where the cache already
+      has a real booking link — those are the slots your Travelpayouts or reseller links fill in.</p>
+    </div>`;
+}
+
+/* ============================ render ============================ */
+
+function render(){
+  const p = params;
+  const pax = paxList(p).length;
+  const kidStr = p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""} (${p.ages.join(", ")})` : "";
+  $("#resSub").textContent =
+    `${p.adults} adult${p.adults>1?"s":""}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
+  $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
+  $("#planChip").className = "chip" + (session.plus?" plus":"");
+  $("#searchChip").hidden = true;
+  $("#upgradeTop").hidden = session.plus;
+  $("#signinBox").hidden = session.authenticated;
+  $("#signedinBox").hidden = !session.authenticated;
+  if(session.authenticated) $("#emailChip").textContent = session.email + (session.plus?" · Plus":"");
+  renderBoard(); renderTable(); renderDetail();
+  $("#board").hidden = view!=="board";
+  $("#tablewrap").hidden = view!=="table";
+}
+
+/* ============================ events ============================ */
+
+$("#run").addEventListener("click", ()=>runSearch(null));
+
+document.addEventListener("click", e=>{
+  const o = e.target.closest("[data-open]");
+  if(o){
+    const i = +o.dataset.open;
+    if(!unlocked(i)){ openPw(); return; }
+    selected = i; renderDetail();
+    $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+    return;
+  }
+  if(e.target.closest(".openpw") || e.target.closest(".lockover")){ openPw(); }
+});
+
+$("#vBoard").addEventListener("click", ()=>{ view="board"; syncView(); });
+$("#vTable").addEventListener("click", ()=>{ view="table"; syncView(); });
+function syncView(){
+  $("#vBoard").setAttribute("aria-pressed", view==="board");
+  $("#vTable").setAttribute("aria-pressed", view==="table");
+  $("#board").hidden = view!=="board";
+  $("#tablewrap").hidden = view!=="table";
+}
+
+function setRegionFilter(v){
+  regionFilter = v;
+  $("#rAll").setAttribute("aria-pressed", v==="all");
+  $("#rDom").setAttribute("aria-pressed", v==="dom");
+  $("#rIntl").setAttribute("aria-pressed", v==="intl");
+  renderBoard(); renderTable();
+}
+$("#rAll").addEventListener("click", ()=>setRegionFilter("all"));
+$("#rDom").addEventListener("click", ()=>setRegionFilter("dom"));
+$("#rIntl").addEventListener("click", ()=>setRegionFilter("intl"));
+
+function fillJumpRow(){
+  const box = $("#jumprow");
+  box.innerHTML = '<span class="cap">Or jump straight to one resort</span>' +
+    RESORTS.map(r=>`<button class="btn btn-sm" data-jump="${r.id}">${r.name}</button>`).join("");
+}
+document.addEventListener("click", async e=>{
+  const j = e.target.closest("[data-jump]");
+  if(!j) return;
+  await runSearch(j.dataset.jump);
+  $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+});
+
+function openPw(){
+  const msg = $("#pwFootMsg");
+  if(!session.authenticated) msg.textContent = "Sign in above with your email first, then ask the owner to enable Plus for your account.";
+  else if(session.plus) msg.textContent = "You already have Plus on this account — thanks!";
+  else msg.textContent = `Signed in as ${session.email}. Ask the owner to enable Plus for this email — there's no payment yet, just a demo.`;
+  $("#paywall").classList.add("on");
+}
+$("#closePw").addEventListener("click", ()=> $("#paywall").classList.remove("on"));
+$("#upgradeTop").addEventListener("click", openPw);
+$("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
+document.addEventListener("keydown", e=>{ if(e.key==="Escape") $("#paywall").classList.remove("on"); });
+
+$("#planMonthly").addEventListener("click", ()=>{
+  $("#planMonthly").setAttribute("aria-pressed","true"); $("#planYearly").setAttribute("aria-pressed","false");
+});
+$("#planYearly").addEventListener("click", ()=>{
+  $("#planYearly").setAttribute("aria-pressed","true"); $("#planMonthly").setAttribute("aria-pressed","false");
+});
+
+/* ============================ accounts ============================ */
+
+async function refreshSession(){
+  const me = await apiGet("/api/auth/me", {});
+  session = me.authenticated
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil }
+    : { authenticated:false, email:null, plus:false, plusUntil:null };
+}
+
+$("#signinBtn").addEventListener("click", async ()=>{
+  const email = $("#signinEmail").value.trim();
+  if(!email) return;
+  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email}) });
+  if(!res.ok) return;
+  await refreshSession();
+  // Plus status changes what tripQuery() sends (airportTransport), so the
+  // already-fetched results are stale — re-run the search, don't just re-render.
+  await runSearch(results[selected] && results[selected].resortId);
+  await loadSavedTrips();
+});
+$("#signoutBtn").addEventListener("click", async ()=>{
+  await fetch("/api/auth/signout", { method:"POST" });
+  await refreshSession();
+  await runSearch(results[selected] && results[selected].resortId);
+  await loadSavedTrips();
+});
+
+async function loadSavedTrips(){
+  const box = $("#savedTripsPanel"), list = $("#savedTripsList");
+  if(!session.plus){ box.hidden = true; return; }
+  box.hidden = false;
+  const trips = await apiGet("/api/trips", {});
+  if(!Array.isArray(trips) || !trips.length){
+    list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
+    return;
+  }
+  list.innerHTML = trips.map(t=>{
+    const r = RESORT_BY_ID.get(t.resortId);
+    return `<div class="li"><div class="l"><b>${t.label || (r?r.name:t.resortId)}</b>
+      <small>Baseline ${usd(t.baselineTotal)}${t.active?"":" · paused"}</small></div>
+      <div class="p"><button class="btn btn-sm" data-deltrip="${t.id}">Remove</button></div></div>`;
+  }).join("");
+}
+document.addEventListener("click", async e=>{
+  const d = e.target.closest("[data-deltrip]");
+  if(!d) return;
+  await fetch("/api/trips/"+d.dataset.deltrip, { method:"DELETE" });
+  await loadSavedTrips();
+});
+document.addEventListener("click", async e=>{
+  const s = e.target.closest("#saveTripBtn");
+  if(!s) return;
+  if(!session.plus){ openPw(); return; }
+  const resortId = s.dataset.resort;
+  const item = results.find(r=>r.resortId===resortId);
+  if(!item || !item.ok) return;
+  const res = await fetch("/api/trips", {
+    method:"POST", headers:{"content-type":"application/json"},
+    body: JSON.stringify({
+      label: `${item.resort.name} — ${params.month}`,
+      params: { ...tripQuery(), month: params.month, resortId },
+      overrides: { [resortId]: ovOf(resortId) },
+      baselineTotal: item.price.total,
+    }),
+  });
+  if(res.ok){
+    s.textContent = "Saved & watching";
+    setTimeout(()=>{ if(s.isConnected) s.textContent = "Save this trip & watch it"; }, 1800);
+    await loadSavedTrips();
+  } else if(res.status === 402){ openPw(); }
+});
+
+/* your-numbers controls */
+function ovEmpty(o){ return !o.nightly && !o.farePerSeat && !o.promoId && !o.personalPromo; }
+
+function setOv(id, key, val){
+  const o = OV[id] || (OV[id] = {});
+  if(val) o[key] = val; else delete o[key];
+  if(ovEmpty(o)) delete OV[id];
+  store.set("ov", OV);
+  recompute(id);
+}
+function setPromoId(id, promoId){
+  const o = OV[id] || (OV[id] = {});
+  if(promoId) o.promoId = promoId; else delete o.promoId;
+  if(ovEmpty(o)) delete OV[id];
+  store.set("ov", OV);
+  recompute(id);
+}
+function setPersonalPromo(id, kind, value, label){
+  const o = OV[id] || (OV[id] = {});
+  if(value > 0) o.personalPromo = { kind, value, label }; else delete o.personalPromo;
+  if(ovEmpty(o)) delete OV[id];
+  store.set("ov", OV);
+  recompute(id);
+}
+
+document.addEventListener("input", e=>{
+  if(e.target.id === "fareSlider"){
+    const el = document.getElementById("fareVal");
+    if(el) el.textContent = usd(+e.target.value);          // live label, no re-fetch mid-drag
+  }
+});
+document.addEventListener("change", e=>{
+  const rid = results[selected] && results[selected].resortId;
+  if(rid){
+    if(e.target.id === "fareSlider") setOv(rid, "farePerSeat", +e.target.value);
+    if(e.target.id === "hotelOv")    setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
+  }
+  // Airport transport is trip-level, not resort-scoped — it moves every resort's total.
+  if(e.target.id === "atMode"){
+    airportTransportChoice = { mode: e.target.value, customAmount: airportTransportChoice.customAmount };
+    runSearch(rid);
+  }
+  if(e.target.id === "atCustom"){
+    airportTransportChoice = { mode:"custom", customAmount: Math.max(0, +e.target.value) || 0 };
+    runSearch(rid);
+  }
+});
+document.addEventListener("click", e=>{
+  const rs = e.target.closest("[data-reset]");
+  if(rs){
+    const rid = results[selected] && results[selected].resortId;
+    if(rid) setOv(rid, rs.dataset.reset, 0);
+    return;
+  }
+  if(e.target.id === "saveOv"){
+    // Already remembered in this browser the moment it was typed (setOv saves
+    // on every change) — this button is just a confirmation, so it's free,
+    // same as typing the number in the first place.
+    store.set("ov", OV);
+    e.target.textContent = "Saved";
+    setTimeout(()=>{ const b = document.getElementById("saveOv"); if(b) b.textContent = "Save these numbers"; }, 1600);
+  }
+  const ap = e.target.closest("[data-applypromo]");
+  if(ap){
+    setPromoId(ap.dataset.resort, ap.dataset.applypromo || null);
+    return;
+  }
+  if(e.target.id === "ppApply"){
+    const resortId = e.target.dataset.resort;
+    const [kind, label] = $("#ppKind").value.split("|");
+    const value = Math.max(0, +$("#ppValue").value) || 0;
+    if(value > 0) setPersonalPromo(resortId, kind, value, label);
+  }
+});
+
+/* tooltip on calendar cells */
+const tip = $("#tip");
+document.addEventListener("mouseover", e=>{
+  const c = e.target.closest(".cell[data-date]");
+  if(!c){ tip.classList.remove("on"); return; }
+  const d = new Date(c.dataset.date+"T00:00:00Z");
+  tip.innerHTML = `<b>${d.toUTCString().slice(0,16)}</b>${usd(+c.dataset.v)} total`;
+  tip.classList.add("on");
+});
+document.addEventListener("mousemove", e=>{
+  if(!tip.classList.contains("on")) return;
+  const pad = 14;
+  let x = e.clientX + pad, y = e.clientY + pad;
+  const rect = tip.getBoundingClientRect();
+  if(x + rect.width > window.innerWidth - 8) x = e.clientX - rect.width - pad;
+  if(y + rect.height > window.innerHeight - 8) y = e.clientY - rect.height - pad;
+  tip.style.left = x+"px"; tip.style.top = y+"px";
+});
+document.addEventListener("mouseout", e=>{
+  if(e.target.closest(".cell[data-date]")) tip.classList.remove("on");
+});
+
+/* calendar cell click -> reprice the detail panel for that exact arrival date */
+document.addEventListener("click", async e=>{
+  const c = e.target.closest(".cell[data-date]");
+  if(!c || !c.dataset.v) return;
+  const item = results[selected];
+  if(!item || !item.ok) return;
+  const priced = await apiGet("/api/compare", { ...compareQuery(), date: c.dataset.date });
+  const mine = priced.results.find(y=>y.resortId===item.resortId);
+  if(mine && mine.ok){
+    results[selected] = { ...item, price: mine.price };
+    renderDetail(); renderBoard(); renderTable();
+  }
+});
+
+/* boot */
+async function boot(){
+  const meta = await apiGet("/api/meta", {});
+  ORIGINS = meta.origins;
+  RESORTS = meta.resorts;
+  RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
+  fillFormOptions();
+  fillJumpRow();
+  buildAges();
+  await refreshSession();
+  await runSearch(null);
+  syncView();
+  await loadSavedTrips();
+}
+boot();
+
+})();
+</script>
