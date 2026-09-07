@@ -6,7 +6,16 @@ name: Parkfare refresh
 on:
   schedule:
     - cron: "0 4 * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: >-
+          Full one-time backfill (every month in the refresh window, not
+          just today's due tier). Use this the first time you deploy, or
+          any time the cache looks thin — the normal daily run only fills
+          in whichever tier is due that day.
+        type: boolean
+        default: false
 
 jobs:
   refresh:
@@ -23,3 +32,4 @@ jobs:
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
           MAX_REQUESTS_PER_MINUTE: "240"
+          REFRESH_BACKFILL: ${{ inputs.backfill }}
