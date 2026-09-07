@@ -4,7 +4,7 @@
  */
 import type { Db } from "./db.js";
 import type { ISODate } from "./dates.js";
-import type { AirportTransportRow, FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
+import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
 import type { Tier } from "./config.js";
 
 export interface BookRequest {
@@ -90,22 +90,6 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     seen(r.updated_at);
   }
 
-  // Static reference data, not a time series — one row per origin, no date range.
-  const at = await db.query(
-    `select origin, parking_per_day_usd, rideshare_roundtrip_usd,
-            transit_available, transit_roundtrip_usd, source_note
-       from airport_transport where origin = $1`,
-    [req.origin],
-  );
-  const airportTransportRow: AirportTransportRow | undefined = at.rows[0] && {
-    origin: at.rows[0].origin,
-    parkingPerDayUsd: Number(at.rows[0].parking_per_day_usd),
-    rideshareRoundTripUsd: Number(at.rows[0].rideshare_roundtrip_usd),
-    transitAvailable: Boolean(at.rows[0].transit_available),
-    transitRoundTripUsd: at.rows[0].transit_roundtrip_usd == null ? undefined : Number(at.rows[0].transit_roundtrip_usd),
-    sourceNote: at.rows[0].source_note ?? "",
-  };
-
   // Owner-curated table, tiny — cheap to load in full for the requested window.
   const pr = await db.query(
     `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note
@@ -131,7 +115,6 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],
     ticket: (resortId, date) => tickets.get(`${resortId}|${date}`),
-    airportTransport: () => airportTransportRow,
     promosFor: (resortId, date) => promos.filter((p) =>
       (p.resortId === resortId || p.resortId === null) && date >= p.startsOn && date <= p.endsOn),
     gasPrice: () => gasPriceRow,
@@ -144,7 +127,6 @@ export function bookFrom(parts: {
   flights?: { dest: string; date: ISODate; row: FlightRow }[];
   hotels?: { resortId: string; date: ISODate; night: HotelNight }[];
   tickets?: { resortId: string; date: ISODate; row: TicketRow }[];
-  airportTransport?: { origin: string; row: AirportTransportRow }[];
   promos?: PromoRow[];
   gasPrice?: { pricePerGallonUsd: number; asOf: string };
 }): PriceBook {
@@ -157,14 +139,11 @@ export function bookFrom(parts: {
   }
   const t = new Map<string, TicketRow>();
   for (const x of parts.tickets ?? []) t.set(`${x.resortId}|${x.date}`, x.row);
-  const a = new Map<string, AirportTransportRow>();
-  for (const x of parts.airportTransport ?? []) a.set(x.origin, x.row);
   const promos = parts.promos ?? [];
   return {
     flight: (_o, dest, date) => f.get(`${dest}|${date}`),
     hotelNights: (rid, date) => h.get(`${rid}|${date}`) ?? [],
     ticket: (rid, date) => t.get(`${rid}|${date}`),
-    airportTransport: (origin) => a.get(origin),
     promosFor: (resortId, date) => promos.filter((p) =>
       (p.resortId === resortId || p.resortId === null) && date >= p.startsOn && date <= p.endsOn),
     gasPrice: () => parts.gasPrice,

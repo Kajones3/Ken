@@ -5,7 +5,7 @@ export type OffTier = "budget" | "mid" | "upscale";
 export type Tier = OnTier | OffTier;
 export type Band = "infant" | "child" | "junior" | "adult";
 export type FoodStyle = "grocery" | "qs" | "mix" | "ts" | "plan";
-export type Stay = "on" | "off" | "both";
+export type Stay = "on" | "off" | "both" | "none";
 export type TierIndex = 0 | 1 | 2;
 
 export const ON_TIERS: readonly OnTier[] = ["value", "moderate", "deluxe"];
@@ -31,8 +31,8 @@ export interface Resort {
   /** Short, hand-maintained facts that don't fit the price breakdown but
    *  change how someone should actually plan the trip — entry/visa notes,
    *  ticket-bundling quirks, anything that trips people up. Same
-   *  "no live API, maintain it by hand" pattern as ticket_prices and
-   *  airport_transport; keep entries short, cite what's checked vs. not,
+   *  "no live API, maintain it by hand" pattern as ticket_prices; keep
+   *  entries short, cite what's checked vs. not,
    *  and re-check before relying on anything time-sensitive (visa rules
    *  especially — they change). */
   goodToKnow: string[];
@@ -55,7 +55,14 @@ export interface Resort {
   /** Admission age bands differ at every resort. A 12-year-old is an adult in
    *  Orlando, a child in Paris, and a Junior in Tokyo. */
   bands: { freeUnder: number; child: [number, number]; junior?: [number, number]; adult: number };
-  ticket: { base: number; child: number; junior?: number; slope: number; floor: number };
+  ticket: {
+    base: number; child: number; junior?: number; slope: number; floor: number;
+    /** Park Hopper as a flat per-ticket add-on, not scaled by day count or
+     *  season the way base admission is — a simplification of Disney's real
+     *  (also date-tiered) hopper pricing. Omitted entirely at Hong Kong and
+     *  Shanghai, which each have one park and no hopper product to sell. */
+    hopperAdultUsd?: number; hopperChildUsd?: number;
+  };
   food: { grocery: number; qs: number; mix: number; ts: number };
   /** Only Walt Disney World and Disneyland Paris sell dining plans. */
   plans: { label: string; adult: number; child: number }[];
@@ -80,7 +87,12 @@ export const RESORTS: Resort[] = [
     ticketUrl: "https://disneyworld.disney.go.com/admission/tickets/",
     altArrivalAirports: [{ iata: "TPA", label: "Tampa — about 75 min from the resort" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
-    ticket: { base: 132, child: 0.93, slope: 0.058, floor: 0.58 },
+    // base recalibrated against real 2026 published one-day pricing ($119-209,
+    // researched — see CLAUDE.md) so the off-peak floor no longer prices below
+    // Disneyland's, which a flat 132 vs. 148 base did. Still a coarse two-
+    // parameter approximation of a genuinely tiered, date-based system — not
+    // a claim of exact per-date accuracy.
+    ticket: { base: 140, child: 0.93, slope: 0.058, floor: 0.58, hopperAdultUsd: 90, hopperChildUsd: 84 },
     food: { grocery: 38, qs: 62, mix: 96, ts: 158 },
     plans: [
       { label: "Disney Dining Plan · Quick Service", adult: 62.78, child: 25.82 },
@@ -118,7 +130,11 @@ export const RESORTS: Resort[] = [
     ticketUrl: "https://disneyland.disney.go.com/tickets/",
     altArrivalAirports: [{ iata: "LAX", label: "Los Angeles — about 45 min from the resort, often more fare options" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
-    ticket: { base: 148, child: 0.94, slope: 0.05, floor: 0.62 },
+    // base recalibrated against real 2026 published one-day pricing ($104-224,
+    // researched — see CLAUDE.md): the old 148 sat *above* WDW's 132, which
+    // inverted the two resorts' off-peak ordering versus reality. Still a
+    // coarse approximation, not exact per-date accuracy — see the note on WDW.
+    ticket: { base: 128, child: 0.94, slope: 0.05, floor: 0.62, hopperAdultUsd: 75, hopperChildUsd: 70 },
     food: { grocery: 40, qs: 66, mix: 100, ts: 162 },
     plans: [],
     transport: { on: 0, off: 40 },
@@ -145,7 +161,10 @@ export const RESORTS: Resort[] = [
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
-    ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55 },
+    // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
+    // base) — weaker confidence than WDW/Disneyland's, which came from an
+    // actual 2026 price check. Refine before relying on this one.
+    ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
     food: { grocery: 30, qs: 49, mix: 80, ts: 128 },
     plans: [
       { label: "Half Board Plus meal plan", adult: 46, child: 26 },
@@ -175,7 +194,10 @@ export const RESORTS: Resort[] = [
     ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
     altArrivalAirports: [{ iata: "HND", label: "Haneda — closer to central Tokyo, often cheaper than Narita" }],
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
-    ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
+    // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
+    // base) — weaker confidence than WDW/Disneyland's, which came from an
+    // actual 2026 price check. Refine before relying on this one.
+    ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82, hopperAdultUsd: 38, hopperChildUsd: 21 },
     food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
     plans: [],
     transport: { on: 0, off: 14 },
@@ -269,39 +291,6 @@ export const ORIGINS: Origin[] = [
 ];
 export const ORIGIN_BY_IATA = new Map(ORIGINS.map((o) => [o.iata, o]));
 
-/**
- * Getting to your home airport: parking there vs. Uber/Lyft/taxi vs.
- * transit where it exists. No live API for any of this either — same
- * situation as ticket prices. These are rough placeholder guesses for a
- * friends demo, not verified against current rates. Refine per-airport
- * before relying on them for anything real.
- */
-export interface AirportTransportGuess {
-  parkingPerDayUsd: number; rideshareRoundTripUsd: number;
-  transitAvailable: boolean; transitRoundTripUsd?: number; note: string;
-}
-export const AIRPORT_TRANSPORT_GUESSES: Record<string, AirportTransportGuess> = {
-  ATL: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 60, transitAvailable: true, transitRoundTripUsd: 6, note: "MARTA runs straight to the terminal — guess" },
-  BOS: { parkingPerDayUsd: 25, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 5, note: "Blue Line + free Silver Line bus — guess" },
-  BWI: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 60, transitAvailable: true, transitRoundTripUsd: 12, note: "MARC/Amtrak from BWI station — guess" },
-  CLT: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 45, transitAvailable: false, note: "no useful rail transit — guess" },
-  DEN: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 70, transitAvailable: true, transitRoundTripUsd: 20, note: "A-Line commuter rail to Union Station — guess" },
-  DFW: { parkingPerDayUsd: 11, rideshareRoundTripUsd: 65, transitAvailable: false, note: "TEXRail only reaches part of the metro — guess" },
-  DTW: { parkingPerDayUsd: 9, rideshareRoundTripUsd: 55, transitAvailable: false, note: "no rail transit — guess" },
-  IAD: { parkingPerDayUsd: 13, rideshareRoundTripUsd: 65, transitAvailable: true, transitRoundTripUsd: 12, note: "Metro Silver Line runs direct since the 2022 extension — guess" },
-  IAH: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 65, transitAvailable: false, note: "no rail transit — guess" },
-  JFK: { parkingPerDayUsd: 20, rideshareRoundTripUsd: 145, transitAvailable: true, transitRoundTripUsd: 17, note: "AirTrain + subway/LIRR — guess" },
-  LAS: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 45, transitAvailable: false, note: "no direct rail to the strip — guess" },
-  LAX: { parkingPerDayUsd: 15, rideshareRoundTripUsd: 100, transitAvailable: true, transitRoundTripUsd: 8, note: "LAX FlyAway bus / Metro C Line via shuttle — guess" },
-  MIA: { parkingPerDayUsd: 15, rideshareRoundTripUsd: 70, transitAvailable: true, transitRoundTripUsd: 5, note: "MIA Mover to Metrorail — guess" },
-  MSP: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 55, transitAvailable: true, transitRoundTripUsd: 5, note: "Blue Line light rail straight to the terminal — guess" },
-  ORD: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 10, note: "CTA Blue Line direct — guess" },
-  PHL: { parkingPerDayUsd: 14, rideshareRoundTripUsd: 55, transitAvailable: true, transitRoundTripUsd: 14, note: "SEPTA Airport Line direct — guess" },
-  PHX: { parkingPerDayUsd: 10, rideshareRoundTripUsd: 45, transitAvailable: true, transitRoundTripUsd: 4, note: "PHX Sky Train to Valley Metro light rail — guess" },
-  SEA: { parkingPerDayUsd: 18, rideshareRoundTripUsd: 80, transitAvailable: true, transitRoundTripUsd: 6, note: "Link light rail direct — guess" },
-  SFO: { parkingPerDayUsd: 22, rideshareRoundTripUsd: 100, transitAvailable: true, transitRoundTripUsd: 20, note: "BART direct — guess" },
-};
-
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [
   { name: "near", fromDay: 0, toDay: 60, everyDays: 1 },
@@ -319,8 +308,7 @@ export function shouldRefresh(tierName: string, dayOfYear: number): boolean {
  * Driving-cost assumptions. US-only for now — no clean public data source
  * for road distance/fuel economy conventions in Europe or Asia the way EIA
  * and the interstate highway system make this tractable for the US. All
- * three numbers are guesses, same footing as AIRPORT_TRANSPORT_GUESSES;
- * refine before relying on them for anything real.
+ * three numbers are guesses; refine before relying on them for anything real.
  */
 export const DRIVING = {
   /** National-average passenger-vehicle fuel economy. */

@@ -16,17 +16,20 @@ say when something is a guess.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 64 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 73 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| Driving / miles transport modes | **Wired, free.** "How are you getting there?" on the trip form: Flying (unchanged), Driving (US-only; gas cost from a real/mock national price × distance, replaces the flights line, domestic resorts only), Flying with miles (0-100% discount on the cash fare, no floor). Plus-only add-on: an alert when the cached gas price has moved since a driving trip was saved. |
+| Driving / miles transport modes | **Wired, free.** "Getting there" on the trip form: Flying (unchanged), Driving (US-only; gas cost from a real/mock national price × distance, replaces the flights line, domestic resorts only, real open city search + IP autofill for "Departing from"), Flying with miles (0-100% discount on the cash fare, no floor). Plus-only add-on: an alert when the cached gas price has moved since a driving trip was saved. |
+| Park Hopper | **Wired, free.** A flat per-ticket add-on at the four multi-park resorts (WDW, Disneyland, Tokyo, Paris); silently has no effect at Hong Kong or Shanghai, which each have one park. WDW/Disneyland's differentials are researched against real 2026 pricing; Tokyo/Paris are unresearched guesses, flagged weaker-confidence below. |
+| "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
+| Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
 | Disney news digest | **Wired, owner-only.** `npm run news-digest` reads a few RSS feeds (`NEWS_FEEDS` in `config.ts`) and emails whatever's new — never shown to end users automatically; the owner reviews and hand-adds anything worth surfacing to a resort's `goodToKnow`. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
-| Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. |
+| Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
-| Airport transport, promos | **Wired, Plus-only.** Parking/rideshare/transit cost and curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. |
+| Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
-| Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + two GitHub Actions cron workflows (`refresh`, `alerts`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
+| Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + three GitHub Actions cron workflows (`refresh`, `alerts`, `news-digest`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
 
 **Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
 the data source:
@@ -239,6 +242,19 @@ than it is — this is the comparison people get wrong.
 - **Resend**: free to 3,000 emails/month, capped at 100/day, one verified sending domain.
   ([Resend](https://resend.com/blog/new-free-tier), [Automation Atlas](https://automationatlas.io/answers/resend-free-tier-explained-2026/))
   Fits the same "free, no minimums, solo-developer" bar Travelpayouts was picked on.
+- **2026 published one-day ticket prices**: WDW $119–209, Disneyland $104–224 (web search
+  at write time). Used to recalibrate `config.ts`'s ticket `base` constants so the two
+  resorts' off-peak floor is no longer inverted (see "Mistakes made" below) — not a claim
+  that the resulting curve matches real per-date pricing, which is genuinely tiered and
+  which this flat curve can only approximate.
+- **2026 IRS standard mileage rate**: $0.725/mile (Jan–Jun), $0.76/mile (Jul–Dec) — the
+  building block for the deferred "Compare Flying vs. Driving" page's wear-and-tear line,
+  not used anywhere yet.
+- **Nominatim** (OpenStreetMap geocoding) and **ip-api.com** (IP geolocation): both free,
+  keyless, no per-request charge — Nominatim capped at 1 req/sec with a caching
+  requirement (see `src/geo/cache.ts`), ip-api at ~45 req/min for non-commercial use.
+  Neither needs a key to gate on, unlike every other real provider here — see
+  `src/geo/pick.ts` for why they're still mocked by default.
 
 ## NOT verified — check before relying on these
 
@@ -273,11 +289,17 @@ than it is — this is the comparison people get wrong.
   next visit.
 - **Off-property hotel base rates** are informed estimates, not published rates.
 - **Food rates** are from budget guides. No API will ever give you food exactly.
-- **All 18 origin airports' parking/rideshare/transit costs** (`AIRPORT_TRANSPORT_GUESSES`
-  in `config.ts`) are rough placeholder guesses for the demo, not checked against current
-  rates. Refine per-airport before relying on them for anything real.
 - **The three example promo rows** (`seedPromos.ts`) are illustrative, not real offers —
   replace with actual, dated promotions before this means anything to a user.
+- **Park Hopper differentials** (`ticket.hopperAdultUsd`/`hopperChildUsd` in `config.ts`):
+  WDW (+$90) and Disneyland (+$75) came from an actual 2026 web-search check; Tokyo (+$38)
+  and Paris (+$45) are unresearched guesses (roughly 20% of base ticket price), explicitly
+  weaker confidence — refine before relying on either.
+- **Rental-car pricing for the deferred "Compare Flying vs. Driving" page** — researched
+  this session that Travelpayouts (already the flight provider) brokers car rentals via
+  partners including DiscoverCars, so this would reuse an existing account/integration
+  rather than a new vendor relationship — but nothing has actually been built or written
+  to that shape yet.
 
 ---
 
@@ -297,6 +319,16 @@ than it is — this is the comparison people get wrong.
 4. **Buried the override controls** at the bottom of a card six cards down. Owner couldn't
    find them. They now sit in a highlighted panel at the top of the detail view.
 5. **Used the word "clamps"** in an explanation to a non-engineer. Plain language.
+6. **Set Disneyland's placeholder ticket `base` (148) higher than WDW's (132)** — backwards
+   from real 2026 published pricing, where WDW's off-peak floor ($119/day) sits above
+   Disneyland's ($104/day). The owner caught it by pricing a real Las Vegas → both-resorts
+   trip and finding WDW came back cheaper, which contradicted a real price they'd looked
+   up ($2,960 WDW vs. $1,890 Disneyland for a comparable December trip). Fixed by
+   recalibrating both `base` values against researched 2026 ranges — still an
+   approximation of a genuinely tiered system, not a claim of exact accuracy, and now
+   disclosed as such on the Park Tickets card. Added a client-side "why is X cheaper?"
+   explainer alongside the fix, on the same reasoning as override controls above: a user
+   who sees a number they can't explain concludes the app is wrong and leaves.
 
 ## Bugs the tests caught (both would have shipped silently)
 
@@ -349,14 +381,24 @@ than it is — this is the comparison people get wrong.
   render time is how tracking parameters go missing and commissions vanish.
 - Prices are stored in USD. Currency display is a presentation concern.
 - **Plus gating happens server-side, in `compare()`/`calendar()`/`overridesFrom()`, not
-  just in the UI.** A non-Plus request never gets airport-transport pricing or promo
-  effects even if the query string asks for them — hiding the control in
-  `prototype.html` is only the cosmetic half. Never trust a client-supplied
-  `isPlus`/`plus` flag; always resolve it from the session cookie against the database.
+  just in the UI.** A non-Plus request never gets promo effects even if the query string
+  asks for them — hiding the control in `prototype.html` is only the cosmetic half.
+  Custom expenses and saved trips are gated the same way, directly on the `/api/trips*`
+  routes. Never trust a client-supplied `isPlus`/`plus` flag; always resolve it from the
+  session cookie against the database.
 - A curated promo's *effect* (`effectKind`/`effectValue`) is always looked up
   server-side from `promosFor()` — only its `id` is ever taken from the client. A
   `personalPromo`'s value/kind *are* client-supplied, and that's fine: it's the user's
   own unverified claim about their own price, never shared with anyone else.
+- **Users never call a provider API — except one deliberate exception.** The driving-mode
+  city search (`GET /api/geocode`, `GET /api/geolocate`, `src/geo/`) calls Nominatim/
+  ip-api live, on a user's own request, because it's on-demand interactive autocomplete —
+  there's no fixed set of routes to pre-cache "every city someone might type" the way
+  flights/hotels/tickets are pre-cached every morning. Bounded by: mock by default
+  (`GEOCODE_LIVE=true` to go live), a real `geocode_cache` table so a repeated query never
+  calls out twice, and both free/keyless services with generous limits for a friends-scale
+  demo. If this ever needs to scale past that, it needs its own conversation — the same
+  caveat the project already applies to the "no search quota" pricing decision.
 
 ---
 
@@ -372,23 +414,49 @@ than it is — this is the comparison people get wrong.
 6. ~~Alert job and email~~ — done, console by default, Resend if configured
 
 7. ~~Deploy for free~~ — done: `render.yaml` (Render free web service) +
-   `.github/workflows/{refresh,alerts}.yml` (free scheduled cron via GitHub
-   Actions) + Neon (free Postgres) for `DATABASE_URL`. Steps for the owner
+   `.github/workflows/{refresh,alerts,news-digest}.yml` (free scheduled cron via
+   GitHub Actions) + Neon (free Postgres) for `DATABASE_URL`. Steps for the owner
    to actually go live are in README.md's "Deploy for free" section — signing
    up for Neon/Render is a human step, not something done from inside this repo.
+8. ~~A round of owner UX feedback~~ — done: trip-form reorder (Adults → Children →
+   Arriving → Getting There → Need a hotel? → Park Days/Hopper → Where you Stay →
+   Resort Category → Food), the ticket-price recalibration and "why is X cheaper?"
+   explainer above, Park Hopper, a real "Need a hotel?" (`stay: "none"`) state, a
+   richer driving overnight stop (nights × cost/night), a real geocoded/IP-autofill
+   "Departing from" search for driving, airport-transport pricing removed in favor
+   of a redefined Plus (monitoring, saved trips, deal/gas alerts, custom planning
+   expenses), and a loading indicator on "Compare six resorts."
 
-Then: a day-by-day trip planner (itinerary, checklist, dining tracker, budget,
-per-day notes, special-event floor pricing — deliberately deferred, see above),
-Travelpayouts token, hotel endpoint approval, a real ticket-price table, Stripe,
-Resend domain verification, and a "prices as of ..." line in the UI.
+Then: the deferred "Compare Flying vs. Driving" page (its own follow-up plan — IRS
+mileage rate and a Travelpayouts/DiscoverCars rental-car adapter are the researched
+building blocks, see "Verified facts" above), the 10-mile off-property hotel radius
+filter (needs a `distanceMiles` field on `HotelDef`, none exists today), a day-by-day
+trip planner (itinerary, checklist, dining tracker, budget, per-day notes,
+special-event floor pricing — deliberately deferred, see above), Travelpayouts token,
+hotel endpoint approval, a real ticket-price table, Stripe, Resend domain
+verification, and a "prices as of ..." line in the UI.
 
 ## Known gaps in the code
 
 - `TravelpayoutsProvider.hotelMonth` **throws deliberately** — flights are wired, hotels
   need whichever Hotellook endpoint you get approved for. It fails loudly so a
   half-configured deploy breaks at the refresh job instead of quietly showing users nothing.
-- `seedTickets()` fills `ticket_prices` from a placeholder curve. Replace with maintained
-  rows and **alarm on any resort whose rows are >30 days old** — nothing fails loudly here.
+- `seedTickets()` fills `ticket_prices` from a placeholder curve — recalibrated once
+  against real 2026 pricing (see "Mistakes made" #6) but still a coarse two-parameter
+  approximation, not real per-date Disney pricing. Replace with maintained rows and
+  **alarm on any resort whose rows are >30 days old** — nothing fails loudly here.
+- `NominatimGeocodeProvider`/`IpApiLocateProvider` (`src/geo/`) were written to each
+  service's documented shape, never run against live traffic from this environment
+  (proxied/restricted network) — same caveat as every other real provider here. Leave
+  `GEOCODE_LIVE` unset and the mock providers handle driving-mode city search instead,
+  so the feature still runs end to end with no account.
+- **No 10-mile (or any) distance filter for off-property hotels.** `HotelDef` has no
+  `distanceMiles`/`lat`/`lon` field, only a free-text `descriptor` — building this needs
+  new structured data across ~30-40 hotels, deliberately deferred (the owner picked the
+  cheaper "Need a hotel?" toggle for this round instead).
+- **The trip form's "Arriving" field is still a month picker, not a real date.** Reordered
+  in this round per the owner's spec, but "Arriving Date" was interpreted as a relabel of
+  the existing control, not a scope change — flag if a real single-date picker is wanted.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.

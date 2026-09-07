@@ -13,8 +13,7 @@ function night(id: string, name: string, nightly: number, tier: string, on: bool
 /** A book with everything a 2-night trip needs, for one resort. */
 function fullBook(resortId: string, iata: string, opts: {
   fare?: number; nights?: HotelNight[]; days?: number; adult?: number; child?: number; junior?: number;
-  origin?: string; airportTransport?: { parkingPerDayUsd: number; rideshareRoundTripUsd: number; transitAvailable: boolean; transitRoundTripUsd?: number };
-  promos?: PromoRow[];
+  origin?: string; promos?: PromoRow[];
 } = {}) {
   const days = opts.days ?? 6;
   const hotels = opts.nights ?? [
@@ -34,9 +33,6 @@ function fullBook(resortId: string, iata: string, opts: {
       resortId, date,
       row: { adult: opts.adult ?? 130, child: opts.child ?? 120, junior: opts.junior },
     })),
-    airportTransport: opts.airportTransport
-      ? [{ origin: opts.origin ?? "ATL", row: { origin: opts.origin ?? "ATL", sourceNote: "", ...opts.airportTransport } }]
-      : [],
     promos: opts.promos ?? [],
   });
 }
@@ -143,6 +139,50 @@ test("off-property carries its parking and transfer cost", () => {
   assert.equal(off.price.transport, 35 * (base.nights + 1));
 });
 
+test("stay: none prices $0 hotel with no pick, not a failed trip", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, { ...base, stay: "none" }, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.rooms, 0);
+  assert.equal(r.price.transport, 0);
+  assert.equal(r.price.hotel, 0);
+  assert.equal(r.price.hotelPick.hotelId, "none");
+});
+
+test("stay: none skips a dining plan too, same as an off-property stay", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, { ...base, stay: "none", food: "plan" }, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.foodPlan, null);
+});
+
+test("park hopper adds a flat per-ticket amount, only where configured", () => {
+  const wdw = resortById("wdw");
+  const shdr = resortById("shdr"); // one park, no hopper product
+  const wdwBook = fullBook("wdw", "MCO");
+  const shdrBook = fullBook("shdr", "PVG");
+  const without = priceTrip(wdwBook, wdw, base, {}, START);
+  const withHopper = priceTrip(wdwBook, wdw, { ...base, hopper: true }, {}, START);
+  assert.ok(without.ok && withHopper.ok);
+  assert.ok(withHopper.price.hopperUsd > 0);
+  assert.equal(Math.round((withHopper.price.tickets - without.price.tickets) * 100), Math.round(withHopper.price.hopperUsd * 100));
+
+  const shdrHopper = priceTrip(shdrBook, shdr, { ...base, hopper: true }, {}, START);
+  assert.ok(shdrHopper.ok);
+  assert.equal(shdrHopper.price.hopperUsd, 0, "Shanghai has one park — hopper is silently a no-op");
+});
+
+test("ticket base no longer inverts WDW vs. Disneyland at the off-peak floor", () => {
+  // Regression: base constants used to have Disneyland (148) priced above
+  // WDW (132) at every date, which put a WDW trip cheaper than Disneyland's
+  // even in Disneyland's own off-peak season — backwards from published
+  // 2026 pricing where WDW's low end ($119) sits above Disneyland's ($104).
+  const wdw = resortById("wdw"), dlr = resortById("dlr");
+  assert.ok(wdw.ticket.base > dlr.ticket.base, "WDW's base should sit above Disneyland's, not below");
+});
+
 test("a dining plan forces an on-property stay", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
@@ -216,59 +256,6 @@ test("off-property and on-property pools do not bleed into each other", () => {
   assert.deepEqual(poolFor(nights, "on", 0).pool.map((h) => h.hotelId), ["v"]);
   assert.deepEqual(poolFor(nights, "off", 0).pool.map((h) => h.hotelId), ["b"]);
   assert.equal(poolFor(nights, "both", 0).pool.length, 2);
-});
-
-test("airport transport: off by default, adds $0", () => {
-  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 60, transitAvailable: false } });
-  const r = priceTrip(book, resortById("wdw"), base, {}, START);
-  assert.ok(r.ok);
-  assert.equal(r.price.airportTransport, 0);
-  assert.equal(r.price.airportTransportPick, null);
-});
-
-test("airport transport: auto picks the cheaper of parking and rideshare", () => {
-  // 4 nights -> parking is 5 days * $12 = $60, cheaper than a $200 rideshare round trip.
-  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 200, transitAvailable: false } });
-  const params: TripParams = { ...base, airportTransport: { mode: "auto" } };
-  const r = priceTrip(book, resortById("wdw"), params, {}, START);
-  assert.ok(r.ok);
-  assert.equal(r.price.airportTransportPick?.mode, "parking");
-  assert.equal(r.price.airportTransport, 12 * 5);
-
-  // A short trip flips the pick: 1 night -> parking is 2 * $12 = $24, still cheaper than $10 rideshare? no —
-  // use a cheap rideshare to prove the flip the other way.
-  const cheapRideshareBook = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 30, transitAvailable: false } });
-  const r2 = priceTrip(cheapRideshareBook, resortById("wdw"), params, {}, START);
-  assert.ok(r2.ok);
-  assert.equal(r2.price.airportTransportPick?.mode, "rideshare");
-  assert.equal(r2.price.airportTransport, 30);
-});
-
-test("airport transport: a forced mode is honored even when it's not the cheapest", () => {
-  const book = fullBook("wdw", "MCO", { airportTransport: { parkingPerDayUsd: 12, rideshareRoundTripUsd: 30, transitAvailable: true, transitRoundTripUsd: 6 } });
-  const params: TripParams = { ...base, airportTransport: { mode: "rideshare" } };
-  const r = priceTrip(book, resortById("wdw"), params, {}, START);
-  assert.ok(r.ok);
-  assert.equal(r.price.airportTransportPick?.mode, "rideshare");
-  assert.equal(r.price.airportTransport, 30);
-});
-
-test("airport transport: custom is your own number, clamped at zero", () => {
-  const book = fullBook("wdw", "MCO");
-  const params: TripParams = { ...base, airportTransport: { mode: "custom", customAmount: -50 } };
-  const r = priceTrip(book, resortById("wdw"), params, {}, START);
-  assert.ok(r.ok);
-  assert.equal(r.price.airportTransport, 0, "never negative");
-  assert.equal(r.price.airportTransportPick?.mode, "custom");
-});
-
-test("airport transport: no cached row for the origin is a soft $0, not a failed trip", () => {
-  const book = fullBook("wdw", "MCO"); // no airportTransport row at all
-  const params: TripParams = { ...base, airportTransport: { mode: "auto" } };
-  const r = priceTrip(book, resortById("wdw"), params, {}, START);
-  assert.ok(r.ok, "missing airport-transport data must never fail the whole trip");
-  assert.equal(r.price.airportTransport, 0);
-  assert.equal(r.price.airportTransportPick, null);
 });
 
 test("promos: a curated room discount applies to the cache-derived rate", () => {
@@ -378,7 +365,20 @@ test("transport mode: driving replaces flights entirely, using the cached gas pr
   assert.equal(r.price.flightPick, null);
   assert.equal(r.price.transportMode, "drive");
   assert.ok(r.price.driving > 0, "driving should be a real positive cost");
-  assert.equal(r.price.drivingPick!.fromIata, "ATL");
+  assert.equal(r.price.drivingPick!.from, "ATL");
+  assert.ok(r.price.drivingPick!.roundTripMiles > 0);
+});
+
+test("transport mode: a geocoded originPoint bypasses the fixed ORIGINS list", () => {
+  const book = fullBook("wdw", "MCO");
+  // Not a real ORIGINS entry — proves origin alone isn't what's used when originPoint is set.
+  const driving = {
+    ...base, origin: "ZZZ", transportMode: "drive" as const,
+    originPoint: { label: "Chattanooga, Tennessee", lat: 35.05, lon: -85.31 },
+  };
+  const r = priceTrip(book, resortById("wdw"), driving, {}, START);
+  assert.ok(r.ok, "originPoint should let an unrecognized origin code still price");
+  assert.equal(r.price.drivingPick!.from, "Chattanooga, Tennessee");
   assert.ok(r.price.drivingPick!.roundTripMiles > 0);
 });
 
@@ -390,16 +390,16 @@ test("transport mode: driving falls back to the configured guess when no gas pri
   assert.equal(r.price.drivingPick!.gasPricePerGallonUsd, 3.15); // DRIVING.fallbackGasPriceUsd
 });
 
-test("transport mode: an overnight stop adds exactly its own cost, nothing more", () => {
+test("transport mode: an overnight stop adds nights times cost per night, nothing more", () => {
   const book = fullBook("wdw", "MCO");
   const noStop = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
   const withStop = priceTrip(
     book, resortById("wdw"),
-    { ...base, transportMode: "drive", overnightStop: { label: "Jacksonville", costUsd: 95 } },
+    { ...base, transportMode: "drive", overnightStop: { label: "Jacksonville", nights: 2, costPerNightUsd: 95 } },
     {}, START,
   );
   assert.ok(noStop.ok && withStop.ok);
-  assert.equal(withStop.price.driving - noStop.price.driving, 95);
+  assert.equal(withStop.price.driving - noStop.price.driving, 190);
 });
 
 test("transport mode: driving from an unrecognized starting city fails, doesn't guess", () => {

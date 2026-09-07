@@ -178,6 +178,88 @@ test("a driving trip gets a gas-price alert when the price has moved enough sinc
   await db.close();
 });
 
+test("a new curated promo for a saved trip's resort fires a deal alert, once", async () => {
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "dealseeker@example.com"]);
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
+     values ('ATL','MCO','2027-03-01',4,100,0)`);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  await db.query(
+    `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property)
+     values ('h1','wdw','Test Hotel','','2027-03-01',150,'value',true)`);
+  const params: TripParams & { month: string; resortId: string } = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs", month: "2027-03", resortId: "wdw",
+  };
+  // Impossibly high threshold/baseline so only the deal alert can fire.
+  // created_at values are in the past relative to the real clock (not the
+  // 2027 travel dates elsewhere in this fixture) because the second run
+  // below compares against price_alerts.fired_at, which is real now().
+  await db.query(
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct,created_at)
+     values ($1,$2,$3,'{}',100000,100,'2024-01-01T00:00:00Z')`,
+    [tripId, userId, JSON.stringify(params)],
+  );
+  // Created after the trip was saved — this is what makes it "new" to this trip.
+  await db.query(
+    `insert into promos (id,resort_id,label,effect_kind,effect_value,starts_on,ends_on,active,created_at)
+     values ($1,'wdw','Summer room discount','room_pct_off',20,'2027-01-01','2027-12-31',true,'2024-01-02T00:00:00Z')`,
+    [randomUUID()],
+  );
+
+  const first = await runAlerts(db, { sender: { name: "unused", async send() {} } });
+  assert.equal(first.fired, 1);
+  assert.equal(first.candidates[0]!.kind, "new_promo");
+  assert.match(first.candidates[0]!.detail, /Summer room discount/);
+
+  // A second run with no new promo since must not re-fire the same one.
+  const second = await runAlerts(db, { sender: { name: "unused", async send() {} } });
+  assert.equal(second.fired, 0);
+
+  await db.close();
+});
+
+test("a promo that predates the saved trip is not treated as new", async () => {
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "latecomer@example.com"]);
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
+     values ('ATL','MCO','2027-03-01',4,100,0)`);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  await db.query(
+    `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property)
+     values ('h1','wdw','Test Hotel','','2027-03-01',150,'value',true)`);
+  const params: TripParams & { month: string; resortId: string } = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs", month: "2027-03", resortId: "wdw",
+  };
+  // Trip saved AFTER the promo already existed — nothing new to report.
+  await db.query(
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct,created_at)
+     values ($1,$2,$3,'{}',100000,100,'2024-01-05T00:00:00Z')`,
+    [tripId, userId, JSON.stringify(params)],
+  );
+  await db.query(
+    `insert into promos (id,resort_id,label,effect_kind,effect_value,starts_on,ends_on,active,created_at)
+     values ($1,'wdw','Old promo','room_pct_off',20,'2027-01-01','2027-12-31',true,'2024-01-01T00:00:00Z')`,
+    [randomUUID()],
+  );
+
+  const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
+  assert.equal(result.fired, 0);
+
+  await db.close();
+});
+
 test("a driving trip gets no gas-price alert when the price has barely moved", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();

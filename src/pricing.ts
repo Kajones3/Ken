@@ -18,9 +18,6 @@ import { haversineMiles } from "./geo.js";
 
 // ---------------------------------------------------------------- inputs
 
-export type AirportTransportMode = "auto" | "parking" | "rideshare" | "transit" | "custom";
-export interface AirportTransportChoice { mode: AirportTransportMode; customAmount?: number }
-
 /** How the party gets to the resort. Undefined/"fly" = today's behavior,
  *  every existing caller unaffected. */
 export type TransportMode = "fly" | "drive" | "miles";
@@ -34,8 +31,6 @@ export interface TripParams {
   stay: Stay;
   tier: TierIndex;
   food: FoodStyle;
-  /** Undefined = feature off, adds $0 — every existing caller is unaffected. Plus-only; gated in server.ts. */
-  airportTransport?: AirportTransportChoice;
   /** Which airport to price flights into. Undefined = the resort's own primary
    *  `iata` (every existing caller is unaffected). Never trust this from a
    *  client as a bare string beyond the resort it's paired with — server.ts
@@ -46,17 +41,27 @@ export interface TripParams {
   /** Undefined = "fly", today's behavior. Free for everyone — this isn't a
    *  Plus feature, it's a different way to answer "what does this trip cost".
    *  "drive" reuses `origin` as the starting city (the existing ORIGINS
-   *  list, an IATA-keyed metro with a known lat/lon) rather than free-text +
-   *  a geocoding dependency this app doesn't have. US-only for now. */
+   *  list, an IATA-keyed metro with a known lat/lon) unless `originPoint` is
+   *  set. US-only for now. */
   transportMode?: TransportMode;
+  /** "drive" only, and only when `origin` isn't one of the fixed ORIGINS —
+   *  a geocoded arbitrary starting city (see src/geo/). When set, this
+   *  bypasses ORIGIN_BY_IATA entirely; flying mode never reads this, since
+   *  flight pricing is airport-cache-keyed and can't be an arbitrary point. */
+  originPoint?: { label: string; lat: number; lon: number };
   /** "drive" only — an optional overnight stop on the way, priced at the
    *  user's own typed estimate (there's no real waypoint-hotel data to guess
-   *  from the way resort hotel rates are guessed). */
-  overnightStop?: { label: string; costUsd: number } | null;
+   *  from the way resort hotel rates are guessed). Nights × cost/night, not
+   *  a single flat amount, so a two-night stopover prices like one. */
+  overnightStop?: { label: string; nights: number; costPerNightUsd: number } | null;
   /** "miles" only, 0-100. A real mile redemption isn't a market-price guess
    *  the way a typed cash fare is, so this is allowed to price below the
    *  cheapest cash fare found — see the no-floor branch in priceTrip. */
   milesPct?: number;
+  /** Park Hopper as a flat per-ticket add-on. Free for everyone. Silently
+   *  ignored (never throws) at a resort with no hopperAdultUsd configured —
+   *  Hong Kong and Shanghai each have one park and no hopper product. */
+  hopper?: boolean;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -79,10 +84,6 @@ export interface HotelNight {
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
 }
 export interface TicketRow { adult: number; child: number; junior?: number }
-export interface AirportTransportRow {
-  origin: string; parkingPerDayUsd: number; rideshareRoundTripUsd: number;
-  transitAvailable: boolean; transitRoundTripUsd?: number; sourceNote: string;
-}
 export interface PromoRow {
   id: string; resortId: string | null; label: string;
   effectKind: PromoEffectKind; effectValue: number;
@@ -97,11 +98,9 @@ export interface PriceBook {
   flight(origin: string, dest: string, date: ISODate, tripLength: number): FlightRow | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
-  airportTransport(origin: string): AirportTransportRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
   /** The most recent cached national average — undefined falls back to
-   *  DRIVING.fallbackGasPriceUsd, same "additive, never a hard failure"
-   *  treatment as airportTransport. */
+   *  DRIVING.fallbackGasPriceUsd rather than a hard failure. */
   gasPrice(): { pricePerGallonUsd: number; asOf: string } | undefined;
   /** Oldest row backing this book, so the UI can say "prices as of ...". */
   oldestFetchedAt: Date | null;
@@ -125,22 +124,26 @@ export interface TripPrice {
   perSeatFare: number;
   /** The cached flight this fare came from — price is the real floor, even when an override raised it. */
   flightPick: { price: number; carrier?: string; stops: number; deepLink?: string } | null;
-  hotelPick: HotelNight | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean };
+  hotelPick: HotelNight
+    | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean }
+    | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
   foodPlan: { label: string; adult: number; child: number } | null;
   partySize: number;
-  /** Getting to the home airport — parking/rideshare/transit/your own plan. $0 unless requested. */
-  airportTransport: number;
-  airportTransportPick: { mode: Exclude<AirportTransportMode, "auto">; amountUsd: number } | null;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
   /** Gas + optional overnight stop, replacing flights entirely when transportMode is "drive". $0 otherwise. */
   driving: number;
   drivingPick: {
-    fromIata: string; roundTripMiles: number; gasPricePerGallonUsd: number;
+    from: string; roundTripMiles: number; gasPricePerGallonUsd: number;
     gasCostUsd: number; overnightUsd: number;
   } | null;
   transportMode: TransportMode;
+  /** How much of `tickets` is Park Hopper — 0 unless params.hopper was set
+   *  and this resort has a hopper price configured. Broken out so the UI can
+   *  show it as its own line rather than folding it silently into the base
+   *  ticket number. */
+  hopperUsd: number;
 }
 export type PriceResult = { ok: true; price: TripPrice } | { ok: false; reason: string };
 
@@ -217,7 +220,7 @@ export function poolFor(nights: HotelNight[], stay: Stay, tier: TierIndex): Hote
 export function planFor(resort: Resort, p: TripParams, stay: Stay) {
   if (p.food !== "plan") return null;
   if (!resort.plans.length) return null;
-  if (stay === "off") return null;          // every Disney dining plan needs an on-property stay
+  if (stay === "off" || stay === "none") return null;   // every Disney dining plan needs an on-property stay
   return resort.plans[Math.min(1, resort.plans.length - 1)]!;
 }
 
@@ -253,17 +256,22 @@ export function priceTrip(
     if (resort.region !== "dom") {
       return { ok: false, reason: `driving isn't a real option to ${resort.name} — try flying instead` };
     }
-    const from = ORIGIN_BY_IATA.get(params.origin);
+    // A geocoded arbitrary city (params.originPoint) takes priority over the
+    // fixed ORIGINS list — flying mode never sets originPoint, since flight
+    // pricing is airport-cache-keyed and can't be an arbitrary point.
+    const from = params.originPoint ?? ORIGIN_BY_IATA.get(params.origin);
     if (!from) return { ok: false, reason: `unknown starting city ${params.origin}` };
+    const fromLabel = params.originPoint ? params.originPoint.label : params.origin;
     const oneWayMiles = haversineMiles(from.lat, from.lon, resort.lat, resort.lon) * DRIVING.roadDistanceFactor;
     const roundTripMiles = oneWayMiles * 2;
     const gas = book.gasPrice();
     const gasPricePerGallonUsd = gas?.pricePerGallonUsd ?? DRIVING.fallbackGasPriceUsd;
     const gasCostUsd = (roundTripMiles / DRIVING.mpg) * gasPricePerGallonUsd;
-    const overnightUsd = params.overnightStop ? Math.max(0, params.overnightStop.costUsd) : 0;
+    const stop = params.overnightStop;
+    const overnightUsd = stop ? Math.max(0, stop.nights) * Math.max(0, stop.costPerNightUsd) : 0;
     driving = Math.round((gasCostUsd + overnightUsd) * 100) / 100;
     drivingPick = {
-      fromIata: params.origin, roundTripMiles: Math.round(roundTripMiles),
+      from: fromLabel, roundTripMiles: Math.round(roundTripMiles),
       gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
     };
   } else {
@@ -303,6 +311,20 @@ export function priceTrip(
     }
   }
 
+  // --- park hopper (flat per-ticket add-on, not scaled by parkDays or ------
+  // --- season) — silently a no-op at a resort with no hopper price. --------
+  let hopperUsd = 0;
+  if (params.hopper && resort.ticket.hopperAdultUsd) {
+    for (const age of ages) {
+      const band = bandOf(resort, age);
+      hopperUsd += band === "infant" ? 0
+        : band === "child" ? (resort.ticket.hopperChildUsd ?? resort.ticket.hopperAdultUsd)
+        : band === "junior" ? resort.ticket.hopperAdultUsd * (resort.ticket.junior ?? 0.9)
+        : resort.ticket.hopperAdultUsd;
+    }
+    tickets += hopperUsd;
+  }
+
   // --- food --------------------------------------------------------------
   const foodPlan = planFor(resort, params, params.stay);
   let food = 0;
@@ -327,7 +349,12 @@ export function priceTrip(
   let hotelPick: TripPrice["hotelPick"];
   let hotelTier: TripPrice["hotelTier"];
 
-  if (ov.nightly !== undefined && ov.nightly > 0) {
+  if (stay === "none") {
+    // No hotel wanted at all — not "off property," genuinely $0, no pick.
+    rooms = 0;
+    hotelPick = { hotelId: "none", name: "No hotel", nightly: 0, onProperty: false };
+    hotelTier = { requested: params.tier, actual: params.tier, swapped: false, custom: false };
+  } else if (ov.nightly !== undefined && ov.nightly > 0) {
     // A rate you found is a rate you found — it does not flex with the season.
     rooms = ov.nightly * params.nights;
     hotelPick = { hotelId: "custom", name: "Your rate", nightly: ov.nightly, onProperty: stay !== "off" };
@@ -403,39 +430,13 @@ export function priceTrip(
     applyPromoEffect("personal", ov.personalPromo.label, ov.personalPromo.kind, ov.personalPromo.value, false);
   }
 
-  // Off-property looks cheaper than it is until you pay to park at the parks.
-  const perDay = hotelPick.onProperty ? resort.transport.on : resort.transport.off;
+  // Off-property looks cheaper than it is until you pay to park at the parks —
+  // unless there's no hotel at all, in which case there's nothing to model.
+  const perDay = stay === "none" ? 0 : hotelPick.onProperty ? resort.transport.on : resort.transport.off;
   const transport = perDay * (params.nights + 1);
   const hotel = rooms + transport;
 
-  // --- airport transport (Plus-only; off unless the caller asked) --------
-  let airportTransport = 0;
-  let airportTransportPick: TripPrice["airportTransportPick"] = null;
-  const atChoice = params.airportTransport;
-  if (atChoice) {
-    if (atChoice.mode === "custom") {
-      airportTransport = Math.max(0, atChoice.customAmount ?? 0);
-      airportTransportPick = { mode: "custom", amountUsd: airportTransport };
-    } else {
-      const at = book.airportTransport(params.origin);
-      if (at) {
-        const options: NonNullable<TripPrice["airportTransportPick"]>[] = [
-          { mode: "parking", amountUsd: at.parkingPerDayUsd * (params.nights + 1) },
-          { mode: "rideshare", amountUsd: at.rideshareRoundTripUsd },
-        ];
-        if (at.transitAvailable && at.transitRoundTripUsd != null) {
-          options.push({ mode: "transit", amountUsd: at.transitRoundTripUsd });
-        }
-        const forced = atChoice.mode !== "auto" ? options.find((o) => o.mode === atChoice.mode) : undefined;
-        airportTransportPick = forced ?? options.reduce((a, b) => (b.amountUsd < a.amountUsd ? b : a));
-        airportTransport = airportTransportPick.amountUsd;
-      }
-      // No cached row for this origin: stays $0/null. Additive/optional —
-      // unlike a missing fare or ticket row, this never fails the whole trip.
-    }
-  }
-
-  const total = Math.max(0, flights + tickets + hotel + food + airportTransport + driving - flatOffTotal);
+  const total = Math.max(0, flights + tickets + hotel + food + driving - flatOffTotal);
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
   return {
@@ -444,8 +445,8 @@ export function priceTrip(
       start, destination, total, flights, tickets, hotel, rooms, transport, food,
       perSeatFare, flightPick,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
-      airportTransport, airportTransportPick, appliedPromos,
-      driving, drivingPick, transportMode,
+      appliedPromos,
+      driving, drivingPick, transportMode, hopperUsd,
     },
   };
 }
