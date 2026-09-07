@@ -1229,7 +1229,8 @@ async function renderDetail(){
         `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.iata}</button>`).join("")}</div>
     </div>
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
-      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul></div></div>` : ""}
+      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul>
+      <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}
     <div class="dbody">
       <div class="ovpanel">
         <div class="ovhead">
