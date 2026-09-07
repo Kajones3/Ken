@@ -228,6 +228,8 @@ th{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(-
 th:first-child,td:first-child{text-align:left}
 td.n{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
 tbody tr:hover{background:var(--surface-2)}
+tbody tr[data-open]{cursor:pointer}
+tbody tr[data-open].sel{background:var(--surface-2)}
 
 /* ---------- detail ---------- */
 .detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
@@ -669,7 +671,7 @@ const CAL_TO = (()=>{
 })();
 
 function fillFormOptions(){
-  fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.iata+" — "+o.name]));
+  fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]));
   fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#nights"), [3,4,5,6,7,8,9,10,12,14].map(n=>[n,n+" nights"]));
@@ -1074,13 +1076,31 @@ async function renderDetail(){
     </div>`;
   }).join("");
 
-  // cheapest start dates
-  const allDays = (cal ? cal.days : []).filter(d=>d.v!==null).sort((a,b)=>a.v-b.v).slice(0,5);
-  const cheapRows = allDays.map(a=>{
-    const d = new Date(a.date+"T00:00:00Z");
-    return `<div class="li"><div class="l"><b>${d.toUTCString().slice(0,11)}</b>
-      <small>${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getUTCDay()]} arrival</small></div>
-      <div class="p">${usd(a.v)}</div></div>`;
+  // cheapest weeks — a single cheap Tuesday buried in an otherwise pricey month
+  // isn't useful if the user can't actually travel that exact day, so this
+  // groups the twelve-month calendar into non-overlapping 7-day windows and
+  // ranks weeks, not individual dates. The single cheapest day (bestDay) is
+  // kept separately for the "arrive on this exact date" upsell line below,
+  // which is a different, more precise claim than "this week is cheap."
+  const calDays = cal ? cal.days : [];
+  const pricedDays = calDays.filter(d=>d.v!==null);
+  const bestDay = pricedDays.length ? pricedDays.reduce((a,b)=> b.v<a.v?b:a) : null;
+  const weekAnchor = calDays.length ? new Date(calDays[0].date+"T00:00:00Z") : null;
+  const weekBuckets = new Map(); // week index -> cheapest day found in that 7-day window
+  for(const day of pricedDays){
+    const offsetDays = Math.round((new Date(day.date+"T00:00:00Z") - weekAnchor) / 86400000);
+    const wk = Math.floor(offsetDays / 7);
+    const cur = weekBuckets.get(wk);
+    if(!cur || day.v < cur.v) weekBuckets.set(wk, { wk, v: day.v, date: day.date });
+  }
+  const cheapWeeks = [...weekBuckets.values()].sort((a,b)=>a.v-b.v).slice(0,5);
+  const cheapRows = cheapWeeks.map(w=>{
+    const start = new Date(weekAnchor.getTime() + w.wk*7*86400000);
+    const end = new Date(start.getTime() + 6*86400000);
+    const cheapest = new Date(w.date+"T00:00:00Z");
+    return `<div class="li"><div class="l"><b>${start.toUTCString().slice(0,11)} – ${end.toUTCString().slice(0,11)}</b>
+      <small>cheapest that week: ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][cheapest.getUTCDay()]}, ${cheapest.toUTCString().slice(5,11)}</small></div>
+      <div class="p">${usd(w.v)}</div></div>`;
   }).join("");
 
   // flights — the one cached fare this trip actually priced against
@@ -1224,9 +1244,8 @@ async function renderDetail(){
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
-        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this trip & watch it" : "Save & watch · Plus"}</button>
-        ${results.map((y,i)=>
-        `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.iata}</button>`).join("")}</div>
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this trip & watch it" : "Get Plus to save & watch for price drops"}</button>
+      </div>
     </div>
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
       <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul>
@@ -1240,31 +1259,16 @@ async function renderDetail(){
         </div>
         <div class="ovgrid">${hotelCtl}${fareCtl}</div>
       </div>
-      <p class="sec-lab">Fare calendar — total trip cost by arrival date</p>
-      <div class="calgrid">${calHtml}</div>
-      <div class="calscale">
-        <span>Cheaper</span>
-        <span class="ramp">${RAMP.map(v=>`<i style="background:var(${v})"></i>`).join("")}</span>
-        <span>Pricier</span>
-        <span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>
-      </div>
-
-      ${(()=>{
-        if(min===null) return "";
-        const save = x.total - min;
-        if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
-          <span>Plus keeps watching, and tells you if it drops below ${usd(min)}.</span></div>
-          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
-        const best = allDays[0] ? new Date(allDays[0].date+"T00:00:00Z") : null;
-        return `<div class="upsell"><div><b>Want to make it cheaper?${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
-          <span>Plus saves this trip with your own rates and tells you when it drops further.</span></div>
-          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
-      })()}
       <div class="cols">
         <div class="card">
-          <h5>Cheapest arrival dates</h5>
-          <p class="sub">Across the next twelve months</p>
-          ${cheapRows || `<div class="li"><div class="l"><b>No cached dates yet</b><small>Run the refresh job to populate the calendar</small></div><div class="p">—</div></div>`}
+          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
+          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
+          ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+        </div>
+        <div class="card">
+          <h5>Age bands here</h5>
+          <p class="sub">${bandLine(r)}</p>
+          ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
         </div>
         <div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
@@ -1272,12 +1276,6 @@ async function renderDetail(){
           ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
         </div>
         ${airportTransportCard(x, p)}
-        ${promosCard(item, x, promoList)}
-        <div class="card">
-          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
-          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
-          ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
-        </div>
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
@@ -1291,12 +1289,47 @@ async function renderDetail(){
           <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
           ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
         </div>
-        <div class="card">
-          <h5>Age bands here</h5>
-          <p class="sub">${bandLine(r)}</p>
-          ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
-        </div>
       </div>
+
+      ${(()=>{
+        if(min===null) return "";
+        const save = x.total - min;
+        if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
+          <span>Plus keeps watching, and tells you if it drops below ${usd(min)}.</span></div>
+          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+        const best = bestDay ? new Date(bestDay.date+"T00:00:00Z") : null;
+        return `<div class="upsell"><div><b>Want to make it cheaper? Choose a different time:${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
+          <span>Plus saves this trip with your own rates and tells you when it drops further.</span></div>
+          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+      })()}
+      <div class="cols">
+        <div class="card">
+          <h5>Cheapest weeks to go</h5>
+          <p class="sub">Across the next twelve months — pick a week, not just one date</p>
+          ${cheapRows || `<div class="li"><div class="l"><b>No cached dates yet</b><small>Run the refresh job to populate the calendar</small></div><div class="p">—</div></div>`}
+        </div>
+        ${promosCard(item, x, promoList)}
+      </div>
+
+      <p class="sec-lab">Fare calendar — total trip cost by arrival date</p>
+      <div class="calgrid">${calHtml}</div>
+      <div class="calscale">
+        <span>Cheaper</span>
+        <span class="ramp">${RAMP.map(v=>`<i style="background:var(${v})"></i>`).join("")}</span>
+        <span>Pricier</span>
+        <span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>
+      </div>
+
+      <p class="sec-lab" style="margin-top:26px">See other park options</p>
+      <p class="sub" style="margin:-6px 0 10px">Same dates and party, compared across all six resorts — pick one to jump there</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Resort</th><th>Airport</th><th>Total</th><th></th></tr></thead>
+        <tbody>${results.map((y,i)=> y.ok
+          ? `<tr data-open="${i}" class="${i===selected?"sel":""}"><td>${y.name}</td><td class="n">${y.iata}</td><td class="n"><b>${usd(y.price.total)}</b></td><td class="n">${i===selected?"Viewing":"View →"}</td></tr>`
+          : `<tr><td>${y.name}</td><td class="n">${y.iata}</td><td class="n" colspan="2">No cached price</td></tr>`
+        ).join("")}</tbody>
+      </table></div>
+
       <p class="hint" style="margin-top:16px">Outbound links go to public search pages and carry no affiliate tag yet, except where the cache already
       has a real booking link — those are the slots your Travelpayouts or reseller links fill in.</p>
     </div>`;
