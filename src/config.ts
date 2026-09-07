@@ -36,6 +36,14 @@ export interface Resort {
    *  and re-check before relying on anything time-sensitive (visa rules
    *  especially — they change). */
   goodToKnow: string[];
+  /** Where to check current attraction closures/refurbishments. Disney's own
+   *  page where one exists (WDW, Disneyland Anaheim) — otherwise the best
+   *  available fan-maintained tracker, and closuresLabel says which so this
+   *  never reads as an official Disney source when it isn't one. No API for
+   *  this exists anywhere; these are checked by hand same as everything
+   *  else in goodToKnow. */
+  closuresUrl: string;
+  closuresLabel: string;
   ticketUrl: string;
   /** Admission age bands differ at every resort. A 12-year-old is an adult in
    *  Orlando, a child in Paris, and a Junior in Tokyo. */
@@ -60,6 +68,8 @@ export const RESORTS: Resort[] = [
     goodToKnow: [
       "Park Hopper (same-day access to more than one park) and Genie+/Lightning Lane (paid line-skipping) are both sold separately from base admission and aren't priced here.",
     ],
+    closuresUrl: "https://disneyworld.disney.go.com/calendars/day/#/magic-kingdom/",
+    closuresLabel: "Official WDW closure calendar",
     ticketUrl: "https://disneyworld.disney.go.com/admission/tickets/",
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 132, child: 0.93, slope: 0.058, floor: 0.58 },
@@ -95,6 +105,8 @@ export const RESORTS: Resort[] = [
     goodToKnow: [
       "Park Hopper and paid Lightning Lane line-skipping are sold separately from base admission and aren't priced here.",
     ],
+    closuresUrl: "https://disneyland.disney.go.com/construction-closures-updates/",
+    closuresLabel: "Official Disneyland closure calendar",
     ticketUrl: "https://disneyland.disney.go.com/tickets/",
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 148, child: 0.94, slope: 0.05, floor: 0.62 },
@@ -115,8 +127,11 @@ export const RESORTS: Resort[] = [
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
+    closuresUrl: "https://news.disneylandparis.com/en/",
+    closuresLabel: "Official Disneyland Paris news (closure announcements)",
     goodToKnow: [
       "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
+      "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
@@ -143,8 +158,10 @@ export const RESORTS: Resort[] = [
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under licence",
     goodToKnow: [
-      "Many nationalities (including US passport holders) can enter Japan visa-free for short tourist stays, but requirements depend on your passport — check current requirements before booking.",
+      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — checked at write time, always confirm current requirements before booking.",
     ],
+    closuresUrl: "https://touringplans.com/tokyo-disney/closures",
+    closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
     ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
@@ -168,9 +185,11 @@ export const RESORTS: Resort[] = [
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
     goodToKnow: [
-      "Most nationalities need a visa for mainland China — this is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Check current requirements for your passport well before booking.",
+      "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
       "Shanghai Disney's real ticket pricing bands some rides by height, not just age — not modeled here; the age-based child/adult split below is a simplification.",
     ],
+    closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
+    closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
@@ -190,8 +209,10 @@ export const RESORTS: Resort[] = [
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
     goodToKnow: [
-      "Hong Kong has its own immigration, separate from mainland China — many nationalities (including US passport holders, for roughly 90 days) can enter visa-free even though mainland China requires a visa for most visitors. If your trip also includes mainland China (e.g. Shanghai Disney), that needs its own separate check.",
+      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — Hong Kong has its own immigration, separate from mainland China, even though mainland China requires a visa for most U.S. visitors. Just need a passport valid 6+ months. If your trip also includes mainland China (e.g. Shanghai Disney), that's a separate, additional visa requirement — see that resort's notes. Source: U.S. Consulate General Hong Kong & Macau — checked at write time, always confirm current requirements before booking.",
     ],
+    closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
+    closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },

@@ -239,11 +239,18 @@ than it is — this is the comparison people get wrong.
 
 ## NOT verified — check before relying on these
 
-- **Visa/entry notes in `goodToKnow`** (Japan, mainland China, Hong Kong) were checked via
-  web search at write time, not a primary government source — and visa policy changes
-  over time. Re-check before relying on the specific numbers (e.g. "240-hour transit",
-  "90 days visa-free") for anything real; the text is deliberately hedged ("check current
-  requirements for your passport") rather than stated as a guarantee.
+- **Visa/entry notes in `goodToKnow`** (Japan, mainland China, Hong Kong) cite
+  travel.state.gov and US consulate pages, checked via web search at write time — closer
+  to a primary source than the first pass, but still not fetched directly from the
+  government site itself, and visa policy changes over time. All three are scoped
+  explicitly to U.S. passport holders (the app doesn't collect nationality, so this can't
+  be made accurate for other travelers without asking). Re-check before relying on the
+  specific numbers (e.g. "240-hour transit", "90 days visa-free") for anything real.
+- **The Disneyland Paris Space Mountain closure date (end of 2027) in `goodToKnow`** was
+  checked via web search across several Disney-fan-news sources reporting an official
+  announcement — not fetched from Disney's own site directly (blocked from this
+  environment's network). Re-check closer to booking; multi-year construction projects
+  slip.
 - **Shanghai and Hong Kong age bands** come from model knowledge, not a source. Both are
   configured as free under 3 / child 3–11 / adult 12+. Shanghai actually bands by *height*
   (1.0–1.4m), which is not modelled at all.
@@ -371,12 +378,19 @@ Resend domain verification, and a "prices as of ..." line in the UI.
   email can sign in as them. Correct trade-off for a friends demo where the owner is
   comping accounts by hand; needs a real verification step (e.g. a one-time emailed
   link through the existing `EmailSender` interface) before any public launch.
-- **No admin UI for `airport_transport`, `promos`, or `goodToKnow`.** All three are
-  hand-maintained directly in code/database (`goodToKnow` lives in `config.ts`, right on
-  each `Resort`) — same pattern as `ticket_prices`, and just as easy to let go stale
-  silently. No alarm-on-staleness exists for any of them yet. `goodToKnow` is the one
-  most worth re-checking periodically: it currently holds visa/entry information, which
-  changes over time and carries real consequences if wrong.
+- **No admin UI for `airport_transport`, `promos`, `goodToKnow`, or `closuresUrl`.** All
+  are hand-maintained directly in code/database (`goodToKnow`/`closuresUrl`/`closuresLabel`
+  live in `config.ts`, right on each `Resort`) — same pattern as `ticket_prices`, and just
+  as easy to let go stale silently. No alarm-on-staleness exists for any of them yet.
+  `goodToKnow` is the one most worth re-checking periodically: it currently holds
+  visa/entry information (sourced from travel.state.gov and US consulate pages, for U.S.
+  passport holders only) and one dated attraction-closure fact (Disneyland Paris's Space
+  Mountain, confirmed closing end of 2027), both of which change over time and carry real
+  consequences if wrong. No live ride-status/closure API exists anywhere for any of the
+  six resorts — WDW and Disneyland Anaheim have official Disney closure-calendar pages
+  (linked via `closuresUrl`); the other four resorts don't, so `closuresUrl` points at the
+  best available third-party tracker instead, with `closuresLabel` always saying plainly
+  when a link is unofficial rather than implying it's Disney's own.
 - **The promo effect vocabulary is deliberately small** (`room_pct_off`,
   `room_flat_off`, `free_dining`, `ticket_pct_off`, `flat_off_total`) — enough for the
   discounts discussed, but a genuinely unusual promo (e.g. a free park-hopper upgrade)
