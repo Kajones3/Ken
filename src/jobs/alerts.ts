@@ -24,16 +24,22 @@ import { buildAlertEmail } from "../email/message.js";
 export interface Candidate {
   tripId: string; userId: string; email: string; resortId: string;
   oldTotal: number; newTotal: number; dropPct: number;
-  kind: "total_drop" | "crossed_your_number"; detail: string;
+  kind: "total_drop" | "crossed_your_number" | "gas_price_change"; detail: string;
 }
 
 const CAP = Number(process.env.ALERT_MAX_PER_USER_PER_DAY ?? 3);
 const ANOMALY_SHARE = Number(process.env.ALERT_ANOMALY_SHARE ?? 0.4);
 const ANOMALY_MOVE = Number(process.env.ALERT_ANOMALY_MOVE_PCT ?? 25);
+const GAS_MOVE_PCT = Number(process.env.ALERT_GAS_MOVE_PCT ?? 8);
 
 export function suppressAnomalies(cands: Candidate[], total: number): { keep: Candidate[]; reason: string } {
   if (total === 0) return { keep: [], reason: "" };
-  const wild = cands.filter((c) => c.dropPct >= ANOMALY_MOVE).length;
+  // gas_price_change is excluded from the "wild" tally on purpose: dropPct
+  // there measures a single shared, externally-sourced number (the national
+  // gas price) moving, not a per-trip provider price — a real, widescale
+  // gas-price swing hitting every driving trip at once is exactly the kind
+  // of thing this alert exists to report, not a sign of bad per-trip data.
+  const wild = cands.filter((c) => c.kind !== "gas_price_change" && c.dropPct >= ANOMALY_MOVE).length;
   if (wild / total >= ANOMALY_SHARE) {
     return { keep: [], reason: `suppressed: ${wild}/${total} trips moved >=${ANOMALY_MOVE}% — looks like bad data` };
   }
@@ -63,7 +69,7 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
 
   const candidates: Candidate[] = [];
   for (const row of rows) {
-    const params = row.params as TripParams & { month?: string; resortId?: string };
+    const params = row.params as TripParams & { month?: string; resortId?: string; gasPriceAtSaveUsd?: number };
     const overrides = (row.overrides ?? {}) as Overrides;
     const resortId: string = params.resortId ?? "wdw";
     const resort = RESORT_BY_ID.get(resortId);
@@ -82,6 +88,29 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
     const oldTotal = Number(row.baseline_total);
     const dropPct = ((oldTotal - best.total) / oldTotal) * 100;
     const threshold = Number(row.threshold_pct);
+
+    // Gas monitoring — the one alert here that isn't "it got cheaper": a
+    // driving trip's gas cost moves on its own, unlike a hotel rate the
+    // user typed themselves, so it's worth flagging either direction.
+    // findAlerts() already filters to Plus users; the free driving estimate
+    // itself isn't gated, only this "tell me when it moves" alert is.
+    if (params.transportMode === "drive" && typeof params.gasPriceAtSaveUsd === "number" && params.gasPriceAtSaveUsd > 0) {
+      const gas = book.gasPrice();
+      if (gas) {
+        const movePct = ((gas.pricePerGallonUsd - params.gasPriceAtSaveUsd) / params.gasPriceAtSaveUsd) * 100;
+        if (Math.abs(movePct) >= GAS_MOVE_PCT) {
+          const direction = movePct > 0 ? "risen" : "fallen";
+          candidates.push({
+            tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
+            oldTotal, newTotal: best.total, dropPct: Math.abs(movePct),
+            kind: "gas_price_change",
+            detail: `Gas prices have ${direction} ${Math.abs(movePct).toFixed(1)}% since you saved this trip `
+              + `($${params.gasPriceAtSaveUsd.toFixed(2)} → $${gas.pricePerGallonUsd.toFixed(2)}/gal) — `
+              + `your ${resort.name} driving estimate is now $${Math.round(best.driving)}.`,
+          });
+        }
+      }
+    }
 
     if (dropPct >= threshold) {
       candidates.push({

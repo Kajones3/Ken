@@ -23,6 +23,22 @@ const PORT = Number(process.env.PORT ?? 8080);
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
+/** Free for everyone — how you get there isn't a Plus feature, just a different
+ *  way to answer "what does this trip cost". Gas-price *monitoring* (an alert
+ *  when the price moves after you save a trip) is the actual Plus feature. */
+function transportModeFrom(q: URLSearchParams): { transportMode?: TripParams["transportMode"]; overnightStop?: TripParams["overnightStop"]; milesPct?: number } {
+  const mode = q.get("transportMode");
+  if (mode !== "drive" && mode !== "miles") return {};
+  if (mode === "drive") {
+    const label = (q.get("overnightLabel") ?? "").slice(0, 80);
+    const cost = Number(q.get("overnightCost") ?? 0);
+    const overnightStop = label && Number.isFinite(cost) && cost > 0 ? { label, costUsd: cost } : null;
+    return { transportMode: "drive", overnightStop };
+  }
+  const milesPct = clamp(Number(q.get("milesPct") ?? 0), 0, 100);
+  return { transportMode: "miles", milesPct };
+}
+
 function paramsFrom(q: URLSearchParams): TripParams {
   const ages = (q.get("childAges") ?? "").split(",").map((s) => s.trim()).filter(Boolean).map(Number);
   const nights = clamp(Number(q.get("nights") ?? 6), 1, 30);
@@ -35,6 +51,7 @@ function paramsFrom(q: URLSearchParams): TripParams {
     stay: (["on", "off", "both"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
+    ...transportModeFrom(q),
   };
 }
 function clamp(n: number, lo: number, hi: number): number {
@@ -55,6 +72,28 @@ function overridesFrom(q: URLSearchParams, allowPromos: boolean): Overrides {
     stripped[resortId] = rest;
   }
   return stripped;
+}
+
+/**
+ * Resolves a requested arrival airport against ONE specific resort's own
+ * list (its primary iata plus altArrivalAirports) — never a bare string
+ * trusted on its own. An unrecognized code (e.g. a WDW request carrying
+ * Hong Kong's HKG) silently falls back to that resort's primary rather than
+ * pricing against an unrelated airport.
+ */
+function resolveDestination(resort: { iata: string; altArrivalAirports: { iata: string }[] }, requested: string | null): string {
+  if (!requested) return resort.iata;
+  const code = requested.toUpperCase().slice(0, 3);
+  if (code === resort.iata || resort.altArrivalAirports.some((a) => a.iata === code)) return code;
+  return resort.iata;
+}
+
+/** Per-resort arrival-airport picks: {resortId: iata}, resolved against that resort's own list. */
+function destinationsFrom(q: URLSearchParams): Record<string, string> {
+  try {
+    const raw = q.get("destinations");
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch { return {}; }
 }
 
 /** Defaults to "auto" — a Plus user sees the real cost without an opt-in toggle they might miss. */
@@ -90,19 +129,26 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // An explicit date prices exactly that day instead of scanning the month for
   // the cheapest one — how a calendar-cell click asks for that date's full breakdown.
   const explicitDate = q.get("date");
+  // Per-resort arrival-airport picks — only ever affects the resort they're
+  // paired with (resolveDestination re-validates against that resort's own
+  // list), so picking an alternate for one resort can't leak into another's.
+  const destinationReqs = destinationsFrom(q);
+  const destinationByResort = new Map(RESORTS.map((r) => [r.id, resolveDestination(r, destinationReqs[r.id] ?? null)]));
   const book = await loadBook(db, {
     origin: params.origin,
-    destinations: RESORTS.map((r) => r.iata),
+    destinations: [...destinationByResort.values()],
     resortIds: RESORTS.map((r) => r.id),
     from: explicitDate ?? from, to: addDaysISO(explicitDate ?? to, params.nights + 1),
     tripLength: bucketFor(params.nights),
   });
   const dates = explicitDate ? [explicitDate] : range(from, to);
   const results = RESORTS.map((resort) => {
-    const { best, skipped } = cheapestIn(book, resort, params, overrides, dates);
+    const iata = destinationByResort.get(resort.id)!;
+    const resortParams = { ...params, destination: iata };
+    const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
     return best
-      ? { resortId: resort.id, name: resort.name, iata: resort.iata, ok: true as const, price: best }
-      : { resortId: resort.id, name: resort.name, iata: resort.iata, ok: false as const, reason: skipped[0] ?? "no data" };
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best }
+      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
   return { month, pricesAsOf: book.oldestFetchedAt, params, results };
@@ -115,17 +161,18 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const overrides = overridesFrom(q, plus);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
+  params.destination = resolveDestination(resort, q.get("destination"));
   const from = q.get("from") ?? addDaysISO(todayISO(), 1);
   const to = q.get("to") ?? addDaysISO(from, 364);
   const book = await loadBook(db, {
-    origin: params.origin, destinations: [resort.iata], resortIds: [resort.id],
+    origin: params.origin, destinations: [params.destination], resortIds: [resort.id],
     from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
   });
   const days = range(from, to).map((d) => {
     const r = priceTrip(book, resort, params, overrides, d);
     return r.ok ? { date: d, total: Math.round(r.price.total) } : { date: d, total: null };
   });
-  return { resortId: resort.id, pricesAsOf: book.oldestFetchedAt, days };
+  return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };
 }
 
 /**
@@ -226,10 +273,19 @@ const server = createServer(async (req, res) => {
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required", message: "Saved trips and alerts are a Plus feature." });
       const t = await readBody(req);
       const id = randomUUID();
+      const params = { ...(t.params ?? {}) };
+      // Stamps today's gas price into the saved trip so the alert job has a
+      // "then" to compare "now" against — same idea as baseline_total, just
+      // for the one input that changes on its own without the user doing
+      // anything (unlike a nightly rate they typed in themselves).
+      if (params.transportMode === "drive") {
+        const { rows } = await db.query(`select price_per_gallon_usd from gas_prices order by as_of desc limit 1`);
+        if (rows[0]) params.gasPriceAtSaveUsd = Number(rows[0].price_per_gallon_usd);
+      }
       await db.query(
         `insert into saved_trips (id,user_id,label,params,overrides,baseline_total,threshold_pct)
          values ($1,$2,$3,$4,$5,$6,$7)`,
-        [id, user.id, t.label ?? "", JSON.stringify(t.params ?? {}), JSON.stringify(t.overrides ?? {}),
+        [id, user.id, t.label ?? "", JSON.stringify(params), JSON.stringify(t.overrides ?? {}),
          Number(t.baselineTotal ?? 0), Number(t.thresholdPct ?? 5)],
       );
       return send(201, { id });

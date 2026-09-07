@@ -31,5 +31,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           TRAVELPAYOUTS_MARKER: ${{ secrets.TRAVELPAYOUTS_MARKER }}
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           MAX_REQUESTS_PER_MINUTE: "240"
           REFRESH_BACKFILL: ${{ inputs.backfill }}

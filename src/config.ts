@@ -45,6 +45,13 @@ export interface Resort {
   closuresUrl: string;
   closuresLabel: string;
   ticketUrl: string;
+  /** Other airports that reasonably serve this resort, besides the primary
+   *  `iata`. Free to browse (board/compare always price the primary), but
+   *  picking one of these is the one place a user can ask for a different
+   *  airport's fares — always scoped to this resort's own list, never a
+   *  bare IATA string trusted from elsewhere, so a WDW search can never be
+   *  accidentally priced against Hong Kong's airport. */
+  altArrivalAirports: { iata: string; label: string }[];
   /** Admission age bands differ at every resort. A 12-year-old is an adult in
    *  Orlando, a child in Paris, and a Junior in Tokyo. */
   bands: { freeUnder: number; child: [number, number]; junior?: [number, number]; adult: number };
@@ -71,6 +78,7 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://disneyworld.disney.go.com/calendars/day/#/magic-kingdom/",
     closuresLabel: "Official WDW closure calendar",
     ticketUrl: "https://disneyworld.disney.go.com/admission/tickets/",
+    altArrivalAirports: [{ iata: "TPA", label: "Tampa — about 75 min from the resort" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 132, child: 0.93, slope: 0.058, floor: 0.58 },
     food: { grocery: 38, qs: 62, mix: 96, ts: 158 },
@@ -108,6 +116,7 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://disneyland.disney.go.com/construction-closures-updates/",
     closuresLabel: "Official Disneyland closure calendar",
     ticketUrl: "https://disneyland.disney.go.com/tickets/",
+    altArrivalAirports: [{ iata: "LAX", label: "Los Angeles — about 45 min from the resort, often more fare options" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 148, child: 0.94, slope: 0.05, floor: 0.62 },
     food: { grocery: 40, qs: 66, mix: 100, ts: 162 },
@@ -129,6 +138,7 @@ export const RESORTS: Resort[] = [
     note: "2 parks · already on dynamic pricing",
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
+    altArrivalAirports: [{ iata: "BVA", label: "Paris Beauvais — budget carriers, about 1h15 from the resort" }],
     goodToKnow: [
       "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
@@ -163,6 +173,7 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://touringplans.com/tokyo-disney/closures",
     closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
     ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
+    altArrivalAirports: [{ iata: "HND", label: "Haneda — closer to central Tokyo, often cheaper than Narita" }],
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
     food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
@@ -191,6 +202,7 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
+    altArrivalAirports: [{ iata: "SHA", label: "Hongqiao — mostly domestic/regional China routes" }],
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
@@ -214,6 +226,7 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
+    altArrivalAirports: [],
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87 },
@@ -301,5 +314,36 @@ export function shouldRefresh(tierName: string, dayOfYear: number): boolean {
   if (!t) return false;
   return dayOfYear % t.everyDays === 0;
 }
+
+/**
+ * Driving-cost assumptions. US-only for now — no clean public data source
+ * for road distance/fuel economy conventions in Europe or Asia the way EIA
+ * and the interstate highway system make this tractable for the US. All
+ * three numbers are guesses, same footing as AIRPORT_TRANSPORT_GUESSES;
+ * refine before relying on them for anything real.
+ */
+export const DRIVING = {
+  /** National-average passenger-vehicle fuel economy. */
+  mpg: 25,
+  /** Real road-trip miles run longer than a straight line — guess. */
+  roadDistanceFactor: 1.25,
+  /** A budget motel room for an optional overnight stop, if the user doesn't type their own. */
+  overnightHotelGuessUsd: 120,
+  /** Used only if the gas-price cache has no row yet (a fresh deploy before its first refresh). */
+  fallbackGasPriceUsd: 3.15,
+} as const;
+
+/**
+ * RSS feeds checked for a private, owner-only digest email — never surfaced
+ * to end users automatically (see src/jobs/newsDigest.ts). Best-guess feed
+ * URLs based on each site's standard WordPress /feed/ convention, not
+ * fetched and confirmed from this environment — verify these resolve on
+ * the first real run (check the GitHub Actions log) before relying on them.
+ */
+export const NEWS_FEEDS: { url: string; label: string }[] = [
+  { url: "https://wdwnt.com/tag/closures-and-refurbishments/feed/", label: "WDWNT — closures & refurbishments" },
+  { url: "https://news.disneylandparis.com/en/feed/", label: "Disneyland Paris official news" },
+  { url: "https://wdwnt.com/tag/deals/feed/", label: "WDWNT — deals & promotions" },
+];
 
 export type { ISODate };

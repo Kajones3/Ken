@@ -398,7 +398,15 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
     <div class="fields">
       <div class="f">
-        <label for="origin">Departing from</label>
+        <label for="transportMode">Getting there</label>
+        <select id="transportMode">
+          <option value="fly" selected>Flying</option>
+          <option value="drive">Driving (US only)</option>
+          <option value="miles">Flying with miles</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="origin" id="originLabel">Departing from</label>
         <select id="origin"></select>
       </div>
       <div class="f">
@@ -439,6 +447,25 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <label for="month">Arriving</label>
         <select id="month"></select>
       </div>
+    </div>
+    <div class="ages" id="driveExtra" hidden>
+      <span class="cap">Overnight stop?</span>
+      <div class="agef" style="width:160px">
+        <label for="overnightLabel">Where (optional)</label>
+        <input type="text" id="overnightLabel" placeholder="e.g. Jacksonville" style="width:100%; padding:7px 8px; font-family:'JetBrains Mono',monospace; font-size:12.5px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px">
+      </div>
+      <div class="agef">
+        <label for="overnightCost">Hotel cost</label>
+        <input type="number" id="overnightCost" min="0" step="5" placeholder="120" style="width:92px">
+      </div>
+    </div>
+    <div class="ages" id="milesExtra" hidden>
+      <span class="cap">Miles discount</span>
+      <div class="agef" style="width:220px">
+        <label for="milesPct">% off the cash fare, no floor</label>
+        <input type="range" id="milesPct" min="0" max="100" step="5" value="50" style="width:100%">
+      </div>
+      <div class="agef"><label>&nbsp;</label><b id="milesPctVal" style="font-family:'JetBrains Mono',monospace">50%</b></div>
     </div>
     <div class="panel-foot">
       <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo.</p>
@@ -647,6 +674,7 @@ let selected = 0, view = "board";
 let searchToken = 0, detailToken = 0;
 let regionFilter = "all";    // "all" | "dom" | "intl" — free, client-side only
 let airportTransportChoice = { mode:"auto" };   // Plus-only; server ignores this unless signed in as Plus
+let destinationChoice = store.get("dest", {});  // { resortId: iata } — free; server re-validates against that resort's own airports
 
 function matchesRegion(item){
   if(regionFilter === "all") return true;
@@ -712,9 +740,26 @@ function readParams(){
     stay: $("#stay").value,
     tier: $("#tier").value,
     food: $("#food").value,
-    month: $("#month").value
+    month: $("#month").value,
+    transportMode: $("#transportMode").value,
+    overnightLabel: $("#overnightLabel").value.trim(),
+    overnightCost: +$("#overnightCost").value || 0,
+    milesPct: +$("#milesPct").value,
   };
 }
+
+/** "Getting there" changes which controls make sense — driving swaps the
+ *  origin field's meaning to a starting city and reveals an overnight-stop
+ *  option; miles reveals the discount slider. Free for everyone; only the
+ *  Plus gas-price alert cares which mode a saved trip used. */
+function syncTransportMode(){
+  const mode = $("#transportMode").value;
+  $("#originLabel").textContent = mode === "drive" ? "Driving from" : "Departing from";
+  $("#driveExtra").hidden = mode !== "drive";
+  $("#milesExtra").hidden = mode !== "miles";
+}
+$("#transportMode").addEventListener("change", syncTransportMode);
+$("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
 /* ============================ search — everything below reads the cache ============================ */
 
@@ -724,13 +769,26 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(session.plus) q.airportTransport = JSON.stringify(airportTransportChoice);
+  if(params.transportMode && params.transportMode !== "fly"){
+    q.transportMode = params.transportMode;
+    if(params.transportMode === "drive"){
+      q.overnightLabel = params.overnightLabel || "";
+      q.overnightCost = params.overnightCost || 0;
+    }
+    if(params.transportMode === "miles") q.milesPct = params.milesPct;
+  }
   return q;
 }
-function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV) }; }
+function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV), destinations: JSON.stringify(destinationChoice) }; }
 function calendarQuery(resortId, from, to, tierOverride){
-  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV) };
+  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV), destination: destinationChoice[resortId] || "" };
   if(tierOverride !== undefined) q.tier = tierOverride;
   return q;
+}
+function setDestination(resortId, iata){
+  if(iata) destinationChoice[resortId] = iata; else delete destinationChoice[resortId];
+  store.set("dest", destinationChoice);
+  recompute(resortId);
 }
 
 let promosByResort = {};   // "resortId|date" -> PromoRow[] — public/free to browse, applying is Plus
@@ -858,6 +916,8 @@ function renderBoard(){
     }
     const x = item.price, tot = x.total, pax = x.partySize;
     const w = n => (n/tot*100).toFixed(2)+"%";
+    const getThere = x.flights + x.driving;   // mutually exclusive — one is always 0
+    const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
     const perPD = tot/pax/(params.nights+1);
     const bands = params.ages.length
@@ -871,7 +931,7 @@ function renderBoard(){
       <div class="ident">
         <div class="rname">${r.name}</div>
         <div class="rmeta">
-          <span class="code">${r.iata}</span>${r.city} · ${r.note}
+          <span class="code">${item.iata}</span>${r.city} · ${r.note}
           ${pos===0?'<span class="bestflag">Cheapest</span>':""}
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
         </div>
@@ -879,15 +939,15 @@ function renderBoard(){
       </div>
       ${sparkSVG(spark)}
       <div class="bar-wrap">
-        <div class="bar" role="img" aria-label="Cost split: flights ${usd(x.flights)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}${x.airportTransport?`, airport ${usd(x.airportTransport)}`:""}">
-          <div class="seg f1" style="width:${w(x.flights)}"></div>
+        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}${x.airportTransport?`, airport ${usd(x.airportTransport)}`:""}">
+          <div class="seg f1" style="width:${w(getThere)}"></div>
           <div class="seg f2" style="width:${w(x.tickets)}"></div>
           <div class="seg f3" style="width:${w(x.hotel)}"></div>
           <div class="seg f4" style="width:${w(x.food)}"></div>
           ${x.airportTransport?`<div class="seg f5" style="width:${w(x.airportTransport)}"></div>`:""}
         </div>
         <div class="barlabs">
-          <span><i style="background:var(--s1)"></i>Flights ${usd(x.flights)}</span>
+          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}</span>
           <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
@@ -920,15 +980,16 @@ function renderTable(){
     const sd = new Date(x.start+"T00:00:00Z");
     return `<tr>
       <td>${pos+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
-      <td class="n">${r.iata}</td>
-      ${cell(x.flights)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
+      <td class="n">${item.iata}</td>
+      ${cell(x.flights + x.driving)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
       <td class="n"><b>${usd(x.total)}</b></td>
       <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
       <td>${open ? x.hotelPick.name : "Locked"}</td>
     </tr>`;
   }).join("");
+  const getThereHeader = params.transportMode === "drive" ? "Driving" : "Flights";
   $("#tablewrap").innerHTML = `<table>
-    <thead><tr><th>Resort</th><th>Airport</th><th>Flights</th><th>Tickets</th><th>Hotel</th><th>Food</th><th>Total</th><th>Best start</th><th>Cheapest stay</th></tr></thead>
+    <thead><tr><th>Resort</th><th>Airport</th><th>${getThereHeader}</th><th>Tickets</th><th>Hotel</th><th>Food</th><th>Total</th><th>Best start</th><th>Cheapest stay</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
@@ -1238,7 +1299,7 @@ async function renderDetail(){
     <div class="dhead">
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
-        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)} ·
+        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
            prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
@@ -1270,11 +1331,32 @@ async function renderDetail(){
           <p class="sub">${bandLine(r)}</p>
           ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
         </div>
-        <div class="card">
+        ${x.transportMode==="drive" ? `<div class="card">
+          <h5><i style="background:var(--s1)"></i>Driving</h5>
+          <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.fromIata : p.origin}</p>
+          <div class="li"><div class="l"><b>Gas</b>
+            <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
+            <div class="p">${usd(x.drivingPick ? x.drivingPick.gasCostUsd : 0)}</div></div>
+          ${x.drivingPick && x.drivingPick.overnightUsd ? `<div class="li"><div class="l"><b>Overnight stop</b>
+            <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
+          <div class="li"><div class="l"><b>Total driving cost</b></div><div class="p">${usd(x.driving)}</div></div>
+          <p class="sub" style="margin-top:10px">Gas price and road-distance figures are estimates, US routes only — see CLAUDE.md for the assumptions.</p>
+        </div>` : `<div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
-          <p class="sub">Round trip per person</p>
+          <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
+          ${r.altArrivalAirports.length ? (()=>{
+            const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
+            const desc = alt ? alt.label : "Primary airport for " + r.name;
+            return `<div class="li"><div class="l"><b>Arrival airport</b><small>${desc}</small></div>
+              <div class="p"><select id="destSel" data-resort="${item.resortId}" aria-label="Arrival airport for ${r.name}">
+                <option value="${r.iata}"${x.destination===r.iata?" selected":""}>${r.iata}</option>
+                ${r.altArrivalAirports.map(a=>`<option value="${a.iata}"${x.destination===a.iata?" selected":""}>${a.iata}</option>`).join("")}
+              </select></div></div>`;
+          })() : ""}
+          ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
+            <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
-        </div>
+        </div>`}
         ${airportTransportCard(x, p)}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
@@ -1539,6 +1621,9 @@ document.addEventListener("change", e=>{
   if(e.target.id === "atCustom"){
     airportTransportChoice = { mode:"custom", customAmount: Math.max(0, +e.target.value) || 0 };
     runSearch(rid);
+  }
+  if(e.target.id === "destSel"){
+    setDestination(e.target.dataset.resort, e.target.value);
   }
 });
 document.addEventListener("click", e=>{

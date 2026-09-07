@@ -16,7 +16,10 @@ say when something is a guess.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 36 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 64 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
+| Driving / miles transport modes | **Wired, free.** "How are you getting there?" on the trip form: Flying (unchanged), Driving (US-only; gas cost from a real/mock national price × distance, replaces the flights line, domestic resorts only), Flying with miles (0-100% discount on the cash fare, no floor). Plus-only add-on: an alert when the cached gas price has moved since a driving trip was saved. |
+| Disney news digest | **Wired, owner-only.** `npm run news-digest` reads a few RSS feeds (`NEWS_FEEDS` in `config.ts`) and emails whatever's new — never shown to end users automatically; the owner reviews and hand-adds anything worth surfacing to a resort's `goodToKnow`. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. |
@@ -306,6 +309,22 @@ than it is — this is the comparison people get wrong.
   (`plus_until is null OR plus_until >= today`) — a brand-new, never-upgraded account
   would have gotten real Plus alert emails. Caught while wiring real accounts; a test
   (`alerts.test.ts`) now pins a never-Plus user to zero candidates.
+- `MockProvider.flightMonth` matched the requested destination against a resort's
+  primary `iata` only, so any alternate arrival airport (Tampa alongside MCO for WDW)
+  silently returned zero rows, forever — no error, just a permanently empty cache for
+  that airport. Caught by actually seeding and querying an alternate, not just by
+  typechecking. Fixed to match either the primary or any alternate airport.
+- The anomaly-suppression rail (built to catch "many *trip* prices moved suspiciously
+  in one refresh — that's bad data, send nothing") was also catching the new gas-price
+  alert, because it reused the same `dropPct` field to carry a percent move. A single
+  real 33% gas-price swing, checked against a population of just itself, looked
+  identical to 100% of trips moving wildly and got silently suppressed. Fixed to
+  exclude `gas_price_change` from that tally — a shared external number moving isn't
+  the same kind of signal as many independent trip prices moving at once.
+- Driving mode had no domestic/international check at first, so "driving" from Atlanta
+  to Shanghai priced a straight-faced, technically-computed dollar figure for crossing
+  an ocean. Caught by actually looking at the rendered board, not just green tests.
+  Fixed to fail cleanly for any non-domestic resort.
 
 ---
 
@@ -373,6 +392,15 @@ Resend domain verification, and a "prices as of ..." line in the UI.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.
+- `EiaGasProvider` (`src/gas/eia.ts`) was written to the EIA Open Data API v2's
+  documented request shape, never run against a live key — same caveat as
+  Travelpayouts/Resend. Leave `EIA_API_KEY` unset and the mock national gas price is
+  used instead, so driving-mode pricing and the refresh job both still run end to end.
+- **`NEWS_FEEDS` (`config.ts`) are best-guess RSS URLs, not confirmed reachable from
+  this environment** (this sandbox's network is proxied/restricted, so a real fetch
+  attempt here returns a blocked-looking error regardless of whether the URL is
+  actually right). Check the first real GitHub Actions "Parkfare news digest" run's
+  log for per-feed errors before assuming these are correct.
 - Shanghai height-based ticket banding is not modelled.
 - **Accounts have no password and no email verification.** Anyone who knows a friend's
   email can sign in as them. Correct trade-off for a friends demo where the owner is
