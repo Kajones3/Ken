@@ -333,4 +333,17 @@ export const DRIVING = {
   fallbackGasPriceUsd: 3.15,
 } as const;
 
+/**
+ * RSS feeds checked for a private, owner-only digest email — never surfaced
+ * to end users automatically (see src/jobs/newsDigest.ts). Best-guess feed
+ * URLs based on each site's standard WordPress /feed/ convention, not
+ * fetched and confirmed from this environment — verify these resolve on
+ * the first real run (check the GitHub Actions log) before relying on them.
+ */
+export const NEWS_FEEDS: { url: string; label: string }[] = [
+  { url: "https://wdwnt.com/tag/closures-and-refurbishments/feed/", label: "WDWNT — closures & refurbishments" },
+  { url: "https://news.disneylandparis.com/en/feed/", label: "Disneyland Paris official news" },
+  { url: "https://wdwnt.com/tag/deals/feed/", label: "WDWNT — deals & promotions" },
+];
+
 export type { ISODate };

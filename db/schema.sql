@@ -138,6 +138,15 @@ alter table price_alerts drop constraint if exists price_alerts_kind_check;
 alter table price_alerts add constraint price_alerts_kind_check
   check (kind in ('total_drop','crossed_your_number','gas_price_change'));
 
+-- Tracks which RSS items the news-digest job has already emailed about, so
+-- a re-run of the same feed only reports genuinely new items. See
+-- src/jobs/newsDigest.ts and NEWS_FEEDS in config.ts — private, owner-only,
+-- never surfaced to end users.
+create table if not exists news_seen (
+  url         text        primary key,
+  first_seen  timestamptz not null default now()
+);
+
 -- Every refresh run is logged. When prices look wrong in three months,
 -- this is how you find out why.
 create table if not exists fetch_runs (

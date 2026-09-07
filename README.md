@@ -81,8 +81,8 @@ terms rather than assumed:
   on the next visit — fine for a friends demo, not for anything you'd want
   instant. (Render's *own* free Postgres expires after 30 days, which is
   why Neon is doing the database instead.)
-- **GitHub Actions**, already part of this repo — runs the twice-daily
-  refresh and alert jobs on a schedule, for free, instead of needing a
+- **GitHub Actions**, already part of this repo — runs the refresh, alert,
+  and news-digest jobs on a schedule, for free, instead of needing a
   separate always-on cron worker.
 
 Steps:
@@ -101,10 +101,12 @@ Steps:
    so the schema is ready before the app starts.
 3. **Add the same `DATABASE_URL` as a GitHub Actions secret**: this repo's
    Settings → Secrets and variables → Actions → New repository secret. The
-   two workflows in `.github/workflows/` (`refresh.yml`, `alerts.yml`) need
-   it to populate the *same* cache Render's app reads from — same cron
-   schedule this project has always documented (`0 4 * * *` refresh,
-   `20 4 * * *` alerts, both UTC).
+   three workflows in `.github/workflows/` (`refresh.yml`, `alerts.yml`,
+   `news-digest.yml`) need it to populate the *same* cache Render's app
+   reads from — same cron schedule this project has always documented
+   (`0 4 * * *` refresh, `20 4 * * *` alerts, `40 4 * * *` news digest, all
+   UTC). The news digest also needs an `OWNER_EMAIL` secret if you want it
+   to actually send — it's a private digest to you, not something friends see.
 4. **Run the refresh workflow once by hand, with backfill on** (Actions tab
    → "Parkfare refresh" → Run workflow → tick the **backfill** checkbox
    → Run workflow). The tiered refresh (see "Decisions worth knowing"
@@ -135,8 +137,10 @@ below before treating this as more than a friends demo).
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
-| `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. |
-| `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop emails. Never calls a provider. |
+| `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. Also seeds the daily gas price. |
+| `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop (and gas-price) emails. Never calls a provider. |
+| `src/jobs/newsDigest.ts` | Private, owner-only: checks a few Disney-news RSS feeds and emails what's new. |
+| `src/gas/` | `mock.ts` works today; `eia.ts` needs a free EIA key. Same interface as `src/email/`/`src/providers/`. |
 | `src/email/` | `console.ts` prints instead of sending, works today; `resend.ts` needs an API key. Same interface. |
 | `src/auth.ts` | Email-only sign-in, session cookies, the one real `isPlus()` entitlement check. |
 | `src/grantPlus.ts` | `npm run grant-plus` — the one way to grant Plus (comping a friend, or your own testing). |

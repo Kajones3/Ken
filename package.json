@@ -11,6 +11,7 @@
     "start": "tsx src/server.ts",
     "refresh": "tsx src/jobs/refresh.ts",
     "alerts": "tsx src/jobs/alerts.ts",
+    "news-digest": "tsx src/jobs/newsDigest.ts",
     "migrate": "tsx src/migrate.ts",
     "grant-plus": "tsx src/grantPlus.ts",
     "seed-promos": "tsx src/seedPromos.ts",
