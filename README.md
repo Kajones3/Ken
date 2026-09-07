@@ -105,9 +105,16 @@ Steps:
    it to populate the *same* cache Render's app reads from — same cron
    schedule this project has always documented (`0 4 * * *` refresh,
    `20 4 * * *` alerts, both UTC).
-4. **Run the refresh workflow once by hand** (Actions tab → "Parkfare
-   refresh" → Run workflow) right after setting the secret — otherwise the
-   site shows "no cached price" everywhere until the next 4am UTC run.
+4. **Run the refresh workflow once by hand, with backfill on** (Actions tab
+   → "Parkfare refresh" → Run workflow → tick the **backfill** checkbox
+   → Run workflow). The tiered refresh (see "Decisions worth knowing"
+   below) is built to spread the far-out months across a week of daily
+   cron runs, which is right for a warm cache but means a brand-new,
+   empty database only gets the *next ~60 days* on day one — dates further
+   out (like a trip six months from now) would show "no cached price"
+   until the weekly tier had rotated all the way through. Backfill fills
+   the whole year in one run instead. You only need this once; the plain
+   scheduled runs after that keep it fresh.
 5. **Grant friends Plus** the same way as local dev, just pointed at Neon
    instead of PGlite — and unlike PGlite, there's no "stop the server
    first" step, since real Postgres allows more than one process at a time:

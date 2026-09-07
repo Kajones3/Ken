@@ -33,6 +33,25 @@ export function dueMonths(today = todayISO(), dayOfYear = dayNumber()): string[]
   return [...months].sort();
 }
 
+/**
+ * Every month any tier ever touches, regardless of whether that tier is due
+ * today. `dueMonths()` is built to spread the far tier's cost across a week
+ * of daily cron runs — exactly right for keeping a warm cache fresh, but it
+ * means a brand-new, empty database only gets the near tier on day one and
+ * doesn't reach a year out until the weekly tier has rotated all the way
+ * through. This is the one-time catch-up for that gap: call it once right
+ * after first deploying, then let the normal tiered `dueMonths()` cron take
+ * over keeping it fresh.
+ */
+export function allTierMonths(today = todayISO()): string[] {
+  const months = new Set<string>();
+  const from = Math.min(...REFRESH_TIERS.map((t) => t.fromDay));
+  const to = Math.max(...REFRESH_TIERS.map((t) => t.toDay));
+  for (let d = from; d <= to; d += 15) months.add(monthKey(addDaysISO(today, d)));
+  months.add(monthKey(addDaysISO(today, to)));
+  return [...months].sort();
+}
+
 function dayNumber(): number {
   return Math.floor(Date.now() / 86_400_000);
 }
@@ -197,7 +216,8 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const db = await getDb();
-  const res = await runRefresh(db);
-  console.log(`refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors`);
+  const backfill = process.env.REFRESH_BACKFILL === "true" || process.env.REFRESH_BACKFILL === "1";
+  const res = await runRefresh(db, backfill ? { months: allTierMonths() } : {});
+  console.log(`refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors${backfill ? " (full backfill)" : ""}`);
   await db.close();
 }

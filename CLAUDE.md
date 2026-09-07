@@ -184,6 +184,15 @@ found, so it doesn't flex with season.
 count for accuracy nobody notices.
 
 **Refresh is tiered.** 0–60 days daily, 61–180 every third day, 181–365 weekly.
+Found the hard way while getting the first real deploy live: this means a
+brand-new, empty database only gets the near tier on its first run — the far
+tier needs about a week of daily cron runs before it's rotated through the
+whole year, so a friend searching six months out would see "no cached price"
+until then. `npm run refresh` now takes `REFRESH_BACKFILL=true` (also a
+checkbox on the GitHub Actions "Parkfare refresh" workflow) to fill every
+tier's months in one run instead of just today's due one — meant as a
+one-time catch-up right after first deploying, not a replacement for the
+normal tiered cron.
 
 **Off-property totals include parking and transfers** ($35/day Orlando, $40 Anaheim,
 $10–14 at transit-served international resorts). Without it, off-property looks cheaper
