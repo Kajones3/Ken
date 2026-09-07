@@ -143,6 +143,8 @@ a{color:var(--ink)}
 .fields{display:grid; grid-template-columns:repeat(3,1fr); gap:12px 16px; align-items:end}
 @media (max-width:760px){ .fields{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:460px){ .fields{grid-template-columns:1fr} }
+.party{display:grid; grid-template-columns:repeat(2,1fr); gap:12px 16px; align-items:end; margin-bottom:14px}
+@media (max-width:460px){ .party{grid-template-columns:1fr} }
 .f{display:flex; flex-direction:column; gap:5px; min-width:0}
 .f label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2)}
 .f select,.f input{
@@ -151,7 +153,7 @@ a{color:var(--ink)}
   font-family:"JetBrains Mono",monospace; font-size:13px; font-variant-numeric:tabular-nums;
 }
 .f select{font-family:"Karla",sans-serif; font-size:13.5px}
-.ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:14px; padding-top:13px; border-top:1px solid var(--rule)}
+.ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .ages[hidden]{display:none}
 .ages .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); align-self:center; margin-right:2px}
 .agef{display:flex; flex-direction:column; gap:4px}
@@ -377,11 +379,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
   <section class="panel">
     <p class="panel-lab">Trip parameters</p>
-    <div class="fields">
-      <div class="f">
-        <label for="origin">Departing from</label>
-        <select id="origin"></select>
-      </div>
+    <div class="party">
       <div class="f">
         <label for="adults">Adults (10+)</label>
         <select id="adults"></select>
@@ -389,6 +387,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div class="f">
         <label for="kids">Children</label>
         <select id="kids"></select>
+      </div>
+    </div>
+    <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
+    <div class="fields">
+      <div class="f">
+        <label for="origin">Departing from</label>
+        <select id="origin"></select>
       </div>
       <div class="f">
         <label for="nights">Nights</label>
@@ -429,7 +434,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <select id="month"></select>
       </div>
     </div>
-    <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
     <div class="panel-foot">
       <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo.</p>
       <button class="btn-primary" id="run">Compare six resorts</button>
@@ -670,7 +674,7 @@ function fillFormOptions(){
 
   $("#origin").value = "ATL";
   $("#adults").value = "2";
-  $("#kids").value = "3";
+  $("#kids").value = "0";
   $("#nights").value = "6";
   $("#parkdays").value = "4";
   $("#month").value = monthOpts[5][0];
