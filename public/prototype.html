@@ -85,6 +85,7 @@
 }
 
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{
   margin:0; background:var(--plane); color:var(--ink);
   font-family:"Karla",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -118,8 +119,12 @@ a{color:var(--ink)}
 .chip.plus{background:var(--accent-bg); border-color:var(--accent-line); color:var(--accent)}
 .btn{border:1px solid var(--rule-strong); background:var(--surface); border-radius:9px; padding:8px 14px; font-weight:600; font-size:13.5px}
 .btn:hover{border-color:var(--ink-2)}
-.btn-primary{background:var(--ink); color:var(--plane); border:1px solid var(--ink); border-radius:9px; padding:11px 20px; font-weight:700; font-size:14px; letter-spacing:-.01em}
+.btn-primary{background:var(--ink); color:var(--plane); border:1px solid var(--ink); border-radius:9px; padding:11px 20px; font-weight:700; font-size:14px; letter-spacing:-.01em; display:inline-flex; align-items:center; gap:8px}
 .btn-primary:hover{opacity:.88}
+.btn-primary:disabled{opacity:.7; cursor:default}
+.spinner{width:13px; height:13px; border-radius:50%; border:2px solid rgba(255,255,255,.35); border-top-color:var(--plane); animation:spin .7s linear infinite; flex:none}
+:root[data-theme="light"] .spinner, :root:not([data-theme="dark"]) .spinner{border-color:rgba(20,22,31,.25); border-top-color:var(--plane)}
+@keyframes spin{to{transform:rotate(360deg)}}
 .btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
 .signin{display:flex; gap:6px; align-items:center}
 .signin[hidden]{display:none}
@@ -159,6 +164,18 @@ a{color:var(--ink)}
 .f select{font-family:"Karla",sans-serif; font-size:13.5px}
 .ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .ages[hidden]{display:none}
+.gt-block{margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
+.gt-block .fields{margin-bottom:0}
+.gt-sub{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px}
+.geosearch{position:relative}
+.geosearch .georow{display:flex; gap:6px}
+.geosearch input[type=text]{flex:1; min-width:0}
+.georesults{position:absolute; z-index:5; top:calc(100% + 4px); left:0; right:0; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; box-shadow:var(--shadow); max-height:200px; overflow-y:auto}
+.georesults[hidden]{display:none}
+.georesults button{display:block; width:100%; text-align:left; padding:8px 10px; font-size:12.5px; background:none; border:0; border-top:1px solid var(--rule)}
+.georesults button:first-child{border-top:0}
+.georesults button:hover{background:var(--surface-2)}
+.geopicked{font-size:11px; color:var(--accent); margin-top:4px}
 .ages .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); align-self:center; margin-right:2px}
 .agef{display:flex; flex-direction:column; gap:4px}
 .agef label{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
@@ -396,27 +413,102 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </div>
     </div>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
+
+    <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
+      <div class="f">
+        <label for="month">Arriving</label>
+        <select id="month"></select>
+      </div>
+    </div>
+
+    <div class="gt-block">
+      <div class="fields">
+        <div class="f">
+          <label for="transportMode">Getting there</label>
+          <select id="transportMode">
+            <option value="fly" selected>Flying</option>
+            <option value="drive">Driving (US only)</option>
+            <option value="miles">Flying with miles</option>
+          </select>
+        </div>
+        <div class="f" id="originAirportField">
+          <label for="origin" id="originLabel">Departing from</label>
+          <select id="origin"></select>
+        </div>
+      </div>
+
+      <div class="gt-sub" id="milesExtra" hidden>
+        <span class="cap">Miles discount</span>
+        <div class="agef" style="width:220px">
+          <label for="milesPct">% off the cash fare, no floor</label>
+          <input type="range" id="milesPct" min="0" max="100" step="5" value="50" style="width:100%">
+        </div>
+        <div class="agef"><label>&nbsp;</label><b id="milesPctVal" style="font-family:'JetBrains Mono',monospace">50%</b></div>
+      </div>
+
+      <div id="driveBlock" hidden>
+        <div class="gt-sub">
+          <div class="agef geosearch" style="width:260px">
+            <label for="originSearch">Driving from</label>
+            <div class="georow">
+              <input type="text" id="originSearch" placeholder="Type a city..." autocomplete="off">
+              <button class="btn btn-sm" id="useMyLocation" type="button" title="Use my approximate location">📍</button>
+            </div>
+            <div class="georesults" id="geoResults" hidden></div>
+            <div class="geopicked" id="geoPicked"></div>
+          </div>
+        </div>
+        <div class="gt-sub">
+          <div class="f" style="width:200px">
+            <label for="overnightYN">Planning to stop for a night?</label>
+            <select id="overnightYN">
+              <option value="no" selected>No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+        </div>
+        <div class="gt-sub" id="overnightDetail" hidden>
+          <div class="agef" style="width:120px">
+            <label for="overnightNights">Nights</label>
+            <select id="overnightNights"></select>
+          </div>
+          <div class="agef">
+            <label for="overnightCostPerNight">Hotel cost / night</label>
+            <input type="number" id="overnightCostPerNight" min="0" step="5" placeholder="120" style="width:110px">
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="fields">
       <div class="f">
-        <label for="transportMode">Getting there</label>
-        <select id="transportMode">
-          <option value="fly" selected>Flying</option>
-          <option value="drive">Driving (US only)</option>
-          <option value="miles">Flying with miles</option>
+        <label for="needHotel">Need a hotel?</label>
+        <select id="needHotel">
+          <option value="yes" selected>Yes</option>
+          <option value="no">No</option>
         </select>
       </div>
-      <div class="f">
-        <label for="origin" id="originLabel">Departing from</label>
-        <select id="origin"></select>
-      </div>
-      <div class="f">
+      <div class="f" id="nightsField">
         <label for="nights">Nights</label>
         <select id="nights"></select>
       </div>
+    </div>
+
+    <div class="fields">
       <div class="f">
         <label for="parkdays">Park days</label>
         <select id="parkdays"></select>
       </div>
+      <div class="f" id="hopperField">
+        <label for="hopper">Park Hopper</label>
+        <select id="hopper">
+          <option value="0" selected>No</option>
+          <option value="1">Yes, add Park Hopper</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="fields" id="hotelDetailFields">
       <div class="f">
         <label for="stay">Where you stay</label>
         <select id="stay">
@@ -433,6 +525,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="2">Deluxe / upscale</option>
         </select>
       </div>
+    </div>
+    <div class="fields">
       <div class="f">
         <label for="food">Food</label>
         <select id="food">
@@ -440,36 +534,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="qs">Counter service</option>
           <option value="mix" selected>Mix of counter &amp; table service</option>
           <option value="ts">Table service &amp; character meals</option>
-          <option value="plan">Resort dining plan where offered</option>
+          <option value="plan" id="foodPlanOpt">Resort dining plan where offered</option>
         </select>
       </div>
-      <div class="f">
-        <label for="month">Arriving</label>
-        <select id="month"></select>
-      </div>
     </div>
-    <div class="ages" id="driveExtra" hidden>
-      <span class="cap">Overnight stop?</span>
-      <div class="agef" style="width:160px">
-        <label for="overnightLabel">Where (optional)</label>
-        <input type="text" id="overnightLabel" placeholder="e.g. Jacksonville" style="width:100%; padding:7px 8px; font-family:'JetBrains Mono',monospace; font-size:12.5px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px">
-      </div>
-      <div class="agef">
-        <label for="overnightCost">Hotel cost</label>
-        <input type="number" id="overnightCost" min="0" step="5" placeholder="120" style="width:92px">
-      </div>
-    </div>
-    <div class="ages" id="milesExtra" hidden>
-      <span class="cap">Miles discount</span>
-      <div class="agef" style="width:220px">
-        <label for="milesPct">% off the cash fare, no floor</label>
-        <input type="range" id="milesPct" min="0" max="100" step="5" value="50" style="width:100%">
-      </div>
-      <div class="agef"><label>&nbsp;</label><b id="milesPctVal" style="font-family:'JetBrains Mono',monospace">50%</b></div>
-    </div>
+
     <div class="panel-foot">
-      <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo.</p>
-      <button class="btn-primary" id="run">Compare six resorts</button>
+      <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
+      <button class="btn-primary" id="run"><span id="runLabel">Compare six resorts</span></button>
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
@@ -530,8 +602,9 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="mhead">
       <h3 id="pwTitle">Want to make it cheaper?</h3>
       <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
-      you should never have to pay to see what a trip costs. Plus is for what happens after you close the tab: your trip
-      saved with your numbers, and a message when the price falls.</p>
+      you should never have to pay to see what a trip costs. Plus is about monitoring and planning: your trip saved and
+      watched, a message when the price falls or we spot a new deal, and room for the extra costs (VIP tours, PhotoPass,
+      anything else) that don't fit the model.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -548,9 +621,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <ul class="feat">
       <li><span class="tick">✓</span><span><b>Price-drop alerts</b> — told when a fare or rate falls below what you saw</span></li>
       <li><span class="tick">✓</span><span><b>Your trips saved</b> with the hotel rates and fares you set yourself</span></li>
-      <li><span class="tick">✓</span><span><b>Compare several trips</b> side by side, not one at a time</span></li>
-      <li><span class="tick">✓</span><span><b>Watch all six resorts at once</b> and hear which one drops first</span></li>
-      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else stays free</span></li>
+      <li><span class="tick">✓</span><span><b>Deal alerts</b> — told the next time we add a new Disney promo for a resort you're watching</span></li>
+      <li><span class="tick">✓</span><span><b>Driving-trip gas-price alerts</b> — told if the price at the pump moves after you save a road-trip estimate</span></li>
+      <li><span class="tick">✓</span><span><b>Custom planning expenses</b> — add your own line items (a VIP tour, PhotoPass, anything not modeled here) to a saved trip's total</span></li>
+      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, driving-cost estimates, park hopper, promos browsing — stays free</span></li>
     </ul>
     <div class="mfoot">
       <span class="stub" id="pwFootMsg"></span>
@@ -673,8 +747,8 @@ let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pri
 let selected = 0, view = "board";
 let searchToken = 0, detailToken = 0;
 let regionFilter = "all";    // "all" | "dom" | "intl" — free, client-side only
-let airportTransportChoice = { mode:"auto" };   // Plus-only; server ignores this unless signed in as Plus
 let destinationChoice = store.get("dest", {});  // { resortId: iata } — free; server re-validates against that resort's own airports
+let pickedOriginPoint = null; // {label,lat,lon} from the driving-mode city search — free for everyone
 
 function matchesRegion(item){
   if(regionFilter === "all") return true;
@@ -702,7 +776,8 @@ function fillFormOptions(){
   fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]));
   fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
-  fillSelect($("#nights"), [3,4,5,6,7,8,9,10,12,14].map(n=>[n,n+" nights"]));
+  fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
+  fillSelect($("#overnightNights"), [1,2,3,4,5].map(n=>[n,n+" night"+(n>1?"s":"")]));
   fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
   fillSelect($("#month"), monthOpts);
 
@@ -710,6 +785,7 @@ function fillFormOptions(){
   $("#adults").value = "2";
   $("#kids").value = "0";
   $("#nights").value = "6";
+  $("#overnightNights").value = "1";
   $("#parkdays").value = "4";
   $("#month").value = monthOpts[5][0];
 }
@@ -729,6 +805,7 @@ function buildAges(){
 $("#kids").addEventListener("change", buildAges);
 
 function readParams(){
+  const needHotel = $("#needHotel").value;
   return {
     origin: $("#origin").value,
     adults: +$("#adults").value,
@@ -737,29 +814,50 @@ function readParams(){
     }),
     nights: +$("#nights").value,
     parkDays: Math.min(+$("#parkdays").value, +$("#nights").value+1),
-    stay: $("#stay").value,
+    needHotel,
+    stay: needHotel === "no" ? "none" : $("#stay").value,
     tier: $("#tier").value,
     food: $("#food").value,
+    hopper: $("#hopper").value === "1",
     month: $("#month").value,
     transportMode: $("#transportMode").value,
-    overnightLabel: $("#overnightLabel").value.trim(),
-    overnightCost: +$("#overnightCost").value || 0,
+    overnightYN: $("#overnightYN").value,
+    overnightNights: +$("#overnightNights").value,
+    overnightCostPerNight: +$("#overnightCostPerNight").value || 0,
     milesPct: +$("#milesPct").value,
+    originPoint: $("#transportMode").value === "drive" ? pickedOriginPoint : null,
   };
 }
 
-/** "Getting there" changes which controls make sense — driving swaps the
- *  origin field's meaning to a starting city and reveals an overnight-stop
- *  option; miles reveals the discount slider. Free for everyone; only the
- *  Plus gas-price alert cares which mode a saved trip used. */
+/** "Getting there" changes which controls make sense — driving swaps
+ *  "Departing from" for a city search box and reveals the overnight-stop
+ *  question; miles reveals the discount slider alongside the normal airport
+ *  picker. Free for everyone; only the Plus gas-price alert cares which
+ *  mode a saved trip used. */
 function syncTransportMode(){
   const mode = $("#transportMode").value;
-  $("#originLabel").textContent = mode === "drive" ? "Driving from" : "Departing from";
-  $("#driveExtra").hidden = mode !== "drive";
+  $("#originAirportField").hidden = mode === "drive";
+  $("#driveBlock").hidden = mode !== "drive";
   $("#milesExtra").hidden = mode !== "miles";
 }
 $("#transportMode").addEventListener("change", syncTransportMode);
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
+
+$("#overnightYN").addEventListener("change", e => { $("#overnightDetail").hidden = e.target.value !== "yes"; });
+
+/** "Need a hotel?" hides the fields that only make sense with one — nights
+ *  (still used internally for flights/food/an overnight driving stop, just
+ *  not shown when there's no hotel to count nights against), where-you-stay,
+ *  and resort category. The resort dining plan option is disabled too,
+ *  since every Disney dining plan requires an on-property stay. */
+function syncNeedHotel(){
+  const no = $("#needHotel").value === "no";
+  $("#nightsField").hidden = no;
+  $("#hotelDetailFields").hidden = no;
+  $("#foodPlanOpt").disabled = no;
+  if(no && $("#food").value === "plan") $("#food").value = "mix";
+}
+$("#needHotel").addEventListener("change", syncNeedHotel);
 
 /* ============================ search — everything below reads the cache ============================ */
 
@@ -768,12 +866,20 @@ function tripQuery(){
     origin: params.origin, adults: params.adults, childAges: params.ages.join(","),
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
-  if(session.plus) q.airportTransport = JSON.stringify(airportTransportChoice);
+  if(params.hopper) q.hopper = "1";
   if(params.transportMode && params.transportMode !== "fly"){
     q.transportMode = params.transportMode;
     if(params.transportMode === "drive"){
-      q.overnightLabel = params.overnightLabel || "";
-      q.overnightCost = params.overnightCost || 0;
+      if(params.overnightYN === "yes"){
+        q.overnightLabel = "Overnight stop";
+        q.overnightNights = params.overnightNights;
+        q.overnightCostPerNight = params.overnightCostPerNight;
+      }
+      if(params.originPoint){
+        q.originLat = params.originPoint.lat;
+        q.originLon = params.originPoint.lon;
+        q.originLabel = params.originPoint.label;
+      }
     }
     if(params.transportMode === "miles") q.milesPct = params.milesPct;
   }
@@ -790,6 +896,61 @@ function setDestination(resortId, iata){
   store.set("dest", destinationChoice);
   recompute(resortId);
 }
+
+/* ============================ driving-mode city search ============================
+ * Free for everyone, same as the driving-cost estimate itself. Debounced
+ * typeahead against /api/geocode; picking a result stores {label,lat,lon} in
+ * pickedOriginPoint, which tripQuery() sends instead of an airport code. */
+let geoDebounce = null;
+$("#originSearch").addEventListener("input", e=>{
+  const q = e.target.value.trim();
+  pickedOriginPoint = null;
+  $("#geoPicked").textContent = "";
+  clearTimeout(geoDebounce);
+  if(q.length < 2){ $("#geoResults").hidden = true; return; }
+  geoDebounce = setTimeout(async ()=>{
+    try{
+      const list = await apiGet("/api/geocode", { q });
+      const box = $("#geoResults");
+      if(!Array.isArray(list) || !list.length){ box.hidden = true; return; }
+      box.innerHTML = list.map((r,i)=>`<button type="button" data-geo="${i}">${r.label}</button>`).join("");
+      box.dataset.results = JSON.stringify(list);
+      box.hidden = false;
+    }catch(e){ console.error(e); }
+  }, 300);
+});
+document.addEventListener("click", e=>{
+  const g = e.target.closest("[data-geo]");
+  if(!g) return;
+  const list = JSON.parse($("#geoResults").dataset.results || "[]");
+  const picked = list[+g.dataset.geo];
+  if(!picked) return;
+  pickedOriginPoint = picked;
+  $("#originSearch").value = picked.label;
+  $("#geoPicked").textContent = "Using: "+picked.label;
+  $("#geoResults").hidden = true;
+});
+document.addEventListener("click", e=>{
+  if(!e.target.closest(".georesults") && e.target.id !== "originSearch") $("#geoResults").hidden = true;
+});
+$("#useMyLocation").addEventListener("click", async ()=>{
+  const btn = $("#useMyLocation");
+  btn.disabled = true;
+  try{
+    const loc = await apiGet("/api/geolocate", {});
+    if(loc && loc.lat != null && loc.lon != null){
+      pickedOriginPoint = { label: loc.label, lat: loc.lat, lon: loc.lon };
+      $("#originSearch").value = loc.label;
+      $("#geoPicked").textContent = "Using: "+loc.label+" (from your location)";
+    } else {
+      $("#geoPicked").textContent = "Couldn't detect your location — type a city instead.";
+    }
+  } catch(e){
+    $("#geoPicked").textContent = "Couldn't detect your location — type a city instead.";
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 let promosByResort = {};   // "resortId|date" -> PromoRow[] — public/free to browse, applying is Plus
 async function fetchPromosFor(resortId, on){
@@ -838,10 +999,17 @@ async function hotelAtTier(item, t){
   return day.total - item.price.total + item.price.hotel;
 }
 
+function setSearchBusy(busy){
+  const btn = $("#run"), label = $("#runLabel");
+  if(!btn) return;
+  btn.disabled = busy;
+  label.innerHTML = busy ? `<span class="spinner"></span>Comparing…` : "Compare six resorts";
+}
+
 async function runSearch(keepId){
   params = readParams();
   const token = ++searchToken;
-  const btn = $("#run"); if(btn) btn.disabled = true;
+  setSearchBusy(true);
   try {
     const compareData = await apiGet("/api/compare", compareQuery());
     if(token !== searchToken) return;
@@ -856,7 +1024,7 @@ async function runSearch(keepId){
     $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not reach the pricing API</div>
       <div class="rmeta">${String((e && e.message) || e)}</div></div></li>`;
   } finally {
-    if(btn) btn.disabled = false;
+    if(token === searchToken) setSearchBusy(false);
   }
 }
 
@@ -939,19 +1107,17 @@ function renderBoard(){
       </div>
       ${sparkSVG(spark)}
       <div class="bar-wrap">
-        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}${x.airportTransport?`, airport ${usd(x.airportTransport)}`:""}">
+        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}">
           <div class="seg f1" style="width:${w(getThere)}"></div>
           <div class="seg f2" style="width:${w(x.tickets)}"></div>
           <div class="seg f3" style="width:${w(x.hotel)}"></div>
           <div class="seg f4" style="width:${w(x.food)}"></div>
-          ${x.airportTransport?`<div class="seg f5" style="width:${w(x.airportTransport)}"></div>`:""}
         </div>
         <div class="barlabs">
           <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}</span>
           <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
-          ${x.airportTransport?`<span><i style="background:var(--s5)"></i>Airport ${usd(x.airportTransport)}</span>`:""}
         </div>
       </div>
       <div class="total">
@@ -1006,34 +1172,6 @@ function levelOf(v, min, med, max){
   return Math.min(8, 4 + Math.max(1, Math.round(t*4)));
 }
 
-const AT_LABEL = { parking:"Parking", rideshare:"Rideshare (Uber/Lyft/taxi)", transit:"Transit", custom:"Your own way" };
-
-function airportTransportCard(x, p){
-  const pick = x.airportTransportPick;
-  const inner = `
-    <div class="li"><div class="l"><b>${pick ? AT_LABEL[pick.mode] : "No cached estimate"}</b>
-      <small>${pick ? "for this trip's length, round trip" : "no parking/rideshare data cached for "+p.origin+" yet"}</small></div>
-      <div class="p">${pick ? usd(pick.amountUsd) : "—"}</div></div>
-    <div class="li"><div class="l"><b>How you'll get there</b>
-      <small>Auto picks whichever's cheaper for ${p.nights} night${p.nights===1?"":"s"}</small></div>
-      <div class="p"><select id="atMode" aria-label="How you'll get to the airport">
-        <option value="auto"${airportTransportChoice.mode==="auto"?" selected":""}>Auto (cheapest)</option>
-        <option value="parking"${airportTransportChoice.mode==="parking"?" selected":""}>Parking</option>
-        <option value="rideshare"${airportTransportChoice.mode==="rideshare"?" selected":""}>Rideshare</option>
-        <option value="transit"${airportTransportChoice.mode==="transit"?" selected":""}>Transit</option>
-        <option value="custom"${airportTransportChoice.mode==="custom"?" selected":""}>My own way — enter $</option>
-      </select></div></div>
-    ${airportTransportChoice.mode==="custom" ? `<div class="li"><div class="l"><b>Your amount, round trip</b></div>
-      <div class="p"><input type="number" id="atCustom" min="0" step="5" value="${airportTransportChoice.customAmount||0}" style="width:80px"></div></div>` : ""}
-  `;
-  return `<div class="card">
-    <h5>Getting to the airport</h5>
-    <p class="sub">Parking, rideshare, or your own way there</p>
-    ${session.plus ? inner : `<div class="gate"><div class="inner">${inner}</div>
-      <div class="g-over"><p>See parking vs. rideshare vs. transit, and set your own way there</p>
-      <button class="btn btn-sm openpw">Ask for Plus</button></div></div>`}
-  </div>`;
-}
 
 const PERSONAL_PROMO_OPTIONS = [
   ["room_pct_off|Annual Passholder", "Annual Passholder — % off room"],
@@ -1044,6 +1182,44 @@ const PERSONAL_PROMO_OPTIONS = [
   ["ticket_pct_off|Custom ticket discount", "Custom — % off tickets"],
   ["flat_off_total|Custom discount", "Custom — $ off total"],
 ];
+
+/**
+ * "Why is X cheaper?" — diffs the viewed resort's TripPrice against the
+ * cheapest other resort currently on the board, line by line, and surfaces
+ * whichever single line (getting there / tickets / hotel / food) explains
+ * the biggest share of the gap. All-client-side: every cost line is already
+ * on the TripPrice the compare API returned, nothing new to fetch.
+ */
+function whyCheaperCard(item, allResults){
+  const others = allResults.filter(y=>y.ok && y.resortId!==item.resortId);
+  if(!others.length) return "";
+  const other = others.reduce((a,b)=> b.price.total<a.price.total?b:a);
+  const cheaper = item.price.total <= other.price.total ? item : other;
+  const pricier = item.price.total <= other.price.total ? other : item;
+  if(cheaper.resortId === pricier.resortId) return "";
+  const cp = cheaper.price, pp = pricier.price;
+  const lines = [
+    ["Getting there (flights/driving)", cp.flights+cp.driving, pp.flights+pp.driving],
+    ["Park tickets", cp.tickets, pp.tickets],
+    ["Hotel", cp.hotel, pp.hotel],
+    ["Food", cp.food, pp.food],
+  ].map(([label,c,pv])=>({label, delta: pv-c})).sort((a,b)=>b.delta-a.delta);
+  const top = lines[0];
+  if(!top || top.delta < 1) return `<div class="card">
+    <h5>Why is ${cheaper.name} cheaper?</h5>
+    <p class="sub">Compared with ${pricier.name}, same dates and party</p>
+    <div class="li"><div class="l"><b>They're close</b><small>No single line item stands out — it's a mix of small differences</small></div>
+      <div class="p">${usd(pp.total-cp.total)} total</div></div>
+  </div>`;
+  return `<div class="card">
+    <h5>Why is ${cheaper.name} cheaper?</h5>
+    <p class="sub">Compared with ${pricier.name}, same dates and party</p>
+    <div class="li"><div class="l"><b>${top.label}</b><small>the single biggest difference between the two</small></div>
+      <div class="p" style="color:var(--accent)">${usd(top.delta)} less</div></div>
+    <p class="sub" style="margin-top:10px">${pricier.name} total ${usd(pp.total)} vs. ${cheaper.name} total ${usd(cp.total)}.
+      Park ticket estimates are approximate — see the disclaimer on the ticket card.</p>
+  </div>`;
+}
 
 function promosCard(item, x, promoList){
   const ov = ovOf(item.resortId);
@@ -1099,8 +1275,9 @@ async function renderDetail(){
   const list = paxList(p);
   const pax = list.length;
 
+  const noHotel = x.hotelPick.hotelId === "none";
   const [tierRows, promoList] = await Promise.all([
-    Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
+    noHotel ? Promise.resolve([null,null,null]) : Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
     fetchPromosFor(item.resortId, x.start),
   ]);
   if(token !== detailToken) return;
@@ -1137,32 +1314,13 @@ async function renderDetail(){
     </div>`;
   }).join("");
 
-  // cheapest weeks — a single cheap Tuesday buried in an otherwise pricey month
-  // isn't useful if the user can't actually travel that exact day, so this
-  // groups the twelve-month calendar into non-overlapping 7-day windows and
-  // ranks weeks, not individual dates. The single cheapest day (bestDay) is
-  // kept separately for the "arrive on this exact date" upsell line below,
-  // which is a different, more precise claim than "this week is cheap."
+  // The single cheapest day in the twelve-month calendar — feeds the
+  // "arrive on this exact date" upsell line below. The full fare-calendar
+  // grid further down already lets someone see every date at a glance, so
+  // there's no separate "cheapest weeks" summary duplicating it.
   const calDays = cal ? cal.days : [];
   const pricedDays = calDays.filter(d=>d.v!==null);
   const bestDay = pricedDays.length ? pricedDays.reduce((a,b)=> b.v<a.v?b:a) : null;
-  const weekAnchor = calDays.length ? new Date(calDays[0].date+"T00:00:00Z") : null;
-  const weekBuckets = new Map(); // week index -> cheapest day found in that 7-day window
-  for(const day of pricedDays){
-    const offsetDays = Math.round((new Date(day.date+"T00:00:00Z") - weekAnchor) / 86400000);
-    const wk = Math.floor(offsetDays / 7);
-    const cur = weekBuckets.get(wk);
-    if(!cur || day.v < cur.v) weekBuckets.set(wk, { wk, v: day.v, date: day.date });
-  }
-  const cheapWeeks = [...weekBuckets.values()].sort((a,b)=>a.v-b.v).slice(0,5);
-  const cheapRows = cheapWeeks.map(w=>{
-    const start = new Date(weekAnchor.getTime() + w.wk*7*86400000);
-    const end = new Date(start.getTime() + 6*86400000);
-    const cheapest = new Date(w.date+"T00:00:00Z");
-    return `<div class="li"><div class="l"><b>${start.toUTCString().slice(0,11)} – ${end.toUTCString().slice(0,11)}</b>
-      <small>cheapest that week: ${["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][cheapest.getUTCDay()]}, ${cheapest.toUTCString().slice(5,11)}</small></div>
-      <div class="p">${usd(w.v)}</div></div>`;
-  }).join("");
 
   // flights — the one cached fare this trip actually priced against
   const fp = x.flightPick;
@@ -1191,14 +1349,19 @@ async function renderDetail(){
     const detail = b === "infant" ? "No admission charged" : `${p.parkDays}-day ticket × ${n}`;
     return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
       <div class="p">${b==="infant"?"Free":usd(perGroup[b])}</div></div>`;
-  }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
+  }).join("")
+    + (x.hopperUsd > 0 ? `<div class="li"><div class="l"><b>Park Hopper</b><small>Flat add-on, already included in the ticket total below</small></div>
+      <div class="p">${usd(x.hopperUsd)}</div></div>` : "")
+    + `<div class="li"><div class="l"><b>Party of ${pax}</b>
       <small>${p.parkDays}-day ticket${p.parkDays>1?"s":""}</small></div>
       <div class="p">${usd(x.tickets)}</div></div>`;
 
   // hotel — the real pick, plus what the other categories would cost at the same date
-  const stayNow = x.hotelPick.onProperty;
+  const stayNow = noHotel ? true : x.hotelPick.onProperty;
   const hp = x.hotelPick;
-  const hotelPickRow = x.hotelTier.custom
+  const hotelPickRow = noHotel
+    ? `<div class="li"><div class="l"><b>No hotel</b><small>Not counted in this trip's total</small></div><div class="p">$0</div></div>`
+    : x.hotelTier.custom
     ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights</small></div>
         <div class="p">${usd(x.rooms)}</div></div>`
     : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night</small></div>
@@ -1211,14 +1374,14 @@ async function renderDetail(){
        <small>${hp.name}${x.transport?" + parking and transfers":""}</small></div>
        <div class="p">${usd(x.hotel)}</div></div>`;
 
-  const tierCompare = [0,1,2].map(t=>{
+  const tierCompare = noHotel ? "" : [0,1,2].map(t=>{
     const cost = tierRows[t];
     const label = TIER_LABEL[(stayNow ? ON_TIERS : OFF_TIERS)[t]];
     return `<div class="li"><div class="l"><b>${label}</b>
       <small>${cost===null?"no cached rate for this date":usd(cost/p.nights)+" / night"}</small></div>
       <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${cost===null?"—":usd(cost)}</div></div>`;
   }).join("");
-  const tierNote = x.hotelTier.swapped
+  const tierNote = !noHotel && x.hotelTier.swapped
     ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
     : "";
 
@@ -1318,13 +1481,16 @@ async function renderDetail(){
           <span class="d">Know a better rate than the cache? Set it here — free, and only for ${r.name}.</span>
           <button class="btn btn-sm" id="saveOv">Save these numbers</button>
         </div>
-        <div class="ovgrid">${hotelCtl}${fareCtl}</div>
+        <div class="ovgrid">${noHotel ? "" : hotelCtl}${fareCtl}</div>
       </div>
       <div class="cols">
         <div class="card">
           <h5><i style="background:var(--s2)"></i>Park tickets</h5>
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
           ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+          <p class="sub" style="margin-top:10px">Estimate from a general pricing curve, not Disney's own real per-date
+            tiers — actual prices vary by exact date and can differ from this by a meaningful amount. Check the official
+            page above before booking.</p>
         </div>
         <div class="card">
           <h5>Age bands here</h5>
@@ -1333,7 +1499,7 @@ async function renderDetail(){
         </div>
         ${x.transportMode==="drive" ? `<div class="card">
           <h5><i style="background:var(--s1)"></i>Driving</h5>
-          <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.fromIata : p.origin}</p>
+          <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.from : p.origin}</p>
           <div class="li"><div class="l"><b>Gas</b>
             <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
             <div class="p">${usd(x.drivingPick ? x.drivingPick.gasCostUsd : 0)}</div></div>
@@ -1357,7 +1523,6 @@ async function renderDetail(){
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
         </div>`}
-        ${airportTransportCard(x, p)}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
@@ -1385,11 +1550,7 @@ async function renderDetail(){
           <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
       })()}
       <div class="cols">
-        <div class="card">
-          <h5>Cheapest weeks to go</h5>
-          <p class="sub">Across the next twelve months — pick a week, not just one date</p>
-          ${cheapRows || `<div class="li"><div class="l"><b>No cached dates yet</b><small>Run the refresh job to populate the calendar</small></div><div class="p">—</div></div>`}
-        </div>
+        ${whyCheaperCard(item, results)}
         ${promosCard(item, x, promoList)}
       </div>
 
@@ -1519,8 +1680,9 @@ $("#signinBtn").addEventListener("click", async ()=>{
   const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email}) });
   if(!res.ok) return;
   await refreshSession();
-  // Plus status changes what tripQuery() sends (airportTransport), so the
-  // already-fetched results are stale — re-run the search, don't just re-render.
+  // Plus status changes whether a promoId override actually applies
+  // server-side, so the already-fetched results are stale — re-run the
+  // search, don't just re-render.
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
@@ -1540,17 +1702,56 @@ async function loadSavedTrips(){
     list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
     return;
   }
+  const expensesByTrip = {};
+  await Promise.all(trips.map(async t=>{
+    expensesByTrip[t.id] = await apiGet(`/api/trips/${t.id}/expenses`, {}).catch(()=>[]);
+  }));
   list.innerHTML = trips.map(t=>{
     const r = RESORT_BY_ID.get(t.resortId);
-    return `<div class="li"><div class="l"><b>${t.label || (r?r.name:t.resortId)}</b>
-      <small>Baseline ${usd(t.baselineTotal)}${t.active?"":" · paused"}</small></div>
-      <div class="p"><button class="btn btn-sm" data-deltrip="${t.id}">Remove</button></div></div>`;
+    const expenses = Array.isArray(expensesByTrip[t.id]) ? expensesByTrip[t.id] : [];
+    const extra = expenses.reduce((s,e)=>s+e.amountUsd, 0);
+    const expenseRows = expenses.map(e=>`<div class="li" style="padding:5px 0"><div class="l"><b>${e.label}</b></div>
+      <div class="p">${usd(e.amountUsd)} <button class="btn btn-sm" data-delexpense="${e.id}" data-trip="${t.id}" style="margin-left:6px">×</button></div></div>`).join("");
+    return `<div class="li" style="flex-direction:column; align-items:stretch; gap:8px">
+      <div style="display:flex; justify-content:space-between; gap:10px">
+        <div class="l"><b>${t.label || (r?r.name:t.resortId)}</b>
+          <small>Baseline ${usd(t.baselineTotal)}${extra?` + ${usd(extra)} in extras`:""}${t.active?"":" · paused"}</small></div>
+        <div class="p"><button class="btn btn-sm" data-deltrip="${t.id}">Remove</button></div>
+      </div>
+      ${expenseRows}
+      <div style="display:flex; gap:6px; flex-wrap:wrap">
+        <input type="text" placeholder="VIP tour, PhotoPass..." data-explabel="${t.id}" style="flex:1; min-width:120px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px">
+        <input type="number" placeholder="$" min="0" step="5" data-expamount="${t.id}" style="width:80px">
+        <button class="btn btn-sm" data-addexpense="${t.id}">Add expense</button>
+      </div>
+    </div>`;
   }).join("");
 }
 document.addEventListener("click", async e=>{
   const d = e.target.closest("[data-deltrip]");
   if(!d) return;
   await fetch("/api/trips/"+d.dataset.deltrip, { method:"DELETE" });
+  await loadSavedTrips();
+});
+document.addEventListener("click", async e=>{
+  const d = e.target.closest("[data-delexpense]");
+  if(!d) return;
+  await fetch(`/api/trips/${d.dataset.trip}/expenses/${d.dataset.delexpense}`, { method:"DELETE" });
+  await loadSavedTrips();
+});
+document.addEventListener("click", async e=>{
+  const a = e.target.closest("[data-addexpense]");
+  if(!a) return;
+  const tripId = a.dataset.addexpense;
+  const labelEl = document.querySelector(`[data-explabel="${tripId}"]`);
+  const amountEl = document.querySelector(`[data-expamount="${tripId}"]`);
+  const label = (labelEl.value || "").trim();
+  const amountUsd = Math.max(0, +amountEl.value) || 0;
+  if(!label || amountUsd <= 0) return;
+  await fetch(`/api/trips/${tripId}/expenses`, {
+    method: "POST", headers: {"content-type":"application/json"},
+    body: JSON.stringify({ label, amountUsd }),
+  });
   await loadSavedTrips();
 });
 document.addEventListener("click", async e=>{
@@ -1612,15 +1813,6 @@ document.addEventListener("change", e=>{
   if(rid){
     if(e.target.id === "fareSlider") setOv(rid, "farePerSeat", +e.target.value);
     if(e.target.id === "hotelOv")    setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
-  }
-  // Airport transport is trip-level, not resort-scoped — it moves every resort's total.
-  if(e.target.id === "atMode"){
-    airportTransportChoice = { mode: e.target.value, customAmount: airportTransportChoice.customAmount };
-    runSearch(rid);
-  }
-  if(e.target.id === "atCustom"){
-    airportTransportChoice = { mode:"custom", customAmount: Math.max(0, +e.target.value) || 0 };
-    runSearch(rid);
   }
   if(e.target.id === "destSel"){
     setDestination(e.target.dataset.resort, e.target.value);

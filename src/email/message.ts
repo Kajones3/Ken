@@ -6,11 +6,14 @@ export interface AlertContent {
   detail: string;
   oldTotal: number;
   newTotal: number;
+  kind?: string;
 }
 
 export function buildAlertEmail(a: AlertContent, to: string): EmailMessage {
   const saved = Math.round(a.oldTotal - a.newTotal);
-  const subject = saved > 0
+  const subject = a.kind === "new_promo"
+    ? "Parkfare: we found a new Disney deal"
+    : saved > 0
     ? `Parkfare: your trip just got $${saved.toLocaleString()} cheaper`
     : "Parkfare: a price on your trip moved";
   const text = [

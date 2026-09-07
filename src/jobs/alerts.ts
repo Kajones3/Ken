@@ -24,7 +24,7 @@ import { buildAlertEmail } from "../email/message.js";
 export interface Candidate {
   tripId: string; userId: string; email: string; resortId: string;
   oldTotal: number; newTotal: number; dropPct: number;
-  kind: "total_drop" | "crossed_your_number" | "gas_price_change"; detail: string;
+  kind: "total_drop" | "crossed_your_number" | "gas_price_change" | "new_promo"; detail: string;
 }
 
 const CAP = Number(process.env.ALERT_MAX_PER_USER_PER_DAY ?? 3);
@@ -58,9 +58,20 @@ export function applyCap(cands: Candidate[], cap = CAP): Candidate[] {
   return out;
 }
 
+function describePromoEffectForEmail(kind: string, value: number): string {
+  switch (kind) {
+    case "room_pct_off": return `${Math.round(value)}% off the room rate`;
+    case "room_flat_off": return `$${Math.round(value)} off the room rate`;
+    case "free_dining": return "free dining plan";
+    case "ticket_pct_off": return `${Math.round(value)}% off tickets`;
+    case "flat_off_total": return `$${Math.round(value)} off the total`;
+    default: return "";
+  }
+}
+
 export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidates: Candidate[]; checked: number }> {
   const { rows } = await db.query(
-    `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct
+    `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct, t.created_at
        from saved_trips t
        join users u on u.id = t.user_id
       where t.active and u.plus_until is not null and u.plus_until >= $1`,
@@ -112,6 +123,29 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
       }
     }
 
+    // Deal alerts — "we found a new Disney deal": a curated promo the owner
+    // added since this trip was last checked for one. "Since last checked"
+    // is the later of this trip's own new_promo history, or when it was
+    // saved (so an old promo that predates the trip never looks new to it).
+    const newPromos = await db.query(
+      `select label, effect_kind, effect_value
+         from promos
+        where active and (resort_id = $1 or resort_id is null)
+          and created_at > coalesce(
+            (select max(fired_at) from price_alerts where trip_id = $2 and kind = 'new_promo'),
+            $3)
+        order by created_at desc limit 3`,
+      [resort.id, row.id, row.created_at],
+    );
+    for (const promo of newPromos.rows) {
+      candidates.push({
+        tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
+        oldTotal, newTotal: best.total, dropPct: 0,
+        kind: "new_promo",
+        detail: `${resort.name}: new promo — ${promo.label} (${describePromoEffectForEmail(promo.effect_kind, Number(promo.effect_value))})`,
+      });
+    }
+
     if (dropPct >= threshold) {
       candidates.push({
         tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
@@ -152,7 +186,7 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
  */
 async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ retried: number; sent: number }> {
   const { rows } = await db.query(
-    `select a.id, a.detail, a.old_total, a.new_total, u.email
+    `select a.id, a.kind, a.detail, a.old_total, a.new_total, u.email
        from price_alerts a
        join saved_trips t on t.id = a.trip_id
        join users u on u.id = t.user_id
@@ -165,7 +199,7 @@ async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ r
   for (const row of rows) {
     try {
       await sender.send(buildAlertEmail(
-        { detail: row.detail, oldTotal: Number(row.old_total), newTotal: Number(row.new_total) }, row.email));
+        { detail: row.detail, oldTotal: Number(row.old_total), newTotal: Number(row.new_total), kind: row.kind }, row.email));
       await db.query(`update price_alerts set notified_at = now() where id = $1`, [row.id]);
       sent++;
     } catch (e) {

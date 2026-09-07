@@ -39,7 +39,7 @@ crossed the threshold, and sent the email — all **zero** provider calls. With 
 `RESEND_API_KEY` set it prints instead of sending, so this runs with no account.
 
 ```bash
-npm test         # 36 tests, no database needed
+npm test         # 73 tests, no database needed
 npm run typecheck
 ```
 
@@ -132,13 +132,14 @@ below before treating this as more than a friends demo).
 
 | Path | What it is |
 |---|---|
-| `db/schema.sql` | Ten tables. Safe to re-run. |
-| `src/config.ts` | The six resorts: age bands, ticket rules, food rates, hotels, transport, airport-transport guesses. |
+| `db/schema.sql` | Thirteen tables. Safe to re-run. |
+| `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
+| `src/geo/` | Geocoding + IP lookup for the driving-mode "Departing from" search. `mock.ts` works today; `nominatim.ts`/`ipapi.ts` are free and keyless but off by default (`GEOCODE_LIVE=true` to enable) — the one place the app calls a live provider on a user's own request instead of a pre-refreshed cache. |
 | `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. Also seeds the daily gas price. |
-| `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop (and gas-price) emails. Never calls a provider. |
+| `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop, gas-price, and new-promo "deal found" emails. Never calls a provider. |
 | `src/jobs/newsDigest.ts` | Private, owner-only: checks a few Disney-news RSS feeds and emails what's new. |
 | `src/gas/` | `mock.ts` works today; `eia.ts` needs a free EIA key. Same interface as `src/email/`/`src/providers/`. |
 | `src/email/` | `console.ts` prints instead of sending, works today; `resend.ts` needs an API key. Same interface. |
@@ -192,9 +193,10 @@ an alert, it doesn't drop it.
 
 **Plus gating happens server-side.** `compare()`, `calendar()` and `overridesFrom()`
 all resolve the caller's session from the cookie and decide what to honor from the
-query string — a non-Plus request never gets airport-transport pricing or promo
-effects, whatever it asks for. The UI hiding those controls for a free user is only
-the cosmetic half; never trust a client-supplied "am I Plus" flag.
+query string — a non-Plus request never gets promo effects, whatever it asks for.
+Saved trips and custom planning expenses are gated the same way, directly on the
+`/api/trips*` routes. The UI hiding those controls for a free user is only the
+cosmetic half; never trust a client-supplied "am I Plus" flag.
 
 **A curated promo's effect is looked up server-side, never trusted from the client
 beyond its id.** A personal promo's value *is* client-supplied — that's fine, it's
@@ -214,7 +216,11 @@ rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
   of the six resorts. `seedTickets()` fills the table so the system runs; replace it
   with rows you maintain against each resort's published calendar, and alarm on any
   resort whose rows go stale. When Disney's dynamic ticket pricing lands, this table
-  needs the same tiered refresh as flights.
+  needs the same tiered refresh as flights. The `base` constants were recalibrated
+  against real 2026 published pricing after an owner-reported bug (see CLAUDE.md), but
+  it's still a coarse two-parameter curve, not real per-date accuracy. Park Hopper's
+  differentials are similarly a flat guess — researched for WDW/Disneyland, unresearched
+  for Tokyo/Paris.
 - **Verify the Travelpayouts response shapes** against current docs. This was written
   to the documented shape, not against a live key.
 - **Verify the Resend request shape** against current docs before relying on it — it
@@ -225,12 +231,23 @@ rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
   email. Fine for a friends demo where the owner grants Plus by hand; needs a real
   verification step (e.g. a one-time link through the existing `EmailSender`
   interface) before a public launch.
-- **Airport-transport and promo data have no admin UI.** Both are hand-maintained
-  directly in the database, same as `ticket_prices` — and just as easy to let go
-  stale silently; no alarm-on-staleness exists for either yet.
+- **Promo data has no admin UI.** Hand-maintained directly in the database, same as
+  `ticket_prices` — and just as easy to let go stale silently; no alarm-on-staleness
+  exists yet.
+- **Nominatim/ip-api (`src/geo/`) haven't been run against live traffic** from this
+  environment (proxied/restricted network) — same caveat as every other real provider
+  here. `GEOCODE_LIVE` is unset by default, so driving-mode city search runs on the
+  mock providers until you turn it on.
+- **No 10-mile (or any) off-property hotel distance filter.** `HotelDef` has no
+  `distanceMiles`/`lat`/`lon`, only a free-text `descriptor` — deliberately deferred
+  in favor of the simpler "Need a hotel?" toggle.
 - **A day-by-day trip planner is not built** (itinerary, checklist, dining tracker,
   budget, per-day notes, special-event floor pricing) — confirmed scope, deliberately
   deferred to its own follow-up.
+- **A "Compare Flying vs. Driving" page is not built** (domestic parks only, IRS
+  wear-and-tear mileage cost, a rental-car estimate) — deliberately deferred to its own
+  fast follow-up; the IRS rate and a Travelpayouts/DiscoverCars rental-car adapter are
+  already researched (see CLAUDE.md).
 
 ## Currency
 

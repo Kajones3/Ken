@@ -12,7 +12,9 @@ import { RESORTS, RESORT_BY_ID, ORIGINS, bucketFor, type TierIndex, type FoodSty
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
-import { cheapestIn, priceTrip, type AirportTransportChoice, type Overrides, type TripParams } from "./pricing.js";
+import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
+import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, type SessionUser,
@@ -26,14 +28,26 @@ const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js
 /** Free for everyone — how you get there isn't a Plus feature, just a different
  *  way to answer "what does this trip cost". Gas-price *monitoring* (an alert
  *  when the price moves after you save a trip) is the actual Plus feature. */
-function transportModeFrom(q: URLSearchParams): { transportMode?: TripParams["transportMode"]; overnightStop?: TripParams["overnightStop"]; milesPct?: number } {
+function transportModeFrom(q: URLSearchParams): {
+  transportMode?: TripParams["transportMode"]; overnightStop?: TripParams["overnightStop"];
+  milesPct?: number; originPoint?: TripParams["originPoint"];
+} {
   const mode = q.get("transportMode");
   if (mode !== "drive" && mode !== "miles") return {};
   if (mode === "drive") {
     const label = (q.get("overnightLabel") ?? "").slice(0, 80);
-    const cost = Number(q.get("overnightCost") ?? 0);
-    const overnightStop = label && Number.isFinite(cost) && cost > 0 ? { label, costUsd: cost } : null;
-    return { transportMode: "drive", overnightStop };
+    const nights = clamp(Number(q.get("overnightNights") ?? 0), 0, 10);
+    const costPerNight = Number(q.get("overnightCostPerNight") ?? 0);
+    const overnightStop = label && nights > 0 && Number.isFinite(costPerNight) && costPerNight > 0
+      ? { label, nights, costPerNightUsd: costPerNight } : null;
+    // A geocoded arbitrary starting city (from the search box), never trusted
+    // beyond a lat/lon pair — the label is display-only, the number crunching
+    // uses only lat/lon, same as any other coordinate in this codebase.
+    const lat = Number(q.get("originLat"));
+    const lon = Number(q.get("originLon"));
+    const originPoint = Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0)
+      ? { label: (q.get("originLabel") ?? "").slice(0, 120), lat, lon } : undefined;
+    return { transportMode: "drive", overnightStop, originPoint };
   }
   const milesPct = clamp(Number(q.get("milesPct") ?? 0), 0, 100);
   return { transportMode: "miles", milesPct };
@@ -48,9 +62,10 @@ function paramsFrom(q: URLSearchParams): TripParams {
     childAges: ages.filter((a) => Number.isFinite(a) && a >= 0 && a <= 17).slice(0, 8),
     nights,
     parkDays: clamp(Number(q.get("parkDays") ?? 4), 1, nights + 1),
-    stay: (["on", "off", "both"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
+    stay: (["on", "off", "both", "none"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
+    hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
     ...transportModeFrom(q),
   };
 }
@@ -96,16 +111,12 @@ function destinationsFrom(q: URLSearchParams): Record<string, string> {
   } catch { return {}; }
 }
 
-/** Defaults to "auto" — a Plus user sees the real cost without an opt-in toggle they might miss. */
-function airportTransportFrom(q: URLSearchParams): AirportTransportChoice {
-  const raw = q.get("airportTransport");
-  if (!raw) return { mode: "auto" };
-  try {
-    const parsed = JSON.parse(raw);
-    const mode = (["auto", "parking", "rideshare", "transit", "custom"].includes(parsed.mode) ? parsed.mode : "auto") as AirportTransportChoice["mode"];
-    const customAmount = Number.isFinite(parsed.customAmount) ? Number(parsed.customAmount) : undefined;
-    return { mode, customAmount };
-  } catch { return { mode: "auto" }; }
+/** x-forwarded-for first, since Render (and any reverse proxy) puts the real
+ *  client IP there — req.socket.remoteAddress alone would just be the proxy. */
+function clientIp(req: IncomingMessage): string {
+  const fwd = req.headers["x-forwarded-for"];
+  if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0]!.trim();
+  return req.socket.remoteAddress ?? "";
 }
 
 async function readBody(req: IncomingMessage): Promise<any> {
@@ -121,8 +132,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
   // Server-side gate, not just a hidden UI control: a non-Plus request never
-  // gets airport-transport pricing or promos, whatever the query string asks for.
-  if (plus) params.airportTransport = airportTransportFrom(q);
+  // gets promo effects, whatever the query string asks for.
   const overrides = overridesFrom(q, plus);
   const month = q.get("month") ?? todayISO().slice(0, 7);
   const [from, to] = monthBounds(month);
@@ -157,7 +167,6 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
 async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
-  if (plus) params.airportTransport = airportTransportFrom(q);
   const overrides = overridesFrom(q, plus);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
@@ -266,6 +275,21 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/promos") {
       return send(200, await listPromos(url.searchParams), { cache: "public, max-age=300" });
     }
+
+    // --- driving-mode "Departing from" search box: free for everyone, same ---
+    // --- as driving-cost estimation itself. See src/geo/ for why this is   ---
+    // --- the one place the app calls a live provider on a user's request. ---
+    if (url.pathname === "/api/geocode") {
+      const q = (url.searchParams.get("q") ?? "").trim().slice(0, 120);
+      if (!q) return send(200, []);
+      const results = await cachedGeocode(db, pickGeocodeProvider(), q);
+      return send(200, results, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/geolocate") {
+      const provider = pickIpLocateProvider();
+      const result = await provider.locate(clientIp(req)).catch(() => null);
+      return send(200, result ?? { error: "unavailable" }, { cache: "no-store" });
+    }
     // --- saved trips: signed in and Plus, always the caller's own rows. ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
       const user = await currentUser(db, req);
@@ -308,6 +332,48 @@ const server = createServer(async (req, res) => {
       if (!user) return send(401, { error: "sign_in_required" });
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       await db.query(`delete from saved_trips where id = $1 and user_id = $2`, [tripMatch[1], user.id]);
+      return send(200, { ok: true });
+    }
+
+    // --- custom planning expenses: free-form Plus line items (VIP tours, ---
+    // --- PhotoPass, anything not modeled elsewhere) attached to a saved  ---
+    // --- trip — the user's own claim about their own price, same trust  ---
+    // --- model as a personal promo. Always scoped to a trip the caller  ---
+    // --- actually owns, joined through saved_trips.user_id.             ---
+    const expensesMatch = url.pathname.match(/^\/api\/trips\/([^/]+)\/expenses$/);
+    if (expensesMatch && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
+      if (!owns.rows[0]) return send(404, { error: "not found" });
+      const body = await readBody(req);
+      const label = String(body.label ?? "").trim().slice(0, 120);
+      const amount = Number(body.amountUsd);
+      if (!label || !Number.isFinite(amount) || amount < 0) return send(400, { error: "label and a non-negative amountUsd are required" });
+      const id = randomUUID();
+      await db.query(`insert into custom_expenses (id, trip_id, label, amount_usd) values ($1,$2,$3,$4)`,
+        [id, expensesMatch[1], label, amount]);
+      return send(201, { id, label, amountUsd: amount });
+    }
+    if (expensesMatch && req.method === "GET") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
+      if (!owns.rows[0]) return send(404, { error: "not found" });
+      const { rows } = await db.query(
+        `select id, label, amount_usd from custom_expenses where trip_id = $1 order by created_at`, [expensesMatch[1]]);
+      return send(200, rows.map((r) => ({ id: r.id, label: r.label, amountUsd: Number(r.amount_usd) })));
+    }
+    const expenseMatch = url.pathname.match(/^\/api\/trips\/([^/]+)\/expenses\/([^/]+)$/);
+    if (expenseMatch && req.method === "DELETE") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expenseMatch[1], user.id]);
+      if (!owns.rows[0]) return send(404, { error: "not found" });
+      await db.query(`delete from custom_expenses where id = $1 and trip_id = $2`, [expenseMatch[2], expenseMatch[1]]);
       return send(200, { ok: true });
     }
 

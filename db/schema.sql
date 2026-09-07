@@ -44,19 +44,6 @@ create table if not exists ticket_prices (
   primary key (resort_id, park_date)
 );
 
--- No live API for airport parking / rideshare / transit costs either.
--- Static per-origin reference data (not a time series like the tables
--- above), seeded from placeholder guesses — see config.ts. Plus-only.
-create table if not exists airport_transport (
-  origin                  char(3)      primary key,
-  parking_per_day_usd     numeric(7,2) not null,
-  rideshare_roundtrip_usd numeric(7,2) not null,
-  transit_available       boolean      not null default false,
-  transit_roundtrip_usd   numeric(7,2),
-  source_note             text         not null default '',
-  updated_at              timestamptz  not null default now()
-);
-
 -- No official Disney promo API — fan sites and memory are the only source,
 -- and nothing here is guaranteed to repeat. Hand-maintained by the owner,
 -- same precedent as ticket_prices. Plus-only to apply; free to browse.
@@ -119,10 +106,33 @@ create table if not exists saved_trips (
 );
 create index if not exists saved_trips_active on saved_trips (active) where active;
 
+-- A free-form Plus feature: "extra planning expenses" (VIP tours, PhotoPass,
+-- anything not modeled elsewhere) the user attaches to a saved trip. This is
+-- the user's own claim about their own price, same trust model as a
+-- personal promo or a typed nightly rate — never verified, never shared.
+create table if not exists custom_expenses (
+  id       uuid primary key,
+  trip_id  uuid not null references saved_trips(id) on delete cascade,
+  label    text not null,
+  amount_usd numeric(10,2) not null check (amount_usd >= 0),
+  created_at timestamptz not null default now()
+);
+create index if not exists custom_expenses_trip on custom_expenses (trip_id);
+
+-- Geocode results cache for the driving-mode "Departing from" search box —
+-- see src/geo/cache.ts. Nominatim's usage policy requires caching, and this
+-- also means a repeated search (e.g. "Atlanta" typed by two different
+-- people) costs one real lookup, not two.
+create table if not exists geocode_cache (
+  query_text text primary key,
+  results    jsonb not null,
+  cached_at  timestamptz not null default now()
+);
+
 create table if not exists price_alerts (
   id          uuid primary key,
   trip_id     uuid not null references saved_trips(id) on delete cascade,
-  kind        text not null check (kind in ('total_drop','crossed_your_number','gas_price_change')),
+  kind        text not null check (kind in ('total_drop','crossed_your_number','gas_price_change','new_promo')),
   resort_id   text,
   old_total   numeric(10,2) not null,
   new_total   numeric(10,2) not null,
@@ -136,7 +146,7 @@ create index if not exists price_alerts_trip on price_alerts (trip_id, fired_at 
 -- re-applies it every run, safe to run repeatedly like the rest of this file.
 alter table price_alerts drop constraint if exists price_alerts_kind_check;
 alter table price_alerts add constraint price_alerts_kind_check
-  check (kind in ('total_drop','crossed_your_number','gas_price_change'));
+  check (kind in ('total_drop','crossed_your_number','gas_price_change','new_promo'));
 
 -- Tracks which RSS items the news-digest job has already emailed about, so
 -- a re-run of the same feed only reports genuinely new items. See
