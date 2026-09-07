@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Parkfare</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -108,7 +109,7 @@ a{color:var(--ink)}
 }
 .brand h1{font-size:23px; font-weight:800; letter-spacing:-.035em; line-height:1.05}
 .tag{margin:1px 0 0; color:var(--ink-2); font-size:12.5px}
-.acct{display:flex; align-items:center; gap:9px}
+.acct{display:flex; align-items:center; gap:9px; flex-wrap:wrap; row-gap:8px}
 .chip{
   font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
   padding:5px 9px; border-radius:999px; border:1px solid var(--rule-strong); color:var(--ink-2);
@@ -122,7 +123,7 @@ a{color:var(--ink)}
 .btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
 .signin{display:flex; gap:6px; align-items:center}
 .signin[hidden]{display:none}
-.signin input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px; width:168px}
+.signin input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px; width:168px; max-width:44vw; min-width:0}
 
 /* ---------- demo banner ---------- */
 .demo{
