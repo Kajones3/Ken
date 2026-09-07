@@ -17,9 +17,29 @@ import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
+import { pickGasProvider } from "../gas/pick.js";
 
 export function pickProvider(): Provider {
   return process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
+}
+
+/**
+ * One row a day, national average only — cheap enough to just always fetch,
+ * not gated by the near/mid/far tiering that flights and hotels use. Feeds
+ * the free driving-cost estimate and the Plus gas-price-change alert.
+ */
+export async function seedGasPrice(db: Db): Promise<number> {
+  const provider = pickGasProvider();
+  const gas = await provider.nationalAverage();
+  if (!gas) return 0;
+  await db.query(
+    `insert into gas_prices (as_of, price_per_gallon_usd, source, fetched_at)
+     values ($1,$2,$3,now())
+     on conflict (as_of) do update set
+       price_per_gallon_usd = excluded.price_per_gallon_usd, source = excluded.source, fetched_at = excluded.fetched_at`,
+    [gas.asOf, gas.pricePerGallonUsd, provider.name],
+  );
+  return 1;
 }
 
 /** Months whose tier is due today. Near dates every day, far dates weekly. */
@@ -212,6 +232,7 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   }
   rows += await seedTickets(db, months);
   rows += await seedAirportTransport(db);
+  rows += await seedGasPrice(db);
 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4 where id = $1`,

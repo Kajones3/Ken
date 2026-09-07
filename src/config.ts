@@ -315,4 +315,22 @@ export function shouldRefresh(tierName: string, dayOfYear: number): boolean {
   return dayOfYear % t.everyDays === 0;
 }
 
+/**
+ * Driving-cost assumptions. US-only for now — no clean public data source
+ * for road distance/fuel economy conventions in Europe or Asia the way EIA
+ * and the interstate highway system make this tractable for the US. All
+ * three numbers are guesses, same footing as AIRPORT_TRANSPORT_GUESSES;
+ * refine before relying on them for anything real.
+ */
+export const DRIVING = {
+  /** National-average passenger-vehicle fuel economy. */
+  mpg: 25,
+  /** Real road-trip miles run longer than a straight line — guess. */
+  roadDistanceFactor: 1.25,
+  /** A budget motel room for an optional overnight stop, if the user doesn't type their own. */
+  overnightHotelGuessUsd: 120,
+  /** Used only if the gas-price cache has no row yet (a fresh deploy before its first refresh). */
+  fallbackGasPriceUsd: 3.15,
+} as const;
+
 export type { ISODate };

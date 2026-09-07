@@ -76,6 +76,17 @@ create table if not exists promos (
 );
 create index if not exists promos_lookup on promos (resort_id, starts_on, ends_on) where active;
 
+-- One row per day, national average only. Free EIA API when EIA_API_KEY is
+-- set, mock (plausible, no account) otherwise — same pattern as everything
+-- else with no live default. Small time series so the alert job can compare
+-- "gas price when this trip was saved" against "gas price now".
+create table if not exists gas_prices (
+  as_of                date         primary key,
+  price_per_gallon_usd numeric(6,3) not null,
+  source               text         not null default '',
+  fetched_at           timestamptz  not null default now()
+);
+
 create table if not exists users (
   id            uuid primary key,
   email         text unique not null,
@@ -111,7 +122,7 @@ create index if not exists saved_trips_active on saved_trips (active) where acti
 create table if not exists price_alerts (
   id          uuid primary key,
   trip_id     uuid not null references saved_trips(id) on delete cascade,
-  kind        text not null check (kind in ('total_drop','crossed_your_number')),
+  kind        text not null check (kind in ('total_drop','crossed_your_number','gas_price_change')),
   resort_id   text,
   old_total   numeric(10,2) not null,
   new_total   numeric(10,2) not null,
@@ -120,6 +131,12 @@ create table if not exists price_alerts (
   notified_at timestamptz
 );
 create index if not exists price_alerts_trip on price_alerts (trip_id, fired_at desc);
+-- create table if not exists is a no-op on a database that already has this
+-- table, so the check constraint above never widens on its own — this
+-- re-applies it every run, safe to run repeatedly like the rest of this file.
+alter table price_alerts drop constraint if exists price_alerts_kind_check;
+alter table price_alerts add constraint price_alerts_kind_check
+  check (kind in ('total_drop','crossed_your_number','gas_price_change'));
 
 -- Every refresh run is logged. When prices look wrong in three months,
 -- this is how you find out why.

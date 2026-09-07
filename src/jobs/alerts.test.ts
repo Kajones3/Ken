@@ -36,6 +36,18 @@ test("a normal day passes through", () => {
   assert.equal(reason, "");
 });
 
+test("a real gas-price swing is never suppressed as 'bad data', even alone in the batch", () => {
+  // Regression: gas_price_change reuses the dropPct field to carry a percent
+  // move, which used to feed straight into the same "too many trips moved
+  // too much" anomaly check built for per-trip provider prices — so one
+  // legitimate 33% gas swing, checked against a population of just itself,
+  // looked identical to 100% of trips moving wildly and got suppressed.
+  const gasOnly: Candidate = { ...c("u1", 33), kind: "gas_price_change" };
+  const { keep, reason } = suppressAnomalies([gasOnly], 1);
+  assert.equal(keep.length, 1);
+  assert.equal(reason, "");
+});
+
 test("a failed send leaves the alert for next run to retry — it is not lost", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
@@ -127,6 +139,69 @@ test("a user who has never been Plus gets no alerts, however far the price drops
 
   const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
   assert.equal(result.checked, 0, "a never-Plus user's trip is not even considered");
+  assert.equal(result.fired, 0);
+
+  await db.close();
+});
+
+test("a driving trip gets a gas-price alert when the price has moved enough since it was saved", async () => {
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "driver@example.com"]);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  await db.query(
+    `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property)
+     values ('h1','wdw','Test Hotel','','2027-03-01',150,'value',true)`);
+  // "now": $4.00/gal. Trip was saved at $3.00/gal — a 33% move, well past the 8% default threshold.
+  await db.query(`insert into gas_prices (as_of, price_per_gallon_usd, source) values ('2027-03-01', 4.00, 'test')`);
+  const params: TripParams & { month: string; resortId: string; gasPriceAtSaveUsd: number } = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs", transportMode: "drive",
+    month: "2027-03", resortId: "wdw", gasPriceAtSaveUsd: 3.00,
+  };
+  await db.query(
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
+     values ($1,$2,$3,'{}',100000,100)`,   // impossibly high threshold/baseline: only the gas alert should fire
+    [tripId, userId, JSON.stringify(params)],
+  );
+
+  const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
+  assert.equal(result.fired, 1);
+  assert.equal(result.candidates[0]!.kind, "gas_price_change");
+  assert.match(result.candidates[0]!.detail, /risen/);
+  assert.match(result.candidates[0]!.detail, /\$3\.00/);
+  assert.match(result.candidates[0]!.detail, /\$4\.00/);
+
+  await db.close();
+});
+
+test("a driving trip gets no gas-price alert when the price has barely moved", async () => {
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "driver2@example.com"]);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  await db.query(
+    `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property)
+     values ('h1','wdw','Test Hotel','','2027-03-01',150,'value',true)`);
+  await db.query(`insert into gas_prices (as_of, price_per_gallon_usd, source) values ('2027-03-01', 3.10, 'test')`);
+  const params: TripParams & { month: string; resortId: string; gasPriceAtSaveUsd: number } = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs", transportMode: "drive",
+    month: "2027-03", resortId: "wdw", gasPriceAtSaveUsd: 3.00, // ~3.3% move, under the 8% default
+  };
+  await db.query(
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
+     values ($1,$2,$3,'{}',100000,100)`,
+    [tripId, userId, JSON.stringify(params)],
+  );
+
+  const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
   assert.equal(result.fired, 0);
 
   await db.close();

@@ -10,15 +10,20 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORT_BY_ID, bucketFor,
+  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
+import { haversineMiles } from "./geo.js";
 
 // ---------------------------------------------------------------- inputs
 
 export type AirportTransportMode = "auto" | "parking" | "rideshare" | "transit" | "custom";
 export interface AirportTransportChoice { mode: AirportTransportMode; customAmount?: number }
+
+/** How the party gets to the resort. Undefined/"fly" = today's behavior,
+ *  every existing caller unaffected. */
+export type TransportMode = "fly" | "drive" | "miles";
 
 export interface TripParams {
   origin: string;
@@ -38,6 +43,20 @@ export interface TripParams {
    *  ever set, so a request for one resort can't end up priced against a
    *  totally unrelated airport. */
   destination?: string;
+  /** Undefined = "fly", today's behavior. Free for everyone — this isn't a
+   *  Plus feature, it's a different way to answer "what does this trip cost".
+   *  "drive" reuses `origin` as the starting city (the existing ORIGINS
+   *  list, an IATA-keyed metro with a known lat/lon) rather than free-text +
+   *  a geocoding dependency this app doesn't have. US-only for now. */
+  transportMode?: TransportMode;
+  /** "drive" only — an optional overnight stop on the way, priced at the
+   *  user's own typed estimate (there's no real waypoint-hotel data to guess
+   *  from the way resort hotel rates are guessed). */
+  overnightStop?: { label: string; costUsd: number } | null;
+  /** "miles" only, 0-100. A real mile redemption isn't a market-price guess
+   *  the way a typed cash fare is, so this is allowed to price below the
+   *  cheapest cash fare found — see the no-floor branch in priceTrip. */
+  milesPct?: number;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -80,6 +99,10 @@ export interface PriceBook {
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
   airportTransport(origin: string): AirportTransportRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
+  /** The most recent cached national average — undefined falls back to
+   *  DRIVING.fallbackGasPriceUsd, same "additive, never a hard failure"
+   *  treatment as airportTransport. */
+  gasPrice(): { pricePerGallonUsd: number; asOf: string } | undefined;
   /** Oldest row backing this book, so the UI can say "prices as of ...". */
   oldestFetchedAt: Date | null;
 }
@@ -111,6 +134,13 @@ export interface TripPrice {
   airportTransportPick: { mode: Exclude<AirportTransportMode, "auto">; amountUsd: number } | null;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
+  /** Gas + optional overnight stop, replacing flights entirely when transportMode is "drive". $0 otherwise. */
+  driving: number;
+  drivingPick: {
+    fromIata: string; roundTripMiles: number; gasPricePerGallonUsd: number;
+    gasCostUsd: number; overnightUsd: number;
+  } | null;
+  transportMode: TransportMode;
 }
 export type PriceResult = { ok: true; price: TripPrice } | { ok: false; reason: string };
 
@@ -207,16 +237,54 @@ export function priceTrip(
   const ov = overrides[resort.id] ?? {};
   const bucket = bucketFor(params.nights);
 
-  // --- flights -----------------------------------------------------------
+  // --- flights, or driving instead of flying ------------------------------
+  const transportMode: TransportMode = params.transportMode ?? "fly";
   const destination = params.destination ?? resort.iata;
-  const row = book.flight(params.origin, destination, start, bucket);
-  if (!row && ov.farePerSeat === undefined) {
-    return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
+  let flights = 0, perSeatFare = 0;
+  let flightPick: TripPrice["flightPick"] = null;
+  let driving = 0;
+  let drivingPick: TripPrice["drivingPick"] = null;
+
+  if (transportMode === "drive") {
+    // US-only, and only to a domestic resort — driving is a real option
+    // between US cities and WDW/Disneyland, not across an ocean. Fails
+    // cleanly rather than computing a technically-real but meaningless
+    // dollar figure for "driving" to Tokyo or Paris.
+    if (resort.region !== "dom") {
+      return { ok: false, reason: `driving isn't a real option to ${resort.name} — try flying instead` };
+    }
+    const from = ORIGIN_BY_IATA.get(params.origin);
+    if (!from) return { ok: false, reason: `unknown starting city ${params.origin}` };
+    const oneWayMiles = haversineMiles(from.lat, from.lon, resort.lat, resort.lon) * DRIVING.roadDistanceFactor;
+    const roundTripMiles = oneWayMiles * 2;
+    const gas = book.gasPrice();
+    const gasPricePerGallonUsd = gas?.pricePerGallonUsd ?? DRIVING.fallbackGasPriceUsd;
+    const gasCostUsd = (roundTripMiles / DRIVING.mpg) * gasPricePerGallonUsd;
+    const overnightUsd = params.overnightStop ? Math.max(0, params.overnightStop.costUsd) : 0;
+    driving = Math.round((gasCostUsd + overnightUsd) * 100) / 100;
+    drivingPick = {
+      fromIata: params.origin, roundTripMiles: Math.round(roundTripMiles),
+      gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
+    };
+  } else {
+    const row = book.flight(params.origin, destination, start, bucket);
+    if (!row && ov.farePerSeat === undefined) {
+      return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
+    }
+    // Flying: an override may raise the fare but never fall below the cheapest fare we know of.
+    // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
+    // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
+    const floor = row?.price ?? 0;
+    if (transportMode === "miles") {
+      const base = ov.farePerSeat !== undefined ? ov.farePerSeat : floor;
+      const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
+      perSeatFare = Math.max(0, base * (1 - milesPct / 100));
+    } else {
+      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : floor;
+    }
+    flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
+    flightPick = row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null;
   }
-  // An override may raise the fare but never fall below the cheapest fare we know of.
-  const floor = row?.price ?? 0;
-  const perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : floor;
-  const flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
 
   // --- tickets -----------------------------------------------------------
   const multiDay = Math.max(resort.ticket.floor, 1 - resort.ticket.slope * (params.parkDays - 1));
@@ -367,17 +435,17 @@ export function priceTrip(
     }
   }
 
-  const total = Math.max(0, flights + tickets + hotel + food + airportTransport - flatOffTotal);
+  const total = Math.max(0, flights + tickets + hotel + food + airportTransport + driving - flatOffTotal);
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
   return {
     ok: true,
     price: {
       start, destination, total, flights, tickets, hotel, rooms, transport, food,
-      perSeatFare,
-      flightPick: row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null,
+      perSeatFare, flightPick,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       airportTransport, airportTransportPick, appliedPromos,
+      driving, drivingPick, transportMode,
     },
   };
 }

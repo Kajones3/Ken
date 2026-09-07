@@ -5,15 +5,9 @@
  */
 import { ORIGIN_BY_IATA, RESORT_BY_ID } from "../config.js";
 import { monthBounds, range } from "../dates.js";
+import { haversineMiles } from "../geo.js";
 import { hotelSeasonFactor, jitter, seasonOf } from "../seasonality.js";
 import type { FlightQuote, HotelQuote, Provider } from "./types.js";
-
-function haversine(a1: number, o1: number, a2: number, o2: number): number {
-  const R = 3958.8, rad = (x: number) => (x * Math.PI) / 180;
-  const dLat = rad(a2 - a1), dLon = rad(o2 - o1);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a1)) * Math.cos(rad(a2)) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
 
 const CARRIERS: Record<string, string[]> = {
   wdw: ["Delta", "Southwest", "JetBlue"], dlr: ["Alaska", "United", "Southwest"],
@@ -32,7 +26,7 @@ export class MockProvider implements Provider {
     const resort = [...RESORT_BY_ID.values()].find((r) =>
       r.iata === destination || r.altArrivalAirports.some((a) => a.iata === destination));
     if (!o || !resort) return [];
-    const dist = haversine(o.lat, o.lon, resort.lat, resort.lon);
+    const dist = haversineMiles(o.lat, o.lon, resort.lat, resort.lon);
     const base = resort.region === "dom" ? 78 + dist * 0.082
       : resort.region === "atl" ? 245 + dist * 0.062
       : 330 + dist * 0.058;

@@ -368,3 +368,76 @@ test("destination: a gap for the requested airport fails clearly, naming that ai
   assert.equal(r.ok, false);
   if (!r.ok) assert.match(r.reason, /TPA/);
 });
+
+test("transport mode: driving replaces flights entirely, using the cached gas price", () => {
+  const book = fullBook("wdw", "MCO");
+  const driving = { ...base, transportMode: "drive" as const };
+  const r = priceTrip(book, resortById("wdw"), driving, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.flights, 0);
+  assert.equal(r.price.flightPick, null);
+  assert.equal(r.price.transportMode, "drive");
+  assert.ok(r.price.driving > 0, "driving should be a real positive cost");
+  assert.equal(r.price.drivingPick!.fromIata, "ATL");
+  assert.ok(r.price.drivingPick!.roundTripMiles > 0);
+});
+
+test("transport mode: driving falls back to the configured guess when no gas price is cached", () => {
+  const bookNoGas = fullBook("wdw", "MCO"); // fullBook doesn't set gasPrice
+  const driving = { ...base, transportMode: "drive" as const };
+  const r = priceTrip(bookNoGas, resortById("wdw"), driving, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.drivingPick!.gasPricePerGallonUsd, 3.15); // DRIVING.fallbackGasPriceUsd
+});
+
+test("transport mode: an overnight stop adds exactly its own cost, nothing more", () => {
+  const book = fullBook("wdw", "MCO");
+  const noStop = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  const withStop = priceTrip(
+    book, resortById("wdw"),
+    { ...base, transportMode: "drive", overnightStop: { label: "Jacksonville", costUsd: 95 } },
+    {}, START,
+  );
+  assert.ok(noStop.ok && withStop.ok);
+  assert.equal(withStop.price.driving - noStop.price.driving, 95);
+});
+
+test("transport mode: driving from an unrecognized starting city fails, doesn't guess", () => {
+  const book = fullBook("wdw", "MCO");
+  const driving = { ...base, origin: "ZZZ", transportMode: "drive" as const };
+  const r = priceTrip(book, resortById("wdw"), driving, {}, START);
+  assert.equal(r.ok, false);
+});
+
+test("transport mode: driving to an overseas resort fails cleanly, not with an absurd number", () => {
+  // Regression: driving mode had no region check, so "driving" from Atlanta
+  // to Shanghai priced a real-looking $2,473 "gas cost" for crossing an ocean.
+  const book = fullBook("shdr", "PVG");
+  const driving = { ...base, transportMode: "drive" as const };
+  const r = priceTrip(book, resortById("shdr"), driving, {}, START);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /driving/i);
+});
+
+test("transport mode: flying with miles discounts the cached fare, no floor", () => {
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const miles = { ...base, transportMode: "miles" as const, milesPct: 50 };
+  const r = priceTrip(book, resortById("wdw"), miles, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.perSeatFare, 150);
+});
+
+test("transport mode: flying with 100% miles prices the seat free, below the cash floor", () => {
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const miles = { ...base, transportMode: "miles" as const, milesPct: 100 };
+  const r = priceTrip(book, resortById("wdw"), miles, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.perSeatFare, 0);
+});
+
+test("transport mode: plain flying ignores a stray milesPct — no accidental discount", () => {
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const r = priceTrip(book, resortById("wdw"), { ...base, milesPct: 90 }, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.perSeatFare, 300);
+});

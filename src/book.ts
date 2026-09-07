@@ -121,6 +121,12 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     historical: Boolean(r.historical), sourceNote: r.source_note ?? "",
   }));
 
+  // Small time series, one row a day — just read the latest.
+  const gp = await db.query(`select as_of, price_per_gallon_usd from gas_prices order by as_of desc limit 1`);
+  const gasPriceRow = gp.rows[0]
+    ? { pricePerGallonUsd: Number(gp.rows[0].price_per_gallon_usd), asOf: dateStr(gp.rows[0].as_of) }
+    : undefined;
+
   return {
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],
@@ -128,6 +134,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     airportTransport: () => airportTransportRow,
     promosFor: (resortId, date) => promos.filter((p) =>
       (p.resortId === resortId || p.resortId === null) && date >= p.startsOn && date <= p.endsOn),
+    gasPrice: () => gasPriceRow,
     oldestFetchedAt: oldest,
   };
 }
@@ -139,6 +146,7 @@ export function bookFrom(parts: {
   tickets?: { resortId: string; date: ISODate; row: TicketRow }[];
   airportTransport?: { origin: string; row: AirportTransportRow }[];
   promos?: PromoRow[];
+  gasPrice?: { pricePerGallonUsd: number; asOf: string };
 }): PriceBook {
   const f = new Map<string, FlightRow>();
   for (const x of parts.flights ?? []) f.set(`${x.dest}|${x.date}`, x.row);
@@ -159,6 +167,7 @@ export function bookFrom(parts: {
     airportTransport: (origin) => a.get(origin),
     promosFor: (resortId, date) => promos.filter((p) =>
       (p.resortId === resortId || p.resortId === null) && date >= p.startsOn && date <= p.endsOn),
+    gasPrice: () => parts.gasPrice,
     oldestFetchedAt: null,
   };
 }

@@ -23,6 +23,22 @@ const PORT = Number(process.env.PORT ?? 8080);
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
+/** Free for everyone — how you get there isn't a Plus feature, just a different
+ *  way to answer "what does this trip cost". Gas-price *monitoring* (an alert
+ *  when the price moves after you save a trip) is the actual Plus feature. */
+function transportModeFrom(q: URLSearchParams): { transportMode?: TripParams["transportMode"]; overnightStop?: TripParams["overnightStop"]; milesPct?: number } {
+  const mode = q.get("transportMode");
+  if (mode !== "drive" && mode !== "miles") return {};
+  if (mode === "drive") {
+    const label = (q.get("overnightLabel") ?? "").slice(0, 80);
+    const cost = Number(q.get("overnightCost") ?? 0);
+    const overnightStop = label && Number.isFinite(cost) && cost > 0 ? { label, costUsd: cost } : null;
+    return { transportMode: "drive", overnightStop };
+  }
+  const milesPct = clamp(Number(q.get("milesPct") ?? 0), 0, 100);
+  return { transportMode: "miles", milesPct };
+}
+
 function paramsFrom(q: URLSearchParams): TripParams {
   const ages = (q.get("childAges") ?? "").split(",").map((s) => s.trim()).filter(Boolean).map(Number);
   const nights = clamp(Number(q.get("nights") ?? 6), 1, 30);
@@ -35,6 +51,7 @@ function paramsFrom(q: URLSearchParams): TripParams {
     stay: (["on", "off", "both"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
+    ...transportModeFrom(q),
   };
 }
 function clamp(n: number, lo: number, hi: number): number {
@@ -256,10 +273,19 @@ const server = createServer(async (req, res) => {
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required", message: "Saved trips and alerts are a Plus feature." });
       const t = await readBody(req);
       const id = randomUUID();
+      const params = { ...(t.params ?? {}) };
+      // Stamps today's gas price into the saved trip so the alert job has a
+      // "then" to compare "now" against — same idea as baseline_total, just
+      // for the one input that changes on its own without the user doing
+      // anything (unlike a nightly rate they typed in themselves).
+      if (params.transportMode === "drive") {
+        const { rows } = await db.query(`select price_per_gallon_usd from gas_prices order by as_of desc limit 1`);
+        if (rows[0]) params.gasPriceAtSaveUsd = Number(rows[0].price_per_gallon_usd);
+      }
       await db.query(
         `insert into saved_trips (id,user_id,label,params,overrides,baseline_total,threshold_pct)
          values ($1,$2,$3,$4,$5,$6,$7)`,
-        [id, user.id, t.label ?? "", JSON.stringify(t.params ?? {}), JSON.stringify(t.overrides ?? {}),
+        [id, user.id, t.label ?? "", JSON.stringify(params), JSON.stringify(t.overrides ?? {}),
          Number(t.baselineTotal ?? 0), Number(t.thresholdPct ?? 5)],
       );
       return send(201, { id });
