@@ -183,15 +183,21 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   let calls = 0, rows = 0, errors = 0;
   for (const month of months) {
     for (const resort of resorts) {
+      // Primary airport plus any alternates (e.g. Tampa alongside MCO for WDW) —
+      // each is its own (origin, destination) pair in flight_prices, so a user
+      // picking an alternate in the UI always finds a real cached fare.
+      const destinations = [resort.iata, ...resort.altArrivalAirports.map((a) => a.iata)];
       for (const origin of origins) {
-        for (const bucket of TRIP_BUCKETS) {
-          try {
-            calls++;
-            const quotes = await provider.flightMonth(origin, resort.iata, month, bucket);
-            rows += await upsertFlights(db, quotes);
-          } catch (e) {
-            errors++;
-            console.error(`flights ${origin}->${resort.iata} ${month}/${bucket}:`, (e as Error).message);
+        for (const destination of destinations) {
+          for (const bucket of TRIP_BUCKETS) {
+            try {
+              calls++;
+              const quotes = await provider.flightMonth(origin, destination, month, bucket);
+              rows += await upsertFlights(db, quotes);
+            } catch (e) {
+              errors++;
+              console.error(`flights ${origin}->${destination} ${month}/${bucket}:`, (e as Error).message);
+            }
           }
         }
       }

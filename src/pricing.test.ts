@@ -335,3 +335,36 @@ test("promos: an unknown promoId is ignored, not a hard failure", () => {
   assert.ok(r.ok);
   assert.equal(r.price.appliedPromos.length, 0);
 });
+
+test("destination: defaults to the resort's primary airport when unset", () => {
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const r = priceTrip(book, resortById("wdw"), base, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.destination, "MCO");
+});
+
+test("destination: an alternate airport prices against its own cached fare", () => {
+  const dates = ["2027-03-01", "2027-03-02", "2027-03-03", "2027-03-04", "2027-03-05", "2027-03-06"];
+  const book = bookFrom({
+    flights: [
+      ...dates.map((date) => ({ dest: "MCO", date, row: { price: 300, stops: 0 } })),
+      ...dates.map((date) => ({ dest: "TPA", date, row: { price: 150, stops: 1 } })),
+    ],
+    hotels: dates.flatMap((date) => [{ resortId: "wdw", date, night: { hotelId: "v", name: "Value inn", descriptor: "", nightly: 150, tier: "value" as any, onProperty: true } }]),
+    tickets: dates.map((date) => ({ resortId: "wdw", date, row: { adult: 130, child: 120 } })),
+  });
+  const flying = { ...base, destination: "TPA" };
+  const r = priceTrip(book, resortById("wdw"), flying, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.destination, "TPA");
+  assert.equal(r.price.flightPick!.price, 150);
+  assert.equal(r.price.flightPick!.stops, 1);
+});
+
+test("destination: a gap for the requested airport fails clearly, naming that airport", () => {
+  const book = fullBook("wdw", "MCO"); // only MCO cached, not TPA
+  const flying = { ...base, destination: "TPA" };
+  const r = priceTrip(book, resortById("wdw"), flying, {}, START);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /TPA/);
+});

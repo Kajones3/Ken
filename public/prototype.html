@@ -647,6 +647,7 @@ let selected = 0, view = "board";
 let searchToken = 0, detailToken = 0;
 let regionFilter = "all";    // "all" | "dom" | "intl" — free, client-side only
 let airportTransportChoice = { mode:"auto" };   // Plus-only; server ignores this unless signed in as Plus
+let destinationChoice = store.get("dest", {});  // { resortId: iata } — free; server re-validates against that resort's own airports
 
 function matchesRegion(item){
   if(regionFilter === "all") return true;
@@ -726,11 +727,16 @@ function tripQuery(){
   if(session.plus) q.airportTransport = JSON.stringify(airportTransportChoice);
   return q;
 }
-function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV) }; }
+function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV), destinations: JSON.stringify(destinationChoice) }; }
 function calendarQuery(resortId, from, to, tierOverride){
-  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV) };
+  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV), destination: destinationChoice[resortId] || "" };
   if(tierOverride !== undefined) q.tier = tierOverride;
   return q;
+}
+function setDestination(resortId, iata){
+  if(iata) destinationChoice[resortId] = iata; else delete destinationChoice[resortId];
+  store.set("dest", destinationChoice);
+  recompute(resortId);
 }
 
 let promosByResort = {};   // "resortId|date" -> PromoRow[] — public/free to browse, applying is Plus
@@ -871,7 +877,7 @@ function renderBoard(){
       <div class="ident">
         <div class="rname">${r.name}</div>
         <div class="rmeta">
-          <span class="code">${r.iata}</span>${r.city} · ${r.note}
+          <span class="code">${item.iata}</span>${r.city} · ${r.note}
           ${pos===0?'<span class="bestflag">Cheapest</span>':""}
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
         </div>
@@ -920,7 +926,7 @@ function renderTable(){
     const sd = new Date(x.start+"T00:00:00Z");
     return `<tr>
       <td>${pos+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
-      <td class="n">${r.iata}</td>
+      <td class="n">${item.iata}</td>
       ${cell(x.flights)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
       <td class="n"><b>${usd(x.total)}</b></td>
       <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
@@ -1238,7 +1244,7 @@ async function renderDetail(){
     <div class="dhead">
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
-        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)} ·
+        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, flying into ${x.destination} ·
            prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
@@ -1272,7 +1278,16 @@ async function renderDetail(){
         </div>
         <div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
-          <p class="sub">Round trip per person</p>
+          <p class="sub">Round trip per person · into ${x.destination}</p>
+          ${r.altArrivalAirports.length ? (()=>{
+            const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
+            const desc = alt ? alt.label : "Primary airport for " + r.name;
+            return `<div class="li"><div class="l"><b>Arrival airport</b><small>${desc}</small></div>
+              <div class="p"><select id="destSel" data-resort="${item.resortId}" aria-label="Arrival airport for ${r.name}">
+                <option value="${r.iata}"${x.destination===r.iata?" selected":""}>${r.iata}</option>
+                ${r.altArrivalAirports.map(a=>`<option value="${a.iata}"${x.destination===a.iata?" selected":""}>${a.iata}</option>`).join("")}
+              </select></div></div>`;
+          })() : ""}
           ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
         </div>
         ${airportTransportCard(x, p)}
@@ -1539,6 +1554,9 @@ document.addEventListener("change", e=>{
   if(e.target.id === "atCustom"){
     airportTransportChoice = { mode:"custom", customAmount: Math.max(0, +e.target.value) || 0 };
     runSearch(rid);
+  }
+  if(e.target.id === "destSel"){
+    setDestination(e.target.dataset.resort, e.target.value);
   }
 });
 document.addEventListener("click", e=>{

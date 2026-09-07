@@ -26,7 +26,11 @@ export class MockProvider implements Provider {
 
   async flightMonth(origin: string, destination: string, month: string, tripLength: number): Promise<FlightQuote[]> {
     const o = ORIGIN_BY_IATA.get(origin);
-    const resort = [...RESORT_BY_ID.values()].find((r) => r.iata === destination);
+    // Matches the resort by its primary airport OR any alternate (e.g. TPA
+    // for WDW) — the resort's own lat/lon/region/season still drive the
+    // generated price, only the airport code differs.
+    const resort = [...RESORT_BY_ID.values()].find((r) =>
+      r.iata === destination || r.altArrivalAirports.some((a) => a.iata === destination));
     if (!o || !resort) return [];
     const dist = haversine(o.lat, o.lon, resort.lat, resort.lon);
     const base = resort.region === "dom" ? 78 + dist * 0.082

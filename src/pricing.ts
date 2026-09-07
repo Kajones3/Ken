@@ -31,6 +31,13 @@ export interface TripParams {
   food: FoodStyle;
   /** Undefined = feature off, adds $0 — every existing caller is unaffected. Plus-only; gated in server.ts. */
   airportTransport?: AirportTransportChoice;
+  /** Which airport to price flights into. Undefined = the resort's own primary
+   *  `iata` (every existing caller is unaffected). Never trust this from a
+   *  client as a bare string beyond the resort it's paired with — server.ts
+   *  resolves it against that resort's own altArrivalAirports before this is
+   *  ever set, so a request for one resort can't end up priced against a
+   *  totally unrelated airport. */
+  destination?: string;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -81,6 +88,10 @@ export interface PriceBook {
 
 export interface TripPrice {
   start: ISODate;
+  /** The airport this trip was actually priced into — the resort's primary
+   *  unless params.destination asked for one of its alternates. Always echo
+   *  this back to the user rather than assuming they know which one was used. */
+  destination: string;
   total: number;
   flights: number;
   tickets: number;
@@ -197,9 +208,10 @@ export function priceTrip(
   const bucket = bucketFor(params.nights);
 
   // --- flights -----------------------------------------------------------
-  const row = book.flight(params.origin, resort.iata, start, bucket);
+  const destination = params.destination ?? resort.iata;
+  const row = book.flight(params.origin, destination, start, bucket);
   if (!row && ov.farePerSeat === undefined) {
-    return { ok: false, reason: `no cached fare for ${params.origin}-${resort.iata} on ${start}` };
+    return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
   }
   // An override may raise the fare but never fall below the cheapest fare we know of.
   const floor = row?.price ?? 0;
@@ -361,7 +373,7 @@ export function priceTrip(
   return {
     ok: true,
     price: {
-      start, total, flights, tickets, hotel, rooms, transport, food,
+      start, destination, total, flights, tickets, hotel, rooms, transport, food,
       perSeatFare,
       flightPick: row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,

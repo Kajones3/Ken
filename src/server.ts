@@ -57,6 +57,28 @@ function overridesFrom(q: URLSearchParams, allowPromos: boolean): Overrides {
   return stripped;
 }
 
+/**
+ * Resolves a requested arrival airport against ONE specific resort's own
+ * list (its primary iata plus altArrivalAirports) — never a bare string
+ * trusted on its own. An unrecognized code (e.g. a WDW request carrying
+ * Hong Kong's HKG) silently falls back to that resort's primary rather than
+ * pricing against an unrelated airport.
+ */
+function resolveDestination(resort: { iata: string; altArrivalAirports: { iata: string }[] }, requested: string | null): string {
+  if (!requested) return resort.iata;
+  const code = requested.toUpperCase().slice(0, 3);
+  if (code === resort.iata || resort.altArrivalAirports.some((a) => a.iata === code)) return code;
+  return resort.iata;
+}
+
+/** Per-resort arrival-airport picks: {resortId: iata}, resolved against that resort's own list. */
+function destinationsFrom(q: URLSearchParams): Record<string, string> {
+  try {
+    const raw = q.get("destinations");
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch { return {}; }
+}
+
 /** Defaults to "auto" — a Plus user sees the real cost without an opt-in toggle they might miss. */
 function airportTransportFrom(q: URLSearchParams): AirportTransportChoice {
   const raw = q.get("airportTransport");
@@ -90,19 +112,26 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // An explicit date prices exactly that day instead of scanning the month for
   // the cheapest one — how a calendar-cell click asks for that date's full breakdown.
   const explicitDate = q.get("date");
+  // Per-resort arrival-airport picks — only ever affects the resort they're
+  // paired with (resolveDestination re-validates against that resort's own
+  // list), so picking an alternate for one resort can't leak into another's.
+  const destinationReqs = destinationsFrom(q);
+  const destinationByResort = new Map(RESORTS.map((r) => [r.id, resolveDestination(r, destinationReqs[r.id] ?? null)]));
   const book = await loadBook(db, {
     origin: params.origin,
-    destinations: RESORTS.map((r) => r.iata),
+    destinations: [...destinationByResort.values()],
     resortIds: RESORTS.map((r) => r.id),
     from: explicitDate ?? from, to: addDaysISO(explicitDate ?? to, params.nights + 1),
     tripLength: bucketFor(params.nights),
   });
   const dates = explicitDate ? [explicitDate] : range(from, to);
   const results = RESORTS.map((resort) => {
-    const { best, skipped } = cheapestIn(book, resort, params, overrides, dates);
+    const iata = destinationByResort.get(resort.id)!;
+    const resortParams = { ...params, destination: iata };
+    const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
     return best
-      ? { resortId: resort.id, name: resort.name, iata: resort.iata, ok: true as const, price: best }
-      : { resortId: resort.id, name: resort.name, iata: resort.iata, ok: false as const, reason: skipped[0] ?? "no data" };
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best }
+      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
   return { month, pricesAsOf: book.oldestFetchedAt, params, results };
@@ -115,17 +144,18 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const overrides = overridesFrom(q, plus);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
+  params.destination = resolveDestination(resort, q.get("destination"));
   const from = q.get("from") ?? addDaysISO(todayISO(), 1);
   const to = q.get("to") ?? addDaysISO(from, 364);
   const book = await loadBook(db, {
-    origin: params.origin, destinations: [resort.iata], resortIds: [resort.id],
+    origin: params.origin, destinations: [params.destination], resortIds: [resort.id],
     from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
   });
   const days = range(from, to).map((d) => {
     const r = priceTrip(book, resort, params, overrides, d);
     return r.ok ? { date: d, total: Math.round(r.price.total) } : { date: d, total: null };
   });
-  return { resortId: resort.id, pricesAsOf: book.oldestFetchedAt, days };
+  return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };
 }
 
 /**
