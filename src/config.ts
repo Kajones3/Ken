@@ -28,6 +28,14 @@ export interface Resort {
   lat: number; lon: number; currency: string; parks: number;
   region: "dom" | "atl" | "pac";
   note: string;
+  /** Short, hand-maintained facts that don't fit the price breakdown but
+   *  change how someone should actually plan the trip — entry/visa notes,
+   *  ticket-bundling quirks, anything that trips people up. Same
+   *  "no live API, maintain it by hand" pattern as ticket_prices and
+   *  airport_transport; keep entries short, cite what's checked vs. not,
+   *  and re-check before relying on anything time-sensitive (visa rules
+   *  especially — they change). */
+  goodToKnow: string[];
   ticketUrl: string;
   /** Admission age bands differ at every resort. A 12-year-old is an adult in
    *  Orlando, a child in Paris, and a Junior in Tokyo. */
@@ -49,6 +57,9 @@ export const RESORTS: Resort[] = [
     id: "wdw", name: "Walt Disney World", city: "Orlando, Florida", iata: "MCO",
     lat: 28.43, lon: -81.31, currency: "USD", parks: 4, region: "dom",
     note: "4 parks · park-hopper priced separately",
+    goodToKnow: [
+      "Park Hopper (same-day access to more than one park) and Genie+/Lightning Lane (paid line-skipping) are both sold separately from base admission and aren't priced here.",
+    ],
     ticketUrl: "https://disneyworld.disney.go.com/admission/tickets/",
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 132, child: 0.93, slope: 0.058, floor: 0.58 },
@@ -81,6 +92,9 @@ export const RESORTS: Resort[] = [
     id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "SNA",
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
+    goodToKnow: [
+      "Park Hopper and paid Lightning Lane line-skipping are sold separately from base admission and aren't priced here.",
+    ],
     ticketUrl: "https://disneyland.disney.go.com/tickets/",
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     ticket: { base: 148, child: 0.94, slope: 0.05, floor: 0.62 },
@@ -101,6 +115,9 @@ export const RESORTS: Resort[] = [
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
+    goodToKnow: [
+      "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
+    ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55 },
@@ -125,6 +142,9 @@ export const RESORTS: Resort[] = [
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under licence",
+    goodToKnow: [
+      "Many nationalities (including US passport holders) can enter Japan visa-free for short tourist stays, but requirements depend on your passport — check current requirements before booking.",
+    ],
     ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
@@ -147,6 +167,10 @@ export const RESORTS: Resort[] = [
     id: "shdr", name: "Shanghai Disney Resort", city: "Pudong, Shanghai", iata: "PVG",
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
+    goodToKnow: [
+      "Most nationalities need a visa for mainland China — this is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Check current requirements for your passport well before booking.",
+      "Shanghai Disney's real ticket pricing bands some rides by height, not just age — not modeled here; the age-based child/adult split below is a simplification.",
+    ],
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
@@ -165,6 +189,9 @@ export const RESORTS: Resort[] = [
     id: "hkdl", name: "Hong Kong Disneyland", city: "Lantau Island, Hong Kong", iata: "HKG",
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
+    goodToKnow: [
+      "Hong Kong has its own immigration, separate from mainland China — many nationalities (including US passport holders, for roughly 90 days) can enter visa-free even though mainland China requires a visa for most visitors. If your trip also includes mainland China (e.g. Shanghai Disney), that needs its own separate check.",
+    ],
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },

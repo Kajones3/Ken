@@ -133,6 +133,10 @@ a{color:var(--ink)}
 }
 .demo b{font-weight:700}
 .demo .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-line);margin-top:7px;flex:none}
+.gtk{margin-bottom:16px}
+.gtk ul{margin:6px 0 0; padding-left:18px}
+.gtk li{margin-bottom:5px}
+.gtk li:last-child{margin-bottom:0}
 
 /* ---------- search panel ---------- */
 .panel{
@@ -1224,6 +1228,8 @@ async function renderDetail(){
         ${results.map((y,i)=>
         `<button class="btn btn-sm" data-open="${i}" style="${i===selected?"border-color:var(--ink)":""}">${y.iata}</button>`).join("")}</div>
     </div>
+    ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
+      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul></div></div>` : ""}
     <div class="dbody">
       <div class="ovpanel">
         <div class="ovhead">
