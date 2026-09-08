@@ -209,6 +209,40 @@ test("missing cache data never becomes NaN", () => {
   if (!r.ok) assert.match(r.reason, /no cached fare/);
 });
 
+test("flight estimate: no exact cache hit falls back to a labeled BTS-baseline estimate", () => {
+  const wdw = resortById("wdw");
+  // Hotels/tickets present but no flight rows at all — book.flight() misses every date.
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const withoutFlights = { ...noFlights, flight: () => undefined };
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2025Q2" };
+  const withEstimate = { ...withoutFlights, flightEstimate: () => estimate };
+  const r = priceTrip(withEstimate, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, estimate.med);
+  assert.deepEqual(r.price.flightPick, { price: estimate.med, estimate });
+});
+
+test("flight estimate: a route with no BTS baseline still fails cleanly, not with a fabricated number", () => {
+  const wdw = resortById("wdw");
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const withoutFlights = { ...noFlights, flight: () => undefined, flightEstimate: () => undefined };
+  const r = priceTrip(withoutFlights, wdw, base, {}, START);
+  assert.equal(r.ok, false);
+  if (!r.ok) assert.match(r.reason, /no cached fare/);
+});
+
+test("flight estimate: a real cached fare always wins over an available estimate", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400, days: 6 });
+  const neverUsed = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
+  const r = priceTrip(neverUsed, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 400);
+  assert.equal(r.price.flightPick?.estimate, undefined);
+});
+
 test("a gap mid-stay is refused rather than silently under-counted", () => {
   const wdw = resortById("wdw");
   // only two nights of hotel data for a four-night stay

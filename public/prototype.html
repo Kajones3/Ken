@@ -1355,7 +1355,12 @@ async function renderDetail(){
   // flights — the one cached fare this trip actually priced against
   const fp = x.flightPick;
   const floor = fp ? fp.price : x.perSeatFare;
-  const flightRows = (fp
+  const flightRows = (fp && fp.estimate
+    ? `<div class="li"><div class="l"><b>Estimated fare</b>
+        <small>No real cached fare for this exact date — estimate from historical baseline (${fp.estimate.basisQuarter})
+        × current market trend: ${usd(fp.estimate.low)}–${usd(fp.estimate.high)}</small></div>
+        <div class="p">${usd(x.perSeatFare)}</div></div>`
+    : fp
     ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>
         <small>${fp.stops===0?"Nonstop":fp.stops+" stop"+(fp.stops>1?"s":"")} · ${p.origin}→${r.iata} · round trip, per person</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`

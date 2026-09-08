@@ -1,0 +1,45 @@
+name: Parkfare BTS baseline
+
+# Manual only — BTS DB1B is a quarterly historical survey, not something to
+# poll daily. Downloads one quarter's real fare data (~100MB zip) and
+# writes a passenger-weighted average fare per route into historical_fares.
+# See src/jobs/btsBaseline.ts for what this data is and why MktFare needs
+# no halving/doubling logic.
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: DB1B year (DB1B ended after 2025 Q2)
+        required: true
+        type: string
+        default: "2025"
+      quarter:
+        description: Quarter (1-4)
+        required: true
+        type: string
+        default: "2"
+
+jobs:
+  bts-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Download and extract BTS DB1B Market file
+        run: |
+          url="https://transtats.bts.gov/PREZIP/Origin_and_Destination_Survey_DB1BMarket_${{ inputs.year }}_${{ inputs.quarter }}.zip"
+          echo "Fetching $url"
+          curl -sSL "$url" -o db1b.zip
+          unzip -o db1b.zip -d db1b_out
+          csv=$(ls db1b_out/*.csv | head -1)
+          echo "BTS_CSV_PATH=$csv" >> "$GITHUB_ENV"
+      - run: npm run bts-baseline
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BTS_YEAR: ${{ inputs.year }}
+          BTS_QUARTER: ${{ inputs.quarter }}
+      - if: always()
+        run: rm -rf db1b.zip db1b_out

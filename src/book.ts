@@ -111,8 +111,44 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     ? { pricePerGallonUsd: Number(gp.rows[0].price_per_gallon_usd), asOf: dateStr(gp.rows[0].as_of) }
     : undefined;
 
+  // BTS historical baseline for this origin's routes, plus the latest
+  // current-vs-baseline trend multiplier — combined lazily in
+  // flightEstimate() below, only when there's no exact cache hit to use.
+  const hf = await db.query(
+    `select distinct on (origin, destination) origin, destination, avg_fare_usd, year, quarter
+       from historical_fares
+      where origin = $1 and destination = any($2)
+      order by origin, destination, year desc, quarter desc`,
+    [req.origin, req.destinations],
+  );
+  const historicals = new Map<string, { avgFareUsd: number; quarter: string }>();
+  for (const r of hf.rows) {
+    historicals.set(`${r.origin}|${r.destination}`, {
+      avgFareUsd: Number(r.avg_fare_usd), quarter: `${r.year}Q${r.quarter}`,
+    });
+  }
+  const ft = await db.query(
+    `select multiplier, low_multiplier, high_multiplier from fare_trend order by computed_at desc limit 1`,
+  );
+  const trend = ft.rows[0]
+    ? {
+        m: Number(ft.rows[0].multiplier), lo: Number(ft.rows[0].low_multiplier),
+        hi: Number(ft.rows[0].high_multiplier),
+      }
+    : undefined;
+
   return {
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
+    flightEstimate: (origin, dest) => {
+      const h = historicals.get(`${origin}|${dest}`);
+      if (!h || !trend) return undefined;
+      return {
+        low: Math.round(h.avgFareUsd * trend.lo * 100) / 100,
+        med: Math.round(h.avgFareUsd * trend.m * 100) / 100,
+        high: Math.round(h.avgFareUsd * trend.hi * 100) / 100,
+        basisQuarter: h.quarter,
+      };
+    },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],
     ticket: (resortId, date) => tickets.get(`${resortId}|${date}`),
     promosFor: (resortId, date) => promos.filter((p) =>
