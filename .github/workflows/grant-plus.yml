@@ -1,0 +1,32 @@
+name: Parkfare grant Plus
+
+# Manual only — comps a friend or a test account into Plus against the same
+# production database refresh/alerts use (DATABASE_URL secret). This is the
+# same mechanism as running `npm run grant-plus -- email days` locally, just
+# runnable from the Actions tab without a Neon connection string on hand.
+# See src/grantPlus.ts.
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Email to grant Plus to
+        required: true
+        type: string
+      days:
+        description: Days of Plus access
+        required: false
+        type: string
+        default: "90"
+
+jobs:
+  grant-plus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run grant-plus -- "${{ inputs.email }}" "${{ inputs.days }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
