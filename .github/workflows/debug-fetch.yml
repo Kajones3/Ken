@@ -1,0 +1,37 @@
+name: Parkfare debug fetch
+
+# One-off diagnostic: HEAD-checks (or optionally GETs) an arbitrary URL, to
+# verify reachability, content-type, and size before committing to a real
+# download/parse pipeline (e.g. BTS DB1C bulk data files, which can be
+# large). Manual only, no database or app code touched.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: URL to check
+        required: true
+        type: string
+      method:
+        description: HEAD (check only) or GET (fetch and show first bytes)
+        required: true
+        type: choice
+        options: ["HEAD", "GET"]
+        default: "HEAD"
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch
+        run: |
+          if [ "${{ inputs.method }}" = "HEAD" ]; then
+            curl -sSIL "${{ inputs.url }}"
+          else
+            curl -sSL "${{ inputs.url }}" -o /tmp/out --max-filesize 5000000
+            echo "--- size ---"
+            ls -la /tmp/out
+            echo "--- file type ---"
+            file /tmp/out
+            echo "--- first 2000 bytes (as text, may be binary) ---"
+            head -c 2000 /tmp/out | cat -v
+          fi
