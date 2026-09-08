@@ -1,0 +1,35 @@
+name: Parkfare debug flight price
+
+# One-off diagnostic: dumps the raw Travelpayouts calendar response for one
+# origin/destination/month so a suspicious cached price can be checked
+# against what the provider actually returned, not just what our parsing
+# code assumed. Manual only, no database or app code touched.
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        required: true
+        type: string
+        default: "ATL"
+      destination:
+        required: true
+        type: string
+        default: "PVG"
+      month:
+        required: true
+        type: string
+        default: "2027-03"
+      trip_duration:
+        required: true
+        type: string
+        default: "4"
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query Travelpayouts calendar endpoint
+        env:
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+        run: |
+          curl -sS "https://api.travelpayouts.com/v1/prices/calendar?origin=${{ inputs.origin }}&destination=${{ inputs.destination }}&depart_date=${{ inputs.month }}&currency=usd&calendar_type=departure_date&trip_duration=${{ inputs.trip_duration }}&token=${TRAVELPAYOUTS_TOKEN}" | python3 -m json.tool
