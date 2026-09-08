@@ -1,0 +1,26 @@
+name: Parkfare debug SerpApi
+
+# One-off diagnostic: hits an arbitrary SerpApi engine/query and dumps the
+# raw response, so a candidate integration (Google Flights, Google Hotels)
+# can be checked against the real response shape before writing code.
+# Manual only, no database or app code touched.
+on:
+  workflow_dispatch:
+    inputs:
+      query:
+        description: >-
+          Full query string (no leading ?, no api_key — that's added
+          automatically). e.g.
+          engine=google_flights&departure_id=ATL&arrival_id=MCO&outbound_date=2026-12-08&return_date=2026-12-12&currency=USD&hl=en&gl=us&type=1
+        required: true
+        type: string
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query SerpApi
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+        run: |
+          curl -sS "https://serpapi.com/search.json?${{ inputs.query }}&api_key=${SERPAPI_KEY}" | python3 -m json.tool
