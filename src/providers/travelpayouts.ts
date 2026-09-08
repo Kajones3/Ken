@@ -73,14 +73,23 @@ export class TravelpayoutsProvider implements Provider {
       // those blindly wrote real-looking but wrong prices under the wrong
       // date/trip-length label (verified 2026-09-08: a request for one exact
       // date came back with the identical sample of unrelated dates months
-      // away, every time). Only keep a row if it's actually the date and
-      // roughly the trip length requested.
+      // away, every time). Only keep a row if it's actually the date
+      // requested, and only accept a nearby trip length rather than an exact
+      // one — Travelpayouts only has real fares for dates someone has
+      // actually searched (verified: every /v2/prices/latest row carries
+      // "actual": true and a found_at timestamp — this is a real-search
+      // cache, not a synthetic calendar), so exact-length matches are rare.
+      // Trip lengths are already bucketed to 4/7/11 nights as an
+      // approximation everywhere else in this project (see CLAUDE.md), and
+      // round-trip airfare mostly tracks the specific dates flown rather
+      // than the exact number of nights between them, so a ±3-night window
+      // is consistent with that existing approximation, not a new one.
       if (!date.startsWith(month)) continue;
       if (v?.departure_at && v?.return_at) {
         const nights = Math.round(
           (new Date(v.return_at).getTime() - new Date(v.departure_at).getTime()) / 86_400_000,
         );
-        if (Math.abs(nights - tripLength) > 1) continue;
+        if (Math.abs(nights - tripLength) > 3) continue;
       }
       out.push({
         origin, destination, departDate: date, tripLength, priceUsd: price,
