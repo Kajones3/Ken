@@ -10,7 +10,7 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor,
+  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, CAR_RENTAL, bucketFor, irsMileageRatePerMile,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
@@ -62,6 +62,13 @@ export interface TripParams {
    *  ignored (never throws) at a resort with no hopperAdultUsd configured —
    *  Hong Kong and Shanghai each have one park and no hopper product. */
   hopper?: boolean;
+  /** Rent a car — for whichever mode this params object represents. "drive":
+   *  rent instead of putting miles on your own car (replaces wearAndTearUsd
+   *  with rentalCarUsd, gas still applies). "fly"/"miles": rent something to
+   *  get around once there (rentalCarUsd is a new line, on top of flights).
+   *  A mixed board can send this true for the driving leg, the flying legs,
+   *  both, or neither — see server.ts's gettingThereParams(). */
+  rentalCar?: boolean;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -132,11 +139,13 @@ export interface TripPrice {
   partySize: number;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
-  /** Gas + optional overnight stop, replacing flights entirely when transportMode is "drive". $0 otherwise. */
+  /** Gas + optional overnight stop + wear-and-tear, replacing flights
+   *  entirely when transportMode is "drive". $0 otherwise. Never includes
+   *  rentalCarUsd — that's always its own separate line, see below. */
   driving: number;
   drivingPick: {
     from: string; roundTripMiles: number; gasPricePerGallonUsd: number;
-    gasCostUsd: number; overnightUsd: number;
+    gasCostUsd: number; overnightUsd: number; wearAndTearUsd: number;
   } | null;
   transportMode: TransportMode;
   /** How much of `tickets` is Park Hopper — 0 unless params.hopper was set
@@ -144,6 +153,12 @@ export interface TripPrice {
    *  show it as its own line rather than folding it silently into the base
    *  ticket number. */
   hopperUsd: number;
+  /** Renting a car — set whenever params.rentalCar is true, regardless of
+   *  drive or fly mode. Always its own line in `total`, never folded into
+   *  `driving` (drive mode zeroes wearAndTearUsd instead, since a rental
+   *  isn't wear on a car you own). */
+  rentalCarUsd: number;
+  rentalCarPick: { dailyRateUsd: number; nights: number } | null;
 }
 export type PriceResult = { ok: true; price: TripPrice } | { ok: false; reason: string };
 
@@ -269,10 +284,14 @@ export function priceTrip(
     const gasCostUsd = (roundTripMiles / DRIVING.mpg) * gasPricePerGallonUsd;
     const stop = params.overnightStop;
     const overnightUsd = stop ? Math.max(0, stop.nights) * Math.max(0, stop.costPerNightUsd) : 0;
-    driving = Math.round((gasCostUsd + overnightUsd) * 100) / 100;
+    // A rental has no wear-and-tear cost to the user — that's priced into
+    // the rental fee already, and rentalCarUsd (below) covers it separately.
+    const wearAndTearUsd = params.rentalCar ? 0 : roundTripMiles * irsMileageRatePerMile(start);
+    driving = Math.round((gasCostUsd + overnightUsd + wearAndTearUsd) * 100) / 100;
     drivingPick = {
       from: fromLabel, roundTripMiles: Math.round(roundTripMiles),
       gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
+      wearAndTearUsd: Math.round(wearAndTearUsd * 100) / 100,
     };
   } else {
     const row = book.flight(params.origin, destination, start, bucket);
@@ -436,7 +455,16 @@ export function priceTrip(
   const transport = perDay * (params.nights + 1);
   const hotel = rooms + transport;
 
-  const total = Math.max(0, flights + tickets + hotel + food + driving - flatOffTotal);
+  // --- rental car — always its own line, whether renting for the drive -----
+  // --- (instead of your own car) or renting once you've flown in. ----------
+  const rentalCarUsd = params.rentalCar
+    ? Math.round(CAR_RENTAL.dailyRateUsd * (params.nights + 1) * 100) / 100
+    : 0;
+  const rentalCarPick: TripPrice["rentalCarPick"] = params.rentalCar
+    ? { dailyRateUsd: CAR_RENTAL.dailyRateUsd, nights: params.nights }
+    : null;
+
+  const total = Math.max(0, flights + tickets + hotel + food + driving + rentalCarUsd - flatOffTotal);
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
   return {
@@ -447,6 +475,7 @@ export function priceTrip(
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd,
+      rentalCarUsd, rentalCarPick,
     },
   };
 }
