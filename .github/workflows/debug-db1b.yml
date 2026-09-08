@@ -1,0 +1,44 @@
+name: Parkfare debug DB1B
+
+# One-off diagnostic: downloads one real BTS DB1B Market quarterly file,
+# unzips it, and shows the CSV header plus a few sample rows for routes we
+# care about (MCO, SNA) — so a real parser can be written against the
+# actual column names instead of guessing. Manual only, no database or
+# app code touched. The file is deleted at the end of the job either way.
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        required: true
+        type: string
+        default: "2024"
+      quarter:
+        required: true
+        type: string
+        default: "4"
+      grep_for:
+        description: Airport code to filter sample rows on (e.g. MCO, SNA)
+        required: true
+        type: string
+        default: "MCO"
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download and inspect
+        run: |
+          url="https://transtats.bts.gov/PREZIP/Origin_and_Destination_Survey_DB1BMarket_${{ inputs.year }}_${{ inputs.quarter }}.zip"
+          echo "Fetching $url"
+          curl -sSL "$url" -o db1b.zip
+          ls -la db1b.zip
+          unzip -o db1b.zip -d db1b_out
+          csv=$(ls db1b_out/*.csv | head -1)
+          echo "--- CSV file: $csv ---"
+          echo "--- header ---"
+          head -1 "$csv"
+          echo "--- 5 sample rows containing ${{ inputs.grep_for }} ---"
+          grep -m 5 "${{ inputs.grep_for }}" "$csv"
+          echo "--- total row count ---"
+          wc -l "$csv"
+          rm -rf db1b.zip db1b_out
