@@ -67,6 +67,21 @@ export class TravelpayoutsProvider implements Provider {
     for (const [date, v] of Object.entries(data)) {
       const price = Number(v?.price);
       if (!Number.isFinite(price) || price <= 0) continue;      // never write junk into the cache
+      // This endpoint does not reliably honor depart_date/trip_duration — it
+      // can hand back fares for a completely different month, or a trip
+      // length nowhere near what was asked for, without any error. Trusting
+      // those blindly wrote real-looking but wrong prices under the wrong
+      // date/trip-length label (verified 2026-09-08: a request for one exact
+      // date came back with the identical sample of unrelated dates months
+      // away, every time). Only keep a row if it's actually the date and
+      // roughly the trip length requested.
+      if (!date.startsWith(month)) continue;
+      if (v?.departure_at && v?.return_at) {
+        const nights = Math.round(
+          (new Date(v.return_at).getTime() - new Date(v.departure_at).getTime()) / 86_400_000,
+        );
+        if (Math.abs(nights - tripLength) > 1) continue;
+      }
       out.push({
         origin, destination, departDate: date, tripLength, priceUsd: price,
         carrier: v?.airline ? String(v.airline) : undefined,
