@@ -20,6 +20,7 @@ import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, type SessionUser,
 } from "./auth.js";
+import { pickEmailSender } from "./email/pick.js";
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
@@ -292,6 +293,25 @@ const server = createServer(async (req, res) => {
       const token = sessionTokenFrom(req);
       if (token) await destroySession(db, token);
       return send(200, { ok: true }, withCookie(clearCookieHeader()));
+    }
+
+    // No payment processor yet — a Plus click from the paywall modal emails
+    // the owner instead of charging anyone, so it does something real rather
+    // than nothing. Granting Plus is still the one real mechanism: grantPlus.ts.
+    if (url.pathname === "/api/plus/request" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign in first" });
+      const body = await readBody(req);
+      const plan = body.plan === "yearly" ? "yearly ($19/year)" : "trip pass ($9/90 days)";
+      const owner = process.env.OWNER_EMAIL;
+      if (owner) {
+        await pickEmailSender().send({
+          to: owner,
+          subject: `Parkfare: ${user.email} wants Plus`,
+          text: `${user.email} picked "${plan}" in the paywall.\n\nGrant it with:\n  npm run grant-plus -- ${user.email} 90`,
+        });
+      }
+      return send(200, { ok: true, delivered: Boolean(owner) });
     }
 
     // --- pricing: reads the cache, personalized only by what the signed-in ---

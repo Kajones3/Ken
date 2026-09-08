@@ -645,6 +645,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <li><span class="tick">✓</span><span><b>Custom planning expenses</b> — add your own line items (a VIP tour, PhotoPass, anything not modeled here) to a saved trip's total</span></li>
       <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, driving-cost estimates, park hopper, promos browsing — stays free</span></li>
     </ul>
+    <div class="signin" id="pwSigninBox" style="padding:0 22px 6px" hidden>
+      <input type="email" id="pwEmail" placeholder="you@example.com" aria-label="Email">
+      <button class="btn btn-sm" id="pwSigninBtn">Sign in to continue</button>
+    </div>
     <div class="mfoot">
       <span class="stub" id="pwFootMsg"></span>
       <button class="btn" id="closePw">Close</button>
@@ -1683,9 +1687,10 @@ document.addEventListener("click", async e=>{
 
 function openPw(){
   const msg = $("#pwFootMsg");
-  if(!session.authenticated) msg.textContent = "Sign in above with your email first, then ask the owner to enable Plus for your account.";
+  $("#pwSigninBox").hidden = session.authenticated;
+  if(!session.authenticated) msg.textContent = "Enter your email below to sign in — then pick a plan and we'll let the owner know.";
   else if(session.plus) msg.textContent = "You already have Plus on this account — thanks!";
-  else msg.textContent = `Signed in as ${session.email}. Ask the owner to enable Plus for this email — there's no payment yet, just a demo.`;
+  else msg.textContent = `Signed in as ${session.email}. Pick a plan below — there's no payment yet, just a demo, so it lets the owner know you want in.`;
   $("#paywall").classList.add("on");
 }
 $("#closePw").addEventListener("click", ()=> $("#paywall").classList.remove("on"));
@@ -1693,11 +1698,34 @@ $("#upgradeTop").addEventListener("click", openPw);
 $("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
 document.addEventListener("keydown", e=>{ if(e.key==="Escape") $("#paywall").classList.remove("on"); });
 
+$("#pwSigninBtn").addEventListener("click", async ()=>{
+  const email = $("#pwEmail").value.trim();
+  if(!email) return;
+  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email}) });
+  if(!res.ok) return;
+  await refreshSession();
+  await runSearch(results[selected] && results[selected].resortId);
+  await loadSavedTrips();
+  openPw(); // re-render the modal now that we're signed in
+});
+
+async function requestPlus(plan){
+  if(!session.authenticated) return; // pwSigninBox is already visible for this case
+  if(session.plus) return; // nothing to request, already Plus
+  const msg = $("#pwFootMsg");
+  const res = await fetch("/api/plus/request", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({plan}) });
+  msg.textContent = res.ok
+    ? "Request sent — the owner will reach out to enable Plus for your account."
+    : "Couldn't send that request right now — try again in a moment.";
+}
+
 $("#planMonthly").addEventListener("click", ()=>{
   $("#planMonthly").setAttribute("aria-pressed","true"); $("#planYearly").setAttribute("aria-pressed","false");
+  requestPlus("trip");
 });
 $("#planYearly").addEventListener("click", ()=>{
   $("#planYearly").setAttribute("aria-pressed","true"); $("#planMonthly").setAttribute("aria-pressed","false");
+  requestPlus("yearly");
 });
 
 /* ============================ accounts ============================ */
