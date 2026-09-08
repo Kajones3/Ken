@@ -15,12 +15,25 @@ import { addDaysISO, monthKey, todayISO, range, monthBounds } from "../dates.js"
 import { getDb, type Db } from "../db.js";
 import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
+import { SerpApiHotelProvider } from "../providers/serpapi.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
 
+/**
+ * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
+ * off-property hotel data (see providers/serpapi.ts) without needing a real
+ * flight token too, and vice versa — the two vendors are unrelated.
+ */
 export function pickProvider(): Provider {
-  return process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
+  const flights = process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
+  if (!process.env.SERPAPI_KEY) return flights;
+  const hotels = new SerpApiHotelProvider();
+  return {
+    name: `${flights.name}+serpapi`,
+    flightMonth: flights.flightMonth.bind(flights),
+    hotelMonth: hotels.hotelMonth.bind(hotels),
+  };
 }
 
 /**
