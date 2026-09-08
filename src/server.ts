@@ -13,6 +13,7 @@ import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
@@ -25,32 +26,51 @@ const PORT = Number(process.env.PORT ?? 8080);
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
-/** Free for everyone — how you get there isn't a Plus feature, just a different
- *  way to answer "what does this trip cost". Gas-price *monitoring* (an alert
- *  when the price moves after you save a trip) is the actual Plus feature. */
-function transportModeFrom(q: URLSearchParams): {
-  transportMode?: TripParams["transportMode"]; overnightStop?: TripParams["overnightStop"];
-  milesPct?: number; originPoint?: TripParams["originPoint"];
+/**
+ * Free for everyone — how you get there isn't a Plus feature, just a different
+ * way to answer "what does this trip cost". Gas-price *monitoring* (an alert
+ * when the price moves after you save a trip) is the actual Plus feature.
+ *
+ * A "Getting there" preset can mean different resorts get there differently
+ * in the *same* six-resort comparison (e.g. drive to WDW, fly to the other
+ * five) — resortTransportMode() resolves which, per resort. This builds the
+ * two possible param baselines up front; compare()/calendar() pick whichever
+ * one applies to a given resort. Both a driving leg and the flying legs can
+ * independently have their own rental-car choice, since a mixed preset can
+ * have both at once.
+ */
+function gettingThereParams(q: URLSearchParams): {
+  gettingThere: GettingThereMode; flyBase: Partial<TripParams>; driveBase: Partial<TripParams>;
 } {
-  const mode = q.get("transportMode");
-  if (mode !== "drive" && mode !== "miles") return {};
-  if (mode === "drive") {
-    const label = (q.get("overnightLabel") ?? "").slice(0, 80);
-    const nights = clamp(Number(q.get("overnightNights") ?? 0), 0, 10);
-    const costPerNight = Number(q.get("overnightCostPerNight") ?? 0);
-    const overnightStop = label && nights > 0 && Number.isFinite(costPerNight) && costPerNight > 0
-      ? { label, nights, costPerNightUsd: costPerNight } : null;
-    // A geocoded arbitrary starting city (from the search box), never trusted
-    // beyond a lat/lon pair — the label is display-only, the number crunching
-    // uses only lat/lon, same as any other coordinate in this codebase.
-    const lat = Number(q.get("originLat"));
-    const lon = Number(q.get("originLon"));
-    const originPoint = Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0)
-      ? { label: (q.get("originLabel") ?? "").slice(0, 120), lat, lon } : undefined;
-    return { transportMode: "drive", overnightStop, originPoint };
+  const raw = q.get("gettingThere");
+  const gettingThere = (GETTING_THERE_MODES as string[]).includes(raw ?? "") ? (raw as GettingThereMode) : "fly";
+
+  const flyBase: Partial<TripParams> = {};
+  if (gettingThere === "flyMiles") {
+    flyBase.transportMode = "miles";
+    flyBase.milesPct = clamp(Number(q.get("milesPct") ?? 0), 0, 100);
+  } else {
+    flyBase.transportMode = "fly";
   }
-  const milesPct = clamp(Number(q.get("milesPct") ?? 0), 0, 100);
-  return { transportMode: "miles", milesPct };
+  if (q.get("flyRentalCar") === "1") flyBase.rentalCar = true;
+
+  const driveBase: Partial<TripParams> = { transportMode: "drive" };
+  const label = (q.get("overnightLabel") ?? "").slice(0, 80);
+  const nights = clamp(Number(q.get("overnightNights") ?? 0), 0, 10);
+  const costPerNight = Number(q.get("overnightCostPerNight") ?? 0);
+  driveBase.overnightStop = label && nights > 0 && Number.isFinite(costPerNight) && costPerNight > 0
+    ? { label, nights, costPerNightUsd: costPerNight } : null;
+  // A geocoded arbitrary starting city (from the search box), never trusted
+  // beyond a lat/lon pair — the label is display-only, the number crunching
+  // uses only lat/lon, same as any other coordinate in this codebase.
+  const lat = Number(q.get("originLat"));
+  const lon = Number(q.get("originLon"));
+  if (Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0)) {
+    driveBase.originPoint = { label: (q.get("originLabel") ?? "").slice(0, 120), lat, lon };
+  }
+  if (q.get("driveRentalCar") === "1") driveBase.rentalCar = true;
+
+  return { gettingThere, flyBase, driveBase };
 }
 
 function paramsFrom(q: URLSearchParams): TripParams {
@@ -66,7 +86,7 @@ function paramsFrom(q: URLSearchParams): TripParams {
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
-    ...transportModeFrom(q),
+    transportMode: "fly",
   };
 }
 function clamp(n: number, lo: number, hi: number): number {
@@ -131,6 +151,7 @@ async function readBody(req: IncomingMessage): Promise<any> {
 async function compare(q: URLSearchParams, user: SessionUser | null) {
   const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
+  const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   // Server-side gate, not just a hidden UI control: a non-Plus request never
   // gets promo effects, whatever the query string asks for.
   const overrides = overridesFrom(q, plus);
@@ -154,22 +175,30 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const dates = explicitDate ? [explicitDate] : range(from, to);
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
-    const resortParams = { ...params, destination: iata };
+    // A "Getting there" preset can send different resorts down different
+    // legs in this same request (e.g. drive to WDW, fly to the rest) —
+    // resortTransportMode() decides which baseline this resort gets.
+    const mode = resortTransportMode(gettingThere, resort);
+    const modeParams = mode === "drive" ? driveBase : flyBase;
+    const resortParams = { ...params, ...modeParams, destination: iata };
     const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
     return best
       ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best }
       : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
-  return { month, pricesAsOf: book.oldestFetchedAt, params, results };
+  return { month, pricesAsOf: book.oldestFetchedAt, params: { ...params, gettingThere }, results };
 }
 
 async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
+  const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q, plus);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
+  const mode = resortTransportMode(gettingThere, resort);
+  Object.assign(params, mode === "drive" ? driveBase : flyBase);
   params.destination = resolveDestination(resort, q.get("destination"));
   const from = q.get("from") ?? addDaysISO(todayISO(), 1);
   const to = q.get("to") ?? addDaysISO(from, 364);
@@ -298,6 +327,22 @@ const server = createServer(async (req, res) => {
       const t = await readBody(req);
       const id = randomUUID();
       const params = { ...(t.params ?? {}) };
+      // A saved trip is always one specific resort, but params.gettingThere
+      // (if present) is a whole-board preset that can mean different things
+      // per resort (e.g. "drive to WDW, fly everywhere else"). Resolve it to
+      // a concrete transportMode/originPoint/overnightStop/rentalCar for
+      // *this* resort now, at save time — the alert job re-prices one saved
+      // trip at a time and has no notion of "Getting there" presets, so it
+      // needs the resolved shape, the same one compare() builds per resort.
+      const savedResort = RESORT_BY_ID.get(params.resortId);
+      if (savedResort && params.gettingThere) {
+        const asQuery = new URLSearchParams(
+          Object.entries(params).map(([k, v]): [string, string] => [k, String(v)]),
+        );
+        const { gettingThere, flyBase, driveBase } = gettingThereParams(asQuery);
+        const mode = resortTransportMode(gettingThere, savedResort);
+        Object.assign(params, mode === "drive" ? driveBase : flyBase);
+      }
       // Stamps today's gas price into the saved trip so the alert job has a
       // "then" to compare "now" against — same idea as baseline_total, just
       // for the one input that changes on its own without the user doing

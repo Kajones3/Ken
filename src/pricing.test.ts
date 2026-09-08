@@ -399,7 +399,51 @@ test("transport mode: an overnight stop adds nights times cost per night, nothin
     {}, START,
   );
   assert.ok(noStop.ok && withStop.ok);
-  assert.equal(withStop.price.driving - noStop.price.driving, 190);
+  // Both sides also carry the same wear-and-tear term, rounded independently
+  // on each side — compare within a cent rather than asserting bit-exact equality.
+  assert.ok(Math.abs(withStop.price.driving - noStop.price.driving - 190) < 0.01);
+});
+
+test("transport mode: driving includes wear and tear at the IRS mileage rate", () => {
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  assert.ok(r.ok);
+  const miles = r.price.drivingPick!.roundTripMiles; // rounded for display, so allow slack below
+  // START = 2027-03-01, a Jan-Jun month -> the 0.725/mi rate.
+  assert.ok(Math.abs(r.price.drivingPick!.wearAndTearUsd - miles * 0.725) < 1);
+  assert.ok(Math.abs(r.price.driving - (r.price.drivingPick!.gasCostUsd + r.price.drivingPick!.wearAndTearUsd)) < 0.01);
+});
+
+test("rental car: renting instead of driving your own car zeroes wear and tear", () => {
+  const book = fullBook("wdw", "MCO");
+  const owned = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  const rented = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive", rentalCar: true }, {}, START);
+  assert.ok(owned.ok && rented.ok);
+  assert.ok(owned.price.drivingPick!.wearAndTearUsd > 0, "owning a car wears it out");
+  assert.equal(rented.price.drivingPick!.wearAndTearUsd, 0, "a rental has no wear-and-tear cost to the user");
+  assert.ok(rented.price.rentalCarUsd > 0);
+});
+
+test("rental car: same formula whether flying or driving, always its own line", () => {
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const flyingRented = priceTrip(book, resortById("wdw"), { ...base, rentalCar: true }, {}, START);
+  const drivingRented = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive", rentalCar: true }, {}, START);
+  assert.ok(flyingRented.ok && drivingRented.ok);
+  assert.equal(flyingRented.price.rentalCarUsd, drivingRented.price.rentalCarUsd);
+  assert.equal(flyingRented.price.rentalCarUsd, 65 * (base.nights + 1));
+  assert.equal(flyingRented.price.rentalCarPick?.dailyRateUsd, 65);
+  // Flying + rental: the rental is on top of the flight total.
+  const flyingNoRental = priceTrip(book, resortById("wdw"), { ...base }, {}, START);
+  assert.ok(flyingNoRental.ok);
+  assert.ok(Math.abs(flyingRented.price.total - flyingNoRental.price.total - flyingRented.price.rentalCarUsd) < 0.01);
+});
+
+test("rental car: not renting means no rental line at all", () => {
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  assert.ok(r.ok);
+  assert.equal(r.price.rentalCarUsd, 0);
+  assert.equal(r.price.rentalCarPick, null);
 });
 
 test("transport mode: driving from an unrecognized starting city fails, doesn't guess", () => {

@@ -424,16 +424,28 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="gt-block">
       <div class="fields">
         <div class="f">
-          <label for="transportMode">Getting there</label>
-          <select id="transportMode">
-            <option value="fly" selected>Flying</option>
-            <option value="drive">Driving (US only)</option>
-            <option value="miles">Flying with miles</option>
+          <label for="gettingThere">Getting there</label>
+          <select id="gettingThere">
+            <option value="fly" selected>Flying to all</option>
+            <option value="flyMiles">Flying to all — using miles</option>
+            <option value="driveWdw">Driving to Walt Disney World, flying everywhere else</option>
+            <option value="driveDlr">Driving to Disneyland Resort, flying everywhere else</option>
+            <option value="driveDomestic">Driving domestically (WDW + Disneyland), flying internationally</option>
           </select>
         </div>
         <div class="f" id="originAirportField">
-          <label for="origin" id="originLabel">Departing from</label>
+          <label for="origin">Departing from</label>
           <select id="origin"></select>
+        </div>
+      </div>
+
+      <div class="gt-sub" id="flyRentalField">
+        <div class="f" style="width:220px">
+          <label for="flyRentalCar">Rent a car at your destination?</label>
+          <select id="flyRentalCar">
+            <option value="0" selected>No</option>
+            <option value="1">Yes</option>
+          </select>
         </div>
       </div>
 
@@ -466,6 +478,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
               <option value="yes">Yes</option>
             </select>
           </div>
+          <div class="f" style="width:200px">
+            <label for="driveRentalCar">Rent a car for the drive?</label>
+            <select id="driveRentalCar">
+              <option value="0" selected>No — use my own car</option>
+              <option value="1">Yes — save the miles on my car</option>
+            </select>
+          </div>
         </div>
         <div class="gt-sub" id="overnightDetail" hidden>
           <div class="agef" style="width:120px">
@@ -482,7 +501,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
     <div class="fields">
       <div class="f">
-        <label for="needHotel">Need a hotel?</label>
+        <label for="needHotel">Need a Hotel for the parks?</label>
         <select id="needHotel">
           <option value="yes" selected>Yes</option>
           <option value="no">No</option>
@@ -804,8 +823,11 @@ function buildAges(){
 }
 $("#kids").addEventListener("change", buildAges);
 
+const DRIVE_PRESETS = ["driveWdw", "driveDlr", "driveDomestic"];
+
 function readParams(){
   const needHotel = $("#needHotel").value;
+  const gettingThere = $("#gettingThere").value;
   return {
     origin: $("#origin").value,
     adults: +$("#adults").value,
@@ -820,27 +842,29 @@ function readParams(){
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
     month: $("#month").value,
-    transportMode: $("#transportMode").value,
+    gettingThere,
+    flyRentalCar: $("#flyRentalCar").value === "1",
+    driveRentalCar: $("#driveRentalCar").value === "1",
     overnightYN: $("#overnightYN").value,
     overnightNights: +$("#overnightNights").value,
     overnightCostPerNight: +$("#overnightCostPerNight").value || 0,
     milesPct: +$("#milesPct").value,
-    originPoint: $("#transportMode").value === "drive" ? pickedOriginPoint : null,
+    originPoint: DRIVE_PRESETS.includes(gettingThere) ? pickedOriginPoint : null,
   };
 }
 
-/** "Getting there" changes which controls make sense — driving swaps
- *  "Departing from" for a city search box and reveals the overnight-stop
- *  question; miles reveals the discount slider alongside the normal airport
- *  picker. Free for everyone; only the Plus gas-price alert cares which
- *  mode a saved trip used. */
-function syncTransportMode(){
-  const mode = $("#transportMode").value;
-  $("#originAirportField").hidden = mode === "drive";
-  $("#driveBlock").hidden = mode !== "drive";
-  $("#milesExtra").hidden = mode !== "miles";
+/** "Getting there" changes which controls make sense. Any of the three
+ *  driving presets reveals the driving block (city search, overnight stop,
+ *  drive-rental toggle) — "Departing from" stays visible too, since every
+ *  preset flies to at least four of the six resorts. The miles slider only
+ *  shows for the miles option. Free for everyone; only the Plus gas-price
+ *  alert cares which mode a saved trip used. */
+function syncGettingThere(){
+  const mode = $("#gettingThere").value;
+  $("#driveBlock").hidden = !DRIVE_PRESETS.includes(mode);
+  $("#milesExtra").hidden = mode !== "flyMiles";
 }
-$("#transportMode").addEventListener("change", syncTransportMode);
+$("#gettingThere").addEventListener("change", syncGettingThere);
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
 $("#overnightYN").addEventListener("change", e => { $("#overnightDetail").hidden = e.target.value !== "yes"; });
@@ -867,21 +891,21 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(params.hopper) q.hopper = "1";
-  if(params.transportMode && params.transportMode !== "fly"){
-    q.transportMode = params.transportMode;
-    if(params.transportMode === "drive"){
-      if(params.overnightYN === "yes"){
-        q.overnightLabel = "Overnight stop";
-        q.overnightNights = params.overnightNights;
-        q.overnightCostPerNight = params.overnightCostPerNight;
-      }
-      if(params.originPoint){
-        q.originLat = params.originPoint.lat;
-        q.originLon = params.originPoint.lon;
-        q.originLabel = params.originPoint.label;
-      }
+  q.gettingThere = params.gettingThere;
+  if(params.gettingThere === "flyMiles") q.milesPct = params.milesPct;
+  if(params.flyRentalCar) q.flyRentalCar = "1";
+  if(DRIVE_PRESETS.includes(params.gettingThere)){
+    if(params.overnightYN === "yes"){
+      q.overnightLabel = "Overnight stop";
+      q.overnightNights = params.overnightNights;
+      q.overnightCostPerNight = params.overnightCostPerNight;
     }
-    if(params.transportMode === "miles") q.milesPct = params.milesPct;
+    if(params.driveRentalCar) q.driveRentalCar = "1";
+    if(params.originPoint){
+      q.originLat = params.originPoint.lat;
+      q.originLon = params.originPoint.lon;
+      q.originLabel = params.originPoint.label;
+    }
   }
   return q;
 }
@@ -1084,7 +1108,7 @@ function renderBoard(){
     }
     const x = item.price, tot = x.total, pax = x.partySize;
     const w = n => (n/tot*100).toFixed(2)+"%";
-    const getThere = x.flights + x.driving;   // mutually exclusive — one is always 0
+    const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
     const perPD = tot/pax/(params.nights+1);
@@ -1147,15 +1171,17 @@ function renderTable(){
     return `<tr>
       <td>${pos+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
       <td class="n">${item.iata}</td>
-      ${cell(x.flights + x.driving)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
+      ${cell(x.flights + x.driving + x.rentalCarUsd)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
       <td class="n"><b>${usd(x.total)}</b></td>
       <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
       <td>${open ? x.hotelPick.name : "Locked"}</td>
     </tr>`;
   }).join("");
-  const getThereHeader = params.transportMode === "drive" ? "Driving" : "Flights";
+  // A mixed "Getting there" preset can have different resorts driving vs.
+  // flying in the very same table, so this column can't honestly claim one
+  // word for every row — kept neutral rather than picking one.
   $("#tablewrap").innerHTML = `<table>
-    <thead><tr><th>Resort</th><th>Airport</th><th>${getThereHeader}</th><th>Tickets</th><th>Hotel</th><th>Food</th><th>Total</th><th>Best start</th><th>Cheapest stay</th></tr></thead>
+    <thead><tr><th>Resort</th><th>Airport</th><th>Getting there</th><th>Tickets</th><th>Hotel</th><th>Food</th><th>Total</th><th>Best start</th><th>Cheapest stay</th></tr></thead>
     <tbody>${rows}</tbody></table>`;
 }
 
@@ -1199,7 +1225,7 @@ function whyCheaperCard(item, allResults){
   if(cheaper.resortId === pricier.resortId) return "";
   const cp = cheaper.price, pp = pricier.price;
   const lines = [
-    ["Getting there (flights/driving)", cp.flights+cp.driving, pp.flights+pp.driving],
+    ["Getting there (flights/driving/rental car)", cp.flights+cp.driving+cp.rentalCarUsd, pp.flights+pp.driving+pp.rentalCarUsd],
     ["Park tickets", cp.tickets, pp.tickets],
     ["Hotel", cp.hotel, pp.hotel],
     ["Food", cp.food, pp.food],
@@ -1503,10 +1529,15 @@ async function renderDetail(){
           <div class="li"><div class="l"><b>Gas</b>
             <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
             <div class="p">${usd(x.drivingPick ? x.drivingPick.gasCostUsd : 0)}</div></div>
+          ${x.drivingPick && x.drivingPick.wearAndTearUsd > 0 ? `<div class="li"><div class="l"><b>Wear &amp; tear on your car</b>
+            <small>IRS standard mileage rate, per mile driven</small></div><div class="p">${usd(x.drivingPick.wearAndTearUsd)}</div></div>` : ""}
           ${x.drivingPick && x.drivingPick.overnightUsd ? `<div class="li"><div class="l"><b>Overnight stop</b>
             <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
-          <div class="li"><div class="l"><b>Total driving cost</b></div><div class="p">${usd(x.driving)}</div></div>
-          <p class="sub" style="margin-top:10px">Gas price and road-distance figures are estimates, US routes only — see CLAUDE.md for the assumptions.</p>
+          ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car</b>
+            <small>Instead of your own car · ${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
+            <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
+          <div class="li"><div class="l"><b>Total getting there</b></div><div class="p">${usd(x.driving + x.rentalCarUsd)}</div></div>
+          <p class="sub" style="margin-top:10px">Gas, wear-and-tear and road-distance figures are estimates, US routes only — see CLAUDE.md for the assumptions.</p>
         </div>` : `<div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
           <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
@@ -1521,7 +1552,11 @@ async function renderDetail(){
           })() : ""}
           ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
-          ${flightRows}<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
+          ${flightRows}
+          ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car at your destination</b>
+            <small>${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
+            <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
+          <a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
         </div>`}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>

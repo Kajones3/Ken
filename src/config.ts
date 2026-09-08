@@ -322,6 +322,34 @@ export const DRIVING = {
 } as const;
 
 /**
+ * 2026 IRS standard mileage rate — the real published figure, not a guess,
+ * covering wear and tear on the user's own car (depreciation, maintenance,
+ * insurance — everything gas doesn't already cover). Two rates a year;
+ * month-only lookup so it works the same way regardless of which year a
+ * cached trip date falls in, same "ignore the year" convention seasonality.ts
+ * already uses. Needs a real annual refresh — the IRS sets a new rate every
+ * December for the following year.
+ */
+export function irsMileageRatePerMile(dateISO: string): number {
+  const month = Number(dateISO.slice(5, 7));
+  return month <= 6 ? 0.725 : 0.76;
+}
+
+/**
+ * A flat national-average daily economy-car rental rate — real rates vary a
+ * lot by city and season (2026 research: roughly $55-95/day generally,
+ * $49-78/day for economy specifically; Miami runs cheap, Chicago runs
+ * pricey). One guess, not a per-city table — a rental's daily rate doesn't
+ * move date-to-date the way a flight or gas price does, so this doesn't need
+ * its own refresh job or provider module, just this one hand-picked number,
+ * same footing as DRIVING's other guesses. Refine (ideally into a real
+ * per-city rate, ideally from a real provider) before relying on it.
+ */
+export const CAR_RENTAL = {
+  dailyRateUsd: 65,
+} as const;
+
+/**
  * RSS feeds checked for a private, owner-only digest email — never surfaced
  * to end users automatically (see src/jobs/newsDigest.ts). Best-guess feed
  * URLs based on each site's standard WordPress /feed/ convention, not

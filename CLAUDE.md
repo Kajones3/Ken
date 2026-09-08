@@ -16,9 +16,9 @@ say when something is a guess.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 73 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 82 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| Driving / miles transport modes | **Wired, free.** "Getting there" on the trip form: Flying (unchanged), Driving (US-only; gas cost from a real/mock national price × distance, replaces the flights line, domestic resorts only, real open city search + IP autofill for "Departing from"), Flying with miles (0-100% discount on the cash fare, no floor). Plus-only add-on: an alert when the cached gas price has moved since a driving trip was saved. |
+| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost now includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRatePerMile()` in `config.ts`, month-only lookup). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). Plus-only add-on unchanged: an alert when the cached gas price has moved since a driving trip was saved. |
 | Park Hopper | **Wired, free.** A flat per-ticket add-on at the four multi-park resorts (WDW, Disneyland, Tokyo, Paris); silently has no effect at Hong Kong or Shanghai, which each have one park. WDW/Disneyland's differentials are researched against real 2026 pricing; Tokyo/Paris are unresearched guesses, flagged weaker-confidence below. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
@@ -247,9 +247,10 @@ than it is — this is the comparison people get wrong.
   resorts' off-peak floor is no longer inverted (see "Mistakes made" below) — not a claim
   that the resulting curve matches real per-date pricing, which is genuinely tiered and
   which this flat curve can only approximate.
-- **2026 IRS standard mileage rate**: $0.725/mile (Jan–Jun), $0.76/mile (Jul–Dec) — the
-  building block for the deferred "Compare Flying vs. Driving" page's wear-and-tear line,
-  not used anywhere yet.
+- **2026 IRS standard mileage rate**: $0.725/mile (Jan–Jun), $0.76/mile (Jul–Dec) — now
+  wired into every driving trip's `wearAndTearUsd` line via `irsMileageRatePerMile()`
+  in `config.ts` (month-only lookup, same "ignore the year" convention `seasonality.ts`
+  already uses). Needs a real annual refresh — the IRS sets a new rate each December.
 - **Nominatim** (OpenStreetMap geocoding) and **ip-api.com** (IP geolocation): both free,
   keyless, no per-request charge — Nominatim capped at 1 req/sec with a caching
   requirement (see `src/geo/cache.ts`), ip-api at ~45 req/min for non-commercial use.
@@ -295,11 +296,14 @@ than it is — this is the comparison people get wrong.
   WDW (+$90) and Disneyland (+$75) came from an actual 2026 web-search check; Tokyo (+$38)
   and Paris (+$45) are unresearched guesses (roughly 20% of base ticket price), explicitly
   weaker confidence — refine before relying on either.
-- **Rental-car pricing for the deferred "Compare Flying vs. Driving" page** — researched
-  this session that Travelpayouts (already the flight provider) brokers car rentals via
-  partners including DiscoverCars, so this would reuse an existing account/integration
-  rather than a new vendor relationship — but nothing has actually been built or written
-  to that shape yet.
+- **Rental car pricing** (`CAR_RENTAL.dailyRateUsd` in `config.ts`, currently $65) is one
+  flat national-average guess, not a per-city rate — real rates vary a lot by city
+  (2026 research: ~$55–95/day generally, ~$49–78/day economy specifically; Miami runs
+  cheap, Chicago runs pricey). A real per-city rate, ideally from a real provider
+  (Travelpayouts, the existing flight provider, also brokers car rentals via partners
+  including DiscoverCars — same account, no new vendor relationship needed), is future
+  work; this session shipped the flat guess so the feature works end to end now rather
+  than staying deferred.
 
 ---
 
@@ -357,6 +361,21 @@ than it is — this is the comparison people get wrong.
   to Shanghai priced a straight-faced, technically-computed dollar figure for crossing
   an ocean. Caught by actually looking at the rendered board, not just green tests.
   Fixed to fail cleanly for any non-domestic resort.
+- When the single global `transportMode` field was replaced with per-resort "Getting
+  there" presets, `POST /api/trips` kept saving the raw preset name
+  (`gettingThere: "driveWdw"`) into `saved_trips.params` — but the alert job re-prices
+  *one* saved resort at a time and has no notion of presets, so it would have silently
+  read `params.transportMode` as `undefined` (defaulting to "fly") for every saved
+  driving trip, forever, with no error. Caught during review, not by a test — fixed by
+  resolving the preset to a concrete `transportMode`/`originPoint`/`rentalCar` for that
+  one resort *at save time*, in `server.ts`, so the alert job keeps working on the same
+  flat shape it always has.
+- Elements hidden via the `hidden` attribute inside `.f`/`.fields`/`.gt-sub` containers
+  weren't actually hiding — those classes set an explicit `display` that beats the
+  `[hidden]` UA-stylesheet rule. Caught by Playwright (`isHidden()` returning `false`
+  for elements that should've been hidden), not by eye. Fixed with a global
+  `[hidden]{display:none!important}` rule — a lesson for any future hidden toggle on
+  a styled container, not just this one.
 
 ---
 
@@ -426,15 +445,23 @@ than it is — this is the comparison people get wrong.
    "Departing from" search for driving, airport-transport pricing removed in favor
    of a redefined Plus (monitoring, saved trips, deal/gas alerts, custom planning
    expenses), and a loading indicator on "Compare six resorts."
+9. ~~Mixed drive/fly comparison, rental car, wear-and-tear~~ — done: five "Getting
+   there" presets (`src/gettingThere.ts`) let different resorts get there
+   differently in the *same* six-resort board — drive to WDW only, drive to
+   Disneyland only, drive to both domestic resorts (fly the four international
+   ones either way), or fly to all (plain or with miles). Real IRS wear-and-tear
+   cost, and a free optional rental car either for the drive (replaces
+   wear-and-tear) or at the destination after flying. This absorbed what was
+   previously planned as a separate "Compare Flying vs. Driving" page — turned out
+   a preset on the main board served the actual ask better than a second page.
 
-Then: the deferred "Compare Flying vs. Driving" page (its own follow-up plan — IRS
-mileage rate and a Travelpayouts/DiscoverCars rental-car adapter are the researched
-building blocks, see "Verified facts" above), the 10-mile off-property hotel radius
-filter (needs a `distanceMiles` field on `HotelDef`, none exists today), a day-by-day
-trip planner (itinerary, checklist, dining tracker, budget, per-day notes,
-special-event floor pricing — deliberately deferred, see above), Travelpayouts token,
-hotel endpoint approval, a real ticket-price table, Stripe, Resend domain
-verification, and a "prices as of ..." line in the UI.
+Then: the 10-mile off-property hotel radius filter (needs a `distanceMiles` field
+on `HotelDef`, none exists today), a real per-city rental-car rate (a
+Travelpayouts/DiscoverCars adapter is the researched building block, see "NOT
+verified" above), a day-by-day trip planner (itinerary, checklist, dining tracker,
+budget, per-day notes, special-event floor pricing — deliberately deferred, see
+above), Travelpayouts token, hotel endpoint approval, a real ticket-price table,
+Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
 
 ## Known gaps in the code
 
@@ -474,9 +501,9 @@ verification, and a "prices as of ..." line in the UI.
   email can sign in as them. Correct trade-off for a friends demo where the owner is
   comping accounts by hand; needs a real verification step (e.g. a one-time emailed
   link through the existing `EmailSender` interface) before any public launch.
-- **No admin UI for `airport_transport`, `promos`, `goodToKnow`, or `closuresUrl`.** All
-  are hand-maintained directly in code/database (`goodToKnow`/`closuresUrl`/`closuresLabel`
-  live in `config.ts`, right on each `Resort`) — same pattern as `ticket_prices`, and just
+- **No admin UI for `promos`, `goodToKnow`, or `closuresUrl`.** All are hand-maintained
+  directly in code/database (`goodToKnow`/`closuresUrl`/`closuresLabel` live in
+  `config.ts`, right on each `Resort`) — same pattern as `ticket_prices`, and just
   as easy to let go stale silently. No alarm-on-staleness exists for any of them yet.
   `goodToKnow` is the one most worth re-checking periodically: it currently holds
   visa/entry information (sourced from travel.state.gov and US consulate pages, for U.S.
@@ -495,3 +522,12 @@ verification, and a "prices as of ..." line in the UI.
   budget breakdown, per-day notes, and special hard-ticket-event floor pricing (like
   Mickey's Not So Scary) are confirmed, wanted scope, deliberately deferred to its own
   follow-up plan once this foundation has been used.
+- **`CAR_RENTAL.dailyRateUsd` is one flat national-average guess**, not a per-city rate —
+  same limitation as the old airport-transport guesses had, see "NOT verified" above.
+  And **"Getting there" is three fixed presets, not a fully general per-resort picker**:
+  you can drive to WDW-only, Disneyland-only, or both domestic resorts (flying
+  everywhere else in that same board), but there's no way to independently choose a
+  mode per resort beyond that grouping, and "Rent a car for the drive" applies to
+  whichever resort(s) are driving as a group, not one at a time. Good enough for the
+  owner's actual asks so far; would need a real per-resort control (bigger UI change)
+  to go further.

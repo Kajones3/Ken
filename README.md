@@ -39,7 +39,7 @@ crossed the threshold, and sent the email — all **zero** provider calls. With 
 `RESEND_API_KEY` set it prints instead of sending, so this runs with no account.
 
 ```bash
-npm test         # 73 tests, no database needed
+npm test         # 82 tests, no database needed
 npm run typecheck
 ```
 
@@ -133,7 +133,8 @@ below before treating this as more than a friends demo).
 | Path | What it is |
 |---|---|
 | `db/schema.sql` | Thirteen tables. Safe to re-run. |
-| `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport. |
+| `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport, the IRS mileage rate, and the flat rental-car guess. |
+| `src/gettingThere.ts` | Pure resolver: turns one "Getting there" preset (fly / fly-with-miles / drive-to-WDW / drive-to-Disneyland / drive-domestic) into a per-resort transport mode, so one six-resort comparison can drive to some resorts and fly to others. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
@@ -244,10 +245,15 @@ rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
 - **A day-by-day trip planner is not built** (itinerary, checklist, dining tracker,
   budget, per-day notes, special-event floor pricing) — confirmed scope, deliberately
   deferred to its own follow-up.
-- **A "Compare Flying vs. Driving" page is not built** (domestic parks only, IRS
-  wear-and-tear mileage cost, a rental-car estimate) — deliberately deferred to its own
-  fast follow-up; the IRS rate and a Travelpayouts/DiscoverCars rental-car adapter are
-  already researched (see CLAUDE.md).
+- **`CAR_RENTAL.dailyRateUsd` is one flat national-average guess, not a per-city rate.**
+  Rental car pricing (and the real IRS wear-and-tear rate) are wired into `pricing.ts`
+  and the "Getting there" trip-form presets, but the rental number itself is a single
+  hand-picked constant — a real per-city rate (ideally from a real provider, e.g. a
+  Travelpayouts/DiscoverCars adapter) is still future work.
+- **"Getting there" is three fixed drive presets, not a fully general per-resort
+  picker.** You can drive to WDW only, Disneyland only, or both domestic resorts
+  (flying everywhere else in the same comparison) — there's no way to pick a mode for
+  each resort independently beyond that grouping.
 
 ## Currency
 
