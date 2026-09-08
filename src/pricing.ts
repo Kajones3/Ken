@@ -85,7 +85,14 @@ export type Overrides = Record<string, ResortOverride | undefined>;
 
 // ---------------------------------------------------------------- cache view
 
-export interface FlightRow { price: number; carrier?: string; stops: number; deepLink?: string }
+export interface FlightRow {
+  price: number; carrier?: string; stops?: number; deepLink?: string;
+  /** Only set when this row came from PriceBook.flightEstimate() rather than
+   *  a real flight_prices cache hit — a BTS historical baseline projected by
+   *  the current Travelpayouts trend multiplier. The UI must render this
+   *  visibly differently from a real fare, never presented as one. */
+  estimate?: { low: number; med: number; high: number; basisQuarter: string };
+}
 export interface HotelNight {
   hotelId: string; name: string; descriptor: string;
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
@@ -103,6 +110,11 @@ export interface AppliedPromo {
 
 export interface PriceBook {
   flight(origin: string, dest: string, date: ISODate, tripLength: number): FlightRow | undefined;
+  /** Route-level BTS-baseline x trend fallback for when there's no exact
+   *  cached fare — undefined when this route has no BTS baseline (expected
+   *  for most international routes today) or no trend has been computed
+   *  yet. Optional on the interface so bookFrom() (tests) needs no changes. */
+  flightEstimate?(origin: string, dest: string): FlightRow["estimate"] | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
@@ -129,8 +141,11 @@ export interface TripPrice {
   transport: number;
   food: number;
   perSeatFare: number;
-  /** The cached flight this fare came from — price is the real floor, even when an override raised it. */
-  flightPick: { price: number; carrier?: string; stops: number; deepLink?: string } | null;
+  /** The cached flight this fare came from — price is the real floor, even
+   *  when an override raised it. Carries `.estimate` instead of a real
+   *  `.stops`/`.deepLink` when there was no exact cache hit and this fell
+   *  back to a BTS-baseline estimate; see FlightRow. */
+  flightPick: FlightRow | null;
   hotelPick: HotelNight
     | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean }
     | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
@@ -295,13 +310,18 @@ export function priceTrip(
     };
   } else {
     const row = book.flight(params.origin, destination, start, bucket);
-    if (!row && ov.farePerSeat === undefined) {
+    // No exact cache hit — fall back to a BTS-baseline x trend estimate
+    // before giving up. Still an honest gap (undefined) for most routes
+    // today, since BTS coverage is domestic-leaning; this never fabricates
+    // a number where flightEstimate() itself has nothing.
+    const est = !row ? book.flightEstimate?.(params.origin, destination) : undefined;
+    if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
     // Flying: an override may raise the fare but never fall below the cheapest fare we know of.
     // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
     // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
-    const floor = row?.price ?? 0;
+    const floor = row?.price ?? est?.med ?? 0;
     if (transportMode === "miles") {
       const base = ov.farePerSeat !== undefined ? ov.farePerSeat : floor;
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
@@ -310,7 +330,11 @@ export function priceTrip(
       perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : floor;
     }
     flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
-    flightPick = row ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } : null;
+    flightPick = row
+      ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink }
+      : est
+      ? { price: est.med, estimate: est }
+      : null;
   }
 
   // --- tickets -----------------------------------------------------------

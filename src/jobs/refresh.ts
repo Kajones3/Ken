@@ -19,6 +19,7 @@ import { SerpApiHotelProvider } from "../providers/serpapi.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
+import { computeFareTrend } from "./fareTrend.js";
 
 /**
  * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
@@ -219,17 +220,26 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);
 
+  // Reads only Postgres (flight_prices we just refreshed, plus whatever BTS
+  // baseline exists) — no provider call, so it rides along here rather than
+  // needing its own schedule. Null just means too few overlapping routes
+  // right now; the last good fare_trend row keeps serving estimates.
+  const trend = await computeFareTrend(db);
+  const trendNote = trend ? `trend: ${trend.sampleRoutes} routes` : "trend: skipped (too few overlapping routes)";
+
   await db.query(
-    `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4 where id = $1`,
-    [runId, calls, rows, errors],
+    `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
+       note = note || ' · ' || $5 where id = $1`,
+    [runId, calls, rows, errors, trendNote],
   );
-  return { runId, calls, rows, errors, months: months.length };
+  return { runId, calls, rows, errors, months: months.length, trend };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const db = await getDb();
   const backfill = process.env.REFRESH_BACKFILL === "true" || process.env.REFRESH_BACKFILL === "1";
   const res = await runRefresh(db, backfill ? { months: allTierMonths() } : {});
-  console.log(`refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors${backfill ? " (full backfill)" : ""}`);
+  const trendMsg = res.trend ? `, trend from ${res.trend.sampleRoutes} routes` : ", trend skipped (too few routes)";
+  console.log(`refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors${backfill ? " (full backfill)" : ""}${trendMsg}`);
   await db.close();
 }

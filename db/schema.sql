@@ -169,3 +169,40 @@ create table if not exists fetch_runs (
   errors      integer not null default 0,
   note        text not null default ''
 );
+
+-- Historical baseline fares from the BTS DB1B Market survey (real US-carrier-
+-- reported itinerary data, free, no API key — see src/jobs/btsBaseline.ts).
+-- One row per (origin, destination, quarter) — quarters are never merged
+-- into each other, since a fare from 2023 and one from 2025 aren't
+-- fungible; the fare_trend multiplier is what turns an old quarter into a
+-- present-day estimate, not averaging across quarters here.
+create table if not exists historical_fares (
+  origin              char(3)      not null,
+  destination         char(3)      not null,
+  year                smallint     not null,
+  quarter             smallint     not null check (quarter between 1 and 4),
+  avg_fare_usd        numeric(9,2) not null check (avg_fare_usd > 0),
+  passengers_sampled  integer      not null default 0,
+  itin_count          integer      not null default 0,
+  source              text         not null default 'bts_db1b',
+  fetched_at          timestamptz  not null default now(),
+  primary key (origin, destination, year, quarter)
+);
+create index if not exists historical_fares_lookup on historical_fares (origin, destination);
+
+-- The trend multiplier that turns a BTS historical baseline into a present-day
+-- estimate: how much current real Travelpayouts fares differ from the BTS
+-- baseline, averaged (trimmed) across whichever routes we have both for right
+-- now. A time series like gas_prices, not a single upserted row — so when an
+-- estimate looks wrong in three months, the history of how the multiplier
+-- moved is still here. Read the latest row; see src/jobs/fareTrend.ts.
+create table if not exists fare_trend (
+  id               uuid primary key,
+  multiplier       numeric(6,4) not null check (multiplier > 0),
+  low_multiplier   numeric(6,4) not null check (low_multiplier > 0),
+  high_multiplier  numeric(6,4) not null check (high_multiplier > 0),
+  sample_routes    integer      not null default 0,
+  basis_quarter    text         not null,
+  computed_at      timestamptz  not null default now()
+);
+create index if not exists fare_trend_latest on fare_trend (computed_at desc);
