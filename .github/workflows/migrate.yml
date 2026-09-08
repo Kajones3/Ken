@@ -1,0 +1,22 @@
+name: Parkfare migrate
+
+# Manual only — applies db/schema.sql (idempotent, safe to re-run: every
+# statement is "create table if not exists") against the production
+# database, using the same DATABASE_URL secret as every other job. Needed
+# whenever schema.sql gains new tables/columns after the initial deploy —
+# Render's own auto-migrate only runs on first deploy, not on every push.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
