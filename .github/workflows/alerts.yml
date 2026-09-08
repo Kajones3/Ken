@@ -1,10 +1,16 @@
 name: Parkfare alerts
 
-# Runs after the refresh job so it re-prices saved trips against the day's
-# fresh cache. Never calls a provider itself — see src/jobs/alerts.ts.
+# Runs twice a day (04:20 and 16:20 UTC) so Plus users' saved trips get
+# checked more often than the once-daily flight/hotel cache refresh — the
+# second run won't find new prices for trips already checked that morning
+# (the cache itself still only refreshes once a day), but it does mean a
+# trip saved mid-day gets its first check the same day instead of waiting
+# until tomorrow, and any alert whose email failed to send gets retried
+# sooner. Never calls a provider itself — see src/jobs/alerts.ts.
 on:
   schedule:
     - cron: "20 4 * * *"
+    - cron: "20 16 * * *"
   workflow_dispatch: {}
 
 jobs:
