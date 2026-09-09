@@ -206,3 +206,33 @@ create table if not exists fare_trend (
   computed_at      timestamptz  not null default now()
 );
 create index if not exists fare_trend_latest on fare_trend (computed_at desc);
+
+-- A route average hides the thing a traveller actually cares about: the
+-- spread. DB1B holds every itinerary's fare, so store real percentiles per
+-- route/quarter rather than only the mean — the shown estimate is built on
+-- the MEDIAN (p50), with p25/p75 as the Low/High band. Added after the
+-- average alone produced estimates far below what a click-through actually
+-- cost: an average is dragged down by deep-discount and partial-itinerary
+-- fares that nobody searching a family trip will ever be quoted.
+alter table historical_fares add column if not exists p25_fare_usd    numeric(9,2);
+alter table historical_fares add column if not exists median_fare_usd numeric(9,2);
+alter table historical_fares add column if not exists p75_fare_usd    numeric(9,2);
+
+-- What people actually search. The nightly job spends its (paid, metered)
+-- real-fare lookups on the busiest routes rather than on all 209 possible
+-- ones, and every other route is estimated from its BTS median moved by the
+-- trend those real lookups measure. One row per (origin, destination,
+-- departure month); `searches` is a running count, never reset, and
+-- `last_searched_at` is what decays an old-but-once-popular route out of
+-- the nightly set. No user id and no session id — this is route popularity,
+-- not per-person history, and it must stay that way.
+create table if not exists route_searches (
+  origin           char(3)     not null,
+  destination      char(3)     not null,
+  depart_month     char(7)     not null,          -- YYYY-MM
+  searches         integer     not null default 0,
+  last_searched_at timestamptz not null default now(),
+  primary key (origin, destination, depart_month)
+);
+create index if not exists route_searches_popular
+  on route_searches (searches desc, last_searched_at desc);

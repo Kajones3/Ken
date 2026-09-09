@@ -18,7 +18,8 @@
     "bts-baseline": "tsx src/jobs/btsBaseline.ts",
     "test": "tsx --test $(find src -name '*.test.ts')",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx src/smoke.ts"
+    "smoke": "tsx src/smoke.ts",
+    "popular-routes": "tsx src/jobs/popularRoutes.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

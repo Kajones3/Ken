@@ -60,9 +60,12 @@ test("computeFareTrend: writes a plausible multiplier from real overlapping rout
     ["RDU", "SNA", 300, 330], // ratio 1.10
   ];
   for (const [origin, destination, baseline, current] of routes) {
+    // Quarter 1, to match the Q1 departure date below — the trend compares
+    // like season with like season, so a baseline from another quarter is
+    // deliberately not a match (see the next test).
     await db.query(
-      `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd) values ($1,$2,$3,$4,$5)`,
-      [origin, destination, 2025, 2, baseline],
+      `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd,median_fare_usd) values ($1,$2,$3,$4,$5,$5)`,
+      [origin, destination, 2025, 1, baseline],
     );
     await db.query(
       `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd) values ($1,$2,$3,$4,$5)`,
@@ -75,7 +78,29 @@ test("computeFareTrend: writes a plausible multiplier from real overlapping rout
   const { rows } = await db.query(`select multiplier, low_multiplier, high_multiplier, basis_quarter from fare_trend`);
   assert.equal(rows.length, 1);
   assert.equal(Number(rows[0].multiplier), 1.2); // mean of 1.30, 1.20, 1.10
-  assert.equal(rows[0].basis_quarter, "2025Q2");
+  assert.equal(rows[0].basis_quarter, "2025Q1");
+  await db.close();
+});
+
+test("computeFareTrend: a baseline from a different quarter is not a match", async () => {
+  // Seasonality is the whole reason the baseline is stored per quarter. A
+  // March fare measured against a summer baseline would report the season
+  // as a price rise, and then apply that invented "rise" to every estimated
+  // route in the app.
+  const db = await memoryDb();
+  for (const [origin, destination] of [["ATL", "MCO"], ["DEN", "MCO"], ["RDU", "SNA"]]) {
+    await db.query(
+      `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd,median_fare_usd) values ($1,$2,2025,3,200,200)`,
+      [origin, destination],
+    );
+    await db.query(
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd) values ($1,$2,'2027-03-01',4,400)`,
+      [origin, destination],
+    );
+  }
+  assert.equal(await computeFareTrend(db), null);
+  const { rows } = await db.query(`select count(*)::int as n from fare_trend`);
+  assert.equal(rows[0].n, 0);
   await db.close();
 });
 

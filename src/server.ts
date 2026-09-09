@@ -12,6 +12,7 @@ import { RESORTS, RESORT_BY_ID, ORIGINS, bucketFor, type TierIndex, type FoodSty
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
+import { recordSearch } from "./routeDemand.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
 import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
@@ -174,6 +175,10 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     tripLength: bucketFor(params.nights),
   });
   const dates = explicitDate ? [explicitDate] : range(from, to);
+  // Log what was asked for, so tonight's paid real-fare lookups go to the
+  // routes people actually search. Fire-and-forget: recordSearch swallows
+  // its own errors, and nothing below reads the result.
+  void recordSearch(db, params.origin, [...destinationByResort.values()], month);
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
     // A "Getting there" preset can send different resorts down different

@@ -3,7 +3,7 @@
  * A whole 12-month fare calendar is three indexed queries, not 365 round trips.
  */
 import type { Db } from "./db.js";
-import type { ISODate } from "./dates.js";
+import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
 import { RESORTS, type Tier } from "./config.js";
 
@@ -135,17 +135,49 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       return primary ? [d, primary] : [d];
     }),
   )];
+  // Seasonality is the whole point of matching the quarter: a March fare
+  // compared against a July baseline is comparing two different products.
+  // BTS DB1B is published by quarter, not by month — the finest grain that
+  // exists — so "the same time last year" means the same *quarter* a year
+  // back, and the UI says so in those words rather than implying a
+  // month-exact match it cannot support.
+  const wantQuarter = quarterOf(req.from);
   const hf = await db.query(
-    `select distinct on (origin, destination) origin, destination, avg_fare_usd, year, quarter
+    `select distinct on (origin, destination, quarter)
+            origin, destination, avg_fare_usd, median_fare_usd,
+            p25_fare_usd, p75_fare_usd, year, quarter
        from historical_fares
       where origin = $1 and destination = any($2)
-      order by origin, destination, year desc, quarter desc`,
+      order by origin, destination, quarter, year desc`,
     [req.origin, hfDestinations],
   );
-  const historicals = new Map<string, { avgFareUsd: number; quarter: string }>();
+  // Prefer the matching quarter from the most recent year that has it; fall
+  // back to whatever quarter is newest for that route, flagged so the UI can
+  // say the season didn't match rather than quietly pretending it did.
+  const byRouteQuarter = new Map<string, typeof hf.rows[number]>();
+  const newestByRoute = new Map<string, typeof hf.rows[number]>();
   for (const r of hf.rows) {
-    historicals.set(`${r.origin}|${r.destination}`, {
-      avgFareUsd: Number(r.avg_fare_usd), quarter: `${r.year}Q${r.quarter}`,
+    const route = `${r.origin}|${r.destination}`;
+    if (Number(r.quarter) === wantQuarter) byRouteQuarter.set(route, r);
+    const cur = newestByRoute.get(route);
+    if (!cur || Number(r.year) > Number(cur.year)) newestByRoute.set(route, r);
+  }
+  const historicals = new Map<string, {
+    med: number; p25: number; p75: number; quarter: string; seasonMatched: boolean;
+  }>();
+  for (const route of new Set([...byRouteQuarter.keys(), ...newestByRoute.keys()])) {
+    const r = byRouteQuarter.get(route) ?? newestByRoute.get(route)!;
+    // median_fare_usd is null on rows written before percentiles existed —
+    // fall back to the mean rather than dropping the route entirely, and
+    // never let a null quietly become 0.
+    const med = Number(r.median_fare_usd ?? r.avg_fare_usd);
+    if (!Number.isFinite(med) || med <= 0) continue;
+    historicals.set(route, {
+      med,
+      p25: Number(r.p25_fare_usd ?? med),
+      p75: Number(r.p75_fare_usd ?? med),
+      quarter: `${r.year}Q${r.quarter}`,
+      seasonMatched: Number(r.quarter) === wantQuarter,
     });
   }
   const ft = await db.query(
@@ -165,11 +197,18 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       const h = historicals.get(`${origin}|${dest}`)
         ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
       if (!h || !trend) return undefined;
+      // The shown number is the MEDIAN moved by the trend the nightly
+      // real-fare lookups measured. Low/High are that route's own p25/p75
+      // spread moved by the same multiplier — a real observed range for
+      // this route, not a percentage invented around the midpoint.
+      const r2 = (n: number) => Math.round(n * 100) / 100;
       return {
-        low: Math.round(h.avgFareUsd * trend.lo * 100) / 100,
-        med: Math.round(h.avgFareUsd * trend.m * 100) / 100,
-        high: Math.round(h.avgFareUsd * trend.hi * 100) / 100,
+        low: r2(h.p25 * trend.m),
+        med: r2(h.med * trend.m),
+        high: r2(h.p75 * trend.m),
         basisQuarter: h.quarter,
+        seasonMatched: h.seasonMatched,
+        trendPct: Math.round((trend.m - 1) * 1000) / 10,
       };
     },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],

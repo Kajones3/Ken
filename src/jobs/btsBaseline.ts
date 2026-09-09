@@ -20,7 +20,45 @@ import type { Readable } from "node:stream";
 import { RESORTS, ORIGINS } from "../config.js";
 import type { Db } from "../db.js";
 
-export interface RouteAggregate { avgFareUsd: number; passengersSampled: number; itinCount: number }
+export interface RouteAggregate {
+  avgFareUsd: number;
+  /** Passenger-weighted percentiles of the real fare distribution on this
+   *  route. The shown estimate is built on `medianFareUsd`; p25/p75 are the
+   *  Low/High band. The mean is kept alongside because it is what the
+   *  original baseline used, but it is not what gets displayed: a mean is
+   *  pulled down by deep-discount and partial itineraries that nobody
+   *  pricing a family trip will actually be quoted. */
+  p25FareUsd: number;
+  medianFareUsd: number;
+  p75FareUsd: number;
+  passengersSampled: number;
+  itinCount: number;
+}
+
+/**
+ * Passenger-weighted percentile over (fare, weight) pairs, using the
+ * "smallest fare whose cumulative weight reaches p of the total" rule —
+ * the same definition Postgres's `percentile_disc` uses. Weighted because
+ * BTS's Passengers column is a sample weight: one row standing for 40
+ * passengers must count 40 times as much as a row standing for 1, or a
+ * handful of odd single-passenger itineraries drag the median around.
+ *
+ * Exported for its own test — percentile code is exactly the kind of thing
+ * that looks right and is off by one.
+ */
+export function weightedPercentile(pairs: { fare: number; weight: number }[], p: number): number {
+  if (!pairs.length) return 0;
+  const sorted = [...pairs].sort((a, b) => a.fare - b.fare);
+  const total = sorted.reduce((s, x) => s + x.weight, 0);
+  if (total <= 0) return sorted[Math.floor((sorted.length - 1) * p)]!.fare;
+  const target = total * p;
+  let cum = 0;
+  for (const x of sorted) {
+    cum += x.weight;
+    if (cum >= target) return x.fare;
+  }
+  return sorted[sorted.length - 1]!.fare;
+}
 
 /**
  * Quote-aware split of one CSV line. Every field in the real BTS file is
@@ -66,7 +104,14 @@ export async function aggregateDb1bFile(
 ): Promise<Map<string, RouteAggregate>> {
   const rl = createInterface({ input, crlfDelay: Infinity });
   let cols: Record<string, number> | null = null;
-  const sums = new Map<string, { fareWeighted: number; passengers: number; itinCount: number }>();
+  // Each route keeps its own fare samples so a real percentile can be taken
+  // at the end. Bounded by construction: only the ~19 origins x ~11 resort
+  // airports we actually price are kept, so this is a couple hundred routes,
+  // not the file's 8.5 million rows.
+  const sums = new Map<string, {
+    fareWeighted: number; passengers: number; itinCount: number;
+    samples: { fare: number; weight: number }[];
+  }>();
 
   for await (const line of rl) {
     if (!line) continue;
@@ -88,17 +133,22 @@ export async function aggregateDb1bFile(
     const passengers = Number.isFinite(passengersRaw) && passengersRaw > 0 ? passengersRaw : 1;
 
     const key = `${origin}|${dest}`;
-    const acc = sums.get(key) ?? { fareWeighted: 0, passengers: 0, itinCount: 0 };
+    const acc = sums.get(key) ?? { fareWeighted: 0, passengers: 0, itinCount: 0, samples: [] };
     acc.fareWeighted += fare * passengers;
     acc.passengers += passengers;
     acc.itinCount += 1;
+    acc.samples.push({ fare, weight: passengers });
     sums.set(key, acc);
   }
 
+  const r2 = (n: number) => Math.round(n * 100) / 100;
   const out = new Map<string, RouteAggregate>();
   for (const [key, acc] of sums) {
     out.set(key, {
-      avgFareUsd: Math.round((acc.fareWeighted / acc.passengers) * 100) / 100,
+      avgFareUsd: r2(acc.fareWeighted / acc.passengers),
+      p25FareUsd: r2(weightedPercentile(acc.samples, 0.25)),
+      medianFareUsd: r2(weightedPercentile(acc.samples, 0.5)),
+      p75FareUsd: r2(weightedPercentile(acc.samples, 0.75)),
       passengersSampled: Math.round(acc.passengers),
       itinCount: acc.itinCount,
     });
@@ -117,16 +167,22 @@ export async function upsertHistoricalFares(
     const vals: unknown[] = [];
     const tuples = chunk.map(([key, a], j) => {
       const [origin, destination] = key.split("|");
-      const b = j * 7;
-      vals.push(origin, destination, year, quarter, a.avgFareUsd, a.passengersSampled, a.itinCount);
-      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},now())`;
+      const b = j * 10;
+      vals.push(origin, destination, year, quarter, a.avgFareUsd,
+        a.p25FareUsd, a.medianFareUsd, a.p75FareUsd, a.passengersSampled, a.itinCount);
+      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},now())`;
     });
     await db.query(
       `insert into historical_fares
-         (origin,destination,year,quarter,avg_fare_usd,passengers_sampled,itin_count,fetched_at)
+         (origin,destination,year,quarter,avg_fare_usd,
+          p25_fare_usd,median_fare_usd,p75_fare_usd,passengers_sampled,itin_count,fetched_at)
        values ${tuples.join(",")}
        on conflict (origin,destination,year,quarter) do update set
-         avg_fare_usd = excluded.avg_fare_usd, passengers_sampled = excluded.passengers_sampled,
+         avg_fare_usd = excluded.avg_fare_usd,
+         p25_fare_usd = excluded.p25_fare_usd,
+         median_fare_usd = excluded.median_fare_usd,
+         p75_fare_usd = excluded.p75_fare_usd,
+         passengers_sampled = excluded.passengers_sampled,
          itin_count = excluded.itin_count, fetched_at = excluded.fetched_at`,
       vals,
     );

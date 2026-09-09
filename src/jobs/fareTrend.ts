@@ -40,30 +40,45 @@ export function trimmedMultiplier(ratios: number[]): TrendResult | null {
 }
 
 export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRoutes: number } | null> {
-  const current = await db.query<{ origin: string; destination: string; current_avg: string }>(
-    `select origin, destination, avg(price_usd) as current_avg
+  // Like for like, on both axes that matter:
+  //   - MEDIAN vs MEDIAN, because the estimate this multiplier scales is a
+  //     median. Comparing a current mean against a historical median would
+  //     bake the difference between those two statistics into the trend and
+  //     call it a price movement.
+  //   - SAME QUARTER vs SAME QUARTER, because a route's fares are seasonal.
+  //     Measuring March fares against a July baseline reports summer as a
+  //     price rise, then applies that "rise" to every other route.
+  const current = await db.query<
+    { origin: string; destination: string; quarter: number; current_med: string }
+  >(
+    `select origin, destination,
+            extract(quarter from depart_date)::int as quarter,
+            percentile_cont(0.5) within group (order by price_usd) as current_med
        from flight_prices
       where fetched_at > now() - interval '21 days'
-      group by origin, destination`,
+      group by origin, destination, quarter`,
   );
   const baseline = await db.query<
-    { origin: string; destination: string; avg_fare_usd: string; year: number; quarter: number }
+    { origin: string; destination: string; median_fare_usd: string; avg_fare_usd: string; year: number; quarter: number }
   >(
-    `select distinct on (origin, destination) origin, destination, avg_fare_usd, year, quarter
+    `select distinct on (origin, destination, quarter)
+            origin, destination, median_fare_usd, avg_fare_usd, year, quarter
        from historical_fares
-      order by origin, destination, year desc, quarter desc`,
+      order by origin, destination, quarter, year desc`,
   );
-  const baselineMap = new Map(baseline.rows.map((r) => [`${r.origin}|${r.destination}`, r]));
+  const baselineMap = new Map(
+    baseline.rows.map((r) => [`${r.origin}|${r.destination}|${r.quarter}`, r]),
+  );
 
   const ratios: number[] = [];
   let newestYear = 0, newestQuarter = 0;
   for (const c of current.rows) {
-    const b = baselineMap.get(`${c.origin}|${c.destination}`);
+    const b = baselineMap.get(`${c.origin}|${c.destination}|${c.quarter}`);
     if (!b) continue;
-    const currentAvg = Number(c.current_avg);
-    const baselineAvg = Number(b.avg_fare_usd);
-    if (!Number.isFinite(currentAvg) || !Number.isFinite(baselineAvg) || baselineAvg <= 0) continue;
-    ratios.push(currentAvg / baselineAvg);
+    const currentMed = Number(c.current_med);
+    const baselineMed = Number(b.median_fare_usd ?? b.avg_fare_usd);
+    if (!Number.isFinite(currentMed) || !Number.isFinite(baselineMed) || baselineMed <= 0) continue;
+    ratios.push(currentMed / baselineMed);
     if (b.year > newestYear || (b.year === newestYear && b.quarter > newestQuarter)) {
       newestYear = b.year;
       newestQuarter = b.quarter;

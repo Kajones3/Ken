@@ -37,3 +37,11 @@ export function monthBounds(ym: string): [ISODate, ISODate] {
   const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return [`${ym}-01`, `${ym}-${String(last).padStart(2, "0")}`];
 }
+/**
+ * Calendar quarter (1-4) of an ISO date. BTS DB1B publishes fares by
+ * quarter — not by month — so this is the finest seasonal grain a
+ * historical baseline can honestly be matched on.
+ */
+export function quarterOf(s: ISODate): number {
+  return Math.floor((Number(s.slice(5, 7)) - 1) / 3) + 1;
+}
