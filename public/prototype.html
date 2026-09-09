@@ -1490,7 +1490,19 @@ async function renderDetail(){
       <span class="yourchip">Your number</span></div>` : ""}
   </div>`;
 
-  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(r.city)}&checkin=${x.start}`;
+  // Real search context (dates, party size) baked in, same as the flight
+  // card's render-time link — no cached hotel deepLink today ever carries
+  // checkout/party size (mock and on-property links are name+checkin only;
+  // SerpApi's off-property link reflects its own sample query date, not the
+  // user's), so the render-time link is never worse and is made the primary
+  // one rather than a last-resort fallback.
+  const coDate = new Date(x.start+"T00:00:00Z");
+  coDate.setUTCDate(coDate.getUTCDate() + (p.nights || 1));
+  const checkout = coDate.toISOString().slice(0,10);
+  const childAgeParams = p.ages.map(a => `&age=${a}`).join("");
+  const bkSearchTerm = (!noHotel && hp.name) ? hp.name : r.city;
+  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(bkSearchTerm)}`
+    + `&checkin=${x.start}&checkout=${checkout}&group_adults=${p.adults}&group_children=${p.ages.length}${childAgeParams}&no_rooms=1`;
   const sd = new Date(x.start+"T00:00:00Z");
 
   box.innerHTML = `
@@ -1573,7 +1585,7 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
-          <a class="book" href="${hp.deepLink || bkUrl}" target="_blank" rel="noopener">Check live rates →</a>
+          <a class="book" href="${bkUrl}" target="_blank" rel="noopener">Check live rates →</a>
         </div>
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>

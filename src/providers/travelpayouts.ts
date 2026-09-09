@@ -74,23 +74,25 @@ export class TravelpayoutsProvider implements Provider {
       // date/trip-length label (verified 2026-09-08: a request for one exact
       // date came back with the identical sample of unrelated dates months
       // away, every time). Only keep a row if it's actually the date
-      // requested, and only accept a nearby trip length rather than an exact
-      // one — Travelpayouts only has real fares for dates someone has
-      // actually searched (verified: every /v2/prices/latest row carries
-      // "actual": true and a found_at timestamp — this is a real-search
-      // cache, not a synthetic calendar), so exact-length matches are rare.
-      // Trip lengths are already bucketed to 4/7/11 nights as an
-      // approximation everywhere else in this project (see CLAUDE.md), and
-      // round-trip airfare mostly tracks the specific dates flown rather
-      // than the exact number of nights between them, so a ±3-night window
-      // is consistent with that existing approximation, not a new one.
+      // requested and within one night of the requested trip length — a
+      // wider ±3 tolerance was tried and reverted (2026-09-09): it let a
+      // real fare for a genuinely shorter trip (e.g. 4 nights) get stored
+      // and displayed as if it were the price for a longer one (e.g. 7
+      // nights), silently understating the total by a lot, since nothing
+      // downstream records or discloses that the real duration differed.
+      // A route/date this tight a tolerance can't match now falls through
+      // to the BTS-baseline estimate (src/jobs/fareTrend.ts, book.ts's
+      // flightEstimate) instead — an honestly-labeled estimate beats a
+      // silently-wrong real-looking number. Also require departure_at/
+      // return_at to actually be present: a row missing both used to be
+      // kept on faith with no duration check at all, looser than even the
+      // old ±3 window.
       if (!date.startsWith(month)) continue;
-      if (v?.departure_at && v?.return_at) {
-        const nights = Math.round(
-          (new Date(v.return_at).getTime() - new Date(v.departure_at).getTime()) / 86_400_000,
-        );
-        if (Math.abs(nights - tripLength) > 3) continue;
-      }
+      if (!v?.departure_at || !v?.return_at) continue;
+      const nights = Math.round(
+        (new Date(v.return_at).getTime() - new Date(v.departure_at).getTime()) / 86_400_000,
+      );
+      if (Math.abs(nights - tripLength) > 1) continue;
       out.push({
         origin, destination, departDate: date, tripLength, priceUsd: price,
         carrier: v?.airline ? String(v.airline) : undefined,

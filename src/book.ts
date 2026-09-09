@@ -5,7 +5,19 @@
 import type { Db } from "./db.js";
 import type { ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
-import type { Tier } from "./config.js";
+import { RESORTS, type Tier } from "./config.js";
+
+/**
+ * Alt arrival airport -> that resort's primary airport (e.g. SHA -> PVG).
+ * BTS DB1B is US-carrier-reported data, so a secondary/domestic-leaning alt
+ * airport (Shanghai's Hongqiao, "mostly domestic/regional China routes")
+ * can easily have zero historical_fares rows even when the resort's real
+ * gateway airport has real coverage — same city, same resort, so falling
+ * back to the primary's baseline beats a hard failure.
+ */
+const ALT_TO_PRIMARY_IATA = new Map(
+  RESORTS.flatMap((r) => r.altArrivalAirports.map((a) => [a.iata, r.iata] as const)),
+);
 
 export interface BookRequest {
   origin: string;
@@ -114,12 +126,21 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   // BTS historical baseline for this origin's routes, plus the latest
   // current-vs-baseline trend multiplier — combined lazily in
   // flightEstimate() below, only when there's no exact cache hit to use.
+  // Also fetch each requested alt airport's primary-airport baseline (see
+  // ALT_TO_PRIMARY_IATA) so flightEstimate() has a same-resort fallback to
+  // reach for when the alt airport itself has no BTS coverage.
+  const hfDestinations = [...new Set(
+    req.destinations.flatMap((d) => {
+      const primary = ALT_TO_PRIMARY_IATA.get(d);
+      return primary ? [d, primary] : [d];
+    }),
+  )];
   const hf = await db.query(
     `select distinct on (origin, destination) origin, destination, avg_fare_usd, year, quarter
        from historical_fares
       where origin = $1 and destination = any($2)
       order by origin, destination, year desc, quarter desc`,
-    [req.origin, req.destinations],
+    [req.origin, hfDestinations],
   );
   const historicals = new Map<string, { avgFareUsd: number; quarter: string }>();
   for (const r of hf.rows) {
@@ -140,7 +161,9 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   return {
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     flightEstimate: (origin, dest) => {
-      const h = historicals.get(`${origin}|${dest}`);
+      const primary = ALT_TO_PRIMARY_IATA.get(dest);
+      const h = historicals.get(`${origin}|${dest}`)
+        ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
       if (!h || !trend) return undefined;
       return {
         low: Math.round(h.avgFareUsd * trend.lo * 100) / 100,
