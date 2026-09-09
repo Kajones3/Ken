@@ -60,6 +60,14 @@ comps friends, and how you'd grant your own account for testing):
 npm run grant-plus -- friend@example.com 90    # Plus for 90 days
 ```
 
+To see whether the cache actually holds real fares for the months people
+search — which the refresh job's own "N calls, M rows" summary cannot tell
+you — run the coverage report:
+
+```bash
+COVERAGE_ORIGIN=ATL npm run coverage    # real fare / estimate / gap, month by month
+```
+
 **If you're on the default embedded PGlite database (no `DATABASE_URL` set), stop
 `npm start` before running any script against the same `.pgdata` directory** —
 `migrate`, `refresh`, `grant-plus`, `seed-promos`, all of them. PGlite doesn't support
@@ -137,7 +145,10 @@ below before treating this as more than a friends demo).
 | `src/gettingThere.ts` | Pure resolver: turns one "Getting there" preset (fly / fly-with-miles / drive-to-WDW / drive-to-Disneyland / drive-domestic) into a per-resort transport mode, so one six-resort comparison can drive to some resorts and fly to others. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
-| `src/providers/` | `mock.ts` works today; `travelpayouts.ts` needs a token. Same interface. |
+| `src/providers/` | `mock.ts` works today. `travelpayouts.ts` needs a token but **cannot price a specific date** — see "How a flight number is arrived at" below. `serpapiFlights.ts` is the real per-date fare source. |
+| `src/routeDemand.ts` | What people search (route + month, never who). Decides where the nightly paid fare lookups go. |
+| `src/jobs/popularRoutes.ts` | The one job that costs money per lookup. Buys real fares for the busiest searched routes, bounded three ways. |
+| `src/jobs/coverage.ts` | Read-only: for a departure city, is each month a real fare, an estimate, or a gap? |
 | `src/geo/` | Geocoding + IP lookup for the driving-mode "Departing from" search. `mock.ts` works today; `nominatim.ts`/`ipapi.ts` are free and keyless but off by default (`GEOCODE_LIVE=true` to enable) — the one place the app calls a live provider on a user's own request instead of a pre-refreshed cache. |
 | `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. Also seeds the daily gas price. |
 | `src/jobs/alerts.ts` | Re-prices saved trips from the cache and sends the drop, gas-price, and new-promo "deal found" emails. Never calls a provider. |
@@ -155,6 +166,49 @@ It runs in three places: the API that shows someone a number, the alert job that
 decides whether that number dropped, and the tests. If the alert job had its own
 copy of this logic, the two would drift, and you would eventually email a customer
 about a price your own site never showed them. One module, no drift.
+
+### How a flight number is arrived at
+
+Every flight figure in the app is one of two things, and the UI always says
+which:
+
+**A real fare.** Someone searched that route recently, so the nightly
+`popular-routes` job bought a genuine round-trip quote for it. Shown plain.
+
+**An estimate.** Nobody has searched that route, so there is nothing bought
+for it. Instead: take what people *actually paid* on that exact route in the
+same quarter (the median of real US DOT DB1B itinerary data — free, no key),
+and move it by the percentage that the routes we *do* buy for real have
+shifted since their own baselines. Shown with an `est.` chip, a
+low–high range, and its basis quarter.
+
+So an unsearched Denver→Orlando trip is priced from Denver→Orlando's own
+history, moved by a currently-measured market trend — not from another
+route's number and not from an invented curve.
+
+Three decisions inside that are worth not undoing:
+
+- **Median, not mean.** A mean is dragged down by deep-discount and partial
+  itineraries nobody pricing a family trip is quoted. Low/High are the
+  route's own p25/p75, a real observed spread rather than a percentage
+  invented around the midpoint.
+- **Same quarter, not the newest one.** Fares are seasonal. Pricing a March
+  trip off a July baseline reports summer as a price rise and then applies
+  that "rise" everywhere. Where only an off-season baseline exists it is
+  still used, but flagged, and the UI says so.
+- **The trend only measures sources we trust.** It moves every estimated
+  route in the app, so it is computed from real per-date fares only.
+  Travelpayouts' calendar rows are excluded (see below).
+
+**Travelpayouts' `/v1/prices/calendar` cannot price a specific date.** Asked
+for ATL→MCO departing 2027-03 with a 7-night trip, the live key returns six
+dates in Sep/Oct 2026, destination `ORL` (the city, not the MCO airport
+requested), durations of 0–3 nights, and $36–$200 prices expiring in an hour.
+It is a "cheapest fares our users recently found" feed, not a fare calendar.
+The adapter's strict filter correctly discards nearly all of it — which is
+why the months people actually search were coming back empty and falling
+through to estimates. Don't "fix" this by loosening the filter; that just
+stores a 2-night fare under a 7-night label.
 
 ### Why nothing throws
 
@@ -222,8 +276,20 @@ rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
   it's still a coarse two-parameter curve, not real per-date accuracy. Park Hopper's
   differentials are similarly a flat guess — researched for WDW/Disneyland, unresearched
   for Tokyo/Paris.
-- **Verify the Travelpayouts response shapes** against current docs. This was written
-  to the documented shape, not against a live key.
+- **Travelpayouts flights are effectively superseded.** Verified against the live key
+  (2026-09-09): the calendar endpoint cannot be asked for a specific date, so almost
+  everything it returns is discarded. It still runs, and its rows are still tagged
+  `travelpayouts` and excluded from the trend. Deciding whether to switch it off
+  entirely is a cost question, not a correctness one — it is free, and it occasionally
+  lands a usable row.
+- **`TRAVELPAYOUTS_MARKER` is unset in production**, so affiliate deep links carry an
+  empty `marker=` and any booking through them earns no commission. Set it in the
+  Render dashboard and as a GitHub Actions secret. This is a revenue leak, not a
+  pricing bug — worth doing before sharing the site with anyone.
+- **SerpApi Google Flights is metered per lookup.** `popular-routes` is the only job
+  that spends. Defaults to at most 12 routes x 3 dates = 36 lookups a night, with a
+  hard per-run ceiling (`SERPAPI_FLIGHTS_BUDGET`). Raising coverage means raising the
+  bill — check the plan's monthly search allowance before increasing any of them.
 - **Verify the Resend request shape** against current docs before relying on it — it
   was written to the documented shape (a single `POST /emails` call), not run against
   a live account. `ALERT_FROM_EMAIL` needs a domain verified in Resend before it will

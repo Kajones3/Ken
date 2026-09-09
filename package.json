@@ -19,7 +19,8 @@
     "test": "tsx --test $(find src -name '*.test.ts')",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke.ts",
-    "popular-routes": "tsx src/jobs/popularRoutes.ts"
+    "popular-routes": "tsx src/jobs/popularRoutes.ts",
+    "coverage": "tsx src/jobs/coverage.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
