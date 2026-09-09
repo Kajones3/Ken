@@ -1,0 +1,40 @@
+name: Parkfare debug coverage
+
+# Read-only diagnostic against the live database: for one departure city,
+# shows month by month whether a searcher gets a REAL cached fare, a
+# BTS-baseline ESTIMATE, or a hard GAP — plus the trend multiplier every
+# estimate is scaled by, and how much BTS baseline coverage exists at all.
+#
+# The refresh job's own "N calls, M rows" summary cannot answer this: the
+# Travelpayouts calendar endpoint returns whatever dates it feels like, so
+# a call "succeeding" says nothing about the month that was asked for.
+#
+# Select-only. No provider calls, no writes, no app code touched.
+on:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: Departure airport IATA (e.g. ATL, LAS, JFK)
+        required: true
+        type: string
+        default: "ATL"
+      months:
+        description: How many months ahead to report on
+        required: true
+        type: string
+        default: "12"
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx tsx src/jobs/coverage.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          COVERAGE_ORIGIN: ${{ inputs.origin }}
+          COVERAGE_MONTHS: ${{ inputs.months }}
