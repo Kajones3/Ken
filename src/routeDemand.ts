@@ -73,3 +73,34 @@ export async function popularRoutes(
     departMonth: x.depart_month, searches: Number(x.searches),
   }));
 }
+
+/**
+ * Routes bought purely to keep the trend measurable.
+ *
+ * The trend multiplier needs at least three routes that have BOTH a real
+ * current fare and a BTS baseline for the same quarter. Real demand does not
+ * guarantee that: searches cluster (everyone asks about the same one or two
+ * routes), and international routes have no BTS coverage at all, since DB1B
+ * is a US-domestic survey. Without anchors, a busy day of Tokyo searches
+ * leaves the trend uncomputable and every estimate in the app falls back to
+ * "no cached price".
+ *
+ * These are chosen by BTS sample size — the routes whose historical median
+ * rests on the most real passengers, so the ratio measured against them is
+ * the most trustworthy one available.
+ */
+export async function trendAnchorRoutes(
+  db: Db, quarter: number, departMonth: string, limit = 3,
+): Promise<PopularRoute[]> {
+  const r = await db.query<{ origin: string; destination: string }>(
+    `select distinct on (origin, destination) origin, destination
+       from historical_fares
+      where quarter = $1 and coalesce(median_fare_usd, avg_fare_usd) > 0
+      order by origin, destination, passengers_sampled desc
+      limit $2`,
+    [quarter, limit],
+  );
+  return r.rows.map((x) => ({
+    origin: x.origin, destination: x.destination, departMonth, searches: 0,
+  }));
+}

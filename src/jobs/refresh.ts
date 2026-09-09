@@ -90,21 +90,22 @@ function dayNumber(): number {
   return Math.floor(Date.now() / 86_400_000);
 }
 
-async function upsertFlights(db: Db, rows: FlightQuote[]): Promise<number> {
+async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promise<number> {
   if (!rows.length) return 0;
   const vals: unknown[] = [];
   const tuples = rows.map((r, i) => {
-    const b = i * 8;
-    vals.push(r.origin, r.destination, r.departDate, r.tripLength, r.priceUsd, r.carrier ?? null, r.stops, r.deepLink ?? null);
-    return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},now())`;
+    const b = i * 9;
+    vals.push(r.origin, r.destination, r.departDate, r.tripLength, r.priceUsd,
+      r.carrier ?? null, r.stops, r.deepLink ?? null, source);
+    return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},now())`;
   });
   await db.query(
     `insert into flight_prices
-       (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,fetched_at)
+       (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)
      values ${tuples.join(",")}
      on conflict (origin,destination,depart_date,trip_length) do update set
        price_usd = excluded.price_usd, carrier = excluded.carrier, stops = excluded.stops,
-       deep_link = excluded.deep_link, fetched_at = excluded.fetched_at`,
+       deep_link = excluded.deep_link, source = excluded.source, fetched_at = excluded.fetched_at`,
     vals,
   );
   return rows.length;
@@ -200,7 +201,7 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
             try {
               calls++;
               const quotes = await provider.flightMonth(origin, destination, month, bucket);
-              rows += await upsertFlights(db, quotes);
+              rows += await upsertFlights(db, quotes, provider.name);
             } catch (e) {
               errors++;
               console.error(`flights ${origin}->${destination} ${month}/${bucket}:`, (e as Error).message);

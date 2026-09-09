@@ -219,6 +219,11 @@ a{color:var(--ink)}
 .bar-wrap{min-width:0}
 .bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
 .seg{height:100%}
+.estchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
+  font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  background:var(--warnbg,#3a2f10); color:var(--warnfg,#f0c674); border:1px solid var(--warnbd,#6b5518)}
+.estnote{margin-top:6px; font-size:11px; line-height:1.45; color:var(--warnfg,#f0c674); opacity:.92}
+.tilde{margin-left:2px; font-weight:600; opacity:.75}
 .seg.f1{background:var(--s1)} .seg.f2{background:var(--s2)} .seg.f3{background:var(--s3)} .seg.f4{background:var(--s4)} .seg.f5{background:var(--s5)}
 .barlabs{display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap}
 .barlabs span{display:flex; align-items:center; gap:5px; white-space:nowrap}
@@ -1112,6 +1117,10 @@ function renderBoard(){
     }
     const x = item.price, tot = x.total, pax = x.partySize;
     const w = n => (n/tot*100).toFixed(2)+"%";
+    // An estimated fare must look different from a quoted one right here on
+    // the board, not only inside Details — the board is where most people
+    // decide, and an unmarked estimate reads as a quote.
+    const est = x.flightPick && x.flightPick.estimate;
     const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
@@ -1142,14 +1151,15 @@ function renderBoard(){
           <div class="seg f4" style="width:${w(x.food)}"></div>
         </div>
         <div class="barlabs">
-          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}</span>
+          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}${est?' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>':""}</span>
           <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
+        ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}${est.seasonMatched===false?" · based on a different season, treat as rough":""}</div>`:""}
       </div>
       <div class="total">
-        <div class="tnum">${usd(tot)}</div>
+        <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
         <div class="tsub">${usd(perPD)} / person / day · from ${dateStr}</div>
       </div>
       <button class="btn btn-sm rowbtn" data-open="${i}">${open?"Details":"Unlock"}</button>
@@ -1356,9 +1366,17 @@ async function renderDetail(){
   const fp = x.flightPick;
   const floor = fp ? fp.price : x.perSeatFare;
   const flightRows = (fp && fp.estimate
-    ? `<div class="li"><div class="l"><b>Estimated fare</b>
-        <small>No real cached fare for this exact date — estimate from historical baseline (${fp.estimate.basisQuarter})
-        × current market trend: ${usd(fp.estimate.low)}–${usd(fp.estimate.high)}</small></div>
+    ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
+        <small>Not a quote. This route has no real fare for this date, so it is estimated from
+        what people actually paid on it in ${fp.estimate.basisQuarter} (median of real US DOT
+        itinerary data)${typeof fp.estimate.trendPct==="number"
+          ? `, moved ${fp.estimate.trendPct>=0?"up":"down"} ${Math.abs(fp.estimate.trendPct)}% to match how fares we
+             price for real have shifted since`
+          : ""}.
+        Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person.${
+          fp.estimate.seasonMatched===false
+            ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
+            : ""}</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
     : fp
     ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>

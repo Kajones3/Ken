@@ -48,6 +48,15 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
   //   - SAME QUARTER vs SAME QUARTER, because a route's fares are seasonal.
   //     Measuring March fares against a July baseline reports summer as a
   //     price rise, then applies that "rise" to every other route.
+  // Only fares from a source we trust. This multiplier moves EVERY estimated
+  // route in the app, so measuring it from Travelpayouts' calendar rows —
+  // city-level, wrong-duration, hour-expiry fares that skew cheap — would
+  // drag every estimate down with them, which is the exact "shown $200,
+  // click through to $700" failure this is meant to prevent. Rows written
+  // before the source column existed are null and excluded on the same
+  // grounds: unlabelled rows are overwhelmingly those old ones.
+  const trusted = (process.env.FARE_TREND_SOURCES ?? "serpapi_flights")
+    .split(",").map((s) => s.trim()).filter(Boolean);
   const current = await db.query<
     { origin: string; destination: string; quarter: number; current_med: string }
   >(
@@ -56,7 +65,9 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
             percentile_cont(0.5) within group (order by price_usd) as current_med
        from flight_prices
       where fetched_at > now() - interval '21 days'
+        and source = any($1)
       group by origin, destination, quarter`,
+    [trusted],
   );
   const baseline = await db.query<
     { origin: string; destination: string; median_fare_usd: string; avg_fare_usd: string; year: number; quarter: number }

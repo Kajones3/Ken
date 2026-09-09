@@ -42,7 +42,7 @@ test("computeFareTrend: skips writing a row when fewer than 3 routes overlap", a
     ["ATL", "MCO", 2025, 2, 200],
   );
   await db.query(
-    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd) values ($1,$2,$3,$4,$5)`,
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source) values ($1,$2,$3,$4,$5,'serpapi_flights')`,
     ["ATL", "MCO", "2027-03-01", 4, 260],
   );
   const result = await computeFareTrend(db);
@@ -68,7 +68,7 @@ test("computeFareTrend: writes a plausible multiplier from real overlapping rout
       [origin, destination, 2025, 1, baseline],
     );
     await db.query(
-      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd) values ($1,$2,$3,$4,$5)`,
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source) values ($1,$2,$3,$4,$5,'serpapi_flights')`,
       [origin, destination, "2027-03-01", 4, current],
     );
   }
@@ -94,7 +94,7 @@ test("computeFareTrend: a baseline from a different quarter is not a match", asy
       [origin, destination],
     );
     await db.query(
-      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd) values ($1,$2,'2027-03-01',4,400)`,
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source) values ($1,$2,'2027-03-01',4,400,'serpapi_flights')`,
       [origin, destination],
     );
   }
@@ -121,12 +121,54 @@ test("computeFareTrend: stale flight_prices rows (older than 21 days) are not tr
   // All three flight_prices rows are stale.
   for (const [origin, destination] of [["ATL", "MCO"], ["DEN", "MCO"], ["RDU", "SNA"]] as const) {
     await db.query(
-      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,fetched_at)
-       values ($1,$2,$3,$4,$5, now() - interval '40 days')`,
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source,fetched_at)
+       values ($1,$2,$3,$4,$5,'serpapi_flights', now() - interval '40 days')`,
       [origin, destination, "2027-03-01", 4, 260],
     );
   }
   const result = await computeFareTrend(db);
   assert.equal(result, null);
+  await db.close();
+});
+
+test("computeFareTrend: fares from an untrusted source are not measured", async () => {
+  // Travelpayouts' calendar rows are city-level, often the wrong trip
+  // length, and skew cheap. This multiplier moves EVERY estimated route in
+  // the app, so letting those in would drag every estimate down — the exact
+  // "shown $200, click through to $700" failure this guards against.
+  const db = await memoryDb();
+  for (const [origin, destination] of [["ATL", "MCO"], ["DEN", "MCO"], ["RDU", "SNA"]] as const) {
+    await db.query(
+      `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd,median_fare_usd)
+       values ($1,$2,2025,1,300,300)`,
+      [origin, destination],
+    );
+    await db.query(
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source)
+       values ($1,$2,'2027-03-01',4,60,'travelpayouts')`,
+      [origin, destination],
+    );
+  }
+  // Three overlapping routes, but none from a trusted source: no trend is
+  // written, and the previous good multiplier keeps serving.
+  assert.equal(await computeFareTrend(db), null);
+  await db.close();
+});
+
+test("computeFareTrend: unlabelled legacy rows are excluded too", async () => {
+  const db = await memoryDb();
+  for (const [origin, destination] of [["ATL", "MCO"], ["DEN", "MCO"], ["RDU", "SNA"]] as const) {
+    await db.query(
+      `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd,median_fare_usd)
+       values ($1,$2,2025,1,300,300)`,
+      [origin, destination],
+    );
+    await db.query(
+      `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd)
+       values ($1,$2,'2027-03-01',4,60)`,
+      [origin, destination],
+    );
+  }
+  assert.equal(await computeFareTrend(db), null);
   await db.close();
 });

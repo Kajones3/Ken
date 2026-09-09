@@ -23,9 +23,9 @@
  * considered. Both fail closed — no key, no spend.
  */
 import { randomUUID } from "node:crypto";
-import { monthBounds } from "../dates.js";
+import { monthBounds, quarterOf, todayISO, addDaysISO } from "../dates.js";
 import { getDb, type Db } from "../db.js";
-import { popularRoutes, type PopularRoute } from "../routeDemand.js";
+import { popularRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS } from "../config.js";
 
@@ -69,7 +69,22 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   await db.query(`insert into fetch_runs (id, job, note) values ($1,'popular_routes',$2)`,
     [runId, `limit ${limit} x ${datesPerMonth} dates x ${buckets.length} bucket(s)`]);
 
-  const routes = opts.routes ?? await popularRoutes(db, limit);
+  let routes = opts.routes ?? await popularRoutes(db, limit);
+
+  // Top up with trend anchors so the multiplier stays computable even on a
+  // day when demand was thin or entirely international (see
+  // trendAnchorRoutes). Without this, one busy Tokyo day would leave every
+  // estimated route in the app showing "no cached price".
+  if (!opts.routes) {
+    const anchorMonth = (routes[0]?.departMonth) ?? addDaysISO(todayISO(), 90).slice(0, 7);
+    const anchors = await trendAnchorRoutes(db, quarterOf(`${anchorMonth}-01`), anchorMonth);
+    const seen = new Set(routes.map((r) => `${r.origin}|${r.destination}|${r.departMonth}`));
+    for (const a of anchors) {
+      const key = `${a.origin}|${a.destination}|${a.departMonth}`;
+      if (!seen.has(key)) { routes.push(a); seen.add(key); }
+    }
+  }
+
   let calls = 0, rows = 0, errors = 0, misses = 0;
 
   if (routes.length) {
@@ -89,12 +104,12 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
             // failed lookup leaves yesterday's real fare in place.
             await db.query(
               `insert into flight_prices
-                 (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,fetched_at)
-               values ($1,$2,$3,$4,$5,$6,$7,$8,now())
+                 (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)
+               values ($1,$2,$3,$4,$5,$6,$7,$8,'serpapi_flights',now())
                on conflict (origin,destination,depart_date,trip_length) do update set
                  price_usd = excluded.price_usd, carrier = excluded.carrier,
                  stops = excluded.stops, deep_link = excluded.deep_link,
-                 fetched_at = excluded.fetched_at`,
+                 source = excluded.source, fetched_at = excluded.fetched_at`,
               [q.origin, q.destination, q.departDate, q.tripLength,
                q.priceUsd, q.carrier ?? null, q.stops, q.deepLink ?? null],
             );

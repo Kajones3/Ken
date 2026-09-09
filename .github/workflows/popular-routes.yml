@@ -1,0 +1,51 @@
+name: Parkfare popular routes
+
+# Nightly: buy real round-trip fares for the routes people actually searched,
+# and let those measure the trend that every *estimated* route is moved by.
+#
+# This is the only job in the project that spends money per lookup, so it is
+# bounded three ways: POPULAR_ROUTES_LIMIT (how many routes),
+# POPULAR_ROUTES_DATES (how many sample dates each), and
+# SERPAPI_FLIGHTS_BUDGET (a hard ceiling on lookups per run, enforced inside
+# the provider). Default worst case is 12 x 3 = 36 lookups a night.
+#
+# Runs after the main refresh (04:00 UTC) so route_searches reflects a full
+# day, and before alerts (04:20 UTC) so a saved trip is re-priced against
+# tonight's real fares. Safe to run by hand any time.
+on:
+  schedule:
+    - cron: "10 4 * * *"
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: How many popular routes to buy fares for
+        required: false
+        type: string
+        default: "12"
+      dates:
+        description: Sample departure dates per route/month
+        required: false
+        type: string
+        default: "3"
+      budget:
+        description: Hard ceiling on paid lookups for this run
+        required: false
+        type: string
+        default: "60"
+
+jobs:
+  popular-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run popular-routes
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '12' }}
+          POPULAR_ROUTES_DATES: ${{ inputs.dates || '3' }}
+          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '60' }}

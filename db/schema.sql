@@ -236,3 +236,14 @@ create table if not exists route_searches (
 );
 create index if not exists route_searches_popular
   on route_searches (searches desc, last_searched_at desc);
+
+-- Which provider wrote a fare row. The trend multiplier that moves every
+-- estimated route is only as good as the real fares it is measured from, so
+-- it must be able to exclude a source it does not trust: Travelpayouts'
+-- calendar endpoint returns city-level, wrong-duration, hour-expiry fares
+-- that survive filtering only occasionally and skew cheap, and averaging
+-- those into the trend would drag every estimate in the app down with them.
+-- Nullable with no default so existing rows stay honestly unlabelled rather
+-- than being retroactively claimed by whichever provider is current.
+alter table flight_prices add column if not exists source text;
+create index if not exists flight_prices_source on flight_prices (source);
