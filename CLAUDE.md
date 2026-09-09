@@ -30,6 +30,7 @@ say when something is a guess.
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
 | Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + three GitHub Actions cron workflows (`refresh`, `alerts`, `news-digest`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
+| Flight price estimates (BTS baseline) | **Wired, free — a disclosed stopgap.** When there's no exact cached Travelpayouts fare for a date, `priceTrip()` falls back to a Low/Med/High estimate: a real historical average fare from the U.S. DOT's BTS DB1B survey (`historical_fares` table, `src/jobs/btsBaseline.ts`, 74 routes loaded for 2025 Q2, the last available quarter) × a dynamically-computed current-vs-historical trend multiplier (`fare_trend` table, `src/jobs/fareTrend.ts`, trimmed-mean of routes with both current and historical data). Not Plus-gated — this is a "the free version's estimate is honest, the real version comes later" trade-off the owner explicitly chose. The prototype labels it clearly as an estimate, distinct from a real cached fare. See the "BTS historical baseline" narrative below for the full design and the three follow-up fixes made after live-testing it. |
 
 **Step 3 (wiring the frontend) is done.** What changed along the way, beyond swapping
 the data source:
@@ -63,6 +64,81 @@ Also caught that `smoke.ts` had been calling `findAlerts`/`applyCap` directly,
 bypassing `suppressAnomalies` entirely — the demo fixture's 33% "your number"
 override was itself exactly the kind of single-trip wild swing that rail exists to
 catch. Now `smoke.ts` calls the real `runAlerts()` and uses a believable override.
+
+**BTS historical baseline + fare-trend estimate (free-version flight-price stopgap)
+is done, plus three live-tested follow-up fixes.** Real per-day flight pricing only
+ever came from Travelpayouts' calendar endpoint, and — after a fix earlier this
+session for that endpoint not honoring `depart_date`/`trip_duration` — most
+(route, date) pairs now honestly return nothing rather than a wrong number. Empty
+isn't useful, so the owner proposed anchoring every route to a real historical
+average fare and scaling it by how much prices have moved since:
+- **Schema**: `historical_fares` (one row per origin/destination/year/quarter,
+  populated rarely from a BTS DB1B file) and `fare_trend` (a small time series,
+  read latest — same pattern `gas_prices` already used).
+- **`src/jobs/btsBaseline.ts`** (new): streams a BTS DB1B CSV via `node:readline`
+  (never loads the ~8.5M-row file into memory), filters to routes touching the
+  app's origins/resort airports, upserts a passenger-weighted average fare per
+  route. Run manually via `.github/workflows/bts-baseline.yml` — real BTS data is
+  free, no API key, but discontinued after 2025 Q2 (DB1B's successor, DB1C, isn't
+  adopted — its download URL isn't confirmed).
+- **`src/jobs/fareTrend.ts`** (new): `computeFareTrend()`, wired into the existing
+  daily `refresh.ts` (no new schedule) — finds routes present in both
+  `historical_fares` and the last 21 days of real `flight_prices`, computes
+  `current/baseline` ratios, and takes a trimmed mean (drop one outlier from each
+  end when ≥5 routes) for the Med multiplier, with Low/High as the real observed
+  min/max of that trimmed set (an honest range, not an invented ±X% band).
+  Requires ≥3 overlapping routes or it skips writing a new row and keeps serving
+  the last good one.
+- **`src/pricing.ts`/`src/book.ts`**: `priceTrip()`'s exact-cache-miss branch now
+  tries `book.flightEstimate?.(origin, dest)` before giving up — `historical_fares`
+  avg × `fare_trend` multiplier — and only returns `{ok:false}` if there's no
+  estimate either. `TripPrice.flightPick` carries the estimate (with its basis
+  quarter) so the UI can show it, clearly labeled, distinct from a real fare.
+- **`public/prototype.html`**: a new "Estimated fare" branch on the flight card,
+  checked before the real-fare branch.
+
+Live-testing the shipped feature turned up three real problems, each investigated
+and fixed:
+1. **Shanghai (MIA→SHA) showed "no cached fare" with no estimate either.** Not a
+   bug — SHA (Hongqiao) is "mostly domestic/regional China routes" (see
+   `altArrivalAirports` in `config.ts`), and BTS DB1B is US-carrier-reported data,
+   so it essentially never samples that airport. Fixed at the product level:
+   `src/book.ts`'s `ALT_TO_PRIMARY_IATA` map lets `flightEstimate()` fall back to
+   the resort's *primary* airport's baseline (Shanghai's PVG) when the alt airport
+   itself has none — same city, same resort, a far better estimate than a hard
+   failure. Covered by `src/book.test.ts` (alt-falls-back-to-primary,
+   direct-alt-baseline-wins-when-both-exist, neither-exists-stays-undefined).
+2. **The app showed ~$98/person for a 6-night Orlando trip when the real cheapest
+   comparable fare was $185–195/person** — traced to the ±1→±3-night tolerance
+   widening made earlier this session (to increase real-cache coverage before the
+   BTS fallback existed): a real fare for a genuinely *shorter* trip (e.g. 4
+   nights) was passing the filter and getting stored/displayed under the
+   *requested*, longer trip length, with no column recording the mismatch and no
+   way for the UI to disclose it. Reverted `src/providers/travelpayouts.ts`'s
+   `flightMonth()` back to ±1 night, and rows missing `departure_at`/`return_at`
+   entirely are now dropped instead of kept on faith (previously looser than even
+   ±3). The BTS-estimate fallback is now the correct, honest mechanism for filling
+   coverage gaps — loosening the *real* cache to paper over them is no longer
+   needed. Covered by `src/providers/travelpayouts.test.ts` (5 tests, including the
+   exact reported shorter-trip-silently-mismatched scenario). Verified live: a
+   production refresh after this fix wrote 8890 rows vs. 9774 under the old ±3
+   tolerance — fewer but more honest, the expected outcome (confirmed via GitHub
+   Actions run 34353491983).
+3. **Hotel "Check live rates" links only ever carried a hotel name + check-in
+   date.** Flight deep links already carry real origin/destination/date because
+   refresh-time providers bake them in; hotel links can't work that way since
+   nobody's party size/checkout is known until a specific user views a specific
+   trip. Fixed in `public/prototype.html`: the Booking.com URL is now built at
+   render time with real `checkin`, `checkout` (from `x.start` + `p.nights`),
+   `group_adults`, `group_children`, and `age=` params — and made the *primary*
+   link, not a fallback behind a cached link that was never actually more complete.
+
+**Not yet confirmed by the owner** (this dev sandbox cannot reach the live Render
+site or most external domains — verify from your own browser): that Shanghai/other
+alt-airport routes now show a labeled estimate on the live site, and that a
+hotel's "Check live rates" link now opens with real checkin/checkout/party-size
+params. Both fixes are covered by passing unit tests and a verified production
+refresh; only the actual live-site rendering is unconfirmed.
 
 **Step 5 (Plus foundation: accounts, airport transport, discounts/promos, two free
 filters) is done.** This was scoped as a phase after the owner asked to slow down and
@@ -304,6 +380,15 @@ than it is — this is the comparison people get wrong.
   including DiscoverCars — same account, no new vendor relationship needed), is future
   work; this session shipped the flat guess so the feature works end to end now rather
   than staying deferred.
+- **BTS DB1B baseline coverage is genuinely thin outside the US.** Only 74 routes were
+  loaded from the one confirmed-good quarter (2025 Q2) — BTS DB1B is US-carrier-reported
+  data, so international resorts (Paris, Tokyo, Shanghai, Hong Kong) get little to no
+  direct coverage; Shanghai's alt airport (SHA) needed a same-resort primary-airport
+  fallback (`ALT_TO_PRIMARY_IATA` in `src/book.ts`) just to get an estimate at all — the
+  other three international resorts' coverage hasn't been specifically audited. And
+  because DB1B was discontinued after 2025 Q2 (its successor DB1C's download URL isn't
+  confirmed), every baseline in `historical_fares` is frozen at that one quarter until
+  DB1C is investigated — it will not get more current on its own.
 
 ---
 
@@ -376,6 +461,15 @@ than it is — this is the comparison people get wrong.
   for elements that should've been hidden), not by eye. Fixed with a global
   `[hidden]{display:none!important}` rule — a lesson for any future hidden toggle on
   a styled container, not just this one.
+- A ±1→±3-night tolerance widening in `TravelpayoutsProvider.flightMonth()` (meant to
+  increase real-cache coverage) let a real fare for a genuinely *shorter* trip pass the
+  filter and get stored/displayed under the requested, longer trip length — no column
+  recorded the real duration, so nothing downstream could catch or disclose the
+  mismatch. Reported live as a real, roughly-2x-too-low flight price. Reverted to ±1
+  and rows missing `departure_at`/`return_at` are now dropped instead of kept
+  unconditionally. Caught by the owner live-testing against Google Flights, not by any
+  test at the time — now covered by `src/providers/travelpayouts.test.ts`, including
+  the exact shorter-trip scenario reported.
 
 ---
 
@@ -531,3 +625,10 @@ Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
   whichever resort(s) are driving as a group, not one at a time. Good enough for the
   owner's actual asks so far; would need a real per-resort control (bigger UI change)
   to go further.
+- **The BTS-baseline flight estimate is an explicitly disclosed stopgap "for the free
+  version,"** not a claim of real-time accuracy — the owner's own framing when this was
+  scoped: "when we get to the real version, we can work on updating our API to create a
+  more realistic experience." A more real-time paid flight-pricing experience is
+  deliberately deferred, not started. `historical_fares` is frozen at 2025 Q2 (DB1B
+  discontinued after that; DB1C not adopted, see "NOT verified" above), and
+  international-resort BTS coverage beyond the Shanghai fallback is unaudited.
