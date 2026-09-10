@@ -8,6 +8,14 @@ import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pr
 import { RESORTS, type Tier } from "./config.js";
 
 /**
+ * Baseline sources the fare_trend multiplier should be applied to. The
+ * multiplier's job is to carry an old survey forward to today, so it applies
+ * to historical surveys only — never to a baseline built from fares sampled
+ * this month, which is already current (see jobs/intlBaseline.ts).
+ */
+const TREND_APPLIES_TO = new Set(["bts_db1b"]);
+
+/**
  * Alt arrival airport -> that resort's primary airport (e.g. SHA -> PVG).
  * BTS DB1B is US-carrier-reported data, so a secondary/domestic-leaning alt
  * airport (Shanghai's Hongqiao, "mostly domestic/regional China routes")
@@ -145,7 +153,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   const hf = await db.query(
     `select distinct on (origin, destination, quarter)
             origin, destination, avg_fare_usd, median_fare_usd,
-            p25_fare_usd, p75_fare_usd, year, quarter
+            p25_fare_usd, p75_fare_usd, year, quarter, source
        from historical_fares
       where origin = $1 and destination = any($2)
       order by origin, destination, quarter, year desc`,
@@ -163,7 +171,8 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     if (!cur || Number(r.year) > Number(cur.year)) newestByRoute.set(route, r);
   }
   const historicals = new Map<string, {
-    med: number; p25: number; p75: number; quarter: string; seasonMatched: boolean;
+    med: number; p25: number; p75: number; quarter: string;
+    seasonMatched: boolean; applyTrend: boolean;
   }>();
   for (const route of new Set([...byRouteQuarter.keys(), ...newestByRoute.keys()])) {
     const r = byRouteQuarter.get(route) ?? newestByRoute.get(route)!;
@@ -178,6 +187,13 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       p75: Number(r.p75_fare_usd ?? med),
       quarter: `${r.year}Q${r.quarter}`,
       seasonMatched: Number(r.quarter) === wantQuarter,
+      // The trend multiplier carries an OLD survey baseline forward to
+      // today's prices. A baseline built from fares sampled this month (see
+      // jobs/intlBaseline.ts — the only way international routes get one at
+      // all, since DB1B has no coverage outside the US) is ALREADY at
+      // today's prices; multiplying it again would inflate a current fare
+      // by the trend a second time.
+      applyTrend: TREND_APPLIES_TO.has(String(r.source ?? "bts_db1b")),
     });
   }
   const ft = await db.query(
@@ -196,19 +212,26 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       const primary = ALT_TO_PRIMARY_IATA.get(dest);
       const h = historicals.get(`${origin}|${dest}`)
         ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
-      if (!h || !trend) return undefined;
-      // The shown number is the MEDIAN moved by the trend the nightly
-      // real-fare lookups measured. Low/High are that route's own p25/p75
-      // spread moved by the same multiplier — a real observed range for
-      // this route, not a percentage invented around the midpoint.
+      if (!h) return undefined;
+      // A historical baseline is useless without a trend to bring it to the
+      // present, so it still requires one. A live-sampled baseline needs no
+      // trend and must not wait on one — that is the whole point of it.
+      if (h.applyTrend && !trend) return undefined;
+      const m = h.applyTrend ? trend!.m : 1;
+      // The shown number is the MEDIAN, moved by the trend the real-fare
+      // lookups measured (or left as-is when it is already current).
+      // Low/High are that route's own p25/p75 spread moved the same way — a
+      // real observed range for this route, not a percentage invented
+      // around the midpoint.
       const r2 = (n: number) => Math.round(n * 100) / 100;
       return {
-        low: r2(h.p25 * trend.m),
-        med: r2(h.med * trend.m),
-        high: r2(h.p75 * trend.m),
+        low: r2(h.p25 * m),
+        med: r2(h.med * m),
+        high: r2(h.p75 * m),
         basisQuarter: h.quarter,
         seasonMatched: h.seasonMatched,
-        trendPct: Math.round((trend.m - 1) * 1000) / 10,
+        trendPct: h.applyTrend ? Math.round((m - 1) * 1000) / 10 : undefined,
+        sampledLive: !h.applyTrend,
       };
     },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],

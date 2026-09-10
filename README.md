@@ -147,7 +147,9 @@ below before treating this as more than a friends demo).
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
 | `src/providers/` | `mock.ts` works today. `travelpayouts.ts` needs a token but **cannot price a specific date** — see "How a flight number is arrived at" below. `serpapiFlights.ts` is the real per-date fare source. |
 | `src/routeDemand.ts` | What people search (route + month, never who). Decides where the nightly paid fare lookups go. |
-| `src/jobs/popularRoutes.ts` | The one job that costs money per lookup. Buys real fares for the busiest searched routes, bounded three ways. |
+| `src/jobs/popularRoutes.ts` | Nightly, metered. Buys real fares for the busiest searched routes, bounded three ways. |
+| `src/jobs/intlSweep.ts` | Monthly, metered. The only way international routes get priced — see below. Sharded one airport per job. |
+| `src/jobs/intlBaseline.ts` | Turns bought international fares into a per-quarter baseline, so one bought date covers the whole quarter. |
 | `src/jobs/coverage.ts` | Read-only: for a departure city, is each month a real fare, an estimate, or a gap? |
 | `src/geo/` | Geocoding + IP lookup for the driving-mode "Departing from" search. `mock.ts` works today; `nominatim.ts`/`ipapi.ts` are free and keyless but off by default (`GEOCODE_LIVE=true` to enable) — the one place the app calls a live provider on a user's own request instead of a pre-refreshed cache. |
 | `src/jobs/refresh.ts` | The morning refresh, tiered by how far out the date is. Also seeds the daily gas price. |
@@ -185,6 +187,30 @@ low–high range, and its basis quarter.
 So an unsearched Denver→Orlando trip is priced from Denver→Orlando's own
 history, moved by a currently-measured market trend — not from another
 route's number and not from an invented curve.
+
+**International routes work differently, because they have to.** BTS is a US
+*domestic* survey — grepping a whole real DB1B quarterly file (8.5 million
+rows) for `CDG` returns nothing at all. So Paris, Tokyo, Shanghai and Hong
+Kong have no free baseline to fall back on, and without help every
+international date would read "no cached price".
+
+Instead, `intl-sweep` runs monthly and samples real fares across all 95
+international routes, then `intlBaseline` turns them into that route's
+baseline for the quarter. One bought date anchors the whole quarter, exactly
+as DB1B does for domestic routes. Cost: 19 origins x 5 airports x 12 travel
+months x 1 date = **1,140 metered lookups a month**.
+
+The trap to know about: a baseline built from fares sampled *this month* is
+already at today's prices. The trend multiplier exists to carry an **old**
+survey forward, so applying it to a fresh sample would add that percentage a
+second time. Live-sampled baselines are tagged `sampled_live`, get no trend,
+and are excluded from computing it (measuring bought fares against a baseline
+built from those same fares gives a ratio of 1.0 and drags the real
+multiplier toward "no change"). See `TREND_APPLIES_TO` in `book.ts`.
+
+Beauvais (BVA) and Shanghai Hongqiao (SHA) were dropped as arrival airports:
+neither has US service, so every lookup returned nothing while still costing
+a metered search — 29% of the international bill for no data.
 
 Three decisions inside that are worth not undoing:
 

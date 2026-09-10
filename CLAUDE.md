@@ -337,6 +337,26 @@ users recently found" feed. The strict filter added earlier is correct and must 
 be loosened to raise row counts — loosening it stores a 2-night fare under a 7-night
 label. Its rows are tagged `travelpayouts` and excluded from the trend.
 
+**International routes have no free baseline, and are sampled instead.** BTS DB1B
+is a US *domestic* survey — grepping a real 2024 Q4 file (8.5M rows) for `CDG`
+returns zero matches, so Paris/Tokyo/Shanghai/Hong Kong have nothing to fall back
+on. `intl-sweep` (monthly) buys real fares across all 95 international routes and
+`intlBaseline` turns them into per-quarter baselines, so one bought date anchors a
+whole quarter instead of covering only itself. ~1,140 metered lookups a month.
+**BVA and SHA were dropped as arrival airports** (2026-09-10): no US service, so
+every lookup returned nothing while still costing a search — 29% of the bill for
+no data.
+
+**A live-sampled baseline must never be moved by the trend.** The multiplier's job
+is to carry an OLD survey forward to today. A baseline built from fares sampled
+this month is already at today's prices, so applying it would inflate a current
+fare by that percentage a second time — the exact "shown price is nowhere near the
+click-through" failure. Live-sampled rows are tagged `sampled_live`, get no trend
+(`TREND_APPLIES_TO` in `book.ts`), and are excluded from computing it, since
+measuring bought fares against a baseline built from those same fares yields a
+ratio of ~1.0 and drags the real multiplier toward "no change". Both directions
+have a test.
+
 **The trend needs anchor routes, not just demand.** The multiplier requires three
 routes with both a real fare and a BTS baseline. Searches cluster, and international
 routes have no DB1B coverage at all, so one busy day of Tokyo searches would leave

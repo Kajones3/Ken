@@ -154,7 +154,11 @@ export const RESORTS: Resort[] = [
     note: "2 parks · already on dynamic pricing",
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
-    altArrivalAirports: [{ iata: "BVA", label: "Paris Beauvais — budget carriers, about 1h15 from the resort" }],
+    // Beauvais dropped (2026-09-10): it is a budget-carrier base with no US
+    // service, so every real-fare lookup against it returns nothing while
+    // still costing a metered search. CDG is the only Paris gateway a US
+    // traveller actually arrives at.
+    altArrivalAirports: [],
     goodToKnow: [
       "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
@@ -224,7 +228,10 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
-    altArrivalAirports: [{ iata: "SHA", label: "Hongqiao — mostly domestic/regional China routes" }],
+    // Hongqiao dropped (2026-09-10): mostly domestic/regional China routes,
+    // so a US-origin lookup returns nothing and still costs a metered search.
+    // PVG is the real gateway.
+    altArrivalAirports: [],
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },

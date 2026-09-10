@@ -69,12 +69,17 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
       group by origin, destination, quarter`,
     [trusted],
   );
+  // Historical survey baselines only. A baseline built from the very fares
+  // being measured (jobs/intlBaseline.ts writes those for international
+  // routes) would compare a number against itself, contributing a ratio of
+  // ~1.0 and quietly dragging the real multiplier toward "no change".
   const baseline = await db.query<
     { origin: string; destination: string; median_fare_usd: string; avg_fare_usd: string; year: number; quarter: number }
   >(
     `select distinct on (origin, destination, quarter)
             origin, destination, median_fare_usd, avg_fare_usd, year, quarter
        from historical_fares
+      where source = 'bts_db1b'
       order by origin, destination, quarter, year desc`,
   );
   const baselineMap = new Map(

@@ -20,7 +20,9 @@
     "typecheck": "tsc --noEmit",
     "smoke": "tsx src/smoke.ts",
     "popular-routes": "tsx src/jobs/popularRoutes.ts",
-    "coverage": "tsx src/jobs/coverage.ts"
+    "coverage": "tsx src/jobs/coverage.ts",
+    "intl-sweep": "tsx src/jobs/intlSweep.ts",
+    "intl-baseline": "tsx src/jobs/intlBaseline.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

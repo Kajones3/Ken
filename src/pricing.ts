@@ -100,6 +100,11 @@ export interface FlightRow {
   estimate?: {
     low: number; med: number; high: number; basisQuarter: string;
     seasonMatched?: boolean; trendPct?: number;
+    /** True when the baseline came from real fares sampled recently on this
+     *  route rather than a historical survey — the only way an international
+     *  route gets an estimate at all, since BTS covers US domestic only. No
+     *  trend is applied to these: they are already at today's prices. */
+    sampledLive?: boolean;
   };
 }
 export interface HotelNight {

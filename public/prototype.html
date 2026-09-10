@@ -1367,12 +1367,18 @@ async function renderDetail(){
   const floor = fp ? fp.price : x.perSeatFare;
   const flightRows = (fp && fp.estimate
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
-        <small>Not a quote. This route has no real fare for this date, so it is estimated from
-        what people actually paid on it in ${fp.estimate.basisQuarter} (median of real US DOT
-        itinerary data)${typeof fp.estimate.trendPct==="number"
-          ? `, moved ${fp.estimate.trendPct>=0?"up":"down"} ${Math.abs(fp.estimate.trendPct)}% to match how fares we
-             price for real have shifted since`
-          : ""}.
+        <small>Not a quote. This route has no real fare for this exact date, so it is estimated from
+        ${fp.estimate.sampledLive
+          ? `the median of real round-trip fares we checked on this route for
+             ${fp.estimate.basisQuarter.replace(/^(\d{4})Q(\d)$/, "Q$2 $1")}. International routes
+             aren't covered by the free US government fare data, so we price them by sampling
+             real fares directly — no market adjustment is applied, because these are already
+             current prices`
+          : `what people actually paid on it in ${fp.estimate.basisQuarter} (median of real US DOT
+             itinerary data)${typeof fp.estimate.trendPct==="number"
+               ? `, moved ${fp.estimate.trendPct>=0?"up":"down"} ${Math.abs(fp.estimate.trendPct)}% to match how fares we
+                  price for real have shifted since`
+               : ""}`}.
         Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person.${
           fp.estimate.seasonMatched===false
             ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
