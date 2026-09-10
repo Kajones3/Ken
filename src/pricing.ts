@@ -88,10 +88,24 @@ export type Overrides = Record<string, ResortOverride | undefined>;
 export interface FlightRow {
   price: number; carrier?: string; stops?: number; deepLink?: string;
   /** Only set when this row came from PriceBook.flightEstimate() rather than
-   *  a real flight_prices cache hit — a BTS historical baseline projected by
-   *  the current Travelpayouts trend multiplier. The UI must render this
-   *  visibly differently from a real fare, never presented as one. */
-  estimate?: { low: number; med: number; high: number; basisQuarter: string };
+   *  a real flight_prices cache hit: this route's real BTS median fare for
+   *  the same quarter, moved by the percentage that the routes we *do* price
+   *  for real have moved since that baseline. `low`/`high` are the route's
+   *  own p25/p75 spread moved the same way. The UI must render this visibly
+   *  differently from a real fare, never presented as one.
+   *
+   *  `seasonMatched` is false when no baseline existed for the quarter being
+   *  searched and an off-season one was used instead — a materially weaker
+   *  estimate, and the UI says so rather than hiding it. */
+  estimate?: {
+    low: number; med: number; high: number; basisQuarter: string;
+    seasonMatched?: boolean; trendPct?: number;
+    /** True when the baseline came from real fares sampled recently on this
+     *  route rather than a historical survey — the only way an international
+     *  route gets an estimate at all, since BTS covers US domestic only. No
+     *  trend is applied to these: they are already at today's prices. */
+    sampledLive?: boolean;
+  };
 }
 export interface HotelNight {
   hotelId: string; name: string; descriptor: string;

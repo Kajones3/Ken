@@ -1,0 +1,73 @@
+name: Parkfare international sweep
+
+# Monthly: sample real fares on every international route, then turn them
+# into per-quarter baselines so the WHOLE quarter can be estimated from them.
+#
+# Why international needs its own job: the free BTS DB1B survey is US-domestic
+# only. Verified by grepping a real 2024 Q4 file (8.5M rows) for "CDG" — zero
+# matches. So Paris/Tokyo/Shanghai/Hong Kong have no historical baseline at
+# all, and the only way to price them is to buy a few real fares a month and
+# let those stand in for the survey.
+#
+# COST — this and popular-routes are the only jobs that spend money:
+#   19 origins x 5 international airports = 95 routes
+#   x 12 travel months x INTL_SWEEP_DATES
+#   = 1,140 metered SerpApi lookups a month at the default of 1 date.
+# That fits SerpApi's $75/month Developer plan (5,000 included) with room to
+# spare. Each extra date multiplies it: 2 -> 2,280, 3 -> 3,420. Check the
+# plan's allowance before raising it. SERPAPI_FLIGHTS_BUDGET is the hard stop
+# regardless, enforced inside the provider.
+#
+# Runs on the 1st so a fresh month of travel dates is covered immediately.
+on:
+  schedule:
+    - cron: "30 4 1 * *"
+  workflow_dispatch:
+    inputs:
+      months:
+        description: How many travel months ahead to sample
+        required: false
+        type: string
+        default: "12"
+      dates:
+        description: Departure dates sampled per travel month (multiplies the bill)
+        required: false
+        type: string
+        default: "1"
+      budget:
+        description: Hard ceiling on paid lookups PER AIRPORT shard
+        required: false
+        type: string
+        default: "300"
+
+jobs:
+  # One job per arrival airport. The whole sweep is ~1,140 sequential
+  # lookups, which at ~180/hour is over 6 hours — past GitHub's job ceiling,
+  # and a timeout would kill the run before baselines are written. Sharded,
+  # each job is ~228 lookups (19 origins x 12 months), comfortably inside it.
+  # max-parallel: 1 keeps the shards from racing each other into the
+  # provider's hourly rate limit.
+  intl-sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        destination: [CDG, NRT, HND, PVG, HKG]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run intl-sweep
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          INTL_SWEEP_DESTINATIONS: ${{ matrix.destination }}
+          INTL_SWEEP_MONTHS: ${{ inputs.months || '12' }}
+          INTL_SWEEP_DATES: ${{ inputs.dates || '1' }}
+          # Per-shard ceiling: 19 origins x 12 months x 1 date = 228, plus headroom.
+          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '300' }}
+          SERPAPI_MAX_PER_HOUR: ${{ vars.SERPAPI_MAX_PER_HOUR || '180' }}

@@ -15,16 +15,16 @@ async function seedTrend(db: Awaited<ReturnType<typeof memoryDb>>) {
 test("flightEstimate: an alt airport with no direct BTS baseline falls back to its resort's primary airport", async () => {
   const db = await memoryDb();
   await seedTrend(db);
-  // Shanghai: SHA (Hongqiao) is the alt airport, PVG the primary — only PVG has a baseline.
+  // Tokyo: HND (Haneda) is the alt airport, NRT (Narita) the primary — only NRT has a baseline.
   await db.query(
     `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd) values ($1,$2,$3,$4,$5)`,
-    ["MIA", "PVG", 2025, 2, 800],
+    ["MIA", "NRT", 2025, 2, 800],
   );
   const book = await loadBook(db, {
-    origin: "MIA", destinations: ["SHA"], resortIds: ["shdr"],
+    origin: "MIA", destinations: ["HND"], resortIds: ["tdr"],
     from: "2027-02-01", to: "2027-02-28", tripLength: 7,
   });
-  const est = book.flightEstimate?.("MIA", "SHA");
+  const est = book.flightEstimate?.("MIA", "HND");
   assert.ok(est, "expected a fallback estimate from the primary airport's baseline");
   assert.equal(est!.med, 800 * 1.2);
   await db.close();
@@ -35,19 +35,19 @@ test("flightEstimate: a direct baseline for the alt airport itself is used, not 
   await seedTrend(db);
   await db.query(
     `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd) values ($1,$2,$3,$4,$5)`,
-    ["MIA", "SHA", 2025, 2, 500],
+    ["MIA", "HND", 2025, 2, 500],
   );
   await db.query(
     `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd) values ($1,$2,$3,$4,$5)`,
-    ["MIA", "PVG", 2025, 2, 800],
+    ["MIA", "NRT", 2025, 2, 800],
   );
   const book = await loadBook(db, {
-    origin: "MIA", destinations: ["SHA"], resortIds: ["shdr"],
+    origin: "MIA", destinations: ["HND"], resortIds: ["tdr"],
     from: "2027-02-01", to: "2027-02-28", tripLength: 7,
   });
-  const est = book.flightEstimate?.("MIA", "SHA");
+  const est = book.flightEstimate?.("MIA", "HND");
   assert.ok(est);
-  assert.equal(est!.med, 500 * 1.2); // direct SHA baseline, not PVG's
+  assert.equal(est!.med, 500 * 1.2); // direct HND baseline, not NRT's
   await db.close();
 });
 
@@ -55,10 +55,10 @@ test("flightEstimate: neither the alt airport nor its primary has a baseline sta
   const db = await memoryDb();
   await seedTrend(db);
   const book = await loadBook(db, {
-    origin: "MIA", destinations: ["SHA"], resortIds: ["shdr"],
+    origin: "MIA", destinations: ["HND"], resortIds: ["tdr"],
     from: "2027-02-01", to: "2027-02-28", tripLength: 7,
   });
-  const est = book.flightEstimate?.("MIA", "SHA");
+  const est = book.flightEstimate?.("MIA", "HND");
   assert.equal(est, undefined);
   await db.close();
 });

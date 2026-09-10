@@ -36,6 +36,29 @@ export interface Resort {
    *  and re-check before relying on anything time-sensitive (visa rules
    *  especially — they change). */
   goodToKnow: string[];
+  /** How much to trust this resort's COST MODEL — whether the way we break a
+   *  trip into lines actually matches how this resort sells one.
+   *
+   *  Omitted entirely means "no worse than the rest of the app": every
+   *  ticket curve is an approximation (see seedTickets) and the Park Tickets
+   *  card already says so. This field is for a resort with a gap BEYOND
+   *  that — something structural the model does not represent at all, where
+   *  a number could be wrong in a way the general disclaimer does not
+   *  cover. Three qualify today: Shanghai bands tickets by height rather
+   *  than age, Hong Kong's age bands were never checked against a source,
+   *  and Disneyland Paris sells hotel and tickets as one bundle while we
+   *  price them as two separate lines.
+   *
+   *  Same "no live API, maintain it by hand" pattern as goodToKnow. Remove
+   *  the entry when the underlying gap is actually fixed — a badge that
+   *  outlives its reason trains people to ignore badges. */
+  dataConfidence?: {
+    /** Short label for the badge itself. Keep it to a couple of words. */
+    level: string;
+    /** One plain sentence a non-technical traveller can act on. Say what is
+     *  actually unmodelled, not that we are "still working on it". */
+    note: string;
+  };
   /** Where to check current attraction closures/refurbishments. Disney's own
    *  page where one exists (WDW, Disneyland Anaheim) — otherwise the best
    *  available fan-maintained tracker, and closuresLabel says which so this
@@ -154,12 +177,26 @@ export const RESORTS: Resort[] = [
     note: "2 parks · already on dynamic pricing",
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
-    altArrivalAirports: [{ iata: "BVA", label: "Paris Beauvais — budget carriers, about 1h15 from the resort" }],
+    // Beauvais dropped (2026-09-10): it is a budget-carrier base with no US
+    // service, so every real-fare lookup against it returns nothing while
+    // still costing a metered search. CDG is the only Paris gateway a US
+    // traveller actually arrives at.
+    altArrivalAirports: [],
     goodToKnow: [
-      "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
+      "Following on from the pricing note above: if you do want the room-only stay this breakdown assumes, it isn't bookable on Disney's own site — call Disney directly, or book the hotel through a third party such as Booking.com or Expedia and buy park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
+    // Disney sells Paris as a hotel + ticket PACKAGE by default — a room-only
+    // stay exists but is not sold online. We price room and tickets as two
+    // separate lines, which matches the room-only booking most people will
+    // not actually make. Deliberately not "fixed" in the pricing math:
+    // package rates are not published, so inventing one would be less honest
+    // than a clearly-labelled room-only basis. Labelled here instead.
+    dataConfidence: {
+      level: "Priced room-only",
+      note: "Disney's own site sells Disneyland Paris as a hotel + ticket package, with tickets included for every day of your stay — a room-only stay exists but isn't sold online. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
@@ -224,7 +261,19 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
-    altArrivalAirports: [{ iata: "SHA", label: "Hongqiao — mostly domestic/regional China routes" }],
+    // Hongqiao dropped (2026-09-10): mostly domestic/regional China routes,
+    // so a US-origin lookup returns nothing and still costs a metered search.
+    // PVG is the real gateway.
+    altArrivalAirports: [],
+    // Shanghai prices children by HEIGHT (1.0-1.4m), not age — a different
+    // system from every other resort here, and one this model does not
+    // represent at all. The age bands below are a stand-in taken from model
+    // knowledge rather than a source, so a family's ticket total can be off
+    // in a way the general ticket disclaimer does not cover.
+    dataConfidence: {
+      level: "Rough ticket pricing",
+      note: "Shanghai charges children by height (1.0–1.4m), not age. We price by age like the other resorts, so if your child is near either cut-off the ticket total could be noticeably off. Check the official ticket page before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
@@ -249,6 +298,14 @@ export const RESORTS: Resort[] = [
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
     altArrivalAirports: [],
+    // Hong Kong's age bands come from model knowledge, not a checked source
+    // — unlike Tokyo's and Paris's, which were verified against official
+    // pages. Flagged until someone confirms them against Hong Kong
+    // Disneyland's own ticket page.
+    dataConfidence: {
+      level: "Unverified age bands",
+      note: "We haven't confirmed Hong Kong's child/adult ticket ages against an official source, so a family's ticket total is our least certain of the six. Worth checking the official ticket page before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87 },

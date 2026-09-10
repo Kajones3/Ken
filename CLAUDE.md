@@ -24,7 +24,8 @@ say when something is a guess.
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
 | Disney news digest | **Wired, owner-only.** `npm run news-digest` reads a few RSS feeds (`NEWS_FEEDS` in `config.ts`) and emails whatever's new — never shown to end users automatically; the owner reviews and hand-adds anything worth surfacing to a resort's `goodToKnow`. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
-| Live provider data | Not connected. Mock provider only, so the real numbers are cache-real but not yet market-real. |
+| Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
+| Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
@@ -306,6 +307,82 @@ than it is — this is the comparison people get wrong.
   than staying deferred.
 
 ---
+
+**Flight numbers are either a real per-date fare or a labelled estimate — never a
+curve.** The owner's spec, and the reasoning behind each part:
+
+- *Free data is the base.* BTS DB1B (US DOT itinerary survey) is real, free and
+  keyless. It is quarterly, not monthly — that is the finest seasonal grain real
+  fare data exists at, so "the same time last year" means the same **quarter**, and
+  the UI says quarter rather than implying month precision.
+- *Median, not mean.* The mean is dragged down by deep-discount and partial
+  itineraries nobody pricing a family trip gets quoted. Low/High are the route's own
+  p25/p75 — a real observed spread, not a percentage invented around the midpoint.
+- *Buy real fares only where people look.* `route_searches` records demand (route and
+  month only — no user id, no session, no IP; keep it that way). `popular-routes`
+  buys genuine round trips for the busiest of those.
+- *Move everything else by what those real fares measured.* If the bought routes sit
+  12% above their own baselines, every unsearched route's **own** median moves 12%.
+  Denver→Orlando is priced from Denver→Orlando's history, never from Atlanta's.
+- *The accuracy bar is the click-through.* Showing $200 and landing on $700 is the
+  failure this exists to prevent. That is why the median is the headline, why the
+  trend excludes untrusted sources, and why `price_insights.lowest_price` is
+  deliberately not used as the shown number.
+
+**Travelpayouts' calendar endpoint cannot price a specific date — verified, not
+assumed.** Asked for ATL→MCO departing 2027-03 over 7 nights, the live key returned
+six dates in Sep/Oct 2026, destination `ORL` (the city, not MCO), durations of 0–3
+nights, and $36–$200 fares expiring within the hour. It is a "cheapest fares our
+users recently found" feed. The strict filter added earlier is correct and must not
+be loosened to raise row counts — loosening it stores a 2-night fare under a 7-night
+label. Its rows are tagged `travelpayouts` and excluded from the trend.
+
+**All six resorts launch; the weak ones are badged, not hidden.** Considered
+launching with Paris and Tokyo only and holding Shanghai/Hong Kong back. Rejected
+on three findings: (1) flights are not the blocker — a live probe of JFK→PVG
+returned a full set of real itineraries at $935–965/person; (2) cost barely moves,
+since dropping two airports takes the monthly sweep from 1,140 to 684 lookups and
+both sit inside the same $75 plan; (3) the per-resort gaps are not where you would
+guess — Paris has a structural one (Disney sells hotel+ticket bundles by default,
+the app prices them separately) while Hong Kong is the simplest of the four. So
+the real gaps are in how the cost model matches each resort, and they are labelled:
+`dataConfidence` in `config.ts` badges Shanghai (children priced by height,
+1.0–1.4m, not modelled), Hong Kong (age bands never checked against a source), and
+Disneyland Paris (Disney bundles hotel+tickets; we price them as two separate
+lines, a room-only basis that isn't bookable on Disney's own site — deliberately
+not "fixed" in the math, since package rates aren't published and inventing one
+would be less honest than a labelled assumption). Same reasoning
+as the override controls and the "why is X cheaper?" explainer — explain a shaky
+number, don't hide it, because the six-resort comparison *is* the product.
+**Remove a badge when its gap is actually fixed**; `config.test.ts` pins which
+resorts carry one so it can't drift.
+
+**International routes have no free baseline, and are sampled instead.** BTS DB1B
+is a US *domestic* survey — grepping a real 2024 Q4 file (8.5M rows) for `CDG`
+returns zero matches, so Paris/Tokyo/Shanghai/Hong Kong have nothing to fall back
+on. `intl-sweep` (monthly) buys real fares across all 95 international routes and
+`intlBaseline` turns them into per-quarter baselines, so one bought date anchors a
+whole quarter instead of covering only itself. ~1,140 metered lookups a month.
+**BVA and SHA were dropped as arrival airports** (2026-09-10): no US service, so
+every lookup returned nothing while still costing a search — 29% of the bill for
+no data.
+
+**A live-sampled baseline must never be moved by the trend.** The multiplier's job
+is to carry an OLD survey forward to today. A baseline built from fares sampled
+this month is already at today's prices, so applying it would inflate a current
+fare by that percentage a second time — the exact "shown price is nowhere near the
+click-through" failure. Live-sampled rows are tagged `sampled_live`, get no trend
+(`TREND_APPLIES_TO` in `book.ts`), and are excluded from computing it, since
+measuring bought fares against a baseline built from those same fares yields a
+ratio of ~1.0 and drags the real multiplier toward "no change". Both directions
+have a test.
+
+**The trend needs anchor routes, not just demand.** The multiplier requires three
+routes with both a real fare and a BTS baseline. Searches cluster, and international
+routes have no DB1B coverage at all, so one busy day of Tokyo searches would leave
+the trend uncomputable and knock out *every* estimate in the app simultaneously. The
+nightly job tops up with the highest-sample domestic routes for exactly this reason.
+Found by testing an all-international demand day, not in production.
 
 ## Mistakes made in this project — don't repeat them
 

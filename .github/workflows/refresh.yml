@@ -35,3 +35,4 @@ jobs:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           MAX_REQUESTS_PER_MINUTE: "240"
           REFRESH_BACKFILL: ${{ inputs.backfill }}
+          FARE_TREND_SOURCES: ${{ vars.FARE_TREND_SOURCES || 'serpapi_flights' }}
