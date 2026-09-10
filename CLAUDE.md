@@ -345,9 +345,13 @@ since dropping two airports takes the monthly sweep from 1,140 to 684 lookups an
 both sit inside the same $75 plan; (3) the per-resort gaps are not where you would
 guess — Paris has a structural one (Disney sells hotel+ticket bundles by default,
 the app prices them separately) while Hong Kong is the simplest of the four. So
-the real gaps are in TICKET pricing, and they are labelled: `dataConfidence` in
-`config.ts` puts a badge on Shanghai (children priced by height, 1.0–1.4m, not
-modelled) and Hong Kong (age bands never checked against a source). Same reasoning
+the real gaps are in how the cost model matches each resort, and they are labelled:
+`dataConfidence` in `config.ts` badges Shanghai (children priced by height,
+1.0–1.4m, not modelled), Hong Kong (age bands never checked against a source), and
+Disneyland Paris (Disney bundles hotel+tickets; we price them as two separate
+lines, a room-only basis that isn't bookable on Disney's own site — deliberately
+not "fixed" in the math, since package rates aren't published and inventing one
+would be less honest than a labelled assumption). Same reasoning
 as the override controls and the "why is X cheaper?" explainer — explain a shaky
 number, don't hide it, because the six-resort comparison *is* the product.
 **Remove a badge when its gap is actually fixed**; `config.test.ts` pins which

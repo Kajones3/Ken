@@ -295,11 +295,19 @@ wrong and leaves, so explain it instead.
 
 - **Flights** carry an `est.` chip and a low–high range whenever the number
   is an estimate rather than a real fare (see above).
-- **Resorts** carry a `dataConfidence` badge when that resort's *ticket*
-  pricing has a gap the general "tickets are approximate" disclaimer does
-  not cover. Two do today: Shanghai prices children by height (1.0–1.4m),
-  which the model does not represent at all, and Hong Kong's age bands have
-  never been checked against an official source.
+- **Resorts** carry a `dataConfidence` badge when the way we break a trip
+  into lines does not match how that resort actually sells one — a gap the
+  general "tickets are approximate" disclaimer does not cover. Three do
+  today:
+  - **Disneyland Paris** — Disney sells hotel and tickets as one bundle by
+    default; we price them as two separate lines (a room-only basis, which
+    isn't even bookable on Disney's own site). Deliberately not "fixed" in
+    the math: package rates aren't published, so inventing one would be less
+    honest than a clearly-labelled assumption.
+  - **Shanghai** — children are priced by height (1.0–1.4m), not age, which
+    the model does not represent at all.
+  - **Hong Kong** — age bands have never been checked against an official
+    source.
 
 All six resorts still price in full — badging is not a soft launch. The
 six-resort comparison is the product, so the answer to a weak line is to say

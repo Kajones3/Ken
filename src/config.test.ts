@@ -3,17 +3,32 @@ import { test } from "node:test";
 import { RESORTS, RESORT_BY_ID } from "./config.js";
 
 /**
- * `dataConfidence` is the "we are least sure about this resort's ticket
- * pricing" badge. It exists so the six-resort comparison can stay complete
- * without overclaiming — the same honesty rule the flight estimates follow.
+ * `dataConfidence` is the "our cost model does not quite match how this
+ * resort sells a trip" badge. It exists so the six-resort comparison can
+ * stay complete without overclaiming — the same honesty rule the flight
+ * estimates follow.
  *
  * These tests pin WHICH resorts carry it. That is a launch decision, not an
  * implementation detail: adding or removing a badge should be a deliberate
  * edit that fails a test first, never something that drifts.
  */
-test("only the two resorts with real ticket-model gaps carry a confidence badge", () => {
+test("only the three resorts with real cost-model gaps carry a confidence badge", () => {
   const flagged = RESORTS.filter((r) => r.dataConfidence).map((r) => r.id).sort();
-  assert.deepEqual(flagged, ["hkdl", "shdr"]);
+  assert.deepEqual(flagged, ["dlp", "hkdl", "shdr"]);
+});
+
+test("Paris's badge names the actual gap: we price room-only, Disney bundles", () => {
+  const dlp = RESORT_BY_ID.get("dlp")!;
+  assert.ok(dlp.dataConfidence);
+  assert.match(dlp.dataConfidence!.note, /package|bundle/i);
+  // The badge is only true while hotel and tickets really are separate
+  // lines. If a package price is ever modelled, this is the reminder to
+  // drop the badge instead of leaving it contradicting the breakdown.
+  assert.equal(dlp.plans.length > 0, true, "meal plans are separate from ticket bundling");
+  assert.ok(
+    !("packageUsd" in (dlp.ticket as object)),
+    "package pricing appears to be modelled now — remove Paris's badge",
+  );
 });
 
 test("Shanghai's badge names the actual gap: height bands, which are not modelled", () => {
@@ -55,7 +70,7 @@ test("every badge renders and gives the reader somewhere to check", () => {
 test("a badged resort is still fully priced — badging is not hiding", () => {
   // The whole point of choosing badges over a staged launch: all six resorts
   // still price. A badge that quietly disabled a resort would defeat it.
-  for (const id of ["shdr", "hkdl"]) {
+  for (const id of ["shdr", "hkdl", "dlp"]) {
     const r = RESORT_BY_ID.get(id)!;
     assert.ok(r.ticket.base > 0, `${id} must still have real ticket pricing`);
     assert.ok(r.hotels.length > 0, `${id} must still have hotels to price`);

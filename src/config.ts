@@ -36,16 +36,18 @@ export interface Resort {
    *  and re-check before relying on anything time-sensitive (visa rules
    *  especially — they change). */
   goodToKnow: string[];
-  /** How much to trust this resort's TICKET pricing specifically — the line
-   *  the model is weakest on, and the one a user cannot correct with an
-   *  override the way they can a hotel rate or a fare.
+  /** How much to trust this resort's COST MODEL — whether the way we break a
+   *  trip into lines actually matches how this resort sells one.
    *
-   *  Omitted entirely means "no worse than the rest of the app": the ticket
-   *  curve is still an approximation everywhere (see seedTickets), and the
-   *  Park Tickets card already says so. This field is for a resort with a
-   *  gap BEYOND that — something structural the model does not represent at
-   *  all, where a number could be wrong in a way the general disclaimer
-   *  does not cover.
+   *  Omitted entirely means "no worse than the rest of the app": every
+   *  ticket curve is an approximation (see seedTickets) and the Park Tickets
+   *  card already says so. This field is for a resort with a gap BEYOND
+   *  that — something structural the model does not represent at all, where
+   *  a number could be wrong in a way the general disclaimer does not
+   *  cover. Three qualify today: Shanghai bands tickets by height rather
+   *  than age, Hong Kong's age bands were never checked against a source,
+   *  and Disneyland Paris sells hotel and tickets as one bundle while we
+   *  price them as two separate lines.
    *
    *  Same "no live API, maintain it by hand" pattern as goodToKnow. Remove
    *  the entry when the underlying gap is actually fixed — a badge that
@@ -181,10 +183,20 @@ export const RESORTS: Resort[] = [
     // traveller actually arrives at.
     altArrivalAirports: [],
     goodToKnow: [
-      "Booking directly through Disney's own website, on-property hotel stays are only sold bundled with park tickets — one combined price, tickets included for every day of your stay. A room-only stay (no tickets) does exist but isn't sold online; you'd need to call Disney directly or book through a third-party site. The hotel and ticket prices below are priced separately, matching a room-only stay — if you book Disney's own package instead, expect one combined price rather than these two added together.",
+      "Following on from the pricing note above: if you do want the room-only stay this breakdown assumes, it isn't bookable on Disney's own site — call Disney directly, or book the hotel through a third party such as Booking.com or Expedia and buy park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
+    // Disney sells Paris as a hotel + ticket PACKAGE by default — a room-only
+    // stay exists but is not sold online. We price room and tickets as two
+    // separate lines, which matches the room-only booking most people will
+    // not actually make. Deliberately not "fixed" in the pricing math:
+    // package rates are not published, so inventing one would be less honest
+    // than a clearly-labelled room-only basis. Labelled here instead.
+    dataConfidence: {
+      level: "Priced room-only",
+      note: "Disney's own site sells Disneyland Paris as a hotel + ticket package, with tickets included for every day of your stay — a room-only stay exists but isn't sold online. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
