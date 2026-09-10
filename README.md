@@ -287,6 +287,30 @@ skipped if the user has typed their own nightly rate (a guess shouldn't second-g
 a rate they already found); a personal discount always applies, even on top of that
 rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
 
+## Saying how confident we are, per resort
+
+Two things in the app are labelled rather than hidden, on the same reasoning:
+a user who sees a number they cannot explain concludes the whole app is
+wrong and leaves, so explain it instead.
+
+- **Flights** carry an `est.` chip and a low–high range whenever the number
+  is an estimate rather than a real fare (see above).
+- **Resorts** carry a `dataConfidence` badge when that resort's *ticket*
+  pricing has a gap the general "tickets are approximate" disclaimer does
+  not cover. Two do today: Shanghai prices children by height (1.0–1.4m),
+  which the model does not represent at all, and Hong Kong's age bands have
+  never been checked against an official source.
+
+All six resorts still price in full — badging is not a soft launch. The
+six-resort comparison is the product, so the answer to a weak line is to say
+so plainly, not to drop a resort from the board.
+
+`dataConfidence` is hand-maintained in `config.ts`, same pattern as
+`goodToKnow`. **Remove the entry when the underlying gap is actually
+fixed** — a badge that outlives its reason trains people to ignore badges.
+`config.test.ts` pins which resorts carry one, so adding or removing a badge
+has to be deliberate.
+
 ## What is not done
 
 - **`TravelpayoutsProvider.hotelMonth` throws.** Flights are wired to the documented

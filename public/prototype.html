@@ -219,6 +219,12 @@ a{color:var(--ink)}
 .bar-wrap{min-width:0}
 .bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
 .seg{height:100%}
+.lowconf{display:inline-flex; align-items:center; font-size:9.5px; font-weight:800;
+  letter-spacing:.08em; text-transform:uppercase; cursor:help;
+  color:var(--warnfg,#f0c674); border:1px solid var(--warnbd,#6b5518);
+  border-radius:999px; padding:1px 6px}
+.demo.lowconfnote{border-color:var(--warnbd,#6b5518)}
+.demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
 .estchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
   font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
   background:var(--warnbg,#3a2f10); color:var(--warnfg,#f0c674); border:1px solid var(--warnbd,#6b5518)}
@@ -699,6 +705,13 @@ const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
+/** Escape for interpolation into markup, including quoted attributes like
+ *  title="...". Config text is ours, not user input, but a stray quote or
+ *  angle bracket in a hand-maintained note would otherwise break the tag it
+ *  sits in — and these notes are meant to be edited by hand. */
+const esc = v => String(v ?? "")
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -1139,6 +1152,7 @@ function renderBoard(){
           <span class="code">${item.iata}</span>${r.city} · ${r.note}
           ${pos===0?'<span class="bestflag">Cheapest</span>':""}
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
+          ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
         </div>
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
@@ -1542,6 +1556,10 @@ async function renderDetail(){
         <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this trip & watch it" : "Get Plus to save & watch for price drops"}</button>
       </div>
     </div>
+    ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
+      <div><b>${esc(r.dataConfidence.level)} at ${r.name}</b>
+      <p style="margin:6px 0 0">${esc(r.dataConfidence.note)}</p>
+      <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ${r.name} tickets →</a></div></div>` : ""}
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
       <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul>
       <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}

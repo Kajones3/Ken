@@ -337,6 +337,22 @@ users recently found" feed. The strict filter added earlier is correct and must 
 be loosened to raise row counts — loosening it stores a 2-night fare under a 7-night
 label. Its rows are tagged `travelpayouts` and excluded from the trend.
 
+**All six resorts launch; the weak ones are badged, not hidden.** Considered
+launching with Paris and Tokyo only and holding Shanghai/Hong Kong back. Rejected
+on three findings: (1) flights are not the blocker — a live probe of JFK→PVG
+returned a full set of real itineraries at $935–965/person; (2) cost barely moves,
+since dropping two airports takes the monthly sweep from 1,140 to 684 lookups and
+both sit inside the same $75 plan; (3) the per-resort gaps are not where you would
+guess — Paris has a structural one (Disney sells hotel+ticket bundles by default,
+the app prices them separately) while Hong Kong is the simplest of the four. So
+the real gaps are in TICKET pricing, and they are labelled: `dataConfidence` in
+`config.ts` puts a badge on Shanghai (children priced by height, 1.0–1.4m, not
+modelled) and Hong Kong (age bands never checked against a source). Same reasoning
+as the override controls and the "why is X cheaper?" explainer — explain a shaky
+number, don't hide it, because the six-resort comparison *is* the product.
+**Remove a badge when its gap is actually fixed**; `config.test.ts` pins which
+resorts carry one so it can't drift.
+
 **International routes have no free baseline, and are sampled instead.** BTS DB1B
 is a US *domestic* survey — grepping a real 2024 Q4 file (8.5M rows) for `CDG`
 returns zero matches, so Paris/Tokyo/Shanghai/Hong Kong have nothing to fall back

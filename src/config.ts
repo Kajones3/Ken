@@ -36,6 +36,27 @@ export interface Resort {
    *  and re-check before relying on anything time-sensitive (visa rules
    *  especially — they change). */
   goodToKnow: string[];
+  /** How much to trust this resort's TICKET pricing specifically — the line
+   *  the model is weakest on, and the one a user cannot correct with an
+   *  override the way they can a hotel rate or a fare.
+   *
+   *  Omitted entirely means "no worse than the rest of the app": the ticket
+   *  curve is still an approximation everywhere (see seedTickets), and the
+   *  Park Tickets card already says so. This field is for a resort with a
+   *  gap BEYOND that — something structural the model does not represent at
+   *  all, where a number could be wrong in a way the general disclaimer
+   *  does not cover.
+   *
+   *  Same "no live API, maintain it by hand" pattern as goodToKnow. Remove
+   *  the entry when the underlying gap is actually fixed — a badge that
+   *  outlives its reason trains people to ignore badges. */
+  dataConfidence?: {
+    /** Short label for the badge itself. Keep it to a couple of words. */
+    level: string;
+    /** One plain sentence a non-technical traveller can act on. Say what is
+     *  actually unmodelled, not that we are "still working on it". */
+    note: string;
+  };
   /** Where to check current attraction closures/refurbishments. Disney's own
    *  page where one exists (WDW, Disneyland Anaheim) — otherwise the best
    *  available fan-maintained tracker, and closuresLabel says which so this
@@ -232,6 +253,15 @@ export const RESORTS: Resort[] = [
     // so a US-origin lookup returns nothing and still costs a metered search.
     // PVG is the real gateway.
     altArrivalAirports: [],
+    // Shanghai prices children by HEIGHT (1.0-1.4m), not age — a different
+    // system from every other resort here, and one this model does not
+    // represent at all. The age bands below are a stand-in taken from model
+    // knowledge rather than a source, so a family's ticket total can be off
+    // in a way the general ticket disclaimer does not cover.
+    dataConfidence: {
+      level: "Rough ticket pricing",
+      note: "Shanghai charges children by height (1.0–1.4m), not age. We price by age like the other resorts, so if your child is near either cut-off the ticket total could be noticeably off. Check the official ticket page before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
@@ -256,6 +286,14 @@ export const RESORTS: Resort[] = [
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
     altArrivalAirports: [],
+    // Hong Kong's age bands come from model knowledge, not a checked source
+    // — unlike Tokyo's and Paris's, which were verified against official
+    // pages. Flagged until someone confirms them against Hong Kong
+    // Disneyland's own ticket page.
+    dataConfidence: {
+      level: "Unverified age bands",
+      note: "We haven't confirmed Hong Kong's child/adult ticket ages against an official source, so a family's ticket total is our least certain of the six. Worth checking the official ticket page before you budget on it.",
+    },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87 },
