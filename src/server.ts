@@ -8,11 +8,12 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, ORIGIN_BY_IATA, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
+import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
 import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
@@ -292,7 +293,15 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/auth/me") {
       const user = await currentUser(db, req);
       if (!user) return send(200, { authenticated: false });
-      return send(200, { authenticated: true, email: user.email, plus: isPlus(user.plusUntil), plusUntil: user.plusUntil });
+      const plus = isPlus(user.plusUntil);
+      // Exact-fare allowance travels with the identity, so the UI can show a
+      // real remaining count instead of only finding out by hitting the cap.
+      const exactFare = plus
+        ? { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) }
+        : null;
+      return send(200, {
+        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil, exactFare,
+      }, { cache: "no-store" });
     }
     if (url.pathname === "/api/auth/signout" && req.method === "POST") {
       const token = sessionTokenFrom(req);
@@ -344,6 +353,41 @@ const server = createServer(async (req, res) => {
       const result = await provider.locate(clientIp(req)).catch(() => null);
       return send(200, result ?? { error: "unavailable" }, { cache: "no-store" });
     }
+    // --- exact live fare: signed in and Plus. The one route where a user's
+    // click spends metered provider money, which is exactly why it is
+    // paywalled. Plus is resolved from the session cookie against the
+    // database here — never from anything the client sends.
+    if (url.pathname === "/api/exact-fare" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required", message: "Sign in to check exact fares." });
+      if (!isPlus(user.plusUntil)) {
+        return send(402, {
+          error: "plus_required",
+          message: "Exact live fares are a Plus feature. The estimate is free and unlimited.",
+        });
+      }
+      const b = await readBody(req);
+      const origin = String(b.origin ?? "").toUpperCase();
+      const departDate = String(b.date ?? "");
+      const nights = Number(b.nights ?? 7);
+      // The destination is validated against the named resort's OWN airport
+      // list, exactly as compare() does — so a request can never point a
+      // paid lookup at an arbitrary airport pair.
+      const resort = RESORT_BY_ID.get(String(b.resort ?? ""));
+      if (!resort) return send(400, { error: "unknown_resort" });
+      const destination = resolveDestination(resort, b.destination ? String(b.destination) : null);
+      if (!ORIGIN_BY_IATA.has(origin)) return send(400, { error: "unknown_origin" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate)) return send(400, { error: "bad_date" });
+      if (departDate < todayISO()) return send(400, { error: "past_date", message: "That date has already been and gone." });
+
+      const result = await fetchExactFare(db, {
+        userId: user.id, origin, destination, departDate, tripLength: bucketFor(nights),
+      });
+      // 200 even on a refusal: "you're out of checks for today" is a normal
+      // answer the UI shows inline, not an error condition.
+      return send(200, result, { cache: "no-store" });
+    }
+
     // --- saved trips: signed in and Plus, always the caller's own rows. ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
       const user = await currentUser(db, req);

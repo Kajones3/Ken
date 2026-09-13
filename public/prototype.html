@@ -225,6 +225,10 @@ a{color:var(--ink)}
   border-radius:999px; padding:1px 6px}
 .demo.lowconfnote{border-color:var(--warnbd,#6b5518)}
 .demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
+.exactchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
+  font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
+  background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-line)}
+.li.exactout{background:var(--accent-bg); border-radius:6px}
 .estchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
   font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
   background:var(--warnbg,#3a2f10); color:var(--warnfg,#f0c674); border:1px solid var(--warnbd,#6b5518)}
@@ -632,9 +636,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="mhead">
       <h3 id="pwTitle">Want to make it cheaper?</h3>
       <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
-      you should never have to pay to see what a trip costs. Plus is about monitoring and planning: your trip saved and
-      watched, a message when the price falls or we spot a new deal, and room for the extra costs (VIP tours, PhotoPass,
-      anything else) that don't fit the model.</p>
+      you should never have to pay to see what a trip costs. Flight numbers on the free plan are real estimates, built
+      from what people actually paid on that route, and shown with the range they sit in. Plus adds the exact live fare
+      for a date you're serious about, plus monitoring: your trip saved and watched, a message when the price falls or
+      we spot a new deal, and room for the extra costs (VIP tours, PhotoPass, anything else) that don't fit the model.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -649,12 +654,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </button>
     </div>
     <ul class="feat">
+      <li><span class="tick">✓</span><span><b>Exact live fares</b> — look up the real round-trip price for a specific date, instead of the estimated range everyone gets free</span></li>
       <li><span class="tick">✓</span><span><b>Price-drop alerts</b> — told when a fare or rate falls below what you saw</span></li>
       <li><span class="tick">✓</span><span><b>Your trips saved</b> with the hotel rates and fares you set yourself</span></li>
       <li><span class="tick">✓</span><span><b>Deal alerts</b> — told the next time we add a new Disney promo for a resort you're watching</span></li>
       <li><span class="tick">✓</span><span><b>Driving-trip gas-price alerts</b> — told if the price at the pump moves after you save a road-trip estimate</span></li>
       <li><span class="tick">✓</span><span><b>Custom planning expenses</b> — add your own line items (a VIP tour, PhotoPass, anything not modeled here) to a saved trip's total</span></li>
-      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, driving-cost estimates, park hopper, promos browsing — stays free</span></li>
+      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, estimated flight prices with their range, driving-cost estimates, park hopper, promos browsing — stays free and unlimited</span></li>
     </ul>
     <div class="signin" id="pwSigninBox" style="padding:0 22px 6px" hidden>
       <input type="email" id="pwEmail" placeholder="you@example.com" aria-label="Email">
@@ -715,6 +721,11 @@ const esc = v => String(v ?? "")
 const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+/** "Mar 4" — the same short form the board rows use. */
+const fmtDate = iso => {
+  const d = new Date(iso + "T00:00:00Z");
+  return MONTHS[d.getUTCMonth()] + " " + d.getUTCDate();
+};
 
 function local(r, usdAmount){
   const [rate,sym] = FX[r.currency];
@@ -1406,7 +1417,25 @@ async function renderDetail(){
         <div class="p">${usd(x.perSeatFare)}</div></div>`)
     + `<div class="li"><div class="l"><b>Party of ${pax}</b>
         <small>${list.filter(a=>a>=2).length} seat${list.filter(a=>a>=2).length===1?"":"s"}${list.some(a=>a<2)?` · ${list.filter(a=>a<2).length} lap infant under 2 at 10%`:""}</small></div>
-        <div class="p">${usd(x.flights)}</div></div>`;
+        <div class="p">${usd(x.flights)}</div></div>`
+    // Exact live fare. Only offered where it would actually tell you
+    // something new — if this date already has a real fare, there is nothing
+    // to buy. Free users see what it is and what it costs to unlock, rather
+    // than a disabled control with no explanation.
+    + (fp && fp.estimate
+      ? (session.plus
+        ? `<div class="li exactrow"><div class="l"><b>Check the exact fare</b>
+            <small>Look up the real round-trip price for ${fmtDate(x.start)} right now.${
+              session.exactFare ? ` ${session.exactFare.remainingToday} of ${session.exactFare.perDay} checks left today.` : ""}</small></div>
+            <div class="p"><button class="btn btn-sm" id="exactBtn"
+              data-resort="${r.id}" data-dest="${item.iata}" data-date="${x.start}"
+              data-nights="${p.nights}">Check now</button></div></div>
+           <div class="li exactout" id="exactOut" hidden></div>`
+        : `<div class="li"><div class="l"><b>Want the exact fare?</b>
+            <small>The estimate above is free and unlimited. Plus adds a live lookup of the
+            real round-trip price for a date you're serious about.</small></div>
+            <div class="p"><button class="btn btn-sm openpw">Get Plus</button></div></div>`)
+      : "");
   const flightLink = (fp && fp.deepLink) ||
     `https://www.google.com/travel/flights?q=${encodeURIComponent("Flights from "+p.origin+" to "+r.iata+" on "+x.start)}`;
 
@@ -1897,6 +1926,55 @@ document.addEventListener("click", async e=>{
     setTimeout(()=>{ if(s.isConnected) s.textContent = "Save this trip & watch it"; }, 1800);
     await loadSavedTrips();
   } else if(res.status === 402){ openPw(); }
+});
+
+/* exact live fare — the one control that spends metered provider money, so
+   it is Plus-only, server-gated, and reports the real remaining allowance. */
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("#exactBtn");
+  if(!b) return;
+  if(!session.plus){ openPw(); return; }
+  const out = $("#exactOut");
+  b.disabled = true;
+  const label = b.textContent;
+  b.textContent = "Checking…";
+  if(out){ out.hidden = false; out.innerHTML = `<div class="l"><small>Asking the airline data provider…</small></div>`; }
+  try {
+    const res = await fetch("/api/exact-fare", {
+      method:"POST", headers:{"content-type":"application/json"},
+      body: JSON.stringify({
+        resort: b.dataset.resort, destination: b.dataset.dest,
+        origin: params.origin, date: b.dataset.date, nights: Number(b.dataset.nights),
+      }),
+    });
+    if(res.status === 401 || res.status === 402){ openPw(); return; }
+    const d = await res.json();
+    if(typeof d.remainingToday === "number" && session.exactFare){
+      session.exactFare.remainingToday = d.remainingToday;
+    }
+    if(d.ok){
+      const when = d.cached ? "checked within the last day" : "checked just now";
+      out.innerHTML = `<div class="l"><b>Exact fare ${usd(d.price)} <span class="exactchip">exact</span></b>
+        <small>${esc(d.carrier || "Airline varies")} · ${d.stops===0?"Nonstop":d.stops+" stop"+(d.stops>1?"s":"")}
+        · round trip, per person · ${when}. Re-pricing this trip with it…
+        ${typeof d.remainingToday==="number" ? `${d.remainingToday} checks left today.` : ""}</small></div>
+        <div class="p">${usd(d.price)}</div>`;
+      // The lookup wrote a real fare into the shared cache, so a re-search
+      // now prices the whole trip off it — the total drops the `est.` chip
+      // and the tilde on its own. Without this the exact number would sit in
+      // a box next to a total that still disagreed with it.
+      await runSearch(b.dataset.resort);
+    } else {
+      out.innerHTML = `<div class="l"><b>Couldn't get an exact fare</b>
+        <small>${esc(d.message || "Try again shortly.")}</small></div>`;
+    }
+  } catch(err){
+    if(out) out.innerHTML = `<div class="l"><b>Couldn't reach the fare service</b>
+      <small>The estimate above is unaffected. Try again shortly.</small></div>`;
+  } finally {
+    b.disabled = false;
+    b.textContent = label;
+  }
 });
 
 /* your-numbers controls */

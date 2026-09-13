@@ -247,3 +247,20 @@ create index if not exists route_searches_popular
 -- than being retroactively claimed by whichever provider is current.
 alter table flight_prices add column if not exists source text;
 create index if not exists flight_prices_source on flight_prices (source);
+
+-- Exact live fare lookups, the one thing a user can spend real money on by
+-- clicking. Every lookup is metered by the provider, so both a per-user and
+-- a whole-site daily ceiling are enforced server-side before any call goes
+-- out. One row per user per day; `global` is a reserved user_id holding the
+-- site-wide tally for that day, so one query answers both questions and
+-- neither cap can be bypassed by the other being fine.
+--
+-- Deliberately only a counter — no route, no date, no trip contents. What a
+-- Plus user looked up is their business; all this needs to know is how many.
+create table if not exists exact_fare_usage (
+  user_id   text        not null,       -- a users.id, or the literal 'global'
+  day       date        not null,
+  lookups   integer     not null default 0,
+  spent_at  timestamptz not null default now(),
+  primary key (user_id, day)
+);

@@ -29,6 +29,7 @@ say when something is a guess.
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
+| Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
 | Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + three GitHub Actions cron workflows (`refresh`, `alerts`, `news-digest`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
 
@@ -336,6 +337,30 @@ nights, and $36–$200 fares expiring within the hour. It is a "cheapest fares o
 users recently found" feed. The strict filter added earlier is correct and must not
 be loosened to raise row counts — loosening it stores a 2-night fare under a 7-night
 label. Its rows are tagged `travelpayouts` and excluded from the trend.
+
+**Estimates are free; the exact fare is Plus.** Decided 2026-09-13, and it does
+change an earlier decision — the paywall used to promise nothing about precision
+and the copy now says explicitly what free gets (a real estimate, with its range,
+unlimited) versus what Plus adds (the exact live fare for one date). The reasoning:
+an exact fare costs metered money per lookup, so the person who triggers the cost
+should be the person paying. It also could not be a blanket upgrade — six cheapest
+dates is 6 lookups, one month's calendar ~30, all six resorts for a year ~2,190, so
+one curious session would burn a month's budget. It is per-date, on demand, behind
+a button.
+
+Four bounds, in the order checked: cache first (a repeat question is free AND does
+not consume the allowance — revisiting a trip must not be punished), per-user daily
+cap, site-wide daily cap, provider budget. A failed lookup still counts, because the
+provider bills for a search that finds nothing; otherwise an unserved route is a free
+infinite retry.
+
+**The loop back to the free product is the point**: a bought fare is written to the
+shared cache tagged `serpapi_flights`, so the next re-price uses it as a real fare
+(the estimate and its chip disappear on their own) and it feeds the trend every free
+estimate is built from. A Plus user's spend improves what free users see. Never gate
+this on anything the client sends — a client-supplied `plus` flag would be a way to
+spend the owner's money; it is resolved from the session cookie against the database,
+and that is verified against a live server including a spoofed payload.
 
 **All six resorts launch; the weak ones are badged, not hidden.** Considered
 launching with Paris and Tokyo only and holding Shanghai/Hong Kong back. Rejected
