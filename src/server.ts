@@ -8,11 +8,12 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, ORIGIN_BY_IATA, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
+import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
 import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
@@ -95,6 +96,34 @@ function paramsFrom(q: URLSearchParams): TripParams {
 function clamp(n: number, lo: number, hi: number): number {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : lo;
 }
+
+/**
+ * Which departure airport a request actually gets, and why.
+ *
+ * The free list is the 19 big metros the cache is pre-filled for. Plus adds
+ * the smaller airports people actually live near — someone in Raleigh is
+ * offered Charlotte three hours away, and the fare they'd really pay is a
+ * different number.
+ *
+ * A free user asking for a Plus airport is NOT an error: they are quietly
+ * given the nearest free one and told, so the board still prices and the
+ * paywall has something concrete to point at. Server-side, because the
+ * airport list in the UI is only the cosmetic half.
+ */
+function resolveOrigin(requested: string, plus: boolean): { origin: string; downgradedFrom?: string; downgradedTo?: string } {
+  const iata = (requested || "ATL").toUpperCase().slice(0, 3);
+  if (!originNeedsPlus(iata) || plus) {
+    return { origin: ORIGIN_BY_IATA.has(iata) ? iata : "ATL" };
+  }
+  const wanted = ORIGIN_BY_IATA.get(iata);
+  if (!wanted) return { origin: "ATL" };
+  // Nearest free metro by great-circle distance — the airport they'd have
+  // picked themselves if the Plus one weren't offered.
+  const nearest = ORIGINS.reduce((best, o) =>
+    haversineMiles(wanted.lat, wanted.lon, o.lat, o.lon) <
+    haversineMiles(wanted.lat, wanted.lon, best.lat, best.lon) ? o : best);
+  return { origin: nearest.iata, downgradedFrom: iata, downgradedTo: nearest.iata };
+}
 /** Strips promo fields for anyone not Plus — the server-side gate; hiding the UI control is only the cosmetic half. */
 function overridesFrom(q: URLSearchParams, allowPromos: boolean): Overrides {
   let overrides: Overrides;
@@ -161,8 +190,13 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const month = q.get("month") ?? todayISO().slice(0, 7);
   const [from, to] = monthBounds(month);
   // An explicit date prices exactly that day instead of scanning the month for
-  // the cheapest one — how a calendar-cell click asks for that date's full breakdown.
+  // the cheapest one — how a calendar-cell click asks for that date's full
+  // breakdown, and how a Plus user pins real travel dates instead of a month.
   const explicitDate = q.get("date");
+  // Free users get the 19 pre-cached metros; Plus can depart from a smaller
+  // airport they actually live near. Enforced here, not in the UI.
+  const originPick = resolveOrigin(params.origin, plus);
+  params.origin = originPick.origin;
   // Per-resort arrival-airport picks — only ever affects the resort they're
   // paired with (resolveDestination re-validates against that resort's own
   // list), so picking an alternate for one resort can't leak into another's.
@@ -194,7 +228,17 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
       : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
-  return { month, pricesAsOf: book.oldestFetchedAt, params: { ...params, gettingThere }, results };
+  return {
+    month, pricesAsOf: book.oldestFetchedAt,
+    params: { ...params, gettingThere },
+    // Present only when a free request asked for a Plus airport, so the UI can
+    // say which airport it actually priced rather than silently substituting.
+    originDowngrade: originPick.downgradedFrom
+      ? { requested: originPick.downgradedFrom, priced: originPick.downgradedTo }
+      : undefined,
+    exactDate: explicitDate ?? undefined,
+    results,
+  };
 }
 
 async function calendar(q: URLSearchParams, user: SessionUser | null) {
@@ -271,7 +315,9 @@ const server = createServer(async (req, res) => {
            from fetch_runs where job = 'refresh' and errors = 0`);
       return send(200, { ok: true, db: db.kind, ...rows[0] }, { cache: "no-store" });
     }
-    if (url.pathname === "/api/meta") return send(200, { origins: ORIGINS, resorts: RESORTS }, { cache: "public, max-age=300" });
+    if (url.pathname === "/api/meta") return send(200, {
+      origins: ORIGINS, plusOrigins: PLUS_ORIGINS, resorts: RESORTS,
+    }, { cache: "public, max-age=300" });
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
     // --- explicitly not enough for a public launch (see src/auth.ts).    ---
@@ -380,8 +426,11 @@ const server = createServer(async (req, res) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate)) return send(400, { error: "bad_date" });
       if (departDate < todayISO()) return send(400, { error: "past_date", message: "That date has already been and gone." });
 
+      // Same free/Plus airport rule as compare(). A Plus user is by
+      // definition allowed any of them, so this only ever normalises.
+      const { origin: pricedOrigin } = resolveOrigin(origin, true);
       const result = await fetchExactFare(db, {
-        userId: user.id, origin, destination, departDate, tripLength: bucketFor(nights),
+        userId: user.id, origin: pricedOrigin, destination, departDate, tripLength: bucketFor(nights),
       });
       // 200 even on a refusal: "you're out of checks for today" is a normal
       // answer the UI shows inline, not an error condition.

@@ -213,6 +213,21 @@ Beauvais (BVA) and Shanghai Hongqiao (SHA) were dropped as arrival airports:
 neither has US service, so every lookup returned nothing while still costing
 a metered search — 29% of the international bill for no data.
 
+**A bought fare corrects that route's estimate.** Evidence from the route
+itself beats an average measured across other routes, so where real fares
+exist for a route and quarter, their median sets the correction instead of the
+global trend. Buy one $511 fare on a route the model thought was $382, and
+every other date in that quarter moves to $511 — the estimate learns.
+
+Only fares seen **after** the baseline was written count. Without that cutoff
+the correction is circular: an international baseline is built *from* sampled
+real fares, so measuring those same fares against it always yields 1.0 and
+would report "0% adjustment" as though something had been verified.
+
+`routeSamples` says how many real fares the correction rests on, and the UI
+shows it — one sample is real evidence but could be a peak date that doesn't
+represent its quarter.
+
 Three decisions inside that are worth not undoing:
 
 - **Median, not mean.** A mean is dragged down by deep-discount and partial
@@ -327,6 +342,34 @@ Plus is resolved from the session cookie against the database on every
 request. A client-supplied "I am Plus" flag would be a way to spend the
 owner's money, so it is never trusted — verified against a live server,
 including a request that put `"plus": true` in the payload.
+
+### Which airport you can leave from
+
+Free users pick from 19 big metros — the ones the cache is pre-filled for,
+since every origin multiplies the nightly and monthly bill. Plus adds 22
+smaller airports people actually live near.
+
+That gap is real, not cosmetic: someone in Raleigh is offered Charlotte, three
+hours away, and the fare they'd really pay is a different number. Priced
+against the same seeded data, CLT→MCO comes out at $387/seat and RDU→MCO at
+$350.
+
+A free user who picks a Plus airport is **not** shown an error. The server
+prices the nearest free metro by great-circle distance and returns
+`originDowngrade`, so the board still works and the page says which airport it
+actually used. Enforced in `resolveOrigin()` — the picker in the UI is only
+the cosmetic half.
+
+Plus airports are still fully covered by BTS (the survey is one file spanning
+every US airport, so `originIatas()` includes both lists) — they just aren't
+pre-cached, and a Plus user can pay to check any specific date exactly.
+
+### Pinning real travel dates
+
+Free searches scan a whole month for the cheapest arrival. Plus can set the
+actual departure and return dates — "March 18–24" rather than "sometime in
+March" — and the trip length is derived from the gap rather than the separate
+nights picker. Uses the `date` parameter `/api/compare` already had.
 
 ## Saying how confident we are, per resort
 

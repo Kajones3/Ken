@@ -105,6 +105,12 @@ export interface FlightRow {
      *  route gets an estimate at all, since BTS covers US domestic only. No
      *  trend is applied to these: they are already at today's prices. */
     sampledLive?: boolean;
+    /** How many real fares on this exact route and quarter the correction was
+     *  measured from. Undefined means no route-specific evidence existed and
+     *  the global trend was used instead. One sample is real evidence but
+     *  could be a peak date, so the UI discloses the count rather than
+     *  presenting a one-fare correction as settled. */
+    routeSamples?: number;
   };
 }
 export interface HotelNight {

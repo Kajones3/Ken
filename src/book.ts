@@ -48,6 +48,21 @@ export function dateStr(v: unknown): string {
   return String(v).slice(0, 10);
 }
 
+/**
+ * Timestamp columns come back as JS Date objects from Postgres and as strings
+ * from PGlite/JSON. `String(aDate)` formats to WHOLE SECONDS, so round-tripping
+ * a Date through it silently drops milliseconds — enough to make two rows
+ * written moments apart compare as equal, which is how a just-bought fare
+ * failed to count as newer than the baseline it was meant to correct. Same
+ * shape of bug as dateStr() above, one type down.
+ */
+function tsOf(v: unknown): Date | null {
+  if (v instanceof Date) return v;
+  if (v === null || v === undefined) return null;
+  const d = new Date(String(v));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   const flights = new Map<string, FlightRow>();
   const hotels = new Map<string, HotelNight[]>();
@@ -153,7 +168,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   const hf = await db.query(
     `select distinct on (origin, destination, quarter)
             origin, destination, avg_fare_usd, median_fare_usd,
-            p25_fare_usd, p75_fare_usd, year, quarter, source
+            p25_fare_usd, p75_fare_usd, year, quarter, source, fetched_at
        from historical_fares
       where origin = $1 and destination = any($2)
       order by origin, destination, quarter, year desc`,
@@ -172,7 +187,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   }
   const historicals = new Map<string, {
     med: number; p25: number; p75: number; quarter: string;
-    seasonMatched: boolean; applyTrend: boolean;
+    seasonMatched: boolean; applyTrend: boolean; fetchedAt: Date | null;
   }>();
   for (const route of new Set([...byRouteQuarter.keys(), ...newestByRoute.keys()])) {
     const r = byRouteQuarter.get(route) ?? newestByRoute.get(route)!;
@@ -194,8 +209,62 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       // today's prices; multiplying it again would inflate a current fare
       // by the trend a second time.
       applyTrend: TREND_APPLIES_TO.has(String(r.source ?? "bts_db1b")),
+      // When this baseline was written. Only real fares seen AFTER it can
+      // correct it — see the route-correction note below.
+      fetchedAt: tsOf(r.fetched_at),
     });
   }
+  // What the real fares we've actually bought on THESE routes say, versus
+  // what each route's stored baseline predicted. This is the correction the
+  // owner asked for after seeing an estimate of $382 against an exact fare
+  // of $511: evidence from the route itself beats an average measured across
+  // other routes, so where we have it, it wins.
+  //
+  // Grouped by quarter for the same reason everything else here is: a March
+  // fare says nothing about July. Only trusted sources count, same rule the
+  // global trend follows.
+  const rr = await db.query<{ destination: string; quarter: number; price_usd: string; fetched_at: string }>(
+    `select destination,
+            extract(quarter from depart_date)::int as quarter,
+            price_usd, fetched_at
+       from flight_prices
+      where origin = $1 and destination = any($2)
+        and source = 'serpapi_flights'
+        and fetched_at > now() - ($3 || ' days')::interval
+        and depart_date >= current_date`,
+    [req.origin, hfDestinations, String(Number(process.env.ROUTE_CORRECTION_DAYS ?? 45))],
+  );
+  const routeFares = new Map<string, { price: number; at: Date }[]>();
+  for (const r of rr.rows) {
+    const price = Number(r.price_usd);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const key = `${r.destination}|${r.quarter}`;
+    const at = tsOf(r.fetched_at);
+    if (!at) continue;
+    routeFares.set(key, [...(routeFares.get(key) ?? []), { price, at }]);
+  }
+  /**
+   * The observed median for a route/quarter, counting only fares seen AFTER
+   * the baseline was written.
+   *
+   * That cutoff is what stops the correction being circular. An
+   * international baseline is itself built from sampled real fares, so
+   * measuring those same fares against it always yields a ratio of 1.0 and
+   * would report "0% adjustment" as though something had been verified. A
+   * fare bought *later* — a Plus user checking an exact date — is genuine new
+   * evidence, and does correct it.
+   */
+  const observedSince = (key: string, since: Date | null) => {
+    const all = routeFares.get(key);
+    if (!all) return undefined;
+    const fresh = since ? all.filter((f) => f.at > since) : all;
+    if (!fresh.length) return undefined;
+    const sorted = fresh.map((f) => f.price).sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const med = sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+    return { med, n: sorted.length };
+  };
+
   const ft = await db.query(
     `select multiplier, low_multiplier, high_multiplier from fare_trend order by computed_at desc limit 1`,
   );
@@ -213,11 +282,25 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       const h = historicals.get(`${origin}|${dest}`)
         ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
       if (!h) return undefined;
+
+      // Route-specific evidence first. If real fares have been bought on
+      // this exact route and quarter — by the nightly jobs, or by a Plus
+      // user paying to check one — measure the correction from those rather
+      // than from a global average of other routes. This is what makes an
+      // exact fare teach the estimate: buy one $511 fare on a route the
+      // model thought was $382, and every other date in that quarter moves
+      // to match.
+      const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
+        ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
+      const routeM = obs && h.med > 0 ? obs.med / h.med : undefined;
+
       // A historical baseline is useless without a trend to bring it to the
-      // present, so it still requires one. A live-sampled baseline needs no
-      // trend and must not wait on one — that is the whole point of it.
-      if (h.applyTrend && !trend) return undefined;
-      const m = h.applyTrend ? trend!.m : 1;
+      // present, so it still requires one — unless this route has its own
+      // observation, which is strictly better evidence than the global
+      // average would have been. A live-sampled baseline needs no trend and
+      // must not wait on one.
+      if (h.applyTrend && !trend && routeM === undefined) return undefined;
+      const m = routeM ?? (h.applyTrend ? trend!.m : 1);
       // The shown number is the MEDIAN, moved by the trend the real-fare
       // lookups measured (or left as-is when it is already current).
       // Low/High are that route's own p25/p75 spread moved the same way — a
@@ -230,8 +313,14 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
         high: r2(h.p75 * m),
         basisQuarter: h.quarter,
         seasonMatched: h.seasonMatched,
-        trendPct: h.applyTrend ? Math.round((m - 1) * 1000) / 10 : undefined,
+        trendPct: (routeM !== undefined || h.applyTrend) ? Math.round((m - 1) * 1000) / 10 : undefined,
         sampledLive: !h.applyTrend,
+        // How many real fares on this exact route the correction rests on.
+        // Undefined means it fell back to the global trend. The UI says this
+        // out loud, because a correction built on one fare deserves less
+        // confidence than one built on ten — and one bought date could be a
+        // peak date that doesn't represent its quarter.
+        routeSamples: obs?.n,
       };
     },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],

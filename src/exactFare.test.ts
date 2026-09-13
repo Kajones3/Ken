@@ -237,3 +237,65 @@ test("a bought fare takes over pricing, so the trip total stops using the estima
   assert.equal(real?.estimate, undefined, "and it carries no estimate marker");
   await db.close();
 });
+
+test("an exact fare corrects the estimate for OTHER dates on that route", async () => {
+  // The owner's ask, verbatim: "the estimate said $382 and the exact fare came
+  // back $511 — when this happens I want to make sure we update our estimate."
+  // Evidence from this route beats an average measured across other routes, so
+  // buying one real fare moves every other date in that quarter.
+  const { loadBook } = await import("./book.js");
+  const db = await memoryDb();
+  await db.query(
+    `insert into historical_fares
+       (origin,destination,year,quarter,avg_fare_usd,p25_fare_usd,median_fare_usd,p75_fare_usd,source)
+     values ('ATL','MCO',2026,1,290,268,342,431,'bts_db1b')`,
+  );
+  await db.query(
+    `insert into fare_trend (id,multiplier,low_multiplier,high_multiplier,sample_routes,basis_quarter)
+     values (gen_random_uuid(), 1.117, 1.02, 1.24, 9, '2026Q1')`,
+  );
+  // A DIFFERENT date from the one that gets bought.
+  const otherDate = {
+    origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
+    from: "2027-03-12", to: "2027-03-19", tripLength: 7,
+  };
+
+  const before = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
+  assert.equal(before.med, 382.01, "342 x the global trend of 1.117");
+  assert.equal(before.routeSamples, undefined, "nothing route-specific known yet");
+
+  await fetchExactFare(db, { ...req, departDate: "2027-03-04" },
+    { provider: stubProvider({ price: 511 }), limits: LIMITS, today: TODAY });
+
+  const after = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
+  assert.equal(after.med, 511, "the route's own evidence now sets the estimate");
+  assert.equal(after.routeSamples, 1, "and the UI can say it rests on one fare");
+  assert.ok(after.low < after.med && after.med < after.high, "the band moves with it");
+  await db.close();
+});
+
+test("a correction only counts fares NEWER than the baseline it corrects", async () => {
+  // Otherwise it is circular: an international baseline is built FROM sampled
+  // real fares, so measuring those same fares against it always yields 1.0 and
+  // would report "0% adjustment" as though something had been verified.
+  const { loadBook } = await import("./book.js");
+  const db = await memoryDb();
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,source,fetched_at)
+     values ('ATL','MCO','2027-03-04',7,900,'serpapi_flights', now() - interval '10 days')`,
+  );
+  // Baseline written AFTER that fare, as the monthly rebuild would.
+  await db.query(
+    `insert into historical_fares
+       (origin,destination,year,quarter,avg_fare_usd,p25_fare_usd,median_fare_usd,p75_fare_usd,source,fetched_at)
+     values ('ATL','MCO',2027,1,900,850,900,950,'sampled_live', now())`,
+  );
+  const book = await loadBook(db, {
+    origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
+    from: "2027-03-12", to: "2027-03-19", tripLength: 7,
+  });
+  const est = book.flightEstimate!("ATL", "MCO")!;
+  assert.equal(est.med, 900, "the baseline stands, uncorrected by its own inputs");
+  assert.equal(est.routeSamples, undefined, "and no correction is claimed");
+  await db.close();
+});

@@ -362,6 +362,35 @@ this on anything the client sends — a client-supplied `plus` flag would be a w
 spend the owner's money; it is resolved from the session cookie against the database,
 and that is verified against a live server including a spoofed payload.
 
+**A bought fare corrects that route's estimate** (2026-09-13, owner's ask after
+seeing $382 estimated against $511 exact). Where real fares exist for a route and
+quarter, their median sets the correction instead of the global trend — route
+evidence beats an average of other routes, so one exact lookup moves every other
+date in that quarter. **Only fares newer than the baseline count**, or it is
+circular: an international baseline is built FROM sampled fares, so measuring
+those same fares against it always yields 1.0 and would claim "0% adjustment" as
+though something had been checked. `routeSamples` is surfaced because a
+correction built on one fare (possibly a peak date) deserves less confidence than
+one built on ten.
+
+**Airports are tiered: 19 free metros, 22 more with Plus.** Every origin
+multiplies the pre-caching bill, so the free list stays at the big metros — but
+"nearest big airport" is a real compromise (Raleigh gets offered Charlotte, three
+hours away; against the same data CLT→MCO prices $387/seat and RDU→MCO $350).
+A free user picking a Plus airport is NOT an error: `resolveOrigin()` prices the
+nearest free metro and returns `originDowngrade` so the page says which airport it
+used. BTS ingests baselines for BOTH lists — the survey is one file covering every
+US airport, so withholding data would cost nothing and buy nothing. The split
+governs which airports can be *picked*, not which have data. **Plus also pins real
+travel dates** (Mar 18-24, not "sometime in March") via the `date` param compare()
+already had, with nights derived from the gap.
+
+**Timestamps: never `String(aDate)` to compare them.** Postgres returns
+timestamptz as JS Date objects and `String()` formats to WHOLE SECONDS, silently
+dropping milliseconds — which made a just-bought fare fail to count as newer than
+the baseline it was meant to correct. Use `tsOf()` in `book.ts`. Same shape of bug
+as the `dateStr()` one above, one type down, and it took a test to see it.
+
 **All six resorts launch; the weak ones are badged, not hidden.** Considered
 launching with Paris and Tokyo only and holding Shanghai/Hong Kong back. Rejected
 on three findings: (1) flights are not the blocker — a live probe of JFK→PVG
