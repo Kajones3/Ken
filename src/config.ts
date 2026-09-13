@@ -346,7 +346,59 @@ export const ORIGINS: Origin[] = [
   { iata: "SEA", name: "Seattle", lat: 47.45, lon: -122.31 },
   { iata: "SFO", name: "San Francisco", lat: 37.62, lon: -122.38 },
 ];
-export const ORIGIN_BY_IATA = new Map(ORIGINS.map((o) => [o.iata, o]));
+/**
+ * Extra departure airports a Plus subscriber can pick, beyond the 19 free
+ * metros above.
+ *
+ * Why the split exists: every origin multiplies the nightly and monthly
+ * pre-caching bill, so the free list stays at the big metros most people can
+ * reach. But "nearest big airport" is a real compromise — someone in Raleigh
+ * is offered Charlotte, three hours away, and the fare they'd actually pay is
+ * a different number. Plus removes that compromise, and it pays for itself:
+ * a Plus user can buy the exact fare on their own airport.
+ *
+ * These are NOT pre-cached the way the free 19 are. They are covered by BTS
+ * (the survey includes every US airport — see btsBaseline's origin filter,
+ * which now spans both lists), so a Plus user gets a real estimate on them
+ * immediately, and can pay to check any specific date exactly.
+ */
+export const PLUS_ORIGINS: Origin[] = [
+  { iata: "RDU", name: "Raleigh–Durham", lat: 35.88, lon: -78.79 },
+  { iata: "AUS", name: "Austin", lat: 30.19, lon: -97.67 },
+  { iata: "BNA", name: "Nashville", lat: 36.13, lon: -86.68 },
+  { iata: "CLE", name: "Cleveland", lat: 41.41, lon: -81.85 },
+  { iata: "CMH", name: "Columbus", lat: 39.998, lon: -82.89 },
+  { iata: "CVG", name: "Cincinnati", lat: 39.05, lon: -84.67 },
+  { iata: "IND", name: "Indianapolis", lat: 39.72, lon: -86.29 },
+  { iata: "JAX", name: "Jacksonville", lat: 30.49, lon: -81.69 },
+  { iata: "MCI", name: "Kansas City", lat: 39.3, lon: -94.71 },
+  { iata: "MKE", name: "Milwaukee", lat: 42.95, lon: -87.9 },
+  { iata: "MSY", name: "New Orleans", lat: 29.99, lon: -90.26 },
+  { iata: "OAK", name: "Oakland", lat: 37.71, lon: -122.22 },
+  { iata: "PDX", name: "Portland", lat: 45.59, lon: -122.6 },
+  { iata: "PIT", name: "Pittsburgh", lat: 40.49, lon: -80.23 },
+  { iata: "RSW", name: "Fort Myers", lat: 26.54, lon: -81.76 },
+  { iata: "SAN", name: "San Diego", lat: 32.73, lon: -117.19 },
+  { iata: "SAT", name: "San Antonio", lat: 29.53, lon: -98.47 },
+  { iata: "SJC", name: "San Jose", lat: 37.36, lon: -121.93 },
+  { iata: "SLC", name: "Salt Lake City", lat: 40.79, lon: -111.98 },
+  { iata: "SMF", name: "Sacramento", lat: 38.7, lon: -121.59 },
+  { iata: "STL", name: "St. Louis", lat: 38.75, lon: -90.37 },
+  { iata: "TPA", name: "Tampa", lat: 27.98, lon: -82.53 },
+];
+
+/** Every departure airport the app knows, free and Plus together. */
+export const ALL_ORIGINS: Origin[] = [...ORIGINS, ...PLUS_ORIGINS];
+
+/** Resolves any known origin. Callers that must enforce the free/Plus split
+ *  check membership of ORIGINS separately — this map deliberately does not,
+ *  so pricing and distance maths work the same for either list. */
+export const ORIGIN_BY_IATA = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
+
+/** Is this airport free for everyone, or does picking it need Plus? */
+export function originNeedsPlus(iata: string): boolean {
+  return PLUS_ORIGINS.some((o) => o.iata === iata);
+}
 
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [

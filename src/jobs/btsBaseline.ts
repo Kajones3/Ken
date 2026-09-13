@@ -17,7 +17,7 @@
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import type { Readable } from "node:stream";
-import { RESORTS, ORIGINS } from "../config.js";
+import { RESORTS, ALL_ORIGINS } from "../config.js";
 import type { Db } from "../db.js";
 
 export interface RouteAggregate {
@@ -195,9 +195,14 @@ export async function upsertHistoricalFares(
 export function resortDestinations(): Set<string> {
   return new Set(RESORTS.flatMap((r) => [r.iata, ...r.altArrivalAirports.map((a) => a.iata)]));
 }
-/** Every departure city this app supports. */
+/**
+ * Every departure city this app supports, free and Plus alike. DB1B covers
+ * every US airport at no extra cost — the survey is one file — so there is no
+ * reason to withhold a baseline from a Plus origin. What the free/Plus split
+ * governs is which airports can be *picked*, not which have data.
+ */
 export function originIatas(): Set<string> {
-  return new Set(ORIGINS.map((o) => o.iata));
+  return new Set(ALL_ORIGINS.map((o) => o.iata));
 }
 
 export interface BtsBaselineOptions { csvPath: string; year: number; quarter: number }

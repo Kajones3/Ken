@@ -225,6 +225,11 @@ a{color:var(--ink)}
   border-radius:999px; padding:1px 6px}
 .demo.lowconfnote{border-color:var(--warnbd,#6b5518)}
 .demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
+.downgrade{display:block; margin-top:6px; font-size:11px; line-height:1.5;
+  color:var(--warnfg,#f0c674)}
+.pluspill{display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px;
+  font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+  background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-line)}
 .exactchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
   font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
   background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-line)}
@@ -434,6 +439,21 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <label for="month">Arriving</label>
         <select id="month"></select>
       </div>
+      <div class="f" id="exactDatesField" style="margin-top:10px">
+        <label for="exactDate">
+          Or pin real travel dates
+          <span class="pluspill" id="exactDatesPill">Plus</span>
+        </label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+          <input type="date" id="exactDate" aria-label="Departure date">
+          <span style="color:var(--muted); font-size:12px">to</span>
+          <input type="date" id="exactReturn" aria-label="Return date">
+          <button class="btn btn-sm" id="clearExactDates" type="button" hidden>Clear</button>
+        </div>
+        <small id="exactDatesHint" style="color:var(--muted)">
+          Free searches scan a whole month for the cheapest arrival. Plus prices the exact
+          days you're actually travelling.</small>
+      </div>
     </div>
 
     <div class="gt-block">
@@ -451,6 +471,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="f" id="originAirportField">
           <label for="origin">Departing from</label>
           <select id="origin"></select>
+          <small id="originNote" class="downgrade" hidden></small>
         </div>
       </div>
 
@@ -695,7 +716,9 @@ async function apiGet(path, params){
 
 /* ============================ reference data (loaded from /api/meta) ============================ */
 
-let ORIGINS = [];        // [{iata,name,lat,lon}]
+let ORIGINS = [];        // [{iata,name,lat,lon}] — free, pre-cached metros
+let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus only
+let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
 let RESORT_BY_ID = new Map();
 
@@ -824,8 +847,27 @@ const CAL_TO = (()=>{
   return monthOpts[monthOpts.length-1][0]+"-"+pad(last);
 })();
 
+/**
+ * The departure-airport picker. Free users see the 19 pre-cached metros;
+ * Plus adds the smaller airports people actually live near — "nearest big
+ * airport" is a real compromise (Raleigh is offered Charlotte, three hours
+ * away) and removing it is worth paying for.
+ *
+ * Plus airports stay VISIBLE to a free user, labelled, rather than hidden.
+ * Same rule the rest of the paywall follows: show what Plus unlocks instead
+ * of pretending it doesn't exist. Picking one as a free user is handled
+ * server-side — it prices the nearest free metro and says so.
+ */
+function fillOriginOptions(){
+  const keep = $("#origin").value;
+  const free = ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]);
+  const plus = PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (Plus)")]);
+  fillSelect($("#origin"), free.concat(plus));
+  if(keep) $("#origin").value = keep;
+}
+
 function fillFormOptions(){
-  fillSelect($("#origin"), ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]));
+  fillOriginOptions();
   fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
@@ -875,6 +917,11 @@ function readParams(){
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
     month: $("#month").value,
+    // Plus only. When both are set, the search prices those exact days
+    // instead of scanning the month — nights is derived from the gap, so the
+    // trip length matches the dates rather than the separate nights picker.
+    exactDate: exactDatesActive() ? $("#exactDate").value : "",
+    exactReturn: exactDatesActive() ? $("#exactReturn").value : "",
     gettingThere,
     flyRentalCar: $("#flyRentalCar").value === "1",
     driveRentalCar: $("#driveRentalCar").value === "1",
@@ -942,7 +989,29 @@ function tripQuery(){
   }
   return q;
 }
-function compareQuery(){ return { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV), destinations: JSON.stringify(destinationChoice) }; }
+function compareQuery(){
+  const q = { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV), destinations: JSON.stringify(destinationChoice) };
+  // Pinned travel dates win over the month scan. The server prices that one
+  // arrival date; nights comes from the gap between the two dates so the trip
+  // length always matches what was actually picked.
+  if(params.exactDate && params.exactReturn){
+    q.date = params.exactDate;
+    q.month = params.exactDate.slice(0,7);
+    const n = nightsBetween(params.exactDate, params.exactReturn);
+    if(n > 0) q.nights = n;
+  }
+  return q;
+}
+/** Whole nights between two YYYY-MM-DD dates, UTC so no timezone drift. */
+function nightsBetween(a, b){
+  return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z")) / 86400000);
+}
+/** Both dates set, in order, and the user is entitled to use them. */
+function exactDatesActive(){
+  if(!session.plus) return false;
+  const a = $("#exactDate").value, b = $("#exactReturn").value;
+  return !!(a && b && nightsBetween(a, b) > 0);
+}
 function calendarQuery(resortId, from, to, tierOverride){
   const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV), destination: destinationChoice[resortId] || "" };
   if(tierOverride !== undefined) q.tier = tierOverride;
@@ -1071,6 +1140,9 @@ async function runSearch(keepId){
     const compareData = await apiGet("/api/compare", compareQuery());
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+    // A free user who picked a Plus airport gets the nearest free one priced
+    // instead. Say which, rather than silently showing someone else's airport.
+    originDowngrade = compareData.originDowngrade || null;
     await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
     if(token !== searchToken) return;
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
@@ -1145,6 +1217,11 @@ function renderBoard(){
     // the board, not only inside Details — the board is where most people
     // decide, and an unmarked estimate reads as a quote.
     const est = x.flightPick && x.flightPick.estimate;
+    // A priced fare with no estimate attached is a real one somebody bought —
+    // the nightly job, or a Plus user checking this date. Say so on the board,
+    // not only inside Details: this is what a Plus user paid for and it should
+    // be visible where they actually compare.
+    const exact = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
     const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
@@ -1176,7 +1253,9 @@ function renderBoard(){
           <div class="seg f4" style="width:${w(x.food)}"></div>
         </div>
         <div class="barlabs">
-          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}${est?' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>':""}</span>
+          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}${
+            est ? ' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>'
+                : exact ? ' <span class="exactchip" title="A real fare, not an estimate">exact</span>' : ""}</span>
           <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
@@ -1711,11 +1790,23 @@ function render(){
   const p = params;
   const pax = paxList(p).length;
   const kidStr = p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""} (${p.ages.join(", ")})` : "";
+  const whenStr = (p.exactDate && p.exactReturn)
+    ? `${fmtDate(p.exactDate)}–${fmtDate(p.exactReturn)}`
+    : `arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
   $("#resSub").textContent =
-    `${p.adults} adult${p.adults>1?"s":""}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
+    `${p.adults} adult${p.adults>1?"s":""}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · ${whenStr}`;
   $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
   $("#planChip").className = "chip" + (session.plus?" plus":"");
+  syncExactDatesUi();
   $("#searchChip").hidden = true;
+  const dn = $("#originNote");
+  if(dn){
+    dn.hidden = !originDowngrade;
+    if(originDowngrade){
+      dn.innerHTML = `Priced from <b>${esc(originDowngrade.priced)}</b>, the nearest airport on the free plan.
+        <button class="btn btn-sm openpw" style="margin-left:8px">Get Plus to price ${esc(originDowngrade.requested)}</button>`;
+    }
+  }
   $("#upgradeTop").hidden = session.plus;
   $("#signinBox").hidden = session.authenticated;
   $("#signedinBox").hidden = !session.authenticated;
@@ -1724,6 +1815,47 @@ function render(){
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
 }
+
+/**
+ * Keeps the exact-dates control honest about who can use it, and stops a
+ * stale pinned range silently narrowing a free user's search if their Plus
+ * lapses. Also bounds the inputs to dates that can actually be booked.
+ */
+function syncExactDatesUi(){
+  const on = !!session.plus;
+  const d = $("#exactDate"), r = $("#exactReturn");
+  if(!d || !r) return;
+  d.disabled = !on; r.disabled = !on;
+  $("#exactDatesPill").hidden = on;
+  const today = new Date().toISOString().slice(0,10);
+  d.min = today; r.min = d.value || today;
+  if(!on){ d.value = ""; r.value = ""; }
+  const active = exactDatesActive();
+  $("#clearExactDates").hidden = !active;
+  $("#month").disabled = active;
+  $("#exactDatesHint").textContent = !on
+    ? "Free searches scan a whole month for the cheapest arrival. Plus prices the exact days you're actually travelling."
+    : active
+    ? `Pricing ${nightsBetween(d.value, r.value)} nights, ${fmtDate(d.value)} to ${fmtDate(r.value)}. The month picker is ignored while these are set.`
+    : "Set both dates to price your real trip instead of scanning a month.";
+}
+
+document.addEventListener("change", (e) => {
+  if(!e.target.closest("#exactDate, #exactReturn")) return;
+  if(!session.plus){ openPw(); syncExactDatesUi(); return; }
+  const d = $("#exactDate"), r = $("#exactReturn");
+  // A return before departure is a typo, not an instruction — nudge it to a
+  // week out rather than searching nothing.
+  if(d.value && r.value && nightsBetween(d.value, r.value) <= 0){
+    r.value = new Date(new Date(d.value+"T00:00:00Z").getTime() + 7*86400000).toISOString().slice(0,10);
+  }
+  syncExactDatesUi();
+});
+document.addEventListener("click", (e) => {
+  if(!e.target.closest("#clearExactDates")) return;
+  $("#exactDate").value = ""; $("#exactReturn").value = "";
+  syncExactDatesUi();
+});
 
 /* ============================ events ============================ */
 
@@ -2086,6 +2218,7 @@ document.addEventListener("click", async e=>{
 async function boot(){
   const meta = await apiGet("/api/meta", {});
   ORIGINS = meta.origins;
+  PLUS_ORIGINS = meta.plusOrigins || [];
   RESORTS = meta.resorts;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
