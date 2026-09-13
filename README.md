@@ -175,7 +175,8 @@ Every flight figure in the app is one of two things, and the UI always says
 which:
 
 **A real fare.** Someone searched that route recently, so the nightly
-`popular-routes` job bought a genuine round-trip quote for it. Shown plain.
+`popular-routes` job bought a genuine round-trip quote for it — or a Plus
+user paid to look that exact date up. Shown plain.
 
 **An estimate.** Nobody has searched that route, so there is nothing bought
 for it. Instead: take what people *actually paid* on that exact route in the
@@ -286,6 +287,46 @@ else's number. Composition order, in case you touch this: a curated room discoun
 skipped if the user has typed their own nightly rate (a guess shouldn't second-guess
 a rate they already found); a personal discount always applies, even on top of that
 rate, because it's their own claim; `flat_off_total` clamps the trip at $0.
+
+### Estimates are free; the exact fare is Plus
+
+The free plan's flight number is a real estimate — this route's actual median
+with the range it sits in, labelled `est.` It costs nothing per user because
+it reads a cache someone already paid to fill, and it is unlimited.
+
+A Plus user can additionally ask for the **exact live fare on one specific
+date** (`POST /api/exact-fare`, `src/exactFare.ts`). That is the one place in
+the app where a user's click spends metered provider money, which is exactly
+why it is paywalled: the people who cost money are the people paying.
+
+It could not be a blanket upgrade of every number on the page. Six resorts'
+cheapest dates is 6 lookups, but one month's calendar is ~30 and all six
+resorts across a year is ~2,190 — one curious session would burn a month's
+budget. So it is per-date and on demand, a button on the Flights card.
+
+Four things bound it, checked in this order:
+
+1. **Cache first**, before the quota is even considered. A fare already
+   bought for that exact route/date/length and still fresh is returned free
+   and does not touch the user's allowance — revisiting a trip is not
+   punished. The second person to ask the same question pays nothing.
+2. **Per-user daily cap** (`EXACT_FARE_PER_USER_PER_DAY`, default 25).
+3. **Site-wide daily cap** (`EXACT_FARE_GLOBAL_PER_DAY`, default 90 — sized
+   so the month still fits the plan alongside the two nightly jobs).
+4. **Provider budget**, the same hard ceiling every paid job here has.
+
+A failed lookup still counts: the provider bills for a search that finds
+nothing, so an unserved route is not a free infinite retry.
+
+The payoff loops back to the free product. A bought fare is written into the
+shared cache tagged `serpapi_flights`, so the next re-price uses it as a real
+fare and drops the estimate — and it feeds the trend that every free estimate
+is built from. **A Plus user's spend improves what free users see.**
+
+Plus is resolved from the session cookie against the database on every
+request. A client-supplied "I am Plus" flag would be a way to spend the
+owner's money, so it is never trusted — verified against a live server,
+including a request that put `"plus": true` in the payload.
 
 ## Saying how confident we are, per resort
 
