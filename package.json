@@ -22,7 +22,8 @@
     "popular-routes": "tsx src/jobs/popularRoutes.ts",
     "coverage": "tsx src/jobs/coverage.ts",
     "intl-sweep": "tsx src/jobs/intlSweep.ts",
-    "intl-baseline": "tsx src/jobs/intlBaseline.ts"
+    "intl-baseline": "tsx src/jobs/intlBaseline.ts",
+    "seed-intl": "tsx src/seedInternational.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

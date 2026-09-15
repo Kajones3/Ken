@@ -108,6 +108,69 @@ test("a fare override can raise the price but never fall below the cached fare",
   assert.equal(b.price.perSeatFare, 900, "raised as asked");
 });
 
+test("excludeFlights: a completely empty book still prices, instead of hard-failing", () => {
+  const wdw = resortById("wdw");
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const withoutFlights = { ...noFlights, flight: () => undefined, flightEstimate: () => undefined };
+  const r = priceTrip(withoutFlights, wdw, base, { wdw: { excludeFlights: true } }, START);
+  assert.ok(r.ok, "excluding flights must bypass the cache-gap hard failure");
+  if (!r.ok) return;
+  assert.equal(r.price.flights, 0);
+  assert.equal(r.price.perSeatFare, 0);
+  assert.equal(r.price.flightPick, null);
+});
+
+test("excludeFlights: bypasses the floor entirely, even with a real cached fare present", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const r = priceTrip(book, wdw, base, { wdw: { excludeFlights: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 0, "not a price claim, so the $400 floor never applies");
+});
+
+test("excludeFlights wins over a farePerSeat set on the same override", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const r = priceTrip(book, wdw, base, { wdw: { farePerSeat: 900, excludeFlights: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 0, "excludeFlights is ignored-farePerSeat, not the other way round");
+});
+
+test("excludeFlights: the existing floor test is untouched (no excludeFlights set)", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const under: Overrides = { wdw: { farePerSeat: 50 } };
+  const r = priceTrip(book, wdw, base, under, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 400, "clamped to the floor, same as before this feature existed");
+});
+
+test("excludeFlights behaves the same under miles transport mode", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 300 });
+  const miles = { ...base, transportMode: "miles" as const, milesPct: 50 };
+  const r = priceTrip(book, wdw, miles, { wdw: { excludeFlights: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 0);
+  assert.equal(r.price.flights, 0);
+});
+
+test("excludeFlights is a no-op under driving mode (flights are already zero there)", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const driving = { ...base, transportMode: "drive" as const };
+  const r = priceTrip(book, wdw, driving, { wdw: { excludeFlights: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.flights, 0);
+  assert.equal(r.price.flightPick, null);
+  assert.ok(r.price.driving > 0, "driving cost is unaffected by a flights-only exclude flag");
+});
+
 test("a nightly override is used flat and does not flex", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
@@ -115,6 +178,60 @@ test("a nightly override is used flat and does not flex", () => {
   assert.ok(r.ok);
   assert.equal(r.price.rooms, 150 * base.nights);
   assert.equal(r.price.hotelTier.custom, true);
+});
+
+test("excludeHotel: prices $0 hotel with no pick, same shape as stay: none", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, base, { wdw: { excludeHotel: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(base.stay, "on", "params.stay itself is untouched — this is a per-resort override");
+  assert.equal(r.price.rooms, 0);
+  assert.equal(r.price.transport, 0);
+  assert.equal(r.price.hotel, 0);
+  assert.equal(r.price.hotelPick.hotelId, "none");
+});
+
+test("excludeHotel skips a dining plan too, even though params.stay wants one", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, { ...base, stay: "both", food: "plan" }, { wdw: { excludeHotel: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.foodPlan, null);
+});
+
+test("excludeHotel suppresses a curated room promo, with its own skip reason", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_pct_off", effectValue: 20 })] });
+  const r = priceTrip(book, resortById("wdw"), base, { wdw: { excludeHotel: true, promoId: "p1" } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.rooms, 0);
+  assert.equal(r.price.appliedPromos[0]!.amountUsd, 0);
+  assert.match(r.price.appliedPromos[0]!.skipped ?? "", /not counting a hotel/);
+});
+
+test("excludeHotel wins over a nightly rate set on the same override", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, base, { wdw: { nightly: 150, excludeHotel: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.rooms, 0, "excludeHotel is ignored-nightly, not the other way round");
+  assert.equal(r.price.hotelPick.hotelId, "none");
+});
+
+test("a per-resort excludeHotel does not leak into another resort's pricing", () => {
+  const wdwBook = fullBook("wdw", "MCO");
+  const dlrBook = fullBook("dlr", "SNA");
+  const overrides: Overrides = { wdw: { excludeHotel: true } };
+  const wdwResult = priceTrip(wdwBook, resortById("wdw"), base, overrides, START);
+  const dlrResult = priceTrip(dlrBook, resortById("dlr"), base, overrides, START);
+  assert.ok(wdwResult.ok && dlrResult.ok);
+  assert.equal(wdwResult.price.hotelPick.hotelId, "none");
+  assert.notEqual(dlrResult.price.hotelPick.hotelId, "none");
+  assert.ok(dlrResult.price.rooms > 0);
 });
 
 test("category falls back to the nearest available and says so", () => {
@@ -232,15 +349,44 @@ test("flight estimate: a route with no BTS baseline still fails cleanly, not wit
   if (!r.ok) assert.match(r.reason, /no cached fare/);
 });
 
-test("flight estimate: a real cached fare always wins over an available estimate", () => {
+test("flight estimate: a real cached fare wins when it's at or above the route's own median", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 400, days: 6 });
-  const neverUsed = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
-  const r = priceTrip(neverUsed, wdw, base, {}, START);
+  const lowEstimate = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
+  const r = priceTrip(lowEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
   assert.equal(r.price.perSeatFare, 400);
   assert.equal(r.price.flightPick?.estimate, undefined);
+});
+
+test("flight estimate: the median wins and is shown as an estimate when it's HIGHER than a real cached fare", () => {
+  // A real cached fare can itself be a deal-feed's cheapest-found number
+  // (Travelpayouts' calendar endpoint), not a representative one -- if the
+  // route's own honest median is higher, it corrects the shown price
+  // upward rather than quietly keeping a fare that undersells reality.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 90, days: 6 }); // a suspiciously cheap "real" fare
+  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(highEstimate, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 450, "the median (450) wins over the real-but-unrepresentative $90 fare");
+  assert.equal(r.price.flightPick?.price, 450);
+  assert.ok(r.price.flightPick?.estimate, "shown honestly as an estimate, not passed off as the real $90 quote");
+});
+
+test("flight estimate: a farePerSeat override still floors against the real row's price, not the corrected median", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 90, days: 6 });
+  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(highEstimate, wdw, base, { wdw: { farePerSeat: 100 } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  // 100 is below the median-corrected 450, but still above the real floor
+  // of 90 -- "never claim below the cheapest fare we know of" means the
+  // real $90 finding, not the higher median it gets displayed as.
+  assert.equal(r.price.perSeatFare, 100);
 });
 
 test("a gap mid-stay is refused rather than silently under-counted", () => {
@@ -269,6 +415,17 @@ test("the total is the sum of its parts", () => {
   const p = r.price;
   assert.equal(Math.round(p.total), Math.round(p.flights + p.tickets + p.hotel + p.food));
   assert.equal(Math.round(p.hotel), Math.round(p.rooms + p.transport));
+});
+
+test("excludeHotel and excludeFlights together: total is tickets + food only", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(book, wdw, base, { wdw: { excludeHotel: true, excludeFlights: true } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.flights, 0);
+  assert.equal(r.price.hotel, 0);
+  assert.equal(Math.round(r.price.total), Math.round(r.price.tickets + r.price.food));
 });
 
 test("the hotel pool respects the requested category, not just the cheapest bed", () => {

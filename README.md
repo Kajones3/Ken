@@ -136,6 +136,222 @@ Nothing here needs Stripe, a domain, or a paid tier — everyone signs in
 with just an email (see "Accounts have no password" in What is not done
 below before treating this as more than a friends demo).
 
+### If you deploy on mock data (no TRAVELPAYOUTS_TOKEN), international prices need one extra step
+
+**Six-resort comparison is the whole product** — a wrong international number
+doesn't just look off, it makes the "WDW or Disneyland Paris?" question the
+app exists to answer come out wrong. This was caught and fixed 2026-09-15
+after a real deploy was showing Tokyo/Shanghai flights around $600–720 when
+real fares run $1,000–1,250 (verified against live Google Flights results).
+
+**Root cause**: with no `TRAVELPAYOUTS_TOKEN` set (the README's own
+recommended first deploy, so mock pricing "still works fine"), the daily
+refresh job fills `flight_prices` — the exact-cache table that always wins
+over an estimate — using `MockProvider.flightMonth()`
+(`src/providers/mock.ts`). Its international price formula was a simple
+distance curve (`245 + dist*0.062` for transatlantic, `330 + dist*0.058` for
+transpacific, floor $420) that was never checked against real fares and
+landed close to *domestic* trip money instead. Because a real-looking cached
+row always beats the `est.`-labelled fallback, this wrong number is what
+users saw — not a missing-data problem, a wrong-formula problem, and no
+`historical_fares` seeding could fix it while stale rows sat in
+`flight_prices` ahead of it.
+
+**Fixed**: the mock formula now targets researched 2026 medians (US→Europe
+~$754, US→Asia ~$1,087 — see "How a flight number is arrived at" below) —
+`200 + dist*0.124` (Europe, floor $550) and `350 + dist*0.109` (Asia/Pacific,
+floor $700). Checked against real routes: ATL→CDG ≈ $677, LAX→CDG ≈ $834,
+ATL→NRT ≈ $1,135, IAH→PVG ≈ $1,176 — all within researched range.
+
+**This fix does not retroactively touch rows already cached in production.**
+The tiered refresh (see "Decisions worth knowing" below) only touches
+near-term dates daily; a date 6+ months out sits in the weekly tier and could
+show the old wrong price for up to a week. After deploying this fix, force a
+full recache once:
+
+```bash
+DATABASE_URL="<your neon connection string>" REFRESH_BACKFILL=true npm run refresh
+```
+
+(Same backfill flag as the first-deploy step above — also runnable from the
+Actions tab → "Parkfare refresh" → Run workflow → tick backfill, if
+`DATABASE_URL` is already set as a repo secret.) This overwrites every cached
+international fare with the corrected formula in one pass, rather than
+waiting on the cron tiers to rotate through.
+
+**If you get a real `TRAVELPAYOUTS_TOKEN` later**, this whole class of bug
+goes away for domestic routes (real per-date fares replace mock ones), but
+international routes still need `intl-sweep`/`intl-baseline` (metered, see
+below) or `npm run seed-intl` (`src/seedInternational.ts`, free, synthetic —
+2,460 rows of the same researched medians used above, tagged `sampled_live`
+so no trend multiplier is needed) as the `historical_fares` fallback for any
+date the exact-fare cache hasn't reached yet.
+
+**A real token being set now does not mean old mock-era rows are gone.**
+`pickProvider()` picks the flights provider once, for the whole run, from
+`TRAVELPAYOUTS_TOKEN` — so a deploy that already has a real token uses
+`TravelpayoutsProvider` for every route, mock included nowhere. But
+Travelpayouts' calendar endpoint is documented above as unreliable for
+international routes specifically (strict date/duration filtering discards
+most of what it returns), so it can go a long time genuinely failing to
+overwrite a stale `flight_prices` row that dates back to before the token was
+added — "upsert on success only" means a bad old row just sits there, silent,
+until something actually succeeds in replacing it. If international prices
+still look wrong after a `REFRESH_BACKFILL` run with a real token configured,
+check the run's own log for the specific route: a real 400/429 there (not a
+missing token) means Travelpayouts genuinely can't price that route, and the
+fix is `seed-intl` or `intl-sweep`, not the mock formula.
+
+### If SerpApi hotel quota runs out, on-property data used to die with it
+
+Found 2026-09-15 from a real refresh log: every resort's hotel refresh
+(`shdr`, `hkdl`, `wdw`, `dlr`, `dlp`, `tdr`, every month attempted) came back
+`serpapi hotels ... -> 429 { "error": "Your account has run out of
+searches." }` — the SerpApi account's real search quota was exhausted.
+
+**Cached hotel prices are still safe to rely on** — refresh only upserts on
+success (see "Decisions worth knowing" below), so a failed run never deletes
+existing `hotel_rates` rows. But nothing was being refreshed either, for a
+reason bigger than the quota itself: `SerpApiHotelProvider.hotelMonth()`
+(`src/providers/serpapi.ts`) used `Promise.all([onPropertyMonth(...),
+offPropertyMonth(...)])` — on-property Disney hotel estimates need no
+network call and always succeed, but bundling them with the real off-property
+SerpApi call meant *one* 429 on the off-property half failed the *whole*
+call, so on-property data stopped refreshing too, for no reason related to
+its own reliability. Fixed: `offPropertyMonth()` failures are now caught and
+logged individually, and on-property rows are written regardless — a SerpApi
+outage or exhausted quota now degrades to "off-property data goes stale,
+on-property keeps refreshing normally" instead of "nothing refreshes at all."
+
+This doesn't fix the underlying quota exhaustion — check your SerpApi
+account's plan/usage dashboard for when it resets or whether it needs
+upgrading. Off-property hotel prices will keep serving whatever was last
+successfully fetched until then.
+
+### On-property hotel rates are a static guess, not live data — recalibrated once, 2026-09-15
+
+`src/providers/serpapi.ts`'s file header claims on-property Disney hotels
+are "already reasonably trustworthy" as pure `config.ts` guesses, reasoning
+that "Disney doesn't discount transactionally the way a random off-property
+chain hotel does." **That reasoning doesn't hold** — real 2026 research
+found Tokyo, Shanghai, and Paris on-property rates swing 2–3x by season, the
+same as anywhere else. Off-property hotels get a real live SerpApi Google
+Hotels search every refresh; on-property never has, purely on that
+assumption.
+
+Recalibrated the worst gaps in `config.ts`'s `base` values against real 2026
+nightly rates (researched in local currency and converted — see the dated
+comments on each resort's `hotels:` array for the actual JPY/CNY/EUR figures
+and sources):
+
+- **Tokyo**: Celebration Hotel and Toy Story Hotel were too low; Tokyo
+  Disneyland Hotel and MiraCosta were too high. Fixed. MiraCosta and Fantasy
+  Springs specifically had wide source disagreement (themed suites vs.
+  standard rooms aren't distinguished by this model) — treat those two as a
+  rougher estimate than the other three.
+- **Shanghai**: both hotels were below the low end of the researched range.
+  Fixed.
+- **Paris**: Santa Fe, Cheyenne, Sequoia Lodge, and Newport Bay Club were
+  all below researched "from" prices. Fixed. Disneyland Hotel (the flagship)
+  had no comparably reliable research figure — left as a guess.
+- **WDW, Disneyland Anaheim, Hong Kong**: checked against real research and
+  already landed close (Animal Kingdom Lodge: $509 config vs. $508
+  researched) — left unchanged.
+
+**This is a one-time patch, not a durable fix**, and it will drift the same
+way the original numbers did. The durable fix is extending
+`SerpApiHotelProvider` to search on-property hotels by name through the same
+Google Hotels lookup off-property already uses — real numbers instead of a
+number someone typed in once. Deliberately not done here: it multiplies
+SerpApi call volume (one more search per on-property hotel per resort per
+month) against a quota that's already exhausted (see above) — a real cost
+trade-off the owner should decide on, not something to change silently.
+Don't add a `dataConfidence` badge for this — `config.test.ts` pins badges
+to exactly `["dlp","hkdl","shdr"]` as "a launch decision, not an
+implementation detail" for *structural* cost-model gaps (Paris bundles
+hotel+ticket, Shanghai bands by height, Hong Kong's age bands are
+unverified). Every resort's on-property line shares the same "static guess"
+limitation equally — it isn't a gap unique to one resort, so it isn't what
+that badge is for.
+
+### A "your rate" hotel override leaked across tiers in the "every category" comparison
+
+Found 2026-09-15 from a real screenshot: a WDW search with a $150/night
+nightly-rate override set showed **Value, Moderate, AND Deluxe all at
+exactly $150/night** in the detail view's "every category, same 6 nights"
+comparison — a Deluxe room at $150/night isn't a real option anywhere at
+WDW, which is what made this obviously wrong rather than just imprecise.
+
+Root cause: the "every category" comparison (`hotelAtTier()` in
+`public/prototype.html`) fetches `/api/calendar` once per tier to show what
+Value/Moderate/Deluxe would each independently cost. But `calendarQuery()`
+always attached the full `overrides` object, including any nightly-rate
+override — which is a claim about the ONE tier the user actually priced, not
+every tier at that resort (see "User overrides are free, per resort" in
+CLAUDE.md — they were never meant to be per-tier, but nothing stopped them
+leaking into a per-tier comparison). The server has no way to know "only
+apply this to the tier I originally set it for" because the query never said
+so, so it just applied the same flat nightly rate to all three tier
+requests.
+
+Fixed: `calendarQuery()` takes an optional `stripNightly` flag that removes
+just the `nightly` override for that resort (keeping any `farePerSeat`
+override, which genuinely doesn't vary by hotel tier) before building the
+query string; `hotelAtTier()` passes it for every tier except the one
+actually being priced. Verified with Playwright against a WDW search with a
+$150 override set: before the fix, Value/Moderate/Deluxe all read
+$150/night; after, they read $205/$150/$586 — three real, distinct
+model-based estimates, with only the tier you actually overrode reflecting
+your own number.
+
+### Per-resort "I've already got this sorted" checkboxes — excluding hotel/flights from the total
+
+The numeric "your rate" override above solves a different problem than a
+user raised next: sometimes there's no rate to type in at all — the hotel is
+free (family, points, a day trip) or flights are already booked separately.
+Forcing a $0 override through the numeric field worked but read as a
+placeholder/bug, not a deliberate choice.
+
+Added, per resort, alongside the numeric override (not replacing it — the
+owner explicitly wants to keep typing hypothetical fares too, e.g. "what if
+I fly free to Shanghai on miles" vs. "what if I only pay $500 to Tokyo," to
+compare deals across resorts): two checkboxes, "I've already got a room/
+flights sorted — don't count it in the total." `ResortOverride` gained
+`excludeHotel?: boolean` / `excludeFlights?: boolean` (`src/pricing.ts`).
+
+- `excludeHotel` folds into a `stayForResort` local (`ov.excludeHotel ?
+  "none" : params.stay`), reusing the *existing* `stay === "none"` handling
+  entirely — zero new hotel-pricing branches. This also disables a dining
+  plan and zeroes on-site transport automatically, same as the global "Need
+  a hotel? No" toggle already did, and hides the "every category" tier
+  comparison for free (it's gated on the same `hotelId==="none"` sentinel).
+- `excludeFlights` is a new early-bypass branch, *before* the cache-gap
+  check — it deliberately does **not** go through the fare floor (never
+  claim less than the cheapest real fare found): that floor guards against
+  an unrealistic price *claim*, and excluding a line isn't a price claim at
+  all. This also means a trip with a genuine cache gap for that route now
+  still prices successfully once flights are excluded, instead of hard-
+  failing.
+- Defensive precedence (if a request somehow carries both an exclude flag
+  and its matching numeric override): the exclude flag always wins, and it
+  falls out of branch ordering for free — no extra code needed.
+
+One easy-to-miss correctness trap during implementation: `excludeHotel`
+reusing the `hotelId==="none"` sentinel means the frontend's pre-existing
+`noHotel` check (already used to hide the tier comparison) also becomes true
+the moment the checkbox is checked — including in the one place that must
+**not** react to it, the panel-visibility gate that decides whether to show
+the hotel control at all. Gating that on `noHotel` would hide the checkbox
+(and the only way to uncheck it) the instant it's checked. Fixed with a
+separate `hotelWantedGlobally = params.stay !== "none"` check, so only the
+*global* toggle hides the control entirely — a per-resort exclude keeps its
+checkbox visible and clickable.
+
+12 new tests in `src/pricing.test.ts` cover both flags: zeroing, dining-plan/
+promo interaction, precedence when both a flag and its numeric field are set,
+the floor-bypass specifically, and that a per-resort exclude never leaks into
+another resort's pricing in the same compare. All 174 tests pass.
+
 ## Layout
 
 | Path | What it is |
@@ -251,6 +467,37 @@ The adapter's strict filter correctly discards nearly all of it — which is
 why the months people actually search were coming back empty and falling
 through to estimates. Don't "fix" this by loosening the filter; that just
 stores a 2-night fare under a 7-night label.
+
+**A real cached fare can itself be unrepresentative — the median wins when
+it's higher.** Decided 2026-09-15, after a real report that even domestic
+fares were "vastly underestimated." Root cause: the rows Travelpayouts *does*
+pass its strict filter are still, by the endpoint's own nature, a "cheapest
+recently found" number rather than a typical one — and until now, `priceTrip`
+treated **any** real row as automatically superior to the route's own honest
+BTS median, without ever comparing the two. A rock-bottom deal-feed price
+could silently beat a far more representative estimate just for being "real."
+
+Fixed: `priceTrip` now always computes the median estimate alongside a real
+row (previously only computed when no row existed at all — `flightEstimate()`
+is a cheap in-memory lookup, so this costs nothing extra) and shows whichever
+is **higher**. A real fare at or above the median still shows plain, with its
+carrier and booking link, unchanged from before. A real fare below the median
+gets shown as the median instead — honestly labelled `est.`, not passed off
+as the real quote it replaced. The farePerSeat override floor is unaffected:
+"never claim below the cheapest fare we know of" still means the real row's
+price specifically, not the corrected median — your own number just needs to
+beat what's actually achievable, not the model's best guess at what's typical.
+
+This pairs with a related, separate fix the same day: `SerpApiFlightProvider.
+roundTrip()` (`src/providers/serpapiFlights.ts`) was picking the single
+cheapest itinerary out of everything Google Flights returned for a route/
+date — often a few dozen options across every airline/time/stop combination —
+now picks the **median-priced** itinerary instead. That function backs three
+things at once: the nightly domestic trend job, the international sweep, and
+the Plus "exact fare" feature people pay to check — so the old min-pick made
+even the *paid* lookup unrepresentative. Together, these two fixes are the
+direct answer to "I don't want the cheapest price, I want the median, because
+the cheapest flight won't be available to everyone."
 
 ### Why nothing throws
 

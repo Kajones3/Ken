@@ -76,6 +76,15 @@ export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" |
 /** A rate or fare the user supplied themselves. Never below the cheapest known fare. */
 export interface ResortOverride {
   nightly?: number; farePerSeat?: number;
+  /** "I've already got this sorted — don't count it in the total" (a free
+   *  family/points room, flights already booked separately, etc.). Not a
+   *  price claim like nightly/farePerSeat — it says the line doesn't belong
+   *  in the total at all. Mutually exclusive with the matching numeric field
+   *  in the UI (checking one clears the other); if a request somehow carries
+   *  both, the exclude flag wins here — the numeric field is ignored, not
+   *  partially applied. */
+  excludeHotel?: boolean;
+  excludeFlights?: boolean;
   /** Picks a row from the curated promos table — its effect is always looked up server-side, never trusted from the client. */
   promoId?: string;
   /** The user's own claim (Annual Passholder, DVC, a code they found) — unverified, affects only their own price. */
@@ -328,30 +337,53 @@ export function priceTrip(
       gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
       wearAndTearUsd: Math.round(wearAndTearUsd * 100) / 100,
     };
+  } else if (ov.excludeFlights) {
+    // "I've already got flights sorted" — not a price claim, so this
+    // deliberately does NOT go through the cache-gap check or the floor
+    // clamp below. The floor exists to stop someone claiming a lower price
+    // than a real fare we found; this isn't claiming any price at all, it's
+    // removing the line entirely. Bypassing the cache-gap check also means a
+    // trip with genuinely no flight data for this route still prices
+    // successfully once flights are excluded, rather than hard-failing.
+    flights = 0;
+    perSeatFare = 0;
+    flightPick = null;
   } else {
     const row = book.flight(params.origin, destination, start, bucket);
-    // No exact cache hit — fall back to a BTS-baseline x trend estimate
-    // before giving up. Still an honest gap (undefined) for most routes
-    // today, since BTS coverage is domestic-leaning; this never fabricates
-    // a number where flightEstimate() itself has nothing.
-    const est = !row ? book.flightEstimate?.(params.origin, destination) : undefined;
+    // Always compute the median estimate too, even when a real row exists —
+    // a "real" cached fare can itself be a deal-feed's cheapest-found number
+    // (Travelpayouts' calendar endpoint is documented as exactly this: a
+    // "cheapest fares our users recently found" feed, not a representative
+    // one), so it isn't automatically more trustworthy than the route's own
+    // honest median. This never fabricates a number where flightEstimate()
+    // itself has nothing — est stays undefined for most routes, since BTS
+    // coverage is domestic-leaning.
+    const est = book.flightEstimate?.(params.origin, destination);
     if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
-    // Flying: an override may raise the fare but never fall below the cheapest fare we know of.
+    // The median wins when it's higher than the real row — a rock-bottom
+    // deal-feed price gets corrected up to the honest median rather than
+    // quietly undercutting what most travellers will actually pay; a real
+    // fare that's already representative (at or above the median) still
+    // shows as real, plain, with its carrier and booking link.
+    const useRow = !!row && !(est && est.med > row.price);
+    // Flying: an override may raise the fare but never fall below the cheapest fare we know of —
+    // "cheapest we know of" is still the real row, even on the rare date the median corrects it up.
     // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
     // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
     const floor = row?.price ?? est?.med ?? 0;
+    const modelFare = useRow ? row!.price : (est?.med ?? floor);
     if (transportMode === "miles") {
-      const base = ov.farePerSeat !== undefined ? ov.farePerSeat : floor;
+      const base = ov.farePerSeat !== undefined ? ov.farePerSeat : modelFare;
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
       perSeatFare = Math.max(0, base * (1 - milesPct / 100));
     } else {
-      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : floor;
+      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : modelFare;
     }
     flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
-    flightPick = row
-      ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink }
+    flightPick = useRow
+      ? { price: row!.price, carrier: row!.carrier, stops: row!.stops, deepLink: row!.deepLink }
       : est
       ? { price: est.med, estimate: est }
       : null;
@@ -389,7 +421,12 @@ export function priceTrip(
   }
 
   // --- food --------------------------------------------------------------
-  const foodPlan = planFor(resort, params, params.stay);
+  // excludeHotel folds into the effective stay used for THIS resort only —
+  // "I've already got a room sorted" behaves exactly like the global "no
+  // hotel wanted" case (no dining plan, no on-site transport line) without
+  // being a new branch: it reuses the stay==="none" handling below.
+  const stayForResort: Stay = ov.excludeHotel ? "none" : params.stay;
+  const foodPlan = planFor(resort, params, stayForResort);
   let food = 0;
   if (foodPlan) {
     for (const age of ages) {
@@ -406,7 +443,7 @@ export function priceTrip(
 
   // --- hotel -------------------------------------------------------------
   // A dining plan forces an on-property stay, because that is how Disney sells it.
-  const stay: Stay = foodPlan && params.stay === "both" ? "on" : params.stay;
+  const stay: Stay = foodPlan && stayForResort === "both" ? "on" : stayForResort;
 
   let rooms: number;
   let hotelPick: TripPrice["hotelPick"];
@@ -459,8 +496,13 @@ export function priceTrip(
     if (kind === "room_pct_off" || kind === "room_flat_off") {
       // A curated guess shouldn't second-guess a rate the user already found
       // themselves — but the user's own claim about their own price may.
-      if (source === "global" && ov.nightly !== undefined) {
-        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "you set your own nightly rate" });
+      // Same reasoning applies to a room that's been excluded entirely: a
+      // discount on a $0 room says nothing useful.
+      if (source === "global" && (ov.nightly !== undefined || ov.excludeHotel)) {
+        appliedPromos.push({
+          source, label, kind, amountUsd: 0, historical,
+          skipped: ov.excludeHotel ? "you're not counting a hotel here" : "you set your own nightly rate",
+        });
         return;
       }
       const before = rooms;

@@ -74,12 +74,25 @@ export class SerpApiHotelProvider {
    * On-property Disney hotels stay estimate-based (see file header) — real
    * off-property data gets combined with them here so this method drops
    * straight into the Provider interface's hotelMonth slot.
+   *
+   * on-property is free, local, and needs no network call, so a SerpApi
+   * failure (quota exhausted, rate limited, outage) must not cost it too.
+   * Before this, Promise.all failed the whole call on any off-property
+   * error, which meant a single 429 silently stopped *even the reliable
+   * on-property estimate* from refreshing — discovered when a real account
+   * ran out of searches and every resort's hotel refresh came back empty,
+   * including Disney's own on-property rates that had no reason to fail.
+   * Off-property degrades to whatever is already cached (refresh only
+   * upserts on success) rather than the whole resort/month getting nothing.
    */
   async hotelMonth(resortId: string, month: string): Promise<HotelQuote[]> {
-    const [onProperty, offProperty] = await Promise.all([
-      this.onPropertyMonth(resortId, month),
-      this.offPropertyMonth(resortId, month),
-    ]);
+    const onProperty = this.onPropertyMonth(resortId, month);
+    let offProperty: HotelQuote[] = [];
+    try {
+      offProperty = await this.offPropertyMonth(resortId, month);
+    } catch (e) {
+      console.error(`serpapi off-property hotels ${resortId} ${month}:`, (e as Error).message);
+    }
     return [...onProperty, ...offProperty];
   }
 

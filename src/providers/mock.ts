@@ -27,10 +27,18 @@ export class MockProvider implements Provider {
       r.iata === destination || r.altArrivalAirports.some((a) => a.iata === destination));
     if (!o || !resort) return [];
     const dist = haversineMiles(o.lat, o.lon, resort.lat, resort.lon);
+    // Coefficients fit against researched 2026 market averages (see README
+    // "How a flight number is arrived at"): US->Europe ~$754 median,
+    // US->Asia ~$1,087 median, at each region's typical US-origin distance.
+    // The old atl/pac coefficients (245+dist*0.062, 330+dist*0.058, floor
+    // 420) undershot real fares by roughly 2x on transatlantic/transpacific
+    // routes -- close enough to a domestic fare that a production deploy
+    // running on mock data (no TRAVELPAYOUTS_TOKEN set) silently priced
+    // Tokyo/Paris/Shanghai/Hong Kong flights at domestic-trip money.
     const base = resort.region === "dom" ? 78 + dist * 0.082
-      : resort.region === "atl" ? 245 + dist * 0.062
-      : 330 + dist * 0.058;
-    const floorPrice = resort.region === "dom" ? 98 : 420;
+      : resort.region === "atl" ? 200 + dist * 0.124
+      : 350 + dist * 0.109;
+    const floorPrice = resort.region === "dom" ? 98 : resort.region === "atl" ? 550 : 700;
     const carriers = CARRIERS[resort.id] ?? ["Delta"];
 
     const [from, to] = monthBounds(month);
