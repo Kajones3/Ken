@@ -1,0 +1,23 @@
+name: Parkfare seed international baselines
+
+# Manual only — fills historical_fares with synthetic international flight
+# baselines (src/seedInternational.ts) from researched 2026 market pricing,
+# tagged source='sampled_live' so no trend multiplier is needed. This is the
+# free fallback that keeps Tokyo/Paris/Shanghai/Hong Kong estimates
+# reasonable until intl-sweep has budget to buy real fares regularly. Safe
+# to re-run — it upserts on (origin, destination, year, quarter).
+on:
+  workflow_dispatch: {}
+
+jobs:
+  seed-intl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run seed-intl
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
