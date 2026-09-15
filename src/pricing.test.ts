@@ -349,15 +349,44 @@ test("flight estimate: a route with no BTS baseline still fails cleanly, not wit
   if (!r.ok) assert.match(r.reason, /no cached fare/);
 });
 
-test("flight estimate: a real cached fare always wins over an available estimate", () => {
+test("flight estimate: a real cached fare wins when it's at or above the route's own median", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 400, days: 6 });
-  const neverUsed = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
-  const r = priceTrip(neverUsed, wdw, base, {}, START);
+  const lowEstimate = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
+  const r = priceTrip(lowEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
   assert.equal(r.price.perSeatFare, 400);
   assert.equal(r.price.flightPick?.estimate, undefined);
+});
+
+test("flight estimate: the median wins and is shown as an estimate when it's HIGHER than a real cached fare", () => {
+  // A real cached fare can itself be a deal-feed's cheapest-found number
+  // (Travelpayouts' calendar endpoint), not a representative one -- if the
+  // route's own honest median is higher, it corrects the shown price
+  // upward rather than quietly keeping a fare that undersells reality.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 90, days: 6 }); // a suspiciously cheap "real" fare
+  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(highEstimate, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 450, "the median (450) wins over the real-but-unrepresentative $90 fare");
+  assert.equal(r.price.flightPick?.price, 450);
+  assert.ok(r.price.flightPick?.estimate, "shown honestly as an estimate, not passed off as the real $90 quote");
+});
+
+test("flight estimate: a farePerSeat override still floors against the real row's price, not the corrected median", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 90, days: 6 });
+  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(highEstimate, wdw, base, { wdw: { farePerSeat: 100 } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  // 100 is below the median-corrected 450, but still above the real floor
+  // of 90 -- "never claim below the cheapest fare we know of" means the
+  // real $90 finding, not the higher median it gets displayed as.
+  assert.equal(r.price.perSeatFare, 100);
 });
 
 test("a gap mid-stay is refused rather than silently under-counted", () => {

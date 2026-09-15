@@ -468,6 +468,37 @@ why the months people actually search were coming back empty and falling
 through to estimates. Don't "fix" this by loosening the filter; that just
 stores a 2-night fare under a 7-night label.
 
+**A real cached fare can itself be unrepresentative — the median wins when
+it's higher.** Decided 2026-09-15, after a real report that even domestic
+fares were "vastly underestimated." Root cause: the rows Travelpayouts *does*
+pass its strict filter are still, by the endpoint's own nature, a "cheapest
+recently found" number rather than a typical one — and until now, `priceTrip`
+treated **any** real row as automatically superior to the route's own honest
+BTS median, without ever comparing the two. A rock-bottom deal-feed price
+could silently beat a far more representative estimate just for being "real."
+
+Fixed: `priceTrip` now always computes the median estimate alongside a real
+row (previously only computed when no row existed at all — `flightEstimate()`
+is a cheap in-memory lookup, so this costs nothing extra) and shows whichever
+is **higher**. A real fare at or above the median still shows plain, with its
+carrier and booking link, unchanged from before. A real fare below the median
+gets shown as the median instead — honestly labelled `est.`, not passed off
+as the real quote it replaced. The farePerSeat override floor is unaffected:
+"never claim below the cheapest fare we know of" still means the real row's
+price specifically, not the corrected median — your own number just needs to
+beat what's actually achievable, not the model's best guess at what's typical.
+
+This pairs with a related, separate fix the same day: `SerpApiFlightProvider.
+roundTrip()` (`src/providers/serpapiFlights.ts`) was picking the single
+cheapest itinerary out of everything Google Flights returned for a route/
+date — often a few dozen options across every airline/time/stop combination —
+now picks the **median-priced** itinerary instead. That function backs three
+things at once: the nightly domestic trend job, the international sweep, and
+the Plus "exact fare" feature people pay to check — so the old min-pick made
+even the *paid* lookup unrepresentative. Together, these two fixes are the
+direct answer to "I don't want the cheapest price, I want the median, because
+the cheapest flight won't be available to everyone."
+
 ### Why nothing throws
 
 `priceTrip` returns `{ ok: false, reason }` rather than throwing or returning

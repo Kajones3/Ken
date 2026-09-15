@@ -350,28 +350,40 @@ export function priceTrip(
     flightPick = null;
   } else {
     const row = book.flight(params.origin, destination, start, bucket);
-    // No exact cache hit — fall back to a BTS-baseline x trend estimate
-    // before giving up. Still an honest gap (undefined) for most routes
-    // today, since BTS coverage is domestic-leaning; this never fabricates
-    // a number where flightEstimate() itself has nothing.
-    const est = !row ? book.flightEstimate?.(params.origin, destination) : undefined;
+    // Always compute the median estimate too, even when a real row exists —
+    // a "real" cached fare can itself be a deal-feed's cheapest-found number
+    // (Travelpayouts' calendar endpoint is documented as exactly this: a
+    // "cheapest fares our users recently found" feed, not a representative
+    // one), so it isn't automatically more trustworthy than the route's own
+    // honest median. This never fabricates a number where flightEstimate()
+    // itself has nothing — est stays undefined for most routes, since BTS
+    // coverage is domestic-leaning.
+    const est = book.flightEstimate?.(params.origin, destination);
     if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
-    // Flying: an override may raise the fare but never fall below the cheapest fare we know of.
+    // The median wins when it's higher than the real row — a rock-bottom
+    // deal-feed price gets corrected up to the honest median rather than
+    // quietly undercutting what most travellers will actually pay; a real
+    // fare that's already representative (at or above the median) still
+    // shows as real, plain, with its carrier and booking link.
+    const useRow = !!row && !(est && est.med > row.price);
+    // Flying: an override may raise the fare but never fall below the cheapest fare we know of —
+    // "cheapest we know of" is still the real row, even on the rare date the median corrects it up.
     // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
     // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
     const floor = row?.price ?? est?.med ?? 0;
+    const modelFare = useRow ? row!.price : (est?.med ?? floor);
     if (transportMode === "miles") {
-      const base = ov.farePerSeat !== undefined ? ov.farePerSeat : floor;
+      const base = ov.farePerSeat !== undefined ? ov.farePerSeat : modelFare;
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
       perSeatFare = Math.max(0, base * (1 - milesPct / 100));
     } else {
-      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : floor;
+      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : modelFare;
     }
     flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
-    flightPick = row
-      ? { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink }
+    flightPick = useRow
+      ? { price: row!.price, carrier: row!.carrier, stops: row!.stops, deepLink: row!.deepLink }
       : est
       ? { price: est.med, estimate: est }
       : null;
