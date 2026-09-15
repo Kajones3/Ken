@@ -132,26 +132,60 @@ Steps:
    DATABASE_URL="<your neon connection string>" npm run grant-plus -- friend@example.com 90
    ```
 
-6. **Seed international flight baselines** (one-time setup). International
-   routes (Paris, Tokyo, Shanghai, Hong Kong) have no free historical data
-   source like domestic US flights do (no BTS DB1B coverage). Until the
-   `intl-sweep` job can afford to buy real fares regularly, estimates come
-   from seeded market-research baselines. Run this once after deploy to fill
-   your production database:
-   ```bash
-   DATABASE_URL="<your neon connection string>" npm run seed-intl
-   ```
-   This creates 2,460 rows of synthetic baselines (41 origins × 5 intl
-   destinations × 3 years × 4 quarters) with realistic seasonal adjustments
-   (Q3 peak +37%, Q1 off-peak -15%). Without this seed, international flights
-   show "no cached price" until the monthly `intl-sweep` job runs (if it's
-   enabled and funded). Once real fares are bought later, they automatically
-   correct and improve these estimates — see "How a flight number is arrived
-   at" below for the full story on seasonal baselines and trend correction.
-
 Nothing here needs Stripe, a domain, or a paid tier — everyone signs in
 with just an email (see "Accounts have no password" in What is not done
 below before treating this as more than a friends demo).
+
+### If you deploy on mock data (no TRAVELPAYOUTS_TOKEN), international prices need one extra step
+
+**Six-resort comparison is the whole product** — a wrong international number
+doesn't just look off, it makes the "WDW or Disneyland Paris?" question the
+app exists to answer come out wrong. This was caught and fixed 2026-09-15
+after a real deploy was showing Tokyo/Shanghai flights around $600–720 when
+real fares run $1,000–1,250 (verified against live Google Flights results).
+
+**Root cause**: with no `TRAVELPAYOUTS_TOKEN` set (the README's own
+recommended first deploy, so mock pricing "still works fine"), the daily
+refresh job fills `flight_prices` — the exact-cache table that always wins
+over an estimate — using `MockProvider.flightMonth()`
+(`src/providers/mock.ts`). Its international price formula was a simple
+distance curve (`245 + dist*0.062` for transatlantic, `330 + dist*0.058` for
+transpacific, floor $420) that was never checked against real fares and
+landed close to *domestic* trip money instead. Because a real-looking cached
+row always beats the `est.`-labelled fallback, this wrong number is what
+users saw — not a missing-data problem, a wrong-formula problem, and no
+`historical_fares` seeding could fix it while stale rows sat in
+`flight_prices` ahead of it.
+
+**Fixed**: the mock formula now targets researched 2026 medians (US→Europe
+~$754, US→Asia ~$1,087 — see "How a flight number is arrived at" below) —
+`200 + dist*0.124` (Europe, floor $550) and `350 + dist*0.109` (Asia/Pacific,
+floor $700). Checked against real routes: ATL→CDG ≈ $677, LAX→CDG ≈ $834,
+ATL→NRT ≈ $1,135, IAH→PVG ≈ $1,176 — all within researched range.
+
+**This fix does not retroactively touch rows already cached in production.**
+The tiered refresh (see "Decisions worth knowing" below) only touches
+near-term dates daily; a date 6+ months out sits in the weekly tier and could
+show the old wrong price for up to a week. After deploying this fix, force a
+full recache once:
+
+```bash
+DATABASE_URL="<your neon connection string>" REFRESH_BACKFILL=true npm run refresh
+```
+
+(Same backfill flag as the first-deploy step above — also runnable from the
+Actions tab → "Parkfare refresh" → Run workflow → tick backfill, if
+`DATABASE_URL` is already set as a repo secret.) This overwrites every cached
+international fare with the corrected formula in one pass, rather than
+waiting on the cron tiers to rotate through.
+
+**If you get a real `TRAVELPAYOUTS_TOKEN` later**, this whole class of bug
+goes away for domestic routes (real per-date fares replace mock ones), but
+international routes still need `intl-sweep`/`intl-baseline` (metered, see
+below) or `npm run seed-intl` (`src/seedInternational.ts`, free, synthetic —
+2,460 rows of the same researched medians used above, tagged `sampled_live`
+so no trend multiplier is needed) as the `historical_fares` fallback for any
+date the exact-fare cache hasn't reached yet.
 
 ## Layout
 
