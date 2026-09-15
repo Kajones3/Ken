@@ -207,6 +207,9 @@ a{color:var(--ink)}
 .row:first-child{border-top:0}
 .row.best{background:linear-gradient(90deg,var(--accent-bg) 0%, transparent 62%)}
 .row.best::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent-line)}
+.row.empty-prompt{display:block; padding:28px 16px; text-align:center}
+.row.empty-prompt .rname{font-size:14.5px}
+.row.empty-prompt .rmeta{justify-content:center; margin-top:5px}
 .rank{font-family:"Archivo"; font-weight:800; font-size:19px; color:var(--muted); letter-spacing:-.03em}
 .row.best .rank{color:var(--accent)}
 .ident{min-width:0}
@@ -1196,6 +1199,15 @@ function sparkSVG(pts){
 
 function renderBoard(){
   const board = $("#board");
+  if(!results.length){
+    board.innerHTML = `<li class="row empty-prompt">
+      <div class="ident">
+        <div class="rname">No comparison yet</div>
+        <div class="rmeta">Set your trip details above, then click "Compare six resorts" to see prices.</div>
+      </div>
+    </li>`;
+    return;
+  }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
   board.innerHTML = list.map(({item,i},pos)=>{
     const r = item.resort;
@@ -1275,6 +1287,10 @@ function renderBoard(){
 }
 
 function renderTable(){
+  if(!results.length){
+    $("#tablewrap").innerHTML = `<p class="hint">Set your trip details above, then click "Compare six resorts" to see prices.</p>`;
+    return;
+  }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
   const rows = list.map(({item,i},pos)=>{
     const r = item.resort, open = unlocked(i);
@@ -2225,7 +2241,14 @@ async function boot(){
   fillJumpRow();
   buildAges();
   await refreshSession();
-  await runSearch(null);
+  // Don't auto-run a search on load — a first-time visitor seeing prices
+  // appear before they've set anything (origin, party size, dates) reads as
+  // "these are MY numbers" when they're really just whatever the form
+  // defaulted to. render() with an empty `results` shows the real form state
+  // (plan chip, sign-in box) plus a "no comparison yet" prompt instead —
+  // nothing is fetched or priced until the user clicks the button themselves.
+  params = readParams();
+  render();
   syncView();
   await loadSavedTrips();
 }
