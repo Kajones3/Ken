@@ -28,6 +28,20 @@ test("a repeated query is served from the cache, not the provider", async () => 
   await db.close();
 });
 
+test("the provider receives what was actually typed, not the lowercased cache key", async () => {
+  // Regression: the provider used to be called with the lowercased cache
+  // key, so a mock/echo-style provider's own label came back permanently
+  // lowercase ("Raleigh" typed, "raleigh" shown) even though nothing about
+  // the real place name changed — the cache's own normalization is an
+  // internal lookup detail, not something the provider should ever see.
+  const db = await memoryDb();
+  const { provider, calls } = countingProvider();
+  const result = await cachedGeocode(db, provider, "Raleigh, NC");
+  assert.equal(result[0]!.label, "Raleigh, NC");
+  assert.equal(calls(), 1);
+  await db.close();
+});
+
 test("an empty query never calls the provider", async () => {
   const db = await memoryDb();
   const { provider, calls } = countingProvider();

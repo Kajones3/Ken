@@ -391,6 +391,37 @@ zeroes the driving pick's own field, unset behaves identically to explicit
 `true`, and it's a no-op on a rental (already zero regardless). All 187
 tests pass.
 
+### The city-search cache was passing the wrong case to the provider
+
+Real report: typing "Raleigh" into the driving-mode "Departing from" box
+returned a single suggestion labelled plain lowercase `raleigh`, no state or
+country — exactly what `MockGeocodeProvider` looks like (it echoes its
+input back as the label), not what a real Nominatim result looks like (a
+full `display_name` like "Raleigh, Wake County, North Carolina, United
+States").
+
+Root cause, independent of which provider is active: `cachedGeocode()`
+(`src/geo/cache.ts`) normalizes the query to a lowercase cache key —
+correct for the cache lookup itself, so "Raleigh" and "raleigh" share one
+row — but was then passing that *lowercased key* to `provider.search()`
+instead of what was actually typed. Nominatim's own search is
+case-insensitive so a live lookup would still resolve correctly, but its
+label came from `display_name` regardless, and the mock's echoed label
+came back permanently lowercase either way — this is a real bug independent
+of whether `GEOCODE_LIVE` is set. Fixed: the provider now receives the
+original trimmed (but not lowercased) query; only the cache's own
+lookup/storage key is normalized. New test in `src/geo/cache.test.ts` pins
+this — a fresh, uncached "Raleigh, NC" query reaches the provider exactly
+as typed.
+
+**Separately worth checking**: the lowercase, no-state result in that report
+is also the exact signature of the *mock* geocoder being active rather than
+real Nominatim — if `GEOCODE_LIVE=true` was set in Render's environment
+variables but the result still looks like this after the fix above and a
+redeploy, confirm the variable actually saved and the service redeployed
+with it, since a driving-mode search still silently falls back to the mock
+with no error if it's unset.
+
 ## Layout
 
 | Path | What it is |
