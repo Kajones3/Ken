@@ -208,11 +208,16 @@ export const RESORTS: Resort[] = [
       { label: "Full Board Plus meal plan", adult: 70, child: 39 },
     ],
     transport: { on: 0, off: 12 },
+    // Value/moderate bases recalibrated 2026-09-15 against real 2026 nightly
+    // rates researched in EUR/USD across booking sites — the old bases sat
+    // below researched "from" prices for all four. Disneyland Hotel (the
+    // flagship, castle-adjacent property) had no comparably reliable
+    // research figure to check against — left unchanged, still a guess.
     hotels: [
-      h("dlp-sf", "Disney Hotel Santa Fe", "Value · shuttle", 165, "value", true),
-      h("dlp-ch", "Disney Hotel Cheyenne", "Value · shuttle", 198, "value", true),
-      h("dlp-sl", "Disney Sequoia Lodge", "Moderate · walkable", 252, "moderate", true),
-      h("dlp-nb", "Disney Newport Bay Club", "Moderate · walkable", 285, "moderate", true),
+      h("dlp-sf", "Disney Hotel Santa Fe", "Value · shuttle", 190, "value", true),
+      h("dlp-ch", "Disney Hotel Cheyenne", "Value · shuttle", 205, "value", true),
+      h("dlp-sl", "Disney Sequoia Lodge", "Moderate · walkable", 270, "moderate", true),
+      h("dlp-nb", "Disney Newport Bay Club", "Moderate · walkable", 320, "moderate", true),
       h("dlp-dlh", "Disneyland Hotel", "Deluxe · park gates", 820, "deluxe", true),
       h("dlp-bsg", "Bussy-Saint-Georges hotel", "Off property · 12 min", 135, "budget", false),
       h("dlp-vde", "Val d'Europe hotel", "Off property · 8 min", 178, "mid", false),
@@ -238,12 +243,20 @@ export const RESORTS: Resort[] = [
     food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
     plans: [],
     transport: { on: 0, off: 14 },
+    // On-property bases recalibrated 2026-09-15 against real 2026 nightly
+    // rates researched in JPY and converted (Celebration ~JPY22,000, Toy
+    // Story ~JPY38,000, Tokyo Disneyland Hotel ~JPY54,000, MiraCosta
+    // ~JPY62,000, Fantasy Springs ~JPY90,000, at roughly JPY150/USD) — the
+    // old bases undershot the value tier and overshot Tokyo Disneyland
+    // Hotel/MiraCosta. Sources disagreed by a wide margin on MiraCosta and
+    // Fantasy Springs specifically (themed suites vs. standard rooms), so
+    // those two remain a rougher approximation than the other three.
     hotels: [
-      h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 172, "value", true),
-      h("tdr-ts", "Toy Story Hotel", "Value · monorail", 285, "value", true),
-      h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 495, "deluxe", true),
-      h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 640, "deluxe", true),
-      h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 720, "deluxe", true),
+      h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 195, "value", true),
+      h("tdr-ts", "Toy Story Hotel", "Value · monorail", 300, "value", true),
+      h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 420, "deluxe", true),
+      h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 560, "deluxe", true),
+      h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 680, "deluxe", true),
       h("tdr-su", "Shin-Urayasu business hotel", "Off property · 10 min", 138, "budget", false),
       h("tdr-ar", "Tokyo Bay Ariake", "Off property · 30 min", 178, "mid", false),
       h("tdr-mh", "Maihama partner hotel", "Off property · monorail", 215, "mid", false),
@@ -279,9 +292,13 @@ export const RESORTS: Resort[] = [
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
     plans: [],
     transport: { on: 0, off: 10 },
+    // On-property bases recalibrated 2026-09-15 against real 2026 nightly
+    // rates researched in CNY and converted (Toy Story ~CNY1,200-3,000,
+    // Shanghai Disneyland Hotel ~CNY1,800-3,500, at roughly CNY7/USD) — the
+    // old bases sat below even the low end of the researched range.
     hotels: [
-      h("shdr-ts", "Toy Story Hotel", "Value · shuttle", 165, "value", true),
-      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 305, "deluxe", true),
+      h("shdr-ts", "Toy Story Hotel", "Value · shuttle", 215, "value", true),
+      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 370, "deluxe", true),
       h("shdr-pd", "Pudong business hotel", "Off property · 20 min", 98, "budget", false),
       h("shdr-adj", "Resort-adjacent hotel", "Off property · 10 min", 148, "mid", false),
       h("shdr-cty", "Shanghai city 5-star", "Off property · 45 min", 225, "upscale", false),

@@ -1015,8 +1015,18 @@ function exactDatesActive(){
   const a = $("#exactDate").value, b = $("#exactReturn").value;
   return !!(a && b && nightsBetween(a, b) > 0);
 }
-function calendarQuery(resortId, from, to, tierOverride){
-  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(OV), destination: destinationChoice[resortId] || "" };
+function calendarQuery(resortId, from, to, tierOverride, stripNightly){
+  // A "your rate" nightly override is a claim about ONE specific tier (the
+  // room you priced), not every tier at that resort — so a query asking
+  // "what would Deluxe cost instead?" must not carry the override you set
+  // while looking at Moderate, or the server just echoes that same nightly
+  // rate back for every tier regardless of what it actually asked for.
+  let ov = OV;
+  if(stripNightly && OV[resortId] && OV[resortId].nightly !== undefined){
+    const { nightly, ...rest } = OV[resortId];
+    ov = { ...OV, [resortId]: rest };
+  }
+  const q = { ...tripQuery(), resort: resortId, from, to, overrides: JSON.stringify(ov), destination: destinationChoice[resortId] || "" };
   if(tierOverride !== undefined) q.tier = tierOverride;
   return q;
 }
@@ -1122,7 +1132,10 @@ function monthlyMinima(cal){
  *  from one calendar read on the trip's own start date. */
 async function hotelAtTier(item, t){
   if(t === +params.tier) return item.price.hotel;
-  const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t));
+  // stripNightly=true: this is "what would a DIFFERENT tier cost", so your
+  // own nightly-rate override (which only claims to know the tier you
+  // actually searched) must not apply here — see calendarQuery().
+  const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t, true));
   const day = data.days[0];
   if(!day || day.total === null) return null;
   return day.total - item.price.total + item.price.hotel;

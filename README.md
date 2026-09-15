@@ -228,6 +228,82 @@ account's plan/usage dashboard for when it resets or whether it needs
 upgrading. Off-property hotel prices will keep serving whatever was last
 successfully fetched until then.
 
+### On-property hotel rates are a static guess, not live data — recalibrated once, 2026-09-15
+
+`src/providers/serpapi.ts`'s file header claims on-property Disney hotels
+are "already reasonably trustworthy" as pure `config.ts` guesses, reasoning
+that "Disney doesn't discount transactionally the way a random off-property
+chain hotel does." **That reasoning doesn't hold** — real 2026 research
+found Tokyo, Shanghai, and Paris on-property rates swing 2–3x by season, the
+same as anywhere else. Off-property hotels get a real live SerpApi Google
+Hotels search every refresh; on-property never has, purely on that
+assumption.
+
+Recalibrated the worst gaps in `config.ts`'s `base` values against real 2026
+nightly rates (researched in local currency and converted — see the dated
+comments on each resort's `hotels:` array for the actual JPY/CNY/EUR figures
+and sources):
+
+- **Tokyo**: Celebration Hotel and Toy Story Hotel were too low; Tokyo
+  Disneyland Hotel and MiraCosta were too high. Fixed. MiraCosta and Fantasy
+  Springs specifically had wide source disagreement (themed suites vs.
+  standard rooms aren't distinguished by this model) — treat those two as a
+  rougher estimate than the other three.
+- **Shanghai**: both hotels were below the low end of the researched range.
+  Fixed.
+- **Paris**: Santa Fe, Cheyenne, Sequoia Lodge, and Newport Bay Club were
+  all below researched "from" prices. Fixed. Disneyland Hotel (the flagship)
+  had no comparably reliable research figure — left as a guess.
+- **WDW, Disneyland Anaheim, Hong Kong**: checked against real research and
+  already landed close (Animal Kingdom Lodge: $509 config vs. $508
+  researched) — left unchanged.
+
+**This is a one-time patch, not a durable fix**, and it will drift the same
+way the original numbers did. The durable fix is extending
+`SerpApiHotelProvider` to search on-property hotels by name through the same
+Google Hotels lookup off-property already uses — real numbers instead of a
+number someone typed in once. Deliberately not done here: it multiplies
+SerpApi call volume (one more search per on-property hotel per resort per
+month) against a quota that's already exhausted (see above) — a real cost
+trade-off the owner should decide on, not something to change silently.
+Don't add a `dataConfidence` badge for this — `config.test.ts` pins badges
+to exactly `["dlp","hkdl","shdr"]` as "a launch decision, not an
+implementation detail" for *structural* cost-model gaps (Paris bundles
+hotel+ticket, Shanghai bands by height, Hong Kong's age bands are
+unverified). Every resort's on-property line shares the same "static guess"
+limitation equally — it isn't a gap unique to one resort, so it isn't what
+that badge is for.
+
+### A "your rate" hotel override leaked across tiers in the "every category" comparison
+
+Found 2026-09-15 from a real screenshot: a WDW search with a $150/night
+nightly-rate override set showed **Value, Moderate, AND Deluxe all at
+exactly $150/night** in the detail view's "every category, same 6 nights"
+comparison — a Deluxe room at $150/night isn't a real option anywhere at
+WDW, which is what made this obviously wrong rather than just imprecise.
+
+Root cause: the "every category" comparison (`hotelAtTier()` in
+`public/prototype.html`) fetches `/api/calendar` once per tier to show what
+Value/Moderate/Deluxe would each independently cost. But `calendarQuery()`
+always attached the full `overrides` object, including any nightly-rate
+override — which is a claim about the ONE tier the user actually priced, not
+every tier at that resort (see "User overrides are free, per resort" in
+CLAUDE.md — they were never meant to be per-tier, but nothing stopped them
+leaking into a per-tier comparison). The server has no way to know "only
+apply this to the tier I originally set it for" because the query never said
+so, so it just applied the same flat nightly rate to all three tier
+requests.
+
+Fixed: `calendarQuery()` takes an optional `stripNightly` flag that removes
+just the `nightly` override for that resort (keeping any `farePerSeat`
+override, which genuinely doesn't vary by hotel tier) before building the
+query string; `hotelAtTier()` passes it for every tier except the one
+actually being priced. Verified with Playwright against a WDW search with a
+$150 override set: before the fix, Value/Moderate/Deluxe all read
+$150/night; after, they read $205/$150/$586 — three real, distinct
+model-based estimates, with only the tier you actually overrode reflecting
+your own number.
+
 ## Layout
 
 | Path | What it is |
