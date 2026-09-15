@@ -73,6 +73,10 @@ function gettingThereParams(q: URLSearchParams): {
     driveBase.originPoint = { label: (q.get("originLabel") ?? "").slice(0, 120), lat, lon };
   }
   if (q.get("driveRentalCar") === "1") driveBase.rentalCar = true;
+  // Default (unset) is true — only an explicit "0" turns it off. Moot once
+  // rentalCar is true, since priceTrip zeroes wear-and-tear for a rental
+  // regardless of this flag.
+  if (q.get("driveWearAndTear") === "0") driveBase.includeWearAndTear = false;
 
   return { gettingThere, flyBase, driveBase };
 }

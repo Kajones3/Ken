@@ -605,6 +605,39 @@ test("transport mode: driving includes wear and tear at the IRS mileage rate", (
   assert.ok(Math.abs(r.price.driving - (r.price.drivingPick!.gasCostUsd + r.price.drivingPick!.wearAndTearUsd)) < 0.01);
 });
 
+test("includeWearAndTear: false drops wear and tear, prices gas only", () => {
+  const book = fullBook("wdw", "MCO");
+  const withWear = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  const gasOnly = priceTrip(
+    book, resortById("wdw"), { ...base, transportMode: "drive", includeWearAndTear: false }, {}, START,
+  );
+  assert.ok(withWear.ok && gasOnly.ok);
+  assert.equal(gasOnly.price.drivingPick!.wearAndTearUsd, 0);
+  assert.equal(gasOnly.price.driving, gasOnly.price.drivingPick!.gasCostUsd);
+  assert.ok(gasOnly.price.driving < withWear.price.driving, "dropping wear and tear must actually lower the total");
+});
+
+test("includeWearAndTear: unset behaves the same as true (default is to include it)", () => {
+  const book = fullBook("wdw", "MCO");
+  const unset = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  const explicitTrue = priceTrip(
+    book, resortById("wdw"), { ...base, transportMode: "drive", includeWearAndTear: true }, {}, START,
+  );
+  assert.ok(unset.ok && explicitTrue.ok);
+  assert.equal(unset.price.drivingPick!.wearAndTearUsd, explicitTrue.price.drivingPick!.wearAndTearUsd);
+});
+
+test("includeWearAndTear: false has no effect on a rental (already zero either way)", () => {
+  const book = fullBook("wdw", "MCO");
+  const r = priceTrip(
+    book, resortById("wdw"),
+    { ...base, transportMode: "drive", rentalCar: true, includeWearAndTear: false },
+    {}, START,
+  );
+  assert.ok(r.ok);
+  assert.equal(r.price.drivingPick!.wearAndTearUsd, 0);
+});
+
 test("rental car: renting instead of driving your own car zeroes wear and tear", () => {
   const book = fullBook("wdw", "MCO");
   const owned = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);

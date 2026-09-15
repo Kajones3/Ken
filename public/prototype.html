@@ -527,6 +527,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
               <option value="1">Yes — save the miles on my car</option>
             </select>
           </div>
+          <div class="f" style="width:220px" id="wearAndTearField">
+            <label for="driveWearAndTear">Include wear &amp; tear on your car?</label>
+            <select id="driveWearAndTear">
+              <option value="1" selected>Yes — full IRS mileage rate</option>
+              <option value="0">No — just gas</option>
+            </select>
+          </div>
         </div>
         <div class="gt-sub" id="overnightDetail" hidden>
           <div class="agef" style="width:120px">
@@ -931,6 +938,7 @@ function readParams(){
     gettingThere,
     flyRentalCar: $("#flyRentalCar").value === "1",
     driveRentalCar: $("#driveRentalCar").value === "1",
+    driveWearAndTear: $("#driveWearAndTear").value === "1",
     overnightYN: $("#overnightYN").value,
     overnightNights: +$("#overnightNights").value,
     overnightCostPerNight: +$("#overnightCostPerNight").value || 0,
@@ -952,6 +960,13 @@ function syncGettingThere(){
 }
 $("#gettingThere").addEventListener("change", syncGettingThere);
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
+
+/** Wear-and-tear is already zero on a rental (its own fee covers it), so
+ *  the toggle to drop it manually is moot and hidden whenever renting. */
+function syncDriveRentalCar(){
+  $("#wearAndTearField").hidden = $("#driveRentalCar").value === "1";
+}
+$("#driveRentalCar").addEventListener("change", syncDriveRentalCar);
 
 $("#overnightYN").addEventListener("change", e => { $("#overnightDetail").hidden = e.target.value !== "yes"; });
 
@@ -987,6 +1002,8 @@ function tripQuery(){
       q.overnightCostPerNight = params.overnightCostPerNight;
     }
     if(params.driveRentalCar) q.driveRentalCar = "1";
+    // Default is "include it" — only send anything when explicitly turned off.
+    if(!params.driveWearAndTear) q.driveWearAndTear = "0";
     if(params.originPoint){
       q.originLat = params.originPoint.lat;
       q.originLon = params.originPoint.lon;
@@ -1756,7 +1773,7 @@ async function renderDetail(){
             <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
             <div class="p">${usd(x.drivingPick ? x.drivingPick.gasCostUsd : 0)}</div></div>
           ${x.drivingPick && x.drivingPick.wearAndTearUsd > 0 ? `<div class="li"><div class="l"><b>Wear &amp; tear on your car</b>
-            <small>IRS standard mileage rate, per mile driven</small></div><div class="p">${usd(x.drivingPick.wearAndTearUsd)}</div></div>` : ""}
+            <small>IRS standard mileage rate — bundles depreciation, maintenance and insurance into one per-mile number, not just gas. Turn this off above if you don't think of your own car's wear as a cost of this trip.</small></div><div class="p">${usd(x.drivingPick.wearAndTearUsd)}</div></div>` : ""}
           ${x.drivingPick && x.drivingPick.overnightUsd ? `<div class="li"><div class="l"><b>Overnight stop</b>
             <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
           ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car</b>
