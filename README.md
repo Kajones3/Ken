@@ -187,6 +187,47 @@ below) or `npm run seed-intl` (`src/seedInternational.ts`, free, synthetic —
 so no trend multiplier is needed) as the `historical_fares` fallback for any
 date the exact-fare cache hasn't reached yet.
 
+**A real token being set now does not mean old mock-era rows are gone.**
+`pickProvider()` picks the flights provider once, for the whole run, from
+`TRAVELPAYOUTS_TOKEN` — so a deploy that already has a real token uses
+`TravelpayoutsProvider` for every route, mock included nowhere. But
+Travelpayouts' calendar endpoint is documented above as unreliable for
+international routes specifically (strict date/duration filtering discards
+most of what it returns), so it can go a long time genuinely failing to
+overwrite a stale `flight_prices` row that dates back to before the token was
+added — "upsert on success only" means a bad old row just sits there, silent,
+until something actually succeeds in replacing it. If international prices
+still look wrong after a `REFRESH_BACKFILL` run with a real token configured,
+check the run's own log for the specific route: a real 400/429 there (not a
+missing token) means Travelpayouts genuinely can't price that route, and the
+fix is `seed-intl` or `intl-sweep`, not the mock formula.
+
+### If SerpApi hotel quota runs out, on-property data used to die with it
+
+Found 2026-09-15 from a real refresh log: every resort's hotel refresh
+(`shdr`, `hkdl`, `wdw`, `dlr`, `dlp`, `tdr`, every month attempted) came back
+`serpapi hotels ... -> 429 { "error": "Your account has run out of
+searches." }` — the SerpApi account's real search quota was exhausted.
+
+**Cached hotel prices are still safe to rely on** — refresh only upserts on
+success (see "Decisions worth knowing" below), so a failed run never deletes
+existing `hotel_rates` rows. But nothing was being refreshed either, for a
+reason bigger than the quota itself: `SerpApiHotelProvider.hotelMonth()`
+(`src/providers/serpapi.ts`) used `Promise.all([onPropertyMonth(...),
+offPropertyMonth(...)])` — on-property Disney hotel estimates need no
+network call and always succeed, but bundling them with the real off-property
+SerpApi call meant *one* 429 on the off-property half failed the *whole*
+call, so on-property data stopped refreshing too, for no reason related to
+its own reliability. Fixed: `offPropertyMonth()` failures are now caught and
+logged individually, and on-property rows are written regardless — a SerpApi
+outage or exhausted quota now degrades to "off-property data goes stale,
+on-property keeps refreshing normally" instead of "nothing refreshes at all."
+
+This doesn't fix the underlying quota exhaustion — check your SerpApi
+account's plan/usage dashboard for when it resets or whether it needs
+upgrading. Off-property hotel prices will keep serving whatever was last
+successfully fetched until then.
+
 ## Layout
 
 | Path | What it is |
