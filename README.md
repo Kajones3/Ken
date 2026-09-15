@@ -304,6 +304,54 @@ $150/night; after, they read $205/$150/$586 — three real, distinct
 model-based estimates, with only the tier you actually overrode reflecting
 your own number.
 
+### Per-resort "I've already got this sorted" checkboxes — excluding hotel/flights from the total
+
+The numeric "your rate" override above solves a different problem than a
+user raised next: sometimes there's no rate to type in at all — the hotel is
+free (family, points, a day trip) or flights are already booked separately.
+Forcing a $0 override through the numeric field worked but read as a
+placeholder/bug, not a deliberate choice.
+
+Added, per resort, alongside the numeric override (not replacing it — the
+owner explicitly wants to keep typing hypothetical fares too, e.g. "what if
+I fly free to Shanghai on miles" vs. "what if I only pay $500 to Tokyo," to
+compare deals across resorts): two checkboxes, "I've already got a room/
+flights sorted — don't count it in the total." `ResortOverride` gained
+`excludeHotel?: boolean` / `excludeFlights?: boolean` (`src/pricing.ts`).
+
+- `excludeHotel` folds into a `stayForResort` local (`ov.excludeHotel ?
+  "none" : params.stay`), reusing the *existing* `stay === "none"` handling
+  entirely — zero new hotel-pricing branches. This also disables a dining
+  plan and zeroes on-site transport automatically, same as the global "Need
+  a hotel? No" toggle already did, and hides the "every category" tier
+  comparison for free (it's gated on the same `hotelId==="none"` sentinel).
+- `excludeFlights` is a new early-bypass branch, *before* the cache-gap
+  check — it deliberately does **not** go through the fare floor (never
+  claim less than the cheapest real fare found): that floor guards against
+  an unrealistic price *claim*, and excluding a line isn't a price claim at
+  all. This also means a trip with a genuine cache gap for that route now
+  still prices successfully once flights are excluded, instead of hard-
+  failing.
+- Defensive precedence (if a request somehow carries both an exclude flag
+  and its matching numeric override): the exclude flag always wins, and it
+  falls out of branch ordering for free — no extra code needed.
+
+One easy-to-miss correctness trap during implementation: `excludeHotel`
+reusing the `hotelId==="none"` sentinel means the frontend's pre-existing
+`noHotel` check (already used to hide the tier comparison) also becomes true
+the moment the checkbox is checked — including in the one place that must
+**not** react to it, the panel-visibility gate that decides whether to show
+the hotel control at all. Gating that on `noHotel` would hide the checkbox
+(and the only way to uncheck it) the instant it's checked. Fixed with a
+separate `hotelWantedGlobally = params.stay !== "none"` check, so only the
+*global* toggle hides the control entirely — a per-resort exclude keeps its
+checkbox visible and clickable.
+
+12 new tests in `src/pricing.test.ts` cover both flags: zeroing, dining-plan/
+promo interaction, precedence when both a flag and its numeric field are set,
+the floor-bypass specifically, and that a per-resort exclude never leaks into
+another resort's pricing in the same compare. All 174 tests pass.
+
 ## Layout
 
 | Path | What it is |

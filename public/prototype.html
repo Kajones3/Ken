@@ -336,6 +336,9 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .ovhint{font-size:11px; color:var(--muted); line-height:1.45}
 .ovacts{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
 .yourchip{display:inline-flex; align-items:center; font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 6px}
+.ovexclude{display:flex; align-items:flex-start; gap:8px; font-size:12px; color:var(--ink); cursor:pointer; line-height:1.4}
+.ovexclude input[type=checkbox]{margin-top:2px; width:15px; height:15px; accent-color:var(--accent-line); cursor:pointer; flex:none}
+.ovexcluded{font-size:11.5px; color:var(--ink-2); line-height:1.45; padding-top:2px}
 .gate{position:relative}
 .gate .inner{filter:blur(4px); opacity:.45; pointer-events:none}
 .gate .g-over{position:absolute; inset:0; display:grid; place-items:center; text-align:center; padding:10px}
@@ -814,9 +817,9 @@ const store = {
   set(k,v){ try{ localStorage.setItem("pf_"+k, JSON.stringify(v)); }catch(e){} }
 };
 
-const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?} } — your numbers, not the model's
+const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, excludeHotel?, excludeFlights?} } — your numbers, not the model's
 const ovOf = id => OV[id] || {};
-const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat); };
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
 
 let session = { authenticated:false, email:null, plus:false, plusUntil:null };
 let params = null;
@@ -1449,6 +1452,13 @@ async function renderDetail(){
   const pax = list.length;
 
   const noHotel = x.hotelPick.hotelId === "none";
+  // Distinct from noHotel on purpose: noHotel is true for BOTH "the global
+  // 'Need a hotel?' toggle wants none" and "this one resort's hotel is
+  // excluded" (they share the same hotelId:"none" pricing outcome). Only the
+  // first should hide the hotel control entirely — the second still needs
+  // its checkbox visible so it can be unchecked. See the "your numbers"
+  // panel below.
+  const hotelWantedGlobally = p.stay !== "none";
   const [tierRows, promoList] = await Promise.all([
     noHotel ? Promise.resolve([null,null,null]) : Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
     fetchPromosFor(item.resortId, x.start),
@@ -1498,7 +1508,15 @@ async function renderDetail(){
   // flights — the one cached fare this trip actually priced against
   const fp = x.flightPick;
   const floor = fp ? fp.price : x.perSeatFare;
-  const flightRows = (fp && fp.estimate
+  // excludeFlights also prices to flightPick===null (same as "no cache, no
+  // number" today) — check the override directly, before touching fp, so
+  // "excluded" never gets mislabelled as "priced entirely from your number".
+  const excludeFlights = !!ovOf(item.resortId).excludeFlights;
+  const flightRows = excludeFlights
+    ? `<div class="li"><div class="l"><b>Flights excluded</b>
+        <small>Not counted in this trip's total — you said you've already got this sorted</small></div>
+        <div class="p">$0</div></div>`
+    : (fp && fp.estimate
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
         <small>Not a quote. This route has no real fare for this exact date, so it is estimated from
         ${fp.estimate.sampledLive
@@ -1643,6 +1661,9 @@ async function renderDetail(){
   const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
   const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
   const fareCtl = `<div class="ovcell">
+    <label class="ovexclude"><input type="checkbox" id="excludeFlightsCk" ${ovR.excludeFlights ? "checked" : ""}>
+      <span>I've already got flights sorted — don't count it in the total</span></label>
+    ${ovR.excludeFlights ? `<div class="ovexcluded">Flights excluded from ${r.name}'s total. Uncheck to price a fare again.</div>` : `
     <div class="lab"><span>Airfare you expect, per person</span><b id="fareVal">${usd(fareNow)}</b></div>
     <input type="range" id="fareSlider" min="${Math.round(floor)}" max="${Math.round(floor*2.6)}" step="5"
            value="${Math.round(fareNow)}" aria-label="Airfare you expect per person">
@@ -1651,10 +1672,14 @@ async function renderDetail(){
       You can assume more than that, never less. ${overPct > 0 ? `Right now you're ${overPct}% above it.` : ""}</div>
     ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
+    `}
   </div>`;
 
   const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
   const hotelCtl = `<div class="ovcell">
+    <label class="ovexclude"><input type="checkbox" id="excludeHotelCk" ${ovR.excludeHotel ? "checked" : ""}>
+      <span>I've already got a room sorted — don't count it in the total</span></label>
+    ${ovR.excludeHotel ? `<div class="ovexcluded">Hotel cost excluded from ${r.name}'s total. Uncheck to price a room again.</div>` : `
     <div class="lab"><span>Hotel, per night</span><b>${ovR.nightly ? usd(ovR.nightly) : usd(modelNightly)}</b></div>
     <input type="number" id="hotelOv" step="5" min="0" value="${ovR.nightly || ""}"
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
@@ -1663,6 +1688,7 @@ async function renderDetail(){
       : "Type what you know you can get. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
+    `}
   </div>`;
 
   // Real search context (dates, party size) baked in, same as the flight
@@ -1707,7 +1733,7 @@ async function renderDetail(){
           <span class="d">Know a better rate than the cache? Set it here — free, and only for ${r.name}.</span>
           <button class="btn btn-sm" id="saveOv">Save these numbers</button>
         </div>
-        <div class="ovgrid">${noHotel ? "" : hotelCtl}${fareCtl}</div>
+        <div class="ovgrid">${hotelWantedGlobally ? hotelCtl : ""}${fareCtl}</div>
       </div>
       <div class="cols">
         <div class="card">
@@ -1756,7 +1782,7 @@ async function renderDetail(){
           ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car at your destination</b>
             <small>${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
             <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
-          <a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>
+          ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>` : ""}
         </div>`}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
@@ -2139,11 +2165,29 @@ document.addEventListener("click", async (e) => {
 });
 
 /* your-numbers controls */
-function ovEmpty(o){ return !o.nightly && !o.farePerSeat && !o.promoId && !o.personalPromo; }
+function ovEmpty(o){
+  return !o.nightly && !o.farePerSeat && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
+}
 
 function setOv(id, key, val){
   const o = OV[id] || (OV[id] = {});
   if(val) o[key] = val; else delete o[key];
+  if(ovEmpty(o)) delete OV[id];
+  store.set("ov", OV);
+  recompute(id);
+}
+/** "I've already got this sorted" — a checkbox, not a price claim, so it's
+ *  mutually exclusive with the matching numeric override: checking it clears
+ *  whatever rate/fare you'd typed for that same line. kind is "excludeHotel"
+ *  or "excludeFlights". */
+function setExclude(id, kind, checked){
+  const o = OV[id] || (OV[id] = {});
+  if(checked){
+    o[kind] = true;
+    delete o[kind === "excludeHotel" ? "nightly" : "farePerSeat"];
+  } else {
+    delete o[kind];
+  }
   if(ovEmpty(o)) delete OV[id];
   store.set("ov", OV);
   recompute(id);
@@ -2172,8 +2216,20 @@ document.addEventListener("input", e=>{
 document.addEventListener("change", e=>{
   const rid = results[selected] && results[selected].resortId;
   if(rid){
-    if(e.target.id === "fareSlider") setOv(rid, "farePerSeat", +e.target.value);
-    if(e.target.id === "hotelOv")    setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
+    // Typing a specific rate/fare is a different claim than "don't count
+    // this" — mutual exclusivity the other direction from setExclude().
+    if(e.target.id === "fareSlider"){
+      const o = OV[rid] || (OV[rid] = {});
+      delete o.excludeFlights;
+      setOv(rid, "farePerSeat", +e.target.value);
+    }
+    if(e.target.id === "hotelOv"){
+      const o = OV[rid] || (OV[rid] = {});
+      delete o.excludeHotel;
+      setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
+    }
+    if(e.target.id === "excludeHotelCk")   setExclude(rid, "excludeHotel", e.target.checked);
+    if(e.target.id === "excludeFlightsCk") setExclude(rid, "excludeFlights", e.target.checked);
   }
   if(e.target.id === "destSel"){
     setDestination(e.target.dataset.resort, e.target.value);
