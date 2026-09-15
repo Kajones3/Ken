@@ -352,6 +352,45 @@ promo interaction, precedence when both a flag and its numeric field are set,
 the floor-bypass specifically, and that a per-resort exclude never leaks into
 another resort's pricing in the same compare. All 174 tests pass.
 
+### Driving mode's wear-and-tear line can dwarf gas — now optional
+
+Real user report, 2026-09-15: a driving-mode breakdown showed $511 in gas
+against **$2,822** in "wear and tear" for the same trip — 5.5x the gas cost,
+which reads as broken even though the number is technically correct. The
+IRS standard mileage rate (`irsMileageRatePerMile()`, `config.ts`) is a
+full-cost-of-ownership figure — it bundles depreciation, maintenance and
+insurance into one per-mile number, not just gas — so it dwarfs gas on any
+long drive, and someone who doesn't mentally allocate their own car's
+depreciation to one trip reasonably reads a $2,822 "wear and tear" line as
+a mistake.
+
+Decided **not** to drop it by default: this app's own established principle
+(see "off-property carries its parking and transfer cost" below) is that an
+option shouldn't look artificially cheap by omitting a real cost — the same
+reasoning applies here. Instead, added `TripParams.includeWearAndTear`
+(`src/pricing.ts`), defaulting to `true` (unset behaves identically to
+today), with a form toggle — "Include wear & tear on your car?" — that
+appears next to "Rent a car for the drive?" whenever a driving preset is
+selected, and is itself hidden when renting (already zero either way, since
+a rental's own fee covers it). Turning it off prices gas only; the line
+item itself just disappears from the breakdown rather than showing $0.
+
+Server-side (`gettingThereParams()` in `server.ts`): default is inclusion,
+so only an explicit `driveWearAndTear=0` in the query string turns it off —
+matches the "presence of the flag means true" convention every other
+boolean flag in this function already uses, just inverted, since the
+default here is `true` rather than `false`.
+
+Also reworded the wear-and-tear line's own hint text in the detail view to
+say what the IRS rate actually bundles in and that it can be turned off —
+same "don't hide a shaky number, explain it" reasoning as the override
+controls and the "why is X cheaper?" explainer elsewhere in this app.
+
+3 new tests in `src/pricing.test.ts`: dropping it lowers the total and
+zeroes the driving pick's own field, unset behaves identically to explicit
+`true`, and it's a no-op on a rental (already zero regardless). All 187
+tests pass.
+
 ## Layout
 
 | Path | What it is |

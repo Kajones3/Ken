@@ -69,6 +69,17 @@ export interface TripParams {
    *  A mixed board can send this true for the driving leg, the flying legs,
    *  both, or neither — see server.ts's gettingThereParams(). */
   rentalCar?: boolean;
+  /** "drive" only. Defaults to true (unset behaves the same as true) so the
+   *  total keeps including a real cost by default, same reasoning as always
+   *  including off-property parking/transfers — an option shouldn't look
+   *  artificially cheap by omitting something real. The IRS standard
+   *  mileage rate bundles depreciation, maintenance and insurance into one
+   *  per-mile number, not just gas, which can dwarf the gas line on a long
+   *  drive and read as misleading to someone who doesn't think of their own
+   *  car's depreciation as a cost of THIS trip — set false to drop it and
+   *  price gas only. Moot (and hidden in the UI) whenever rentalCar is true,
+   *  since a rental already has no wear-and-tear cost to the user. */
+  includeWearAndTear?: boolean;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -330,7 +341,10 @@ export function priceTrip(
     const overnightUsd = stop ? Math.max(0, stop.nights) * Math.max(0, stop.costPerNightUsd) : 0;
     // A rental has no wear-and-tear cost to the user — that's priced into
     // the rental fee already, and rentalCarUsd (below) covers it separately.
-    const wearAndTearUsd = params.rentalCar ? 0 : roundTripMiles * irsMileageRatePerMile(start);
+    // includeWearAndTear === false is the user's own opt-out (see TripParams)
+    // — unset/true keeps the default of including it.
+    const wearAndTearUsd = params.rentalCar || params.includeWearAndTear === false
+      ? 0 : roundTripMiles * irsMileageRatePerMile(start);
     driving = Math.round((gasCostUsd + overnightUsd + wearAndTearUsd) * 100) / 100;
     drivingPick = {
       from: fromLabel, roundTripMiles: Math.round(roundTripMiles),
