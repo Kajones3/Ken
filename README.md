@@ -132,6 +132,23 @@ Steps:
    DATABASE_URL="<your neon connection string>" npm run grant-plus -- friend@example.com 90
    ```
 
+6. **Seed international flight baselines** (one-time setup). International
+   routes (Paris, Tokyo, Shanghai, Hong Kong) have no free historical data
+   source like domestic US flights do (no BTS DB1B coverage). Until the
+   `intl-sweep` job can afford to buy real fares regularly, estimates come
+   from seeded market-research baselines. Run this once after deploy to fill
+   your production database:
+   ```bash
+   DATABASE_URL="<your neon connection string>" npm run seed-intl
+   ```
+   This creates 2,460 rows of synthetic baselines (41 origins × 5 intl
+   destinations × 3 years × 4 quarters) with realistic seasonal adjustments
+   (Q3 peak +37%, Q1 off-peak -15%). Without this seed, international flights
+   show "no cached price" until the monthly `intl-sweep` job runs (if it's
+   enabled and funded). Once real fares are bought later, they automatically
+   correct and improve these estimates — see "How a flight number is arrived
+   at" below for the full story on seasonal baselines and trend correction.
+
 Nothing here needs Stripe, a domain, or a paid tier — everyone signs in
 with just an email (see "Accounts have no password" in What is not done
 below before treating this as more than a friends demo).
