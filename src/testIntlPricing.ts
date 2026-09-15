@@ -2,34 +2,34 @@
  * Quick test: verify international flight estimates are now populated.
  * Run: npm run typecheck && tsx src/testIntlPricing.ts
  */
-import { memoryDb } from "./db.js";
+import { getDb } from "./db.js";
 import { loadBook } from "./book.js";
 
 const testRoutes = [
-  { origin: "ATL", dest: "tdr", destCode: "NRT", name: "Tokyo" },
-  { origin: "BOS", dest: "dlp", destCode: "CDG", name: "Paris" },
-  { origin: "LAX", dest: "sdr", destCode: "PVG", name: "Shanghai" },
-  { origin: "ORD", dest: "hkd", destCode: "HKG", name: "Hong Kong" },
+  { origin: "ATL", airport: "NRT", resort: "tdr", name: "Tokyo" },
+  { origin: "BOS", airport: "CDG", resort: "dlp", name: "Paris" },
+  { origin: "LAX", airport: "PVG", resort: "sdr", name: "Shanghai" },
+  { origin: "ORD", airport: "HKG", resort: "hkd", name: "Hong Kong" },
 ];
 
-const db = await memoryDb();
+const db = await getDb();
 
 console.log("Testing international flight estimates:\n");
 
 for (const route of testRoutes) {
   const book = await loadBook(db, {
     origin: route.origin,
-    destinations: [route.dest],
-    resortIds: [route.dest],
+    destinations: [route.airport],
+    resortIds: [route.resort],
     from: "2027-03-01",
     to: "2027-03-08",
     tripLength: 7,
   });
 
-  const est = book.flightEstimate?.(route.origin, route.destCode);
+  const est = book.flightEstimate?.(route.origin, route.airport);
   if (est) {
     console.log(
-      `${route.origin} → ${route.name} (${route.destCode}): ` +
+      `${route.origin} → ${route.name} (${route.airport}): ` +
       `$${est.med} (low: $${est.low}, high: $${est.high})`,
     );
   } else {
