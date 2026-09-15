@@ -125,14 +125,28 @@ export class SerpApiFlightProvider {
       .filter((f) => Number.isFinite(f.price) && (f.price as number) > 0);
     if (!all.length) return null;
 
-    // The cheapest genuinely round-trip itinerary. `price_insights.
-    // lowest_price` is deliberately NOT used as the headline: it can
-    // reflect a fare that isn't in the returned itinerary list at all, so
-    // it produces exactly the "shown $200, click through to $700" gap this
-    // whole change exists to close.
+    // The MEDIAN genuinely round-trip itinerary, not the cheapest. Google
+    // Flights routinely returns a few dozen itineraries per search spanning
+    // every airline/time/stop combination; picking the absolute floor of
+    // that whole list is a real fare, but not one most travellers searching
+    // this route on this date will actually see or book — the floor is
+    // whichever single itinerary happened to be cheapest, not what's
+    // typically available. Found 2026-09-15 from a real report that even
+    // DOMESTIC routes were coming back vastly underestimated: this function
+    // backs popular-routes (nightly domestic trend), intl-sweep (monthly
+    // international baselines), AND the Plus "exact fare" feature people pay
+    // to check, so the old min-pick made the paid feature itself
+    // unrepresentative too. `price_insights.lowest_price` is still
+    // deliberately NOT used as the headline for the same reason as before:
+    // it can reflect a fare that isn't in the returned itinerary list at
+    // all, producing exactly the "shown $200, click through to $700" gap.
     const roundTrips = all.filter((f) => !f.type || /round/i.test(f.type));
-    const pick = (roundTrips.length ? roundTrips : all)
-      .reduce((a, b) => ((a.price as number) <= (b.price as number) ? a : b));
+    const pool = roundTrips.length ? roundTrips : all;
+    const sorted = [...pool].sort((a, b) => (a.price as number) - (b.price as number));
+    // An even count has two middle itineraries; picking the lower of the two
+    // (rather than averaging their prices into a number that matches no real
+    // itinerary) keeps carrier/stops/deepLink attached to one real result.
+    const pick = sorted[Math.floor((sorted.length - 1) / 2)]!;
 
     return {
       priceUsd: pick.price as number,
