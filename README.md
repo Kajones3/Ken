@@ -576,6 +576,49 @@ hotel rate for an open resort keeps that same resort's detail open and its
 button on "Collapse" even when the price change re-sorts it to a different
 position on the board.
 
+### The US-only ZIP filter needed a second attempt — and a third fix beat guessing at Nominatim's schema twice
+
+The `address.country_code` fix above (previous commit) did not actually
+work: the owner reported a real "27540" search still returning France and
+Poland alongside the correct Holly Springs, NC match, live, after that fix
+had deployed. Two attempts at trusting a specific piece of Nominatim's
+structured response (`countrycodes` on the request, then
+`address.country_code` on the response) both let non-US results through
+for a bare postal-code query — evidently neither is as reliable for this
+query shape as documented, and guessing a third time at which field
+*would* work risked shipping a third silent non-fix.
+
+Fixed with `isUsResult()` (`src/geo/nominatim.ts`, now exported and unit
+tested directly): a plain regex against `display_name` itself —
+`/\bunited states( of america)?$/i` — rather than any structured field.
+`display_name` is the one thing that has been correct in every real example
+seen across both failed attempts: a genuine US result always ends
+"...United States", and every leaked non-US result seen so far ended in
+its own country's name instead ("...France", "...Polska",
+"...Україна", "...Argentina") — never "United States". `countrycodes=us`
+stays on the request as a harmless hint, but nothing is trusted from the
+response's structure anymore; the string check is the only thing gating
+US-only now. `addressdetails=1` was dropped from the request since nothing
+reads it anymore.
+
+7 new/changed tests in `nominatim.test.ts` (13 total for this provider):
+`isUsResult()` tested directly against the real display_name strings from
+both the first report (Ukraine, Argentina) and this one (France, Poland),
+plus the genuine Holly Springs match and a case/whitespace check; `search()`
+re-verified end to end against the exact mixed France/US/Poland response
+the owner actually saw. 201 tests total (197 + ~4 net new — some replaced
+the prior attempt's now-obsolete `address`-based cases), 200 pass, same
+pre-existing unrelated `intlBaseline.test.ts` flake as every commit above.
+
+**If this still doesn't work after deploying**, the next thing to check
+isn't the filter logic — it's whether the deploy actually went out (Render
+branch/auto-deploy settings have been the root cause of at least one earlier
+"the fix isn't showing up" report this session). A `display_name` string
+check has no schema left to get subtly wrong; if wrong results still appear
+after a confirmed fresh deploy, capture the exact `display_name` values in
+the response and check them against the regex directly rather than assuming
+the code path is untouched.
+
 ## Layout
 
 | Path | What it is |
