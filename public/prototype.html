@@ -273,6 +273,10 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 
 /* ---------- detail ---------- */
 .detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+/* Inline detail: a child of the row's own grid, spanning every column so it
+   sits directly under the row you opened instead of a separate section far
+   down the page — collapsing it brings the board straight back into view. */
+.row-detail{grid-column:1/-1; margin:14px -16px -15px; border-left:0; border-right:0; border-radius:0; border-top:1px solid var(--rule-strong)}
 .dhead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:16px 18px; border-bottom:1px solid var(--rule)}
 .dhead h3{font-size:16px; font-weight:700; letter-spacing:-.02em}
 .dhead p{margin:3px 0 0; font-size:12.5px; color:var(--ink-2)}
@@ -314,13 +318,7 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .li .l small{color:var(--muted); font-size:11px}
 .li .p{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
 .book{display:inline-block; margin-top:11px; font-size:11.5px; font-weight:700; color:var(--ink); border-bottom:1.5px solid var(--accent-line); text-decoration:none; padding-bottom:1px}
-.ovpanel{border:1px solid var(--accent-line); background:var(--accent-bg); border-radius:12px; padding:14px 16px 16px; margin-bottom:22px}
-.ovhead{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:13px}
-.ovhead .t{font-family:"Archivo"; font-weight:700; font-size:13.5px; letter-spacing:-.01em}
-.ovhead .d{font-size:12px; color:var(--ink-2); flex:1; min-width:180px}
-.ovgrid{display:grid; grid-template-columns:1fr 1.35fr; gap:20px}
-@media (max-width:720px){ .ovgrid{grid-template-columns:1fr} }
-.ovcell{display:grid; gap:7px; align-content:start}
+.ovcell{display:grid; gap:7px; align-content:start; margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--rule-strong)}
 .ovcell .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
 .ovcell .lab b{font-family:"JetBrains Mono",monospace; font-size:15px; color:var(--ink); letter-spacing:0}
 .ovcell input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink)}
@@ -645,8 +643,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <ol class="board" id="board"></ol>
   <div class="tablewrap" id="tablewrap" hidden></div>
 
-  <section class="detail" id="detail"></section>
-
   <footer>
     <h4>What it would take to make these numbers real</h4>
     <div class="srcs">
@@ -834,6 +830,11 @@ let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
 let selected = 0, view = "board";
+// Whether the detail panel is expanded inline under the `selected` row.
+// Lives here rather than inside renderBoard/renderDetail so a re-render for
+// any other reason (an override change, a new search) keeps the same row
+// open instead of collapsing it.
+let detailOpen = false;
 let searchToken = 0, detailToken = 0;
 let regionFilter = "all";    // "all" | "dom" | "intl" — free, client-side only
 let destinationChoice = store.get("dest", {});  // { resortId: iata } — free; server re-validates against that resort's own airports
@@ -1320,8 +1321,9 @@ function renderBoard(){
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
         <div class="tsub">${usd(perPD)} / person / day · from ${dateStr}</div>
       </div>
-      <button class="btn btn-sm rowbtn" data-open="${i}">${open?"Details":"Unlock"}</button>
+      <button class="btn btn-sm rowbtn" data-open="${i}">${open?(i===selected&&detailOpen?"Collapse":"Details"):"Unlock"}</button>
       ${open?"":`<div class="lockover"><span>Locked on the free plan</span></div>`}
+      ${(open && i===selected && detailOpen) ? `<div class="detail row-detail" id="detail"></div>` : ""}
     </li>`;
   }).join("");
   if(!list.length) board.innerHTML = `<li class="row"><div class="ident"><div class="rname">No resorts in this filter</div>
@@ -1462,8 +1464,12 @@ function promosCard(item, x, promoList){
 
 async function renderDetail(){
   const token = ++detailToken;
-  const item = results[selected];
   const box = $("#detail");
+  // No row is expanded right now — renderBoard() only creates #detail
+  // inside the selected row when detailOpen is true, so this is the normal
+  // state whenever nothing's open, not an error.
+  if(!box) return;
+  const item = results[selected];
   if(!item){ box.innerHTML = ""; return; }
   if(!item.ok){
     box.innerHTML = `<div class="dhead"><div><h3>${item.name}</h3>
@@ -1753,14 +1759,6 @@ async function renderDetail(){
       <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul>
       <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}
     <div class="dbody">
-      <div class="ovpanel">
-        <div class="ovhead">
-          <span class="t">Your numbers</span>
-          <span class="d">Know a better rate than the cache? Set it here — free, and only for ${r.name}.</span>
-          <button class="btn btn-sm" id="saveOv">Save these numbers</button>
-        </div>
-        <div class="ovgrid">${hotelWantedGlobally ? hotelCtl : ""}${fareCtl}</div>
-      </div>
       <div class="cols">
         <div class="card">
           <h5><i style="background:var(--s2)"></i>Park tickets</h5>
@@ -1793,6 +1791,7 @@ async function renderDetail(){
         </div>` : `<div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
           <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
+          ${fareCtl}
           ${r.altArrivalAirports.length ? (()=>{
             const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
             const desc = alt ? alt.label : "Primary airport for " + r.name;
@@ -1813,6 +1812,7 @@ async function renderDetail(){
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
+          ${hotelWantedGlobally ? hotelCtl : ""}
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
@@ -1947,8 +1947,22 @@ document.addEventListener("click", e=>{
   if(o){
     const i = +o.dataset.open;
     if(!unlocked(i)){ openPw(); return; }
-    selected = i; renderDetail();
-    $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+    // Table's "View" also opens the same inline detail, which only ever
+    // renders inside a board row — jump to Board so it's actually visible.
+    view = "board"; syncView();
+    if(selected === i && detailOpen){
+      detailOpen = false;
+      renderBoard();
+    } else {
+      selected = i; detailOpen = true;
+      // renderBoard() first: it's what creates the empty #detail slot
+      // inside this row. renderDetail() then fills it — the other order
+      // would have nothing to fill, or get overwritten by the next
+      // renderBoard() call.
+      renderBoard();
+      renderDetail();
+      $(`.row[data-i="${i}"]`)?.scrollIntoView({behavior:"smooth", block:"nearest"});
+    }
     return;
   }
   if(e.target.closest(".openpw") || e.target.closest(".lockover")){ openPw(); }
@@ -2268,14 +2282,6 @@ document.addEventListener("click", e=>{
     if(rid) setOv(rid, rs.dataset.reset, 0);
     return;
   }
-  if(e.target.id === "saveOv"){
-    // Already remembered in this browser the moment it was typed (setOv saves
-    // on every change) — this button is just a confirmation, so it's free,
-    // same as typing the number in the first place.
-    store.set("ov", OV);
-    e.target.textContent = "Saved";
-    setTimeout(()=>{ const b = document.getElementById("saveOv"); if(b) b.textContent = "Save these numbers"; }, 1600);
-  }
   const ap = e.target.closest("[data-applypromo]");
   if(ap){
     setPromoId(ap.dataset.resort, ap.dataset.applypromo || null);
@@ -2321,7 +2327,10 @@ document.addEventListener("click", async e=>{
   const mine = priced.results.find(y=>y.resortId===item.resortId);
   if(mine && mine.ok){
     results[selected] = { ...item, price: mine.price };
-    renderDetail(); renderBoard(); renderTable();
+    // renderBoard() first: it (re)creates the #detail slot inside the
+    // selected row, which renderDetail() then fills — the other order
+    // leaves renderDetail()'s output to be wiped by the next renderBoard().
+    renderBoard(); renderTable(); renderDetail();
   }
 });
 
