@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { NominatimGeocodeProvider } from "./nominatim.js";
+import { NominatimGeocodeProvider, isUsResult } from "./nominatim.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -14,29 +14,50 @@ function mockFetch(rows: unknown[]) {
   }) as typeof fetch;
 }
 
-function usRow(display_name: string, lat = "35.78", lon = "-78.64") {
-  return { display_name, lat, lon, address: { country_code: "us" } };
+function row(display_name: string, lat = "35.78", lon = "-78.64") {
+  return { display_name, lat, lon };
 }
 
-test("search: asks Nominatim for the US and structured addresses, but doesn't trust the request-side filter alone", async () => {
-  mockFetch([usRow("Raleigh, Wake County, North Carolina, United States")]);
+// isUsResult() directly: real display_name strings from live 27540 searches,
+// including the exact ones that leaked through two earlier (wrong) attempts
+// at filtering — see the function's own comment in nominatim.ts.
+test("isUsResult: the real Holly Springs, NC match", () => {
+  assert.ok(isUsResult("27540, Holly Springs, Wake County, North Carolina, United States"));
+});
+
+test("isUsResult: France does not match, despite ending in a country name", () => {
+  assert.ok(!isUsResult("27540, Ivry-la-Bataille, Évreux, Eure, Normandie, France métropolitaine, France"));
+});
+
+test("isUsResult: Poland does not match", () => {
+  assert.ok(!isUsResult("27-540, Lipnik, gmina Lipnik, powiat opatowski, województwo świętokrzyskie, Polska"));
+});
+
+test("isUsResult: Ukraine and Argentina (the first report's leaks) do not match", () => {
+  assert.ok(!isUsResult("27540, Світловодськ, Кіровоградська область, Україна"));
+  assert.ok(!isUsResult("27540, Córdoba, Argentina"));
+});
+
+test("isUsResult: trailing whitespace and case don't matter", () => {
+  assert.ok(isUsResult("Somewhere, UNITED STATES   "));
+  assert.ok(isUsResult("Somewhere, United States of America"));
+});
+
+test("search: biases to the US on the request too, even though it isn't trusted alone", async () => {
+  mockFetch([row("Raleigh, Wake County, North Carolina, United States")]);
   const p = new NominatimGeocodeProvider();
   await p.search("Raleigh, NC");
   assert.equal(lastUrl?.searchParams.get("countrycodes"), "us");
-  assert.equal(lastUrl?.searchParams.get("addressdetails"), "1");
 });
 
 test("search: a non-US result is dropped even when Nominatim returns it anyway", async () => {
-  // Found live 2026-09-16: a real "27540" postalcode search with
-  // countrycodes=us set still came back with matches in Ukraine, Spain, and
-  // France alongside the real Holly Springs, NC result -- the request-side
-  // restriction is not reliable for a bare postal-code search. This is the
-  // real guarantee: every row is checked against its OWN address.country_code.
+  // The exact live scenario reported by the owner (2026-09-16): a real
+  // "27540" postalcode search returned Holly Springs, NC mixed in with
+  // France and Poland, despite countrycodes=us on the request.
   mockFetch([
-    { display_name: "27540, Світловодськ, Кіровоградська область, Україна", lat: "48.9", lon: "33.2", address: { country_code: "ua" } },
-    { display_name: "27540, Córdoba, Argentina", lat: "-31.4", lon: "-64.2", address: { country_code: "ar" } },
-    usRow("27540, Holly Springs, Wake County, North Carolina, United States"),
-    { display_name: "27540, Ivry-la-Bataille, Évreux, Eure, Normandie, France métropolitaine", lat: "48.9", lon: "1.5", address: { country_code: "fr" } },
+    row("27540, Ivry-la-Bataille, Évreux, Eure, Normandie, France métropolitaine, France"),
+    row("27540, Holly Springs, Wake County, North Carolina, United States"),
+    row("27-540, Lipnik, gmina Lipnik, powiat opatowski, województwo świętokrzyskie, Polska"),
   ]);
   const p = new NominatimGeocodeProvider();
   const results = await p.search("27540");
@@ -44,15 +65,8 @@ test("search: a non-US result is dropped even when Nominatim returns it anyway",
   assert.match(results[0]!.label, /Holly Springs/);
 });
 
-test("search: a row missing address entirely is dropped, not assumed US", async () => {
-  mockFetch([{ display_name: "Some place with no address block", lat: "1", lon: "2" }]);
-  const p = new NominatimGeocodeProvider();
-  const results = await p.search("27540");
-  assert.deepEqual(results, []);
-});
-
 test("search: a 5-digit ZIP uses Nominatim's structured postalcode search, not freeform q", async () => {
-  mockFetch([usRow("27601, Raleigh, Wake County, North Carolina, United States")]);
+  mockFetch([row("27601, Raleigh, Wake County, North Carolina, United States")]);
   const p = new NominatimGeocodeProvider();
   const results = await p.search("27601");
   assert.equal(lastUrl?.searchParams.get("postalcode"), "27601");
@@ -62,14 +76,14 @@ test("search: a 5-digit ZIP uses Nominatim's structured postalcode search, not f
 });
 
 test("search: a ZIP+4 uses just the 5-digit part for postalcode", async () => {
-  mockFetch([usRow("27601, Raleigh, North Carolina, United States")]);
+  mockFetch([row("27601, Raleigh, North Carolina, United States")]);
   const p = new NominatimGeocodeProvider();
   await p.search("27601-1234");
   assert.equal(lastUrl?.searchParams.get("postalcode"), "27601");
 });
 
 test("search: anything not shaped like a ZIP still falls back to freeform q", async () => {
-  mockFetch([usRow("Raleigh, Wake County, North Carolina, United States")]);
+  mockFetch([row("Raleigh, Wake County, North Carolina, United States")]);
   const p = new NominatimGeocodeProvider();
   await p.search("Raleigh");
   assert.equal(lastUrl?.searchParams.get("q"), "Raleigh");
@@ -85,7 +99,7 @@ test("search: an empty query never calls fetch", async () => {
 });
 
 test("search: a row with a non-numeric lat/lon is dropped, not kept as NaN", async () => {
-  mockFetch([{ display_name: "Bad row", lat: "not-a-number", lon: "-78.64", address: { country_code: "us" } }]);
+  mockFetch([row("Bad row, United States", "not-a-number", "-78.64")]);
   const p = new NominatimGeocodeProvider();
   const results = await p.search("anything");
   assert.deepEqual(results, []);

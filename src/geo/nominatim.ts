@@ -15,6 +15,28 @@ const USER_AGENT = "Parkfare/1.0 (+https://github.com/kajones3/ken; trip cost co
 
 const US_ZIP = /^\d{5}(-\d{4})?$/;
 
+/**
+ * Real-world evidence, both from a live "27540" postal-code search
+ * (2026-09-16): Nominatim's own `countrycodes=us` request parameter does
+ * NOT reliably exclude non-US matches for a bare structured `postalcode`
+ * query — a first attempt then trusted `addressdetails=1`'s returned
+ * `address.country_code` field instead, which *also* did not reliably
+ * come back "us"-only (results in France and Poland still got through) —
+ * evidently either that field isn't populated the way documented for this
+ * query shape, or something else about it can't be trusted blind. Rather
+ * than guess again at which part of Nominatim's structured response is
+ * reliable, this checks the one thing that's been correct in every example
+ * seen so far, including the ones that leaked through both earlier
+ * attempts: `display_name` itself always ends with the place's country,
+ * in English, and every non-US result observed ended in that country's own
+ * name ("...Ivry-la-Bataille... France", "...powiat opatowski... Polska"),
+ * never "United States". This is a plain string check, nothing to get
+ * subtly wrong about a response schema.
+ */
+export function isUsResult(displayName: string): boolean {
+  return /\bunited states( of america)?$/i.test(displayName.trim());
+}
+
 export class NominatimGeocodeProvider implements GeocodeProvider {
   readonly name = "nominatim";
   async search(query: string): Promise<GeocodeResult[]> {
@@ -23,23 +45,8 @@ export class NominatimGeocodeProvider implements GeocodeProvider {
     const url = new URL("https://nominatim.openstreetmap.org/search");
     url.searchParams.set("format", "jsonv2");
     url.searchParams.set("limit", "5");
-    // addressdetails=1 gets a structured address.country_code back on every
-    // row, which is what actually gates the US-only filter below — see why.
-    url.searchParams.set("addressdetails", "1");
-    // Driving mode only ever prices a real option to a US domestic resort
-    // (pricing.ts refuses non-"dom" regions outright), so every lookup asks
-    // to be biased to the US. Found live (2026-09-16) that this request-side
-    // restriction is NOT reliable for a bare postal-code search specifically:
-    // a real "27540" postalcode lookup with countrycodes=us set still
-    // returned matches in Ukraine, Spain, and France alongside the real
-    // Holly Springs, NC result — plenty of countries reuse 5-digit postal
-    // formats, and Nominatim's own countrycodes filter evidently doesn't
-    // bind tightly enough to a structured postalcode-only query to exclude
-    // them. countrycodes stays set (it costs nothing and may narrow the
-    // upstream result set even if imperfectly), but it is NOT trusted alone
-    // — every row is filtered again below using its own returned
-    // address.country_code, which is the one thing in the response that
-    // actually says what country a result is in.
+    // Kept as a request-side hint even though it's proven unreliable alone
+    // (see isUsResult above) — costs nothing, may narrow the upstream set.
     url.searchParams.set("countrycodes", "us");
     // The "Driving from" field only ever asks for a ZIP now (city names were
     // dropped — ambiguous: multiple towns share a name across states, and
@@ -59,11 +66,9 @@ export class NominatimGeocodeProvider implements GeocodeProvider {
     }
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
     if (!res.ok) throw new Error(`nominatim ${res.status}`);
-    const rows = (await res.json()) as {
-      display_name: string; lat: string; lon: string; address?: { country_code?: string };
-    }[];
+    const rows = (await res.json()) as { display_name: string; lat: string; lon: string }[];
     return rows
-      .filter((r) => (r.address?.country_code ?? "").toLowerCase() === "us")
+      .filter((r) => isUsResult(r.display_name))
       .map((r) => ({ label: r.display_name, lat: Number(r.lat), lon: Number(r.lon) }))
       .filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lon));
   }
