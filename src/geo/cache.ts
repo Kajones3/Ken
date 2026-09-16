@@ -6,15 +6,31 @@
  * are pre-fetched in bulk every morning, this is filled lazily as people
  * actually type city names, since there's no way to pre-cache "every
  * possible city" the way there is a fixed set of routes to fetch.
+ *
+ * Rows expire after CACHE_TTL. A real address's coordinates don't change,
+ * so this isn't tracking real-world drift — it's a self-healing bound on
+ * how long a *bad* cached row (a provider bug, or a since-fixed filtering
+ * bug in nominatim.ts) can be served before the next request re-runs
+ * today's code. Found 2026-09-16: a "27540" search cached during an
+ * earlier broken filtering attempt kept returning the same wrong non-US
+ * results through two later deploys that had actually fixed the filter,
+ * because nothing here ever read `cached_at` for staleness.
  */
 import type { Db } from "../db.js";
 import type { GeocodeProvider, GeocodeResult } from "./types.js";
+
+const CACHE_TTL = "7 days";
 
 export async function cachedGeocode(db: Db, provider: GeocodeProvider, query: string): Promise<GeocodeResult[]> {
   const trimmed = query.trim();
   const key = trimmed.toLowerCase();
   if (!key) return [];
-  const cached = await db.query(`select results from geocode_cache where query_text = $1`, [key]);
+  const cached = await db.query(
+    `select results from geocode_cache
+      where query_text = $1
+        and cached_at > now() - interval '${CACHE_TTL}'`,
+    [key],
+  );
   if (cached.rows[0]) return cached.rows[0].results as GeocodeResult[];
 
   // The lowercased key is only for the cache's own lookup/storage — the
