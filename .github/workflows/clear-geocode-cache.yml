@@ -1,0 +1,22 @@
+name: Parkfare clear geocode cache
+
+# Manual only — wipes geocode_cache entirely. Needed when a bad cached
+# result (e.g. from an earlier provider/filtering bug, since fixed in code)
+# is stuck being served forever, since cachedGeocode() only re-fetches a
+# query once its cached row passes the 7-day TTL. Run once for immediate
+# relief instead of waiting for the TTL to expire the bad row naturally.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  clear-geocode-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run clear-geocode-cache
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

@@ -50,3 +50,34 @@ test("an empty query never calls the provider", async () => {
   assert.equal(calls(), 0);
   await db.close();
 });
+
+test("a cached result older than the TTL is re-fetched from the provider, not served stale", async () => {
+  // Regression: geocode_cache had no expiry at all, so a bad row cached
+  // during an earlier (now-fixed) broken filtering attempt kept getting
+  // served forever, through every later deploy that fixed the filter.
+  const db = await memoryDb();
+  const { provider, calls } = countingProvider();
+  await db.query(
+    `insert into geocode_cache (query_text, results, cached_at)
+     values ($1,$2, now() - interval '8 days')`,
+    ["27540", JSON.stringify([{ label: "stale, wrong", lat: 0, lon: 0 }])],
+  );
+  const result = await cachedGeocode(db, provider, "27540");
+  assert.equal(calls(), 1, "a TTL-expired row must not short-circuit the provider call");
+  assert.equal(result[0]!.label, "27540");
+  await db.close();
+});
+
+test("a cached result within the TTL is still served from the cache", async () => {
+  const db = await memoryDb();
+  const { provider, calls } = countingProvider();
+  await db.query(
+    `insert into geocode_cache (query_text, results, cached_at)
+     values ($1,$2, now() - interval '6 days')`,
+    ["27540", JSON.stringify([{ label: "still fresh", lat: 1, lon: 2 }])],
+  );
+  const result = await cachedGeocode(db, provider, "27540");
+  assert.equal(calls(), 0, "a row inside the TTL window must still be served from cache");
+  assert.equal(result[0]!.label, "still fresh");
+  await db.close();
+});
