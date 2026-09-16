@@ -13,24 +13,37 @@ import type { GeocodeProvider, GeocodeResult } from "./types.js";
 
 const USER_AGENT = "Parkfare/1.0 (+https://github.com/kajones3/ken; trip cost comparator, low volume)";
 
+const US_ZIP = /^\d{5}(-\d{4})?$/;
+
 export class NominatimGeocodeProvider implements GeocodeProvider {
   readonly name = "nominatim";
   async search(query: string): Promise<GeocodeResult[]> {
     const q = query.trim();
     if (!q) return [];
     const url = new URL("https://nominatim.openstreetmap.org/search");
-    url.searchParams.set("q", q);
     url.searchParams.set("format", "jsonv2");
     url.searchParams.set("limit", "5");
     // Driving mode only ever prices a real option to a US domestic resort
-    // (pricing.ts refuses non-"dom" regions outright), and Nominatim's
-    // freeform "q" already matches US ZIP codes the same way it matches
-    // city names — a 5-digit ZIP is a real, unambiguous alternative to a
-    // city name someone might type inconsistently ("New York City" vs.
-    // "New York"). Biasing to the US keeps a bare ZIP from ever resolving
-    // to some other country's postal system, and keeps city-name results
-    // from ever landing outside the country driving mode is scoped to.
+    // (pricing.ts refuses non-"dom" regions outright), so every lookup is
+    // biased to the US regardless of which search style below fires.
     url.searchParams.set("countrycodes", "us");
+    // The "Driving from" field only ever asks for a ZIP now (city names were
+    // dropped — ambiguous: multiple towns share a name across states, and
+    // OpenStreetMap's own naming for a place like New York City can surprise
+    // people). Nominatim's structured `postalcode` search targets postal
+    // boundaries directly, which is more precise than its freeform `q` for
+    // a ZIP specifically — `q` has to first guess whether a string of digits
+    // is a postcode, a street number, or something else. Per Nominatim's own
+    // docs, `postalcode` and `q` are mutually exclusive in one request, so
+    // this always picks exactly one. Anything not shaped like a ZIP still
+    // falls back to freeform `q` — defensive only; the UI itself never sends
+    // that path today.
+    if (US_ZIP.test(q)) {
+      url.searchParams.set("postalcode", q.slice(0, 5));
+      url.searchParams.set("country", "United States");
+    } else {
+      url.searchParams.set("q", q);
+    }
     const res = await fetch(url, { headers: { "User-Agent": USER_AGENT } });
     if (!res.ok) throw new Error(`nominatim ${res.status}`);
     const rows = (await res.json()) as { display_name: string; lat: string; lon: string }[];

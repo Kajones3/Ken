@@ -21,13 +21,30 @@ test("search: biases to the US, since driving mode only ever prices a domestic r
   assert.equal(lastUrl?.searchParams.get("countrycodes"), "us");
 });
 
-test("search: a ZIP code goes through the same freeform query Nominatim already matches postcodes with", async () => {
+test("search: a 5-digit ZIP uses Nominatim's structured postalcode search, not freeform q", async () => {
   mockFetch([{ display_name: "27601, Raleigh, Wake County, North Carolina, United States", lat: "35.78", lon: "-78.64" }]);
   const p = new NominatimGeocodeProvider();
   const results = await p.search("27601");
-  assert.equal(lastUrl?.searchParams.get("q"), "27601");
+  assert.equal(lastUrl?.searchParams.get("postalcode"), "27601");
+  assert.equal(lastUrl?.searchParams.get("country"), "United States");
+  assert.equal(lastUrl?.searchParams.get("q"), null, "postalcode and q are mutually exclusive in one request");
   assert.equal(results.length, 1);
   assert.equal(results[0]!.label, "27601, Raleigh, Wake County, North Carolina, United States");
+});
+
+test("search: a ZIP+4 uses just the 5-digit part for postalcode", async () => {
+  mockFetch([{ display_name: "27601, Raleigh, North Carolina, United States", lat: "35.78", lon: "-78.64" }]);
+  const p = new NominatimGeocodeProvider();
+  await p.search("27601-1234");
+  assert.equal(lastUrl?.searchParams.get("postalcode"), "27601");
+});
+
+test("search: anything not shaped like a ZIP still falls back to freeform q", async () => {
+  mockFetch([{ display_name: "Raleigh, Wake County, North Carolina, United States", lat: "35.78", lon: "-78.64" }]);
+  const p = new NominatimGeocodeProvider();
+  await p.search("Raleigh");
+  assert.equal(lastUrl?.searchParams.get("q"), "Raleigh");
+  assert.equal(lastUrl?.searchParams.get("postalcode"), null);
 });
 
 test("search: an empty query never calls fetch", async () => {
