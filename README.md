@@ -494,6 +494,36 @@ field (renamed **"Your ZIP code"**) now only ever asks for one.
 `intlBaseline.test.ts` flake as above, still unrelated and still not
 touched by this change.
 
+### `countrycodes=us` does not reliably filter a bare postal-code search — verified live, fixed with a real response check
+
+Real report, same day: searching ZIP `27540` returned the correct US match
+(Holly Springs, NC) mixed in with matches in **Ukraine, Argentina, and
+France** — despite `countrycodes=us` being set on the request. Plenty of
+countries reuse 5-digit-shaped postal codes, and Nominatim's own
+country-restriction filter evidently doesn't bind tightly enough to a
+structured `postalcode`-only query to exclude them, whatever the docs
+imply.
+
+**Never trust a request-side filter you can't verify** — fixed by checking
+what actually came back, not just what was asked for. `NominatimGeocodeProvider`
+now sends `addressdetails=1`, which gets a structured `address.country_code`
+on every row, and filters every result to `country_code === "us"` after the
+fact. `countrycodes=us` stays on the request (costs nothing, may narrow the
+upstream set even if imperfectly), but it is no longer the thing doing the
+real work — the post-filter is. A row with no `address` block at all is
+dropped rather than assumed to be a match, same "never fabricate a result"
+reasoning as everywhere else real provider data is handled in this app.
+
+Also dropped the redundant structured `country=United States` field from the
+postal-code request — it wasn't preventing the problem above and added
+nothing `postalcode` + the response-side filter don't already cover.
+
+2 more tests in `nominatim.test.ts` (9 total for this provider): the exact
+Ukraine/Argentina/France/Holly-Springs scenario from the real report,
+confirming only the genuine US row survives, and a row missing `address`
+entirely is dropped rather than assumed US. 197 tests total (195 + 2 new),
+196 pass, same pre-existing unrelated `intlBaseline.test.ts` flake.
+
 ## Layout
 
 | Path | What it is |
