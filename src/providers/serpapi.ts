@@ -61,14 +61,24 @@ function tierFromClass(hotelClass: number | undefined): "budget" | "mid" | "upsc
 
 export class SerpApiHotelProvider {
   private readonly limiter: HourlyLimiter;
+  /** Hard ceiling on paid lookups for one process, so a loop bug or an
+   *  unexpectedly long month list can't quietly run up a bill. The hourly
+   *  limiter alone only paces spending — it never stops it. Mirrors
+   *  SerpApiFlightProvider's budget; both fail closed. */
+  private spent = 0;
+  private budgetWarned = false;
 
   constructor(
     private readonly apiKey = process.env.SERPAPI_KEY ?? "",
     perHour = Number(process.env.SERPAPI_MAX_PER_HOUR ?? 180),
+    private readonly budget = Number(process.env.SERPAPI_HOTELS_BUDGET ?? 200),
   ) {
     if (!this.apiKey) throw new Error("SERPAPI_KEY is not set");
     this.limiter = new HourlyLimiter(perHour);
   }
+
+  get callsSpent(): number { return this.spent; }
+  get budgetRemaining(): number { return Math.max(0, this.budget - this.spent); }
 
   /**
    * On-property Disney hotels stay estimate-based (see file header) — real
@@ -123,6 +133,19 @@ export class SerpApiHotelProvider {
   private async offPropertyMonth(resortId: string, month: string): Promise<HotelQuote[]> {
     const resort = RESORT_BY_ID.get(resortId);
     if (!resort) return [];
+    // Budget before anything else: an exhausted budget degrades to whatever
+    // off-property rates are already cached (refresh upserts on success
+    // only), exactly like a 429 does. On-property is unaffected either way.
+    if (this.spent >= this.budget) {
+      if (!this.budgetWarned) {
+        this.budgetWarned = true;
+        console.warn(
+          `serpapi hotels: budget of ${this.budget} lookups is spent — ` +
+          `off-property falls back to cached rates for the rest of this run`,
+        );
+      }
+      return [];
+    }
     const [from] = monthBounds(month);
     const sampleCheckIn = addDaysISO(from, 13);
     const sampleCheckOut = addDaysISO(sampleCheckIn, 4);
@@ -139,6 +162,10 @@ export class SerpApiHotelProvider {
     url.searchParams.set("api_key", this.apiKey);
 
     await this.limiter.take();
+    // Counted before the call, not after: SerpApi bills for a search that
+    // errors or finds nothing, so charging only successes would make a
+    // failing route a free infinite retry. Same rule as exactFare.ts.
+    this.spent++;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`serpapi hotels ${resortId} ${month} -> ${res.status} ${await res.text().catch(() => "")}`);
     const json = (await res.json()) as { properties?: SerpApiProperty[] };
