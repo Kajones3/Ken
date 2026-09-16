@@ -422,6 +422,38 @@ redeploy, confirm the variable actually saved and the service redeployed
 with it, since a driving-mode search still silently falls back to the mock
 with no error if it's unset.
 
+**Update, same day, `GEOCODE_LIVE` confirmed set**: real Nominatim was
+active and "New York City" still only came back as "New York" — that's
+OpenStreetMap's own place naming for NYC, not a bug in this app. Owner
+asked for ZIP code search as a more unambiguous alternative. It already
+worked with no code change needed — Nominatim's freeform `q` parameter
+matches US postal codes the same way it matches city names — but two real
+improvements went in anyway:
+
+- `NominatimGeocodeProvider` (`src/geo/nominatim.ts`) now sends
+  `countrycodes=us`. Driving mode only ever prices a real option to a US
+  domestic resort (`priceTrip` refuses non-`"dom"` regions outright), so
+  biasing every lookup to the US removes any chance a bare ZIP resolves to
+  another country's postal system, and keeps city-name results from ever
+  landing outside the country driving mode is scoped to.
+- The "Departing from" placeholder now reads "Type a city or ZIP code..."
+  instead of "Type a city..." — the capability existed but nothing told
+  anyone it was there.
+
+New `src/geo/nominatim.test.ts` (no test file existed for this provider
+before): pins the `countrycodes=us` param, a ZIP code going through the
+same freeform query untouched, empty-query/non-ok-response handling, and
+that a row with an unparseable lat/lon is dropped rather than kept as
+`NaN`. 193 tests total (188 existing + 5 new for this provider); 192 pass.
+The one failure (`intlBaseline.test.ts`, unrelated to geocoding) is a
+pre-existing, date-sensitive flake — `sampleDates()` in
+`src/jobs/popularRoutes.ts` always samples day 15 for a single-date month,
+and `date < today` skips it once the month passes the 15th, so sweeping
+"this month" with one date silently buys nothing for the back half of
+every month. Found while running the full suite here, not caused by
+anything in this change — flagged, not fixed, since it's a separate,
+pre-existing issue in an unrelated job.
+
 ## Layout
 
 | Path | What it is |
