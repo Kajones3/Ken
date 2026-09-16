@@ -524,6 +524,58 @@ confirming only the genuine US row survives, and a row missing `address`
 entirely is dropped rather than assumed US. 197 tests total (195 + 2 new),
 196 pass, same pre-existing unrelated `intlBaseline.test.ts` flake.
 
+### The detail panel now expands inline under its own row, and "Your numbers" moved into the cards it corrects
+
+Owner's report: opening "Details" jumped to a separate `<section id="detail">`
+far below all six board rows, so an override you'd just typed was nowhere
+near the comparison you were making it for — you had to scroll back and
+forth to see the effect. Two changes, both frontend-only:
+
+**Inline expand/collapse.** `#detail` is no longer a fixed section outside
+the board — `renderBoard()` now creates it as a child of the `selected`
+row itself (`grid-column:1/-1` lets it span the row's full width, breaking
+onto its own line below that row's summary cells), only when a new
+`detailOpen` flag is true. The "Details" button becomes "Collapse" for
+whichever row is open, and clicking it collapses the row back in place —
+no separate close control, no scrolling away from the board to get back to
+comparing.
+
+**Ordering matters now, where it didn't before.** `renderBoard()` must run
+*before* `renderDetail()` on every path that calls both — `renderBoard()`
+recreates the entire `<ol>`, including the empty `#detail` slot, so calling
+it *after* `renderDetail()` would immediately wipe whatever was just
+rendered. Fixed at both existing call sites that had it backwards
+(a calendar-cell click, and the old open-detail handler) — `render()`
+itself already had the right order. `renderDetail()` also gained a guard
+(`if(!box) return`) for the ordinary case where nothing is expanded and
+`#detail` doesn't exist anywhere yet.
+
+Clicking "View" from Table view now also switches to Board view, since the
+inline detail only ever renders inside a board row — Table itself doesn't
+grow one.
+
+**"Your numbers" is no longer a separate highlighted panel.** It was one
+`.ovpanel` block above the six resort cards holding both the hotel-rate and
+airfare controls together, with a "Save these numbers" button — removed,
+since `setOv()`/`setExclude()` already save to `localStorage` the instant a
+value changes; the button was a confirmation, not a requirement, per its
+own comment in the code. `fareCtl` now renders inside the **Flights** card
+itself (and is skipped entirely in *driving* mode, where an airfare
+override never had any effect on the price anyway — a pre-existing minor
+inconsistency this reorganization incidentally fixes), and `hotelCtl` now
+renders inside the **Hotel** card. Each control sits directly above the
+numbers it corrects, instead of both living together somewhere else on
+the page.
+
+Verified live with Playwright: `#detail` doesn't exist anywhere before a
+row is opened; opening one creates it nested inside that exact `<li>`;
+switching to a different row moves it there instead of creating a second
+one; collapsing removes it and all six rows stay visible; and — the one
+case worth double-checking given the reordering fix above — typing a
+hotel rate for an open resort keeps that same resort's detail open and its
+button on "Collapse" even when the price change re-sorts it to a different
+position on the board.
+
 ## Layout
 
 | Path | What it is |
