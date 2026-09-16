@@ -454,6 +454,46 @@ every month. Found while running the full suite here, not caused by
 anything in this change — flagged, not fixed, since it's a separate,
 pre-existing issue in an unrelated job.
 
+### ZIP code only, not city-or-ZIP — superseding the change above, same day
+
+Owner's follow-up after the change above shipped: don't offer a choice —
+require a ZIP code, since it's unambiguous where a city name isn't
+("Springfield" exists in multiple states; OpenStreetMap's own naming for a
+place like New York City can itself surprise people). The "Driving from"
+field (renamed **"Your ZIP code"**) now only ever asks for one.
+
+- `public/prototype.html`: the field strips every non-digit character as
+  you type and caps at 5 digits in JavaScript (`e.target.value.replace(/\D/g,
+  "").slice(0, 5)`) — a paste or a stray letter from a physical keyboard
+  gets cleaned up rather than accepted. The search itself only fires once 5
+  digits are present (was: any 2+ characters), since a partial ZIP has
+  nothing useful to look up. Deliberately **not** relying on the HTML
+  `maxlength` attribute for the length cap — found live that `maxlength`
+  truncates raw characters (letters included) before the strip-non-digits
+  logic runs, so `maxlength="5"` plus a pasted `"abc27601xyz"` produced
+  `"27"` (the first 5 raw characters, only 2 of them digits) instead of the
+  intended `"27601"`. The JS-only approach strips first, then slices, so
+  the 5 kept characters are always digits regardless of what surrounds them.
+- `src/geo/nominatim.ts`: since a ZIP is now the *only* thing this field
+  sends, `NominatimGeocodeProvider` uses Nominatim's **structured**
+  `postalcode` search (plus `country`) for anything shaped like a 5-digit
+  ZIP (`^\d{5}(-\d{4})?$`, using just the 5-digit part), instead of its
+  general-purpose freeform `q`. Per Nominatim's own docs, `postalcode` and
+  `q` are mutually exclusive in one request — sending both is undefined
+  behavior, so this always picks exactly one. Structured search targets
+  postal boundaries directly rather than making `q` guess whether a string
+  of digits is a postcode, a street number, or something else, which is a
+  real precision improvement, not just a formality. Anything not
+  ZIP-shaped still falls back to freeform `q` — defensive only, since the
+  UI itself never sends that path anymore.
+- 2 more tests in `nominatim.test.ts` (7 total for this provider now): a
+  ZIP+4 keeps just the 5-digit part, and a non-ZIP string still goes
+  through freeform `q` untouched.
+
+195 tests total (193 + 2 new), 194 pass — same pre-existing
+`intlBaseline.test.ts` flake as above, still unrelated and still not
+touched by this change.
+
 ## Layout
 
 | Path | What it is |

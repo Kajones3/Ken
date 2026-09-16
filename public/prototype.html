@@ -503,9 +503,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div id="driveBlock" hidden>
         <div class="gt-sub">
           <div class="agef geosearch" style="width:260px">
-            <label for="originSearch">Driving from</label>
+            <label for="originSearch">Your ZIP code</label>
             <div class="georow">
-              <input type="text" id="originSearch" placeholder="Type a city or ZIP code..." autocomplete="off">
+              <input type="text" id="originSearch" placeholder="Enter your ZIP code" autocomplete="off"
+                     inputmode="numeric" pattern="[0-9]{5}">
               <button class="btn btn-sm" id="useMyLocation" type="button" title="Use my approximate location">📍</button>
             </div>
             <div class="georesults" id="geoResults" hidden></div>
@@ -1056,17 +1057,25 @@ function setDestination(resortId, iata){
   recompute(resortId);
 }
 
-/* ============================ driving-mode city search ============================
- * Free for everyone, same as the driving-cost estimate itself. Debounced
- * typeahead against /api/geocode; picking a result stores {label,lat,lon} in
+/* ============================ driving-mode ZIP code search ============================
+ * Free for everyone, same as the driving-cost estimate itself. A ZIP is
+ * unambiguous where a city name isn't ("New York City" vs. OpenStreetMap's
+ * own "New York", multiple towns sharing a name across states) -- the field
+ * only ever asks for one. Debounced typeahead against /api/geocode, which
+ * uses Nominatim's structured postal-code search for a 5-digit query rather
+ * than guessing at freeform text. Picking a result stores {label,lat,lon} in
  * pickedOriginPoint, which tripQuery() sends instead of an airport code. */
 let geoDebounce = null;
 $("#originSearch").addEventListener("input", e=>{
-  const q = e.target.value.trim();
+  // Strip anything that isn't a digit as they type -- the field only ever
+  // means a ZIP code, so there's nothing else valid to leave in place.
+  const digits = e.target.value.replace(/\D/g, "").slice(0, 5);
+  if(digits !== e.target.value) e.target.value = digits;
+  const q = digits;
   pickedOriginPoint = null;
   $("#geoPicked").textContent = "";
   clearTimeout(geoDebounce);
-  if(q.length < 2){ $("#geoResults").hidden = true; return; }
+  if(q.length < 5){ $("#geoResults").hidden = true; return; }
   geoDebounce = setTimeout(async ()=>{
     try{
       const list = await apiGet("/api/geocode", { q });
