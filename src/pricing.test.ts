@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
 import { bandOf, cheapestIn, poolFor, priceTrip, resortById, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
+import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS } from "./config.js";
 
 const START = "2027-03-01";
 
@@ -14,6 +15,8 @@ function night(id: string, name: string, nightly: number, tier: string, on: bool
 function fullBook(resortId: string, iata: string, opts: {
   fare?: number; nights?: HotelNight[]; days?: number; adult?: number; child?: number; junior?: number;
   origin?: string; promos?: PromoRow[];
+  /** First cached date. Defaults to START; set it to price a trip in another year. */
+  startISO?: string;
 } = {}) {
   const days = opts.days ?? 6;
   const hotels = opts.nights ?? [
@@ -22,8 +25,9 @@ function fullBook(resortId: string, iata: string, opts: {
     night("d", "Deluxe tower", 600, "deluxe", true),
     night("b", "Budget motel", 120, "budget", false),
   ];
+  const first = new Date(`${opts.startISO ?? START}T00:00:00Z`);
   const dates = Array.from({ length: days }, (_, i) => {
-    const d = new Date(Date.UTC(2027, 2, 1 + i));
+    const d = new Date(first.getTime() + i * 86_400_000);
     return d.toISOString().slice(0, 10);
   });
   return bookFrom({
@@ -600,9 +604,59 @@ test("transport mode: driving includes wear and tear at the IRS mileage rate", (
   const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
   assert.ok(r.ok);
   const miles = r.price.drivingPick!.roundTripMiles; // rounded for display, so allow slack below
-  // START = 2027-03-01, a Jan-Jun month -> the 0.725/mi rate.
+  // START = 2027-03-01, a Jan-Jun month -> the 0.725/mi rate (carried forward
+  // from 2026, which is the newest year we have a published figure for).
   assert.ok(Math.abs(r.price.drivingPick!.wearAndTearUsd - miles * 0.725) < 1);
   assert.ok(Math.abs(r.price.driving - (r.price.drivingPick!.gasCostUsd + r.price.drivingPick!.wearAndTearUsd)) < 0.01);
+});
+
+test("the rate a trip was priced at carries the year it came from", () => {
+  const book = fullBook("wdw", "MCO", { startISO: "2026-03-01" });
+  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, "2026-03-01");
+  assert.ok(r.ok);
+  const rate = r.price.drivingPick!.mileageRate!;
+  assert.equal(rate.rateYear, 2026);
+  assert.equal(rate.tripYear, 2026);
+  assert.equal(rate.carriedForward, false, "2026 has a published rate — nothing is being reused");
+  assert.equal(rate.ratePerMile, 0.725);
+});
+
+test("a trip in a year with no published rate still prices, flagged as carried forward", () => {
+  const book = fullBook("wdw", "MCO");
+  // START = 2027-03-01. The IRS has not published 2027, so this reuses 2026's
+  // figure rather than refusing — the app books 365 days out, and refusing
+  // would break every driving comparison from 1 January onward.
+  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
+  assert.ok(r.ok);
+  const rate = r.price.drivingPick!.mileageRate!;
+  assert.equal(rate.tripYear, 2027);
+  assert.equal(rate.rateYear, 2026);
+  assert.equal(rate.carriedForward, true, "reusing an older year's rate must never be silent");
+});
+
+test("a trip too far past the newest rate fails cleanly instead of guessing", () => {
+  const tooFar = newestMileageRateYear() + MILEAGE_RATE_CARRY_FORWARD_YEARS + 1;
+  // A book that fully covers those dates, so the mileage rate is the only
+  // thing that can make this fail.
+  const book = fullBook("wdw", "MCO", { startISO: `${tooFar}-03-01` });
+  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, `${tooFar}-03-01`);
+  assert.equal(r.ok, false, "pricing on a rate that stale would be a real misstatement of cost");
+  assert.ok(!r.ok && r.reason.includes("mileage rate"), `reason should name the cause: ${!r.ok && r.reason}`);
+});
+
+test("no wear and tear charged means a missing rate cannot block the trip", () => {
+  const tooFar = newestMileageRateYear() + MILEAGE_RATE_CARRY_FORWARD_YEARS + 1;
+  const book = fullBook("wdw", "MCO", { startISO: `${tooFar}-03-01` });
+  // A rental, and an explicit opt-out: neither charges wear and tear, so
+  // neither has any business failing over a rate it never uses.
+  for (const extra of [{ rentalCar: true }, { includeWearAndTear: false as const }]) {
+    const r = priceTrip(
+      book, resortById("wdw"), { ...base, transportMode: "drive", ...extra }, {}, `${tooFar}-03-01`,
+    );
+    assert.ok(r.ok, `should still price with ${JSON.stringify(extra)}`);
+    assert.equal(r.price.drivingPick!.wearAndTearUsd, 0);
+    assert.equal(r.price.drivingPick!.mileageRate, null, "no rate was used, so none is reported");
+  }
 });
 
 test("includeWearAndTear: false drops wear and tear, prices gas only", () => {

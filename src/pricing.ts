@@ -10,7 +10,7 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, CAR_RENTAL, bucketFor, irsMileageRatePerMile,
+  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, CAR_RENTAL, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
@@ -201,6 +201,11 @@ export interface TripPrice {
   drivingPick: {
     from: string; roundTripMiles: number; gasPricePerGallonUsd: number;
     gasCostUsd: number; overnightUsd: number; wearAndTearUsd: number;
+    /** Which IRS rate wearAndTearUsd was computed at, and whether it's the
+     *  real rate for the trip's own year or an older one carried forward
+     *  because the IRS hasn't published that year yet. null when no
+     *  wear-and-tear was charged at all (a rental, or the user opted out). */
+    mileageRate: MileageRateUsed;
   } | null;
   transportMode: TransportMode;
   /** How much of `tickets` is Park Hopper — 0 unless params.hopper was set
@@ -215,6 +220,18 @@ export interface TripPrice {
   rentalCarUsd: number;
   rentalCarPick: { dailyRateUsd: number; nights: number } | null;
 }
+/**
+ * The IRS standard mileage rate a driving trip's wear-and-tear line was
+ * actually priced at. `carriedForward` is the honest bit: true means the trip
+ * falls in a year the IRS hasn't published a rate for yet, so the newest rate
+ * on file was reused. Nothing in the UI renders this — it's here so the
+ * calculation is inspectable and testable, same as gasPricePerGallonUsd. The
+ * owner hears about a carried-forward rate through the news-digest email.
+ */
+export type MileageRateUsed =
+  | { ratePerMile: number; rateYear: number; tripYear: number; carriedForward: boolean }
+  | null;
+
 export type PriceResult = { ok: true; price: TripPrice } | { ok: false; reason: string };
 
 // ---------------------------------------------------------------- age bands
@@ -343,13 +360,30 @@ export function priceTrip(
     // the rental fee already, and rentalCarUsd (below) covers it separately.
     // includeWearAndTear === false is the user's own opt-out (see TripParams)
     // — unset/true keeps the default of including it.
-    const wearAndTearUsd = params.rentalCar || params.includeWearAndTear === false
-      ? 0 : roundTripMiles * irsMileageRatePerMile(start);
+    const chargingWearAndTear = !(params.rentalCar || params.includeWearAndTear === false);
+    let wearAndTearUsd = 0;
+    let mileageRate: MileageRateUsed = null;
+    if (chargingWearAndTear) {
+      // Year-aware: the IRS sets a new rate every December, so a trip in a year
+      // we have no published figure for reuses the newest one on file — flagged
+      // as carried forward, which the owner-only news-digest email reports and
+      // the UI deliberately does NOT show (owner's call: a stale-rate banner on
+      // a trip page is noise to a traveller, and the number barely moves). Once
+      // the newest rate is too old to stand behind, this refuses instead, rather
+      // than quietly pricing on it.
+      const rate = irsMileageRate(start);
+      if (!rate.ok) return { ok: false, reason: rate.reason };
+      wearAndTearUsd = roundTripMiles * rate.ratePerMile;
+      mileageRate = {
+        ratePerMile: rate.ratePerMile, rateYear: rate.rateYear,
+        tripYear: rate.tripYear, carriedForward: rate.carriedForward,
+      };
+    }
     driving = Math.round((gasCostUsd + overnightUsd + wearAndTearUsd) * 100) / 100;
     drivingPick = {
       from: fromLabel, roundTripMiles: Math.round(roundTripMiles),
       gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
-      wearAndTearUsd: Math.round(wearAndTearUsd * 100) / 100,
+      wearAndTearUsd: Math.round(wearAndTearUsd * 100) / 100, mileageRate,
     };
   } else if (ov.excludeFlights) {
     // "I've already got flights sorted" — not a price claim, so this
