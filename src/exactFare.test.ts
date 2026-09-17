@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { memoryDb } from "./db.js";
-import { fetchExactFare, remainingForUser, GLOBAL_BUDGET_KEY, type ExactFareLimits } from "./exactFare.js";
+import { fetchExactFare, limitsFromEnv, remainingForUser, GLOBAL_BUDGET_KEY, type ExactFareLimits } from "./exactFare.js";
 
 const LIMITS: ExactFareLimits = { perUserPerDay: 3, globalPerDay: 5, freshHours: 24 };
 const TODAY = "2027-01-15";
@@ -298,4 +298,24 @@ test("a correction only counts fares NEWER than the baseline it corrects", async
   assert.equal(est.med, 900, "the baseline stands, uncorrected by its own inputs");
   assert.equal(est.routeSamples, undefined, "and no correction is claimed");
   await db.close();
+});
+
+test("the shipped default caps are sized for the SerpApi plan actually bought", async () => {
+  // These defaults are the only thing standing between a Plus user's clicks
+  // and the month's search allowance, and they were originally sized for the
+  // 5,000/month Developer plan (25/user, 90/day site-wide) while the project
+  // runs on Starter's 1,000. Pinned so they can't drift back up silently:
+  // 6/day site-wide is ~180/month, which is what's left after the nightly
+  // flight rotation (~300) and hotels (~240).
+  delete process.env.EXACT_FARE_PER_USER_PER_DAY;
+  delete process.env.EXACT_FARE_GLOBAL_PER_DAY;
+  const limits = limitsFromEnv();
+  assert.equal(limits.perUserPerDay, 3);
+  assert.equal(limits.globalPerDay, 6);
+});
+
+test("the caps stay overridable, so a plan upgrade doesn't need a code change", async () => {
+  process.env.EXACT_FARE_GLOBAL_PER_DAY = "90";
+  assert.equal(limitsFromEnv().globalPerDay, 90);
+  delete process.env.EXACT_FARE_GLOBAL_PER_DAY;
 });

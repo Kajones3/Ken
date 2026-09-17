@@ -14,6 +14,7 @@
  * nightly job only ever needs "how many people asked about ATL-MCO in
  * March", never who they were.
  */
+import { ORIGINS, RESORTS } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface PopularRoute {
@@ -21,6 +22,12 @@ export interface PopularRoute {
   destination: string;
   departMonth: string;
   searches: number;
+}
+
+/** Every arrival airport the app prices — primaries plus alternates. Same
+ *  shape jobs/coverage.ts builds for its report. */
+function arrivalAirports(): string[] {
+  return RESORTS.flatMap((r) => [r.iata, ...r.altArrivalAirports.map((a) => a.iata)]);
 }
 
 /**
@@ -88,19 +95,80 @@ export async function popularRoutes(
  * These are chosen by BTS sample size — the routes whose historical median
  * rests on the most real passengers, so the ratio measured against them is
  * the most trustworthy one available.
+ *
+ * The two-level query matters (fixed 2026-09-17). This used to be a single
+ * `distinct on (origin, destination) ... order by origin, destination,
+ * passengers_sampled desc limit 3`, which reads as "biggest sample first"
+ * but is not: Postgres requires `distinct on`'s leading ORDER BY terms to
+ * match its distinct columns, so `passengers_sampled` only broke ties
+ * *within* one route and never influenced which routes came back. The
+ * effect was alphabetical — the same three airports every night forever,
+ * re-bought over the same rows, so paid coverage never widened. Ranking by
+ * sample size has to happen in an outer query over the de-duplicated rows.
  */
 export async function trendAnchorRoutes(
   db: Db, quarter: number, departMonth: string, limit = 3,
 ): Promise<PopularRoute[]> {
   const r = await db.query<{ origin: string; destination: string }>(
-    `select distinct on (origin, destination) origin, destination
-       from historical_fares
-      where quarter = $1 and coalesce(median_fare_usd, avg_fare_usd) > 0
-      order by origin, destination, passengers_sampled desc
-      limit $2`,
+    `select origin, destination from (
+       select distinct on (origin, destination) origin, destination, passengers_sampled
+         from historical_fares
+        where quarter = $1 and coalesce(median_fare_usd, avg_fare_usd) > 0
+        order by origin, destination, passengers_sampled desc
+     ) best
+     order by passengers_sampled desc nulls last, origin, destination
+     limit $2`,
     [quarter, limit],
   );
   return r.rows.map((x) => ({
     origin: x.origin, destination: x.destination, departMonth, searches: 0,
+  }));
+}
+
+/**
+ * Routes bought to widen coverage when nobody has searched anything.
+ *
+ * Demand-driven buying assumes there is demand. Before launch there isn't:
+ * `route_searches` is empty or near-empty, so the nightly job would spend
+ * its whole budget on the same handful of anchor routes every night,
+ * overwriting the same rows via `on conflict do update` and never learning
+ * anything new. This is the round-robin that fixes that.
+ *
+ * Staleness order, never-bought first, so a route bought tonight goes to the
+ * back of the queue. Only `serpapi_flights` rows count as "bought" — a
+ * Travelpayouts row or an estimate is not a real fare for this route, so a
+ * route carrying only those is still unvisited as far as rotation cares.
+ *
+ * Why this is worth more than it looks: a bought fare corrects that route's
+ * whole *quarter* (see book.ts), not just its date. ~19 origins x 9 arrival
+ * airports is ~171 routes, so at ten lookups a night the rotation touches
+ * every route the app prices inside about three weeks.
+ */
+export async function rotationRoutes(
+  db: Db, limit: number, departMonth: string, exclude: Set<string> = new Set(),
+): Promise<PopularRoute[]> {
+  if (limit <= 0) return [];
+  const dests = arrivalAirports();
+  const seen = await db.query<{ origin: string; destination: string; last_bought: Date | null }>(
+    `select origin, destination, max(fetched_at) as last_bought
+       from flight_prices
+      where source = 'serpapi_flights'
+      group by origin, destination`,
+  );
+  const lastBought = new Map(
+    seen.rows.map((r) => [`${r.origin}|${r.destination}`, r.last_bought ? new Date(r.last_bought).getTime() : 0]),
+  );
+
+  const candidates: { origin: string; destination: string; at: number }[] = [];
+  for (const o of ORIGINS) {
+    for (const d of dests) {
+      const key = `${o.iata}|${d}`;
+      if (exclude.has(key)) continue;
+      candidates.push({ origin: o.iata, destination: d, at: lastBought.get(key) ?? 0 });
+    }
+  }
+  candidates.sort((a, b) => a.at - b.at || a.origin.localeCompare(b.origin) || a.destination.localeCompare(b.destination));
+  return candidates.slice(0, limit).map((c) => ({
+    origin: c.origin, destination: c.destination, departMonth, searches: 0,
   }));
 }

@@ -23,9 +23,9 @@
  * considered. Both fail closed — no key, no spend.
  */
 import { randomUUID } from "node:crypto";
-import { monthBounds, quarterOf, todayISO, addDaysISO } from "../dates.js";
+import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates.js";
 import { getDb, type Db } from "../db.js";
-import { popularRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
+import { popularRoutes, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS } from "../config.js";
 
@@ -70,6 +70,24 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     [runId, `limit ${limit} x ${datesPerMonth} dates x ${buckets.length} bucket(s)`]);
 
   let routes = opts.routes ?? await popularRoutes(db, limit);
+
+  // Fill the rest of tonight's slots by rotation, stalest route first.
+  // Demand still wins where it exists — someone actually asking about a
+  // route is better evidence than a schedule — but before launch there is
+  // no demand, and without this the job re-bought the same few routes every
+  // night and coverage never widened. See rotationRoutes().
+  if (!opts.routes && routes.length < limit) {
+    // Cycle the sampled month across roughly four quarters on successive
+    // nights, so revisiting a route later anchors a different quarter
+    // instead of overwriting the same one. A bought fare corrects its whole
+    // quarter, so spreading across quarters buys more than depth in one.
+    const quarterStep = Math.floor(Date.now() / 86_400_000) % 4;
+    const rotationMonth = monthKey(addDaysISO(todayISO(), 60 + quarterStep * 90));
+    const taken = new Set(routes.map((r) => `${r.origin}|${r.destination}`));
+    routes = routes.concat(
+      await rotationRoutes(db, limit - routes.length, rotationMonth, taken),
+    );
+  }
 
   // Top up with trend anchors so the multiplier stays computable even on a
   // day when demand was thin or entirely international (see

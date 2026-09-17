@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { memoryDb } from "./db.js";
-import { popularRoutes, recordSearch, trendAnchorRoutes } from "./routeDemand.js";
+import { popularRoutes, recordSearch, rotationRoutes, trendAnchorRoutes } from "./routeDemand.js";
 import { runPopularRoutes } from "./jobs/popularRoutes.js";
 import { computeFareTrend } from "./jobs/fareTrend.js";
 import { loadBook } from "./book.js";
@@ -48,6 +48,78 @@ test("trendAnchorRoutes prefers the routes with the biggest BTS sample", async (
   const anchors = await trendAnchorRoutes(db, 1, "2027-03", 2);
   assert.equal(anchors.length, 2);
   for (const a of anchors) assert.equal(a.departMonth, "2027-03");
+  // Assert WHICH routes, not just how many. This test asserted only the
+  // count for a long time, which is exactly why the ordering bug survived:
+  // the query read as "biggest sample first" but Postgres requires
+  // `distinct on`'s leading ORDER BY to match its distinct columns, so it
+  // actually sorted alphabetically and returned ATL + BWI — BWI being the
+  // 10-passenger route, the least trustworthy baseline in the table.
+  assert.deepEqual(
+    anchors.map((a) => a.origin).sort(),
+    ["ATL", "ORD"],
+    "must pick the two biggest samples (90000, 70000), never the 10-passenger route",
+  );
+  await db.close();
+});
+
+test("rotationRoutes returns never-bought routes before ones already bought", async () => {
+  const db = await memoryDb();
+  // ATL-MCO has a real bought fare; nothing else does.
+  await db.query(
+    `insert into flight_prices
+       (origin,destination,depart_date,trip_length,price_usd,stops,source,fetched_at)
+     values ('ATL','MCO','2027-03-15',7,400,0,'serpapi_flights',now())`,
+  );
+  const picks = await rotationRoutes(db, 5, "2027-03");
+  assert.ok(picks.length > 0);
+  assert.ok(
+    !picks.some((p) => p.origin === "ATL" && p.destination === "MCO"),
+    "a route bought just now must go to the back of the queue, not the front",
+  );
+  for (const p of picks) assert.equal(p.departMonth, "2027-03");
+  await db.close();
+});
+
+test("rotationRoutes orders by staleness, oldest purchase first", async () => {
+  const db = await memoryDb();
+  // Give EVERY candidate route a fare so staleness is the only differentiator.
+  const all = await rotationRoutes(db, 1000, "2027-03");
+  for (const r of all) {
+    await db.query(
+      `insert into flight_prices
+         (origin,destination,depart_date,trip_length,price_usd,stops,source,fetched_at)
+       values ($1,$2,'2027-03-15',7,400,0,'serpapi_flights', now() - ($3 || ' hours')::interval)`,
+      [r.origin, r.destination, String(all.indexOf(r))],
+    );
+  }
+  // index 0 is the freshest (now - 0h), the last is the stalest.
+  const picks = await rotationRoutes(db, 3, "2027-03");
+  const stalest = all.slice(-3).map((r) => `${r.origin}|${r.destination}`).sort();
+  assert.deepEqual(picks.map((p) => `${p.origin}|${p.destination}`).sort(), stalest);
+  await db.close();
+});
+
+test("rotationRoutes ignores estimates and Travelpayouts rows — only real bought fares count", async () => {
+  const db = await memoryDb();
+  await db.query(
+    `insert into flight_prices
+       (origin,destination,depart_date,trip_length,price_usd,stops,source,fetched_at)
+     values ('ATL','MCO','2027-03-15',7,400,0,'travelpayouts',now())`,
+  );
+  const picks = await rotationRoutes(db, 1000, "2027-03");
+  assert.ok(
+    picks.some((p) => p.origin === "ATL" && p.destination === "MCO"),
+    "a Travelpayouts row is not a real bought fare, so the route is still unvisited",
+  );
+  await db.close();
+});
+
+test("rotationRoutes honours the exclude set, so demand routes aren't bought twice", async () => {
+  const db = await memoryDb();
+  const first = await rotationRoutes(db, 1, "2027-03");
+  const key = `${first[0]!.origin}|${first[0]!.destination}`;
+  const second = await rotationRoutes(db, 1, "2027-03", new Set([key]));
+  assert.notEqual(`${second[0]!.origin}|${second[0]!.destination}`, key);
   await db.close();
 });
 
