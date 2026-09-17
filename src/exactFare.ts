@@ -60,12 +60,16 @@ export interface ExactFareLimits {
 
 export function limitsFromEnv(): ExactFareLimits {
   return {
-    perUserPerDay: Number(process.env.EXACT_FARE_PER_USER_PER_DAY ?? 25),
+    perUserPerDay: Number(process.env.EXACT_FARE_PER_USER_PER_DAY ?? 3),
     // Sized against the rest of the month's committed spend. On SerpApi's
-    // 5,000/month Developer plan: intl-sweep ~1,140 and popular-routes
-    // ~1,080 leaves ~2,780, or about 90 a day. Raise this only after
-    // checking what those two jobs are actually using.
-    globalPerDay: Number(process.env.EXACT_FARE_GLOBAL_PER_DAY ?? 90),
+    // 1,000/month Starter plan: the nightly flight rotation takes ~300 and
+    // hotels ~240, so ~180/month is what is left to reserve for on-demand
+    // lookups — about 6 a day. This is insurance against an unbounded
+    // worst case more than an expected cost: exact-fare only spends when a
+    // Plus user clicks, and a handful of comped friends will not come near
+    // it. Raise both only after checking what the nightly jobs actually
+    // use — `npm run coverage` reports it.
+    globalPerDay: Number(process.env.EXACT_FARE_GLOBAL_PER_DAY ?? 6),
     freshHours: Number(process.env.EXACT_FARE_FRESH_HOURS ?? DEFAULT_FRESH_HOURS),
   };
 }

@@ -127,6 +127,38 @@ set) doesn't have this limitation.
 
 ## Decisions already made — reasoning included so they don't get re-litigated
 
+**The paid budget is SerpApi Starter: $25/month, 1,000 searches** (bought
+2026-09-17). Every default in this repo was originally sized for the
+**Developer plan (5,000/month)** and had to be retuned. The allocation, worst
+case, must stay inside 1,000:
+
+| Job | Budget | Worst case/month |
+|---|---|---|
+| `popular-routes` (demand + rotation) | 10/night | 300 |
+| `refresh` off-property hotels | 8/night | 240 |
+| exact-fare (on demand) | 6/day site-wide | 180 |
+| Reserve (manual `intl-sweep`, headroom) | | 280 |
+
+Two consequences worth not re-deriving: **`intl-sweep` is deliberately
+unscheduled** (a full 12-month sweep is ~1,140 lookups, more than a whole
+month's allowance — it would consume the month in one run and still not
+finish), and **SerpApi has no overage billing**, so $25 is a hard ceiling
+*unless* "Automatic Early Renewal" is on, which re-buys the plan the instant
+the bucket empties. Leave that off.
+
+**Paid lookups rotate by staleness, they don't chase demand alone.**
+`rotationRoutes()` in `routeDemand.ts` fills whatever nightly slots real
+demand doesn't. Demand still wins where it exists — someone actually asking
+about a route is better evidence than a schedule — but before launch
+`route_searches` is empty, so a purely demand-driven job re-bought the same
+few routes every night and coverage never widened. Rotation is stalest-first
+over ~171 routes (19 free origins × 9 arrival airports), and only
+`serpapi_flights` rows count as "bought", so a Travelpayouts row or an
+estimate leaves a route still unvisited. Measured: **200 lookups over 20
+simulated nights covered all 171 routes with no repeats.** This is also what
+gradually fixes international pricing, since international routes are in the
+same rotation.
+
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
 calendar endpoint at 300 req/min, so live per-search fetching doesn't just cost money,
@@ -466,6 +498,22 @@ Found by testing an all-international demand day, not in production.
    who sees a number they can't explain concludes the app is wrong and leaves.
 
 ## Bugs the tests caught (both would have shipped silently)
+
+- **`trendAnchorRoutes()` claimed to pick the best-evidenced routes and
+  actually picked the alphabetically-first ones.** Its SQL was
+  `select distinct on (origin, destination) ... order by origin, destination,
+  passengers_sampled desc limit 3` — which reads as "biggest BTS sample
+  first", but Postgres requires `distinct on`'s *leading* ORDER BY terms to
+  match its distinct columns, so `passengers_sampled` only broke ties within
+  one route and never influenced which routes came back. Proven against a
+  real query, not reasoned about: with ATL/MCO (90,000 passengers), ORD/MCO
+  (70,000) and BWI/MCO (10) in the table, the old query returned **ATL and
+  BWI** — anchoring the entire app's fare trend partly on a ten-passenger
+  sample. The existing test asserted only `anchors.length === 2` and never
+  which routes, which is exactly how it survived; it now asserts the routes.
+  Ranking by sample size has to happen in an outer query over the
+  de-duplicated rows. Caught by the owner asking whether the nightly job
+  would keep pulling the same routes — it would have, forever.
 
 - Postgres returns `date` columns as JS `Date` objects; string-slicing them mangled every
   date and made all six resorts return "unavailable" with **no error at all**. See

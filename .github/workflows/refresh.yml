@@ -35,9 +35,12 @@ jobs:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           MAX_REQUESTS_PER_MINUTE: "240"
           # Hard ceiling on paid off-property hotel lookups for this run.
-          # A normal tiered night spends ~18-48 (6 resorts x the months due);
-          # a REFRESH_BACKFILL run spends ~150. 200 covers both and still
-          # stops a loop bug from running up a bill.
-          SERPAPI_HOTELS_BUDGET: ${{ vars.SERPAPI_HOTELS_BUDGET || '200' }}
+          # Sized for SerpApi Starter (1,000 searches/month): 8 a night is
+          # ~240/month, leaving room for the nightly flight rotation (~300)
+          # and exact-fare (~180). An exhausted budget degrades off-property
+          # to cached rates; on-property is local and unaffected.
+          # Raise this temporarily for a REFRESH_BACKFILL run, which wants
+          # ~150 in one go.
+          SERPAPI_HOTELS_BUDGET: ${{ vars.SERPAPI_HOTELS_BUDGET || '8' }}
           REFRESH_BACKFILL: ${{ inputs.backfill }}
           FARE_TREND_SOURCES: ${{ vars.FARE_TREND_SOURCES || 'serpapi_flights' }}
