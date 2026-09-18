@@ -1,4 +1,5 @@
 import type { ISODate } from "./dates.js";
+import { haversineMiles } from "./geo.js";
 
 export type OnTier = "value" | "moderate" | "deluxe";
 export type OffTier = "budget" | "mid" | "upscale";
@@ -341,6 +342,87 @@ export const RESORTS: Resort[] = [
 
 export const RESORT_BY_ID = new Map(RESORTS.map((r) => [r.id, r]));
 
+/* =========================================================================
+ * Attractions — what a resort HAS, next to what it costs.
+ *
+ * Price answers "which of these can we afford". It never answers "which of
+ * these is our trip", and that is the question people actually start from.
+ * A family who wants Zootopia has exactly one option and should be told so
+ * before they compare six totals.
+ *
+ * ONE RULE ABOVE ALL: an attraction lists every resort that has it, and
+ * "only here" is DERIVED from that list, never asserted per row. Clones
+ * across resorts are normal — Ratatouille runs at both EPCOT and Walt
+ * Disney Studios, TRON at both Shanghai and the Magic Kingdom — and the
+ * first draft of this idea got that wrong out loud. A row that claims
+ * exclusivity it doesn't have is worse than no row: it sends someone to the
+ * wrong side of the planet.
+ *
+ * Hand-maintained here, same as goodToKnow and closuresUrl and for the same
+ * reason: no API exposes this for any of the six resorts. Unlike ticket
+ * prices, it does not rot quickly — headline attractions stand for years,
+ * and what moves is openings and closures, which the news digest already
+ * watches.
+ * ====================================================================== */
+
+export interface AttractionDef {
+  /** Stable key. Never reuse one for a different attraction — a user's saved
+   *  picks reference it, and a recycled id silently changes what they chose. */
+  id: string;
+  /** What a traveller would call it. Where resorts use different names for
+   *  the same ride, pick the one most people search for and let `note` carry
+   *  the difference. */
+  name: string;
+  /** EVERY resort that has it. One entry means genuinely only there. */
+  resortIds: string[];
+  /** Optional: what makes a resort's version different from its clones.
+   *  Worth writing only when it would change where someone goes. */
+  note?: string;
+}
+
+/**
+ * STARTER SET — the owner is replacing this with their own list.
+ *
+ * Kept short on purpose: every row here is one Claude is confident about,
+ * because a confident wrong entry is the failure this whole file is shaped
+ * to avoid. Treat it the way `seedPromos.ts`'s example rows are treated —
+ * real enough to build and test against, not a researched catalogue.
+ */
+export const ATTRACTIONS: AttractionDef[] = [
+  { id: "zootopia", name: "Zootopia", resortIds: ["shdr"],
+    note: "A whole themed land, and the only one anywhere." },
+  { id: "mystic-manor", name: "Mystic Manor", resortIds: ["hkdl"],
+    note: "Hong Kong's own take on the haunted-house idea — no Doom Buggies, a different story entirely." },
+  { id: "journey-center-earth", name: "Journey to the Center of the Earth", resortIds: ["tdr"],
+    note: "Tokyo DisneySea only." },
+  { id: "radiator-springs-racers", name: "Radiator Springs Racers", resortIds: ["dlr"] },
+  { id: "guardians-cosmic-rewind", name: "Guardians of the Galaxy: Cosmic Rewind", resortIds: ["wdw"] },
+  { id: "pirates-sunken-treasure", name: "Pirates of the Caribbean: Battle for the Sunken Treasure", resortIds: ["shdr"],
+    note: "Shares a name with the Pirates rides elsewhere and is a completely different attraction." },
+  { id: "ratatouille", name: "Ratatouille", resortIds: ["wdw", "dlp"],
+    note: "Remy's Ratatouille Adventure at EPCOT, Ratatouille: L'Aventure Totalement Toquée at Walt Disney Studios." },
+  { id: "tron", name: "TRON Lightcycle / Run", resortIds: ["wdw", "shdr"] },
+  { id: "rise-of-the-resistance", name: "Star Wars: Rise of the Resistance", resortIds: ["wdw", "dlr"] },
+  { id: "crush-coaster", name: "Crush's Coaster", resortIds: ["dlp"] },
+];
+
+export const ATTRACTION_BY_ID = new Map(ATTRACTIONS.map((a) => [a.id, a]));
+
+/** Every attraction this resort has. */
+export function attractionsFor(resortId: string): AttractionDef[] {
+  return ATTRACTIONS.filter((a) => a.resortIds.includes(resortId));
+}
+
+/**
+ * True when this resort is the ONLY place you can ride it — computed from
+ * `resortIds`, so it can never disagree with the data. This is the whole
+ * reason the shape is a list: "only at X" is a fact about the list, not a
+ * flag someone remembers to update when a clone opens.
+ */
+export function isOnlyAt(attraction: AttractionDef): boolean {
+  return attraction.resortIds.length === 1;
+}
+
 export interface Origin { iata: string; name: string; lat: number; lon: number }
 export const ORIGINS: Origin[] = [
   { iata: "ATL", name: "Atlanta", lat: 33.64, lon: -84.43 },
@@ -415,6 +497,88 @@ export const ORIGIN_BY_IATA = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 /** Is this airport free for everyone, or does picking it need Plus? */
 export function originNeedsPlus(iata: string): boolean {
   return PLUS_ORIGINS.some((o) => o.iata === iata);
+}
+
+/** Every arrival airport the app prices, mapped back to the resort it serves.
+ *  Primaries and alternates both, so a lookup can start from a bare IATA code
+ *  that came out of a route table rather than a resort object. */
+export const RESORT_BY_ARRIVAL_AIRPORT = new Map(
+  RESORTS.flatMap((r) => [r.iata, ...r.altArrivalAirports.map((a) => a.iata)].map((iata) => [iata, r] as const)),
+);
+
+/**
+ * Below this, flying is not a thing anyone does — you drive.
+ *
+ * Picked against the real distances rather than by feel. Every origin the app
+ * knows, measured to the two domestic resorts: LAX→Disneyland 36 miles,
+ * SAN→Disneyland 77, TPA→WDW 81, then a clear gap to RSW→WDW 133, JAX→WDW
+ * 144, MIA→WDW 193 and LAS→Disneyland 226. The first three are drives nobody
+ * would fly; the last four are genuine, scheduled, regularly-flown routes.
+ * 100 sits in the gap, so the rule catches the nonsense without ever
+ * withholding a fare someone might really book.
+ */
+export const NO_FLY_RADIUS_MILES = 100;
+
+/**
+ * True when pricing this route is pointless because the traveller is already
+ * there. Two cases, and both were really happening every night:
+ *
+ *   1. The same airport at both ends. LAX is a departure airport AND one of
+ *      Disneyland's arrival airports, so the refresh asked for LAX→LAX six
+ *      times a night and Travelpayouts rejected every one of them.
+ *   2. Different airports, same metro. LAX→SNA failed the same way, because
+ *      Travelpayouts resolves SNA to the Los Angeles city code and then sees
+ *      an origin and destination that are equal.
+ *
+ * Worth catching in one shared place rather than at each call site: the
+ * nightly rotation would otherwise spend real SerpApi money on these (they
+ * are in its 171-route pool and have never been bought, so they sort to the
+ * FRONT of the stalest-first queue), and an exact-fare click would spend a
+ * metered lookup to be told what we already know.
+ *
+ * Deliberately NOT a claim about whether the trip is worth taking — someone
+ * in Los Angeles absolutely may visit Disneyland. It is a claim about the
+ * flight only. Driving is priced separately and is unaffected.
+ */
+export function isLocalRoute(originIata: string, destinationIata: string): boolean {
+  if (!originIata || !destinationIata) return false;
+  if (originIata === destinationIata) return true;
+  const resort = RESORT_BY_ARRIVAL_AIRPORT.get(destinationIata);
+  return Boolean(resort && isLocalToResort(originIata, resort));
+}
+
+/** Shared by both directions of the rule, so "too close to fly" and "close
+ *  enough to drive" can never disagree about the same pair of points. */
+function isLocalToResort(originIata: string, resort: Resort): boolean {
+  const origin = ORIGIN_BY_IATA.get(originIata);
+  if (!origin) return false;
+  return haversineMiles(origin.lat, origin.lon, resort.lat, resort.lon) < NO_FLY_RADIUS_MILES;
+}
+
+/**
+ * The resort this departure airport is close enough to drive to, if any.
+ *
+ * The other half of `isLocalRoute`, and the useful half for a traveller:
+ * having established that someone departing LAX will not be flying to
+ * Disneyland, the board should say what they WILL do — drive to Disneyland,
+ * fly to the other five — rather than show a gap where the nearest resort's
+ * price ought to be.
+ *
+ * Domestic only, and that is a real limit rather than an oversight:
+ * `priceTrip` refuses to price a drive to any resort outside the US, so
+ * "local to Paris" has nowhere to go even if someone departed from CDG.
+ * Nearest wins if two ever qualify (none do today — Orlando and Anaheim are
+ * 2,000 miles apart).
+ */
+export function localResortFor(originIata: string): Resort | null {
+  if (!originIata) return null;
+  const origin = ORIGIN_BY_IATA.get(originIata);
+  if (!origin) return null;
+  return RESORTS
+    .filter((r) => r.region === "dom" && isLocalToResort(originIata, r))
+    .sort((a, b) =>
+      haversineMiles(origin.lat, origin.lon, a.lat, a.lon)
+      - haversineMiles(origin.lat, origin.lon, b.lat, b.lon))[0] ?? null;
 }
 
 /** Tiered freshness: near dates move, far dates don't. */

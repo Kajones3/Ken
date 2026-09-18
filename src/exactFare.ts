@@ -28,6 +28,7 @@
  */
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
+import { isLocalRoute } from "./config.js";
 import { SerpApiFlightProvider } from "./providers/serpapiFlights.js";
 
 /** Reserved user_id holding the site-wide daily tally. */
@@ -50,7 +51,7 @@ export interface ExactFareRequest {
 
 export type ExactFareResult =
   | { ok: true; cached: boolean; price: number; carrier?: string; stops: number; deepLink?: string; fetchedAt: string; remainingToday: number }
-  | { ok: false; reason: "quota_user" | "quota_global" | "no_provider" | "no_fare" | "error"; message: string; remainingToday: number };
+  | { ok: false; reason: "quota_user" | "quota_global" | "no_provider" | "no_fare" | "local_route" | "error"; message: string; remainingToday: number };
 
 export interface ExactFareLimits {
   perUserPerDay: number;
@@ -111,6 +112,19 @@ export async function fetchExactFare(
 ): Promise<ExactFareResult> {
   const limits = deps.limits ?? limitsFromEnv();
   const today = deps.today ?? todayISO();
+
+  // --- 0. Is there a flight to buy at all? -------------------------------
+  // Someone in Los Angeles checking the exact fare to Disneyland would
+  // otherwise spend a metered lookup, and one of their three daily checks,
+  // to be told there are no itineraries from LAX to LAX. Refused before any
+  // of the four bounds, because it costs nothing to know this.
+  if (isLocalRoute(req.origin, req.destination)) {
+    return {
+      ok: false, reason: "local_route",
+      remainingToday: await remainingForUser(db, req.userId, limits, today),
+      message: "That trip doesn't involve a flight — the resort is a drive from your departure city. Try the driving option on the trip form instead.",
+    };
+  }
 
   // --- 1. Cache first, before any quota is even considered ---------------
   // A cached hit costs nothing, so it must not consume the user's daily

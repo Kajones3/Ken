@@ -126,6 +126,41 @@ a{color:var(--ink)}
 :root[data-theme="light"] .spinner, :root:not([data-theme="dark"]) .spinner{border-color:rgba(20,22,31,.25); border-top-color:var(--plane)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
+/* The signed-in indicator. A bordered button with an avatar rather than a
+   chip, because the complaint it fixes was "I have no real idea that I am
+   signed in" — a small grey chip among other small grey chips was not
+   telling anybody anything. */
+.attrline{margin-top:5px}
+.attr{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px;
+  border-radius:999px; border:1px solid var(--rule-strong); color:var(--ink-2); background:var(--surface-2)}
+.attr-only{border-color:var(--accent, var(--ink)); color:var(--accent, var(--ink))}
+.attr-none{opacity:.6}
+.attrpick{display:flex; flex-direction:column; gap:7px; max-height:230px; overflow-y:auto;
+  border:1px solid var(--rule); border-radius:10px; padding:11px 12px; margin-top:7px}
+.attrpick label{display:flex; gap:9px; align-items:flex-start; font-size:13px; line-height:1.4}
+.attrpick input{margin-top:2px; flex:none}
+.attrpick .who{color:var(--muted); font-size:11.5px; display:block}
+.acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1px solid var(--rule-strong);
+  border-radius:999px; background:var(--surface-2); text-align:left; max-width:260px}
+.acctbtn:hover{border-color:var(--ink-2)}
+.acctbtn[hidden]{display:none}
+.avatar{width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--plane); flex:none;
+  display:grid; place-items:center; font-weight:800; font-size:12.5px; text-transform:uppercase}
+.acctmeta{display:flex; flex-direction:column; min-width:0; line-height:1.25}
+.acctname{font-size:12.5px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.acctplan{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.acctplan.plus{color:var(--accent, var(--ink))}
+/* A real sign-in panel, so signing in is a page you go to rather than two
+   inputs wedged into the masthead. */
+.authfield{display:flex; flex-direction:column; gap:6px; margin-bottom:14px}
+.authfield label{font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.authfield input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong);
+  border-radius:9px; padding:10px 12px; font-size:14px; width:100%}
+.authrow{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.acctline{display:flex; justify-content:space-between; gap:14px; padding:10px 0; border-bottom:1px solid var(--rule); font-size:13.5px}
+.acctline:last-child{border-bottom:0}
+.acctline .k{color:var(--muted)}
+.acctline .v{font-weight:650; text-align:right; overflow-wrap:anywhere}
 .signin{display:flex; gap:6px; align-items:center}
 .signin[hidden]{display:none}
 .signin input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px; width:168px; max-width:44vw; min-width:0}
@@ -230,9 +265,15 @@ a{color:var(--ink)}
 .demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
 .downgrade{display:block; margin-top:6px; font-size:11px; line-height:1.5;
   color:var(--warnfg,#f0c674)}
-.pluspill{display:inline-block; margin-left:6px; padding:0 6px; border-radius:999px;
+.labelrow{display:flex; align-items:center; gap:2px}
+.labelrow label{margin:0}
+.pluspill{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
   font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
   background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-line)}
+/* It opens the Plus dialog, so it has to look like something you can press. */
+button.pluspill{cursor:pointer}
+button.pluspill:hover{background:var(--accent); color:var(--plane); border-color:var(--accent)}
+button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 .exactchip{display:inline-block; margin-left:4px; padding:0 5px; border-radius:4px;
   font-size:10px; font-weight:700; letter-spacing:.03em; text-transform:uppercase;
   background:var(--accent-bg); color:var(--accent); border:1px solid var(--accent-line)}
@@ -404,17 +445,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="acct">
       <span class="chip" id="planChip">Free plan</span>
       <span class="chip" id="searchChip" hidden></span>
-      <span class="signin" id="signinBox">
-        <input type="email" id="signinEmail" placeholder="you@example.com" aria-label="Email">
-        <input type="password" id="signinPassword" placeholder="Password (if set)" aria-label="Password"
-               autocomplete="current-password">
-        <button class="btn btn-sm" id="signinBtn">Sign in</button>
-        <small id="signinError" class="downgrade" hidden></small>
-      </span>
-      <span class="signin" id="signedinBox" hidden>
-        <span class="chip" id="emailChip"></span>
-        <button class="btn btn-sm" id="signoutBtn">Sign out</button>
-      </span>
+      <button class="btn btn-sm" id="signinTop">Sign in</button>
+      <button class="acctbtn" id="accountTop" hidden aria-haspopup="dialog">
+        <span class="avatar" id="acctInitial" aria-hidden="true"></span>
+        <span class="acctmeta">
+          <span class="acctname" id="acctEmail"></span>
+          <span class="acctplan" id="acctPlan"></span>
+        </span>
+      </button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
   </header>
@@ -447,10 +485,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <select id="month"></select>
       </div>
       <div class="f" id="exactDatesField" style="margin-top:10px">
-        <label for="exactDate">
-          Or pin real travel dates
-          <span class="pluspill" id="exactDatesPill">Plus</span>
-        </label>
+        <div class="labelrow">
+          <label for="exactDate">Or pin real travel dates</label>
+          <button type="button" class="pluspill openpw" id="exactDatesPill"
+                  title="See what Plus includes">Plus</button>
+        </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
           <input type="date" id="exactDate" aria-label="Departure date">
           <span style="color:var(--muted); font-size:12px">to</span>
@@ -474,6 +513,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
             <option value="driveDlr">Driving to Disneyland Resort, flying everywhere else</option>
             <option value="driveDomestic">Driving domestically (WDW + Disneyland), flying internationally</option>
           </select>
+          <small id="gettingThereNote" class="downgrade" hidden></small>
         </div>
         <div class="f" id="originAirportField">
           <label for="origin">Departing from</label>
@@ -665,6 +705,63 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   </footer>
 </div>
 
+<!-- Sign in / your account. One dialog, two states: the form when signed
+     out, a real account panel when signed in. The account panel exists
+     mostly to answer "am I actually signed in?" with something bigger than
+     a chip — who you are, which plan, and when it runs out. -->
+<div class="back" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="modal" style="max-width:460px">
+    <div class="mhead">
+      <h3 id="authTitle">Sign in</h3>
+      <p id="authIntro"></p>
+    </div>
+
+    <div style="padding:18px 22px 4px">
+      <div id="authForm">
+        <div class="authfield">
+          <label for="signinEmail">Email</label>
+          <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="authfield">
+          <label for="signinPassword">Password <span style="text-transform:none; letter-spacing:0; font-weight:500">— only if you've set one</span></label>
+          <input type="password" id="signinPassword" placeholder="Leave blank if you haven't" autocomplete="current-password">
+        </div>
+        <div class="authrow">
+          <button class="btn btn-primary" id="signinBtn">Sign in</button>
+          <small style="color:var(--muted); font-size:12px">Accounts are free. Plus is comped by the owner.</small>
+        </div>
+        <small id="signinError" class="downgrade" hidden></small>
+      </div>
+
+      <div id="authAccount" hidden>
+        <div class="acctline"><span class="k">Signed in as</span><span class="v" id="emailChip"></span></div>
+        <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
+        <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
+        <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
+        <div class="authfield" style="margin:16px 0 4px">
+          <label for="homeAirport">Home airport</label>
+          <select id="homeAirport"></select>
+          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
+          <small id="homeAirportLapsed" class="downgrade" hidden>Saved while you had Plus. It's kept, and trips still price from the nearest free airport — renew Plus to change it to another Plus airport.</small>
+          <small id="homeAirportSaved" class="downgrade" hidden></small>
+        </div>
+        <div class="authfield" style="margin:16px 0 4px">
+          <label for="attrPick">Attractions you care about</label>
+          <div class="attrpick" id="attrPick"></div>
+          <small id="attrPickNote" style="color:var(--muted); font-size:12px"></small>
+        </div>
+        <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
+      </div>
+    </div>
+
+    <div class="mfoot">
+      <button class="btn" id="acctUpgradeBtn" hidden>Get Plus</button>
+      <button class="btn" id="signoutBtn" hidden>Sign out</button>
+      <button class="btn" id="closeAuth">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
@@ -828,7 +925,7 @@ const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, exc
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
 
-let session = { authenticated:false, email:null, plus:false, plusUntil:null };
+let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
@@ -963,7 +1060,56 @@ function syncGettingThere(){
   $("#driveBlock").hidden = !DRIVE_PRESETS.includes(mode);
   $("#milesExtra").hidden = mode !== "flyMiles";
 }
-$("#gettingThere").addEventListener("change", syncGettingThere);
+
+/* Someone departing LAX is not going to fly to Disneyland, and someone
+ * departing Orlando is not going to fly to Walt Disney World. Before this
+ * they got a blank cell where the nearest resort's price belonged — which
+ * reads as "this app has no data", not "you'd drive that one".
+ *
+ * So the preset follows the departure airport: the local resort switches to
+ * its drive preset, the other five keep flying, and a note says so. The
+ * server decides which airports count as local (/api/meta's
+ * suggestedGettingThere) — the rule is a distance against resort
+ * coordinates and a second copy of it here would be free to drift from the
+ * one pricing uses.
+ *
+ * It stops the moment the traveller picks a preset themselves. Plenty of
+ * people really do fly LAX->SNA on points; the app should suggest, not
+ * insist. */
+let gettingTherePickedByUser = false;
+
+function suggestedModeFor(iata){
+  const all = ORIGINS.concat(PLUS_ORIGINS);
+  return (all.find(o => o.iata === iata) || {}).suggestedGettingThere || "fly";
+}
+
+function applySuggestedGettingThere(){
+  const note = $("#gettingThereNote");
+  const suggestion = suggestedModeFor($("#origin").value);
+  if(gettingTherePickedByUser || suggestion === "fly"){
+    if(note) note.hidden = true;
+    return;
+  }
+  $("#gettingThere").value = suggestion;
+  syncGettingThere();
+  if(note){
+    const resortName = suggestion === "driveWdw" ? "Walt Disney World" : "Disneyland Resort";
+    const originName = ($("#origin").selectedOptions[0] || {}).textContent || $("#origin").value;
+    note.hidden = false;
+    note.innerHTML = `${esc(resortName)} is a drive from ${esc(originName)}, so we've set that up —
+      the other five resorts still price as flights. Change this if you'd rather fly.`;
+  }
+}
+
+$("#gettingThere").addEventListener("change", () => {
+  gettingTherePickedByUser = true;
+  $("#gettingThereNote").hidden = true;
+  syncGettingThere();
+});
+$("#origin").addEventListener("change", ()=>{
+  originPickedByUser = true;
+  applySuggestedGettingThere();
+});
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
 /** Wear-and-tear is already zero on a rental (its own fee covers it), so
@@ -1243,6 +1389,28 @@ function sparkSVG(pts){
   </svg>`;
 }
 
+/* The attraction match, on the board row where people actually decide.
+ *
+ * Note what it deliberately is NOT: part of the sort. The board stays
+ * ordered by price, because that is the app's one job. This says what a
+ * cheaper total would cost you — "the cheapest option doesn't have the one
+ * thing you came for" is a decision people want to make knowingly, not a
+ * reason to quietly reorder their results.
+ *
+ * Nothing renders at all without picks, so a free user sees no teaser and
+ * no empty space. Server-side, a non-Plus request never carries matches in
+ * the first place. */
+function attractionChip(item){
+  const a = item.attractions;
+  if(!a || !a.summary) return "";
+  const only = a.matched.filter(m=>m.onlyHere);
+  const cls = only.length ? "attr attr-only" : (a.matched.length ? "attr" : "attr attr-none");
+  const detail = a.matched.length
+    ? a.matched.map(m=>m.name + (m.onlyHere ? " (only here)" : "")).join(", ")
+    : "Missing: " + a.missing.map(m=>m.name).join(", ");
+  return `<div class="attrline"><span class="${cls}" title="${esc(detail)}">${esc(a.summary)}</span></div>`;
+}
+
 function renderBoard(){
   const board = $("#board");
   if(!results.length){
@@ -1263,6 +1431,7 @@ function renderBoard(){
         <div class="ident">
           <div class="rname">${item.name}</div>
           <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
+          ${attractionChip(item)}
         </div>
         <div></div><div></div>
         <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
@@ -1300,6 +1469,7 @@ function renderBoard(){
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
           ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
         </div>
+        ${attractionChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
       ${sparkSVG(spark)}
@@ -1892,9 +2062,7 @@ function render(){
     }
   }
   $("#upgradeTop").hidden = session.plus;
-  $("#signinBox").hidden = session.authenticated;
-  $("#signedinBox").hidden = !session.authenticated;
-  if(session.authenticated) $("#emailChip").textContent = session.email + (session.plus?" · Plus":"");
+  syncAccountUi();
   renderBoard(); renderTable(); renderDetail();
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
@@ -2003,6 +2171,240 @@ document.addEventListener("click", async e=>{
   $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
 });
 
+/* ================================ account ================================
+ * Signing in used to be two inputs wedged into the masthead, and being
+ * signed in was a small grey chip among other small grey chips — so the
+ * honest report was "I have no real idea that I am signed in".
+ *
+ * Now: a Sign in button that opens a real panel, and once you're in, an
+ * account button carrying your initial, your email and your plan. Clicking
+ * it opens the same dialog showing who you are, what you're on, and when
+ * Plus runs out. Nothing about entitlement changed — Plus is still resolved
+ * server-side from the session cookie on every request that matters, and
+ * this is only the part that tells you about it. */
+function syncAccountUi(){
+  const on = session.authenticated;
+  $("#signinTop").hidden = on;
+  $("#accountTop").hidden = !on;
+  if(on){
+    $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
+    $("#acctEmail").textContent = session.email || "";
+    $("#acctPlan").textContent = session.plus ? "Plus" : "Free plan";
+    $("#acctPlan").className = "acctplan" + (session.plus ? " plus" : "");
+    $("#accountTop").title = "Signed in as " + session.email;
+  } else {
+    // Clear it rather than just hiding it. A hidden element still holding
+    // the last person's address is one CSS accident away from showing a
+    // signed-out browser someone else's email.
+    $("#acctInitial").textContent = "";
+    $("#acctEmail").textContent = "";
+    $("#acctPlan").textContent = "";
+    $("#accountTop").removeAttribute("title");
+  }
+}
+
+function fmtPlusUntil(d){
+  if(!d) return null;
+  try{
+    return new Date(d + "T00:00:00").toLocaleDateString(undefined,
+      { year:"numeric", month:"long", day:"numeric" });
+  }catch(e){ return d; }
+}
+
+function openAuth(){
+  const on = session.authenticated;
+  $("#authForm").hidden = on;
+  $("#authAccount").hidden = !on;
+  $("#signoutBtn").hidden = !on;
+  $("#acctUpgradeBtn").hidden = !on || session.plus;
+  $("#authTitle").textContent = on ? "Your account" : "Sign in";
+  $("#authIntro").textContent = on
+    ? "Everything below is tied to this account — saved trips, alerts and Plus all follow the email, not this browser."
+    : "An account is free and takes one field. It's what saved trips, price alerts and Plus attach to. There's no email verification yet, so use an address you'd actually want alerts sent to.";
+  if(on){
+    $("#emailChip").textContent = session.email;
+    $("#acctPlanRow").textContent = session.plus ? "Plus" : "Free";
+    const until = fmtPlusUntil(session.plusUntil);
+    $("#acctExpiryRow").hidden = !(session.plus && until);
+    if(until) $("#acctExpiry").textContent = until;
+    $("#acctTrips").textContent = session.plus
+      ? String(savedTripCount)
+      : "Plus only";
+    $("#acctHint").textContent = session.plus
+      ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
+      : "Comparing all six resorts, the fare calendars and your own rates are free and unlimited. Plus adds saving, watching and exact fares.";
+    fillHomeAirportOptions();
+    $("#homeAirportSaved").hidden = true;
+    loadAttractions().then(renderAttractionPicker);
+  } else {
+    $("#signinError").hidden = true;
+    $("#signinPassword").value = "";
+  }
+  $("#authModal").classList.add("on");
+  if(!on) setTimeout(()=> $("#signinEmail").focus(), 30);
+}
+function closeAuth(){ $("#authModal").classList.remove("on"); }
+
+$("#signinTop").addEventListener("click", openAuth);
+$("#accountTop").addEventListener("click", openAuth);
+$("#closeAuth").addEventListener("click", closeAuth);
+$("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
+$("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
+$("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+$("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
+/* ------------------------------ attractions ------------------------------
+ * Price answers "which of these can we afford". It never answers "which of
+ * these is our trip", and that is where people actually start. Someone who
+ * wants Zootopia has exactly one option and should know that before they
+ * compare six totals.
+ *
+ * The LIST is public — facts about what each resort has, the same way a
+ * curated promo is public to browse. What Plus buys is the personalisation:
+ * ticking yours and having the board answer. That split is the house
+ * pattern, and the server enforces it (402 on PUT without Plus); this is
+ * only the part that saves a wasted click.
+ *
+ * "Only here" is never written down. It arrives derived from how many
+ * resorts an attraction lists, so a clone opening elsewhere can't leave a
+ * stale exclusivity claim behind — the mistake this feature was corrected
+ * on before a line of it was written. */
+let allAttractions = [];
+let attractionPicks = [];
+
+async function loadAttractions(){
+  if(!allAttractions.length){
+    allAttractions = await apiGet("/api/attractions", {}).catch(()=>[]);
+  }
+  if(session.plus){
+    const r = await apiGet("/api/profile/attractions", {}).catch(()=>null);
+    attractionPicks = (r && Array.isArray(r.picks)) ? r.picks : [];
+  } else {
+    attractionPicks = [];
+  }
+}
+
+function renderAttractionPicker(){
+  const box = $("#attrPick"), note = $("#attrPickNote");
+  if(!box) return;
+  const picked = new Set(attractionPicks);
+  box.innerHTML = allAttractions.map(a=>{
+    const where = a.onlyAt
+      ? "Only at " + ((RESORT_BY_ID.get(a.onlyAt)||{}).name || a.onlyAt)
+      : a.resortIds.map(id=>(RESORT_BY_ID.get(id)||{}).name || id).join(" · ");
+    return `<label><input type="checkbox" data-attr="${esc(a.id)}"
+      ${picked.has(a.id)?"checked":""} ${session.plus?"":"disabled"}>
+      <span>${esc(a.name)}<span class="who">${esc(where)}${a.note?" — "+esc(a.note):""}</span></span></label>`;
+  }).join("") || `<small style="color:var(--muted)">No attractions listed yet.</small>`;
+  note.textContent = session.plus
+    ? "Ticked attractions show on the board — which resorts have them, and which are the only place you can ride them. It never changes the price order."
+    : "Browsing what each resort has is free. Plus is what lets you tick yours and have the board answer.";
+}
+
+document.addEventListener("change", async (e)=>{
+  const box = e.target.closest("[data-attr]");
+  if(!box) return;
+  if(!session.plus){ box.checked = false; return; }
+  const id = box.dataset.attr;
+  attractionPicks = box.checked
+    ? attractionPicks.concat([id])
+    : attractionPicks.filter(x=>x !== id);
+  const res = await fetch("/api/profile/attractions", {
+    method:"PUT", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ picks: attractionPicks }),
+  });
+  if(!res.ok){
+    // Put the checkbox back rather than leaving the page claiming something
+    // the server didn't accept.
+    box.checked = !box.checked;
+    await loadAttractions();
+    renderAttractionPicker();
+    return;
+  }
+  const body = await res.json().catch(()=>({}));
+  if(Array.isArray(body.picks)) attractionPicks = body.picks;
+  // Re-run the search rather than re-render: matches are computed server-side
+  // from the saved picks, so the results in hand are stale the moment they
+  // change — the same reason signing in re-runs it.
+  if(results.length) await runSearch(results[selected] && results[selected].resortId);
+});
+
+/* -------------------------------- profile --------------------------------
+ * One field so far, and the one worth having first: the airport you leave
+ * from. It is the first thing every search needs, it now also decides the
+ * drive/fly preset, and it is the same answer every time — so asking for it
+ * on every visit was pure friction.
+ *
+ * Free, not Plus. An account is free, saving a TRIP is Plus, and a
+ * remembered dropdown is neither.
+ *
+ * "Not set" is a real, reachable state, not just the starting one — picking
+ * the blank option clears it server-side. A first save that could never be
+ * undone would be a trap. */
+function fillHomeAirportOptions(){
+  const sel = $("#homeAirport");
+  const opts = [["", "Not set — ask me each time"]]
+    .concat(ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]))
+    .concat(PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (needs Plus)")]));
+  fillSelect(sel, opts);
+  // Which airports you may KEEP follows the same free/Plus split as picking
+  // one. Disabled rather than hidden, on the same reasoning as the rest of
+  // the paywall: show what Plus unlocks instead of pretending it isn't there.
+  // The server refuses it too — this is only the half that saves a wasted
+  // click.
+  if(!session.plus){
+    const plusCodes = new Set(PLUS_ORIGINS.map(o=>o.iata));
+    for(const opt of sel.options) if(plusCodes.has(opt.value)) opt.disabled = true;
+  }
+  sel.value = session.homeAirport || "";
+  // An airport saved while Plus was active stays saved after it lapses — the
+  // board still prices it, downgraded to the nearest free airport, and says
+  // so. Say it here too rather than letting a disabled-looking selection sit
+  // there unexplained.
+  const lapsed = !session.plus && session.homeAirport
+    && PLUS_ORIGINS.some(o=>o.iata === session.homeAirport);
+  $("#homeAirportLapsed").hidden = !lapsed;
+}
+
+$("#homeAirport").addEventListener("change", async (e)=>{
+  const value = e.target.value || null;
+  const note = $("#homeAirportSaved");
+  const res = await fetch("/api/profile", {
+    method: "PUT", headers: {"content-type":"application/json"},
+    body: JSON.stringify({ homeAirport: value }),
+  });
+  if(!res.ok){
+    const body = await res.json().catch(()=>({}));
+    note.textContent = body.message || "Couldn't save that airport.";
+    note.hidden = false;
+    e.target.value = session.homeAirport || "";   // put the control back
+    return;
+  }
+  const body = await res.json().catch(()=>({}));
+  session.homeAirport = body.homeAirport ?? null;
+  note.textContent = session.homeAirport
+    ? "Saved — we'll start from " + session.homeAirport + " next time."
+    : "Cleared — we'll ask each time.";
+  note.hidden = false;
+  // Apply it to the form immediately rather than only on the next visit:
+  // being told "saved" while the form still says Atlanta is the kind of
+  // half-applied change that makes people doubt the save happened at all.
+  applyHomeAirport();
+});
+
+/** Point the trip form at the saved airport, and let the drive/fly preset
+ *  follow it — an LA user should land on "drive to Disneyland" without
+ *  touching anything. Never overrides a choice made in this session. */
+function applyHomeAirport(){
+  if(!session.homeAirport) return;
+  const sel = $("#origin");
+  if(!sel || originPickedByUser) return;
+  if(![...sel.options].some(o=>o.value === session.homeAirport)) return;
+  sel.value = session.homeAirport;
+  applySuggestedGettingThere();
+}
+let originPickedByUser = false;
+
 function openPw(){
   const msg = $("#pwFootMsg");
   $("#pwSigninBox").hidden = session.authenticated;
@@ -2014,7 +2416,11 @@ function openPw(){
 $("#closePw").addEventListener("click", ()=> $("#paywall").classList.remove("on"));
 $("#upgradeTop").addEventListener("click", openPw);
 $("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") $("#paywall").classList.remove("on"); });
+document.addEventListener("keydown", e=>{
+  if(e.key !== "Escape") return;
+  $("#paywall").classList.remove("on");
+  closeAuth();
+});
 
 $("#pwSigninBtn").addEventListener("click", async ()=>{
   const email = $("#pwEmail").value.trim();
@@ -2051,8 +2457,16 @@ $("#planYearly").addEventListener("click", ()=>{
 async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
-    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil }
-    : { authenticated:false, email:null, plus:false, plusUntil:null };
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null }
+    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
+  // Repaint the masthead here rather than only in render(): boot() and the
+  // paywall's own sign-in path both refresh the session without going
+  // through a render, and a stale "Sign in" button after signing in is the
+  // exact confusion this change exists to remove.
+  syncAccountUi();
+  // And point the form at their saved airport, which is why this runs on
+  // boot rather than only when the account panel is opened.
+  applyHomeAirport();
 }
 
 $("#signinBtn").addEventListener("click", async ()=>{
@@ -2072,6 +2486,10 @@ $("#signinBtn").addEventListener("click", async ()=>{
   }
   $("#signinPassword").value = "";
   await refreshSession();
+  // Straight back to the board, signed in — the dialog has done its job and
+  // the account button in the masthead now carries the state.
+  closeAuth();
+  syncAccountUi();
   // Plus status changes whether a promoId override actually applies
   // server-side, so the already-fetched results are stale — re-run the
   // search, don't just re-render.
@@ -2081,15 +2499,22 @@ $("#signinBtn").addEventListener("click", async ()=>{
 $("#signoutBtn").addEventListener("click", async ()=>{
   await fetch("/api/auth/signout", { method:"POST" });
   await refreshSession();
+  closeAuth();
+  syncAccountUi();
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
 
+/** Kept at module scope purely so the account panel can report it without
+ *  firing another request every time the dialog opens. */
+let savedTripCount = 0;
+
 async function loadSavedTrips(){
   const box = $("#savedTripsPanel"), list = $("#savedTripsList");
-  if(!session.plus){ box.hidden = true; return; }
+  if(!session.plus){ box.hidden = true; savedTripCount = 0; return; }
   box.hidden = false;
   const trips = await apiGet("/api/trips", {});
+  savedTripCount = Array.isArray(trips) ? trips.length : 0;
   if(!Array.isArray(trips) || !trips.length){
     list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
     return;
@@ -2356,6 +2781,10 @@ async function boot(){
   RESORTS = meta.resorts;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
+  // After the form's defaults are in place, so a returning visitor whose
+  // saved origin is Los Angeles or Orlando lands on the drive preset rather
+  // than on a blank cell for the resort they live next to.
+  applySuggestedGettingThere();
   fillJumpRow();
   buildAges();
   await refreshSession();

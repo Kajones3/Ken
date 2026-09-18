@@ -319,3 +319,34 @@ test("the caps stay overridable, so a plan upgrade doesn't need a code change", 
   assert.equal(limitsFromEnv().globalPerDay, 90);
   delete process.env.EXACT_FARE_GLOBAL_PER_DAY;
 });
+
+test("a route with no flight is refused before anything is spent", async () => {
+  // Someone in Los Angeles clicking "check the exact fare" for Disneyland.
+  // There is no LAX->LAX itinerary to buy, and SerpApi bills for a search
+  // that finds nothing — so this must cost neither money nor one of the
+  // three checks the user gets that day.
+  const db = await memoryDb();
+  const p = stubProvider();
+  const res = await fetchExactFare(db, {
+    ...req, origin: "LAX", destination: "LAX",
+  }, { provider: p, limits: LIMITS, today: TODAY });
+
+  assert.equal(res.ok, false);
+  assert.equal(!res.ok && res.reason, "local_route");
+  assert.equal(p.calls, 0, "the provider must never be paid for this");
+  assert.equal(res.remainingToday, LIMITS.perUserPerDay, "and it costs the user nothing");
+  await db.close();
+});
+
+test("the same-metro case is refused too, not just the identical airport", async () => {
+  // LAX -> SNA is the one that a plain origin === destination check misses.
+  const db = await memoryDb();
+  const p = stubProvider();
+  const res = await fetchExactFare(db, {
+    ...req, origin: "LAX", destination: "SNA",
+  }, { provider: p, limits: LIMITS, today: TODAY });
+
+  assert.equal(!res.ok && res.reason, "local_route");
+  assert.equal(p.calls, 0);
+  await db.close();
+});

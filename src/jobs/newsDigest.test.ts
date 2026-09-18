@@ -107,13 +107,16 @@ test("news digest: tells the owner which year the IRS rate is missing for", asyn
     feeds,
   });
   assert.equal(r.sent, 1);
-  assert.match(sent[0]!.subject, /IRS mileage rate/i);
-  assert.match(sent[0]!.text, /no published rate on file for 2027/);
+  // The mileage rate is now one row in the owner's job list rather than its
+  // own block. Same information, same placement, same repetition — the
+  // subject still carries it so it cannot be announced once and lost.
+  assert.match(sent[0]!.subject, /job/i);
+  assert.match(sent[0]!.text, /IRS standard mileage rate for 2027/);
   assert.match(sent[0]!.text, /irs\.gov/);
   assert.match(sent[0]!.text, /IRS_MILEAGE_RATES/);
   assert.ok(
-    sent[0]!.text.indexOf("IRS MILEAGE RATE") < sent[0]!.text.indexOf("Test Closure"),
-    "the warning leads the email — it must not be buried under the news",
+    sent[0]!.text.indexOf("Your manual jobs") < sent[0]!.text.indexOf("Test Closure"),
+    "the job list leads the email — it must not be buried under the news",
   );
   assert.match(r.note, /IRS mileage rate missing for 2027/);
 
@@ -134,8 +137,9 @@ test("news digest: a missing year that stops trips pricing earns an email with n
   });
   assert.equal(r.newItems, 0, "no news this run");
   assert.equal(r.sent, 1, "the warning still goes out on its own");
-  assert.match(sent[0]!.subject, /IRS mileage rate/i);
-  assert.match(sent[0]!.text, /URGENT/);
+  assert.match(sent[0]!.subject, /needs? you/i);
+  assert.match(sent[0]!.text, /\[BLOCKING\]/);
+  assert.match(sent[0]!.text, /will NOT price/);
 
   await db.close();
 });

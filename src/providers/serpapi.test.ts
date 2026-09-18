@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { SerpApiHotelProvider } from "./serpapi.js";
+import { SerpApiHotelProvider, sampleCheckIn } from "./serpapi.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -60,4 +60,86 @@ test("an off-property failure never costs the on-property rates", async () => {
   const quotes = await p.hotelMonth(RESORT, "2027-03");
   assert.ok(quotes.length > 0);
   assert.ok(quotes.every((q) => q.onProperty));
+});
+
+
+/* ---------------------------------------------------------------------------
+ * sampleCheckIn — the date bug that was throwing away most of the hotel
+ * budget for roughly half of every month.
+ * ------------------------------------------------------------------------ */
+
+test("mid-month is used whenever mid-month is still ahead of us", () => {
+  // The original intent, unchanged: away from both month edges, so the
+  // sampled price represents the month rather than its boundary.
+  assert.equal(sampleCheckIn("2027-03", "2027-02-01"), "2027-03-14");
+  assert.equal(sampleCheckIn("2027-03", "2027-03-01"), "2027-03-14");
+});
+
+test("a check-in date that has already been is never requested", () => {
+  // THE BUG. Standing on 18 September and asking for September's rates, the
+  // old code asked for the 14th and Google Hotels answered
+  // `check_in_date cannot be in the past` — six times a night, once per
+  // resort, with the budget counter charging for every one.
+  const pick = sampleCheckIn("2026-09", "2026-09-18");
+  assert.equal(pick, "2026-09-19", "the soonest bookable night, not the 14th");
+  assert.ok(pick! > "2026-09-18", "must be in the future, always");
+});
+
+test("a month with no bookable night left asks for nothing at all", () => {
+  // Standing on the last day of the month, tomorrow is next month — there is
+  // no night left in this one to price at any price, so we don't pay to ask.
+  assert.equal(sampleCheckIn("2026-09", "2026-09-30"), null);
+  assert.equal(sampleCheckIn("2026-09", "2026-10-05"), null);
+});
+
+test("every day of a month yields either a future date inside it, or nothing", () => {
+  // The property that matters, checked exhaustively rather than at the two
+  // ends: whatever we ask for is bookable and belongs to the month we are
+  // pricing. A date outside either bound is the old bug in a new costume.
+  for (let d = 1; d <= 30; d++) {
+    const today = `2026-09-${String(d).padStart(2, "0")}`;
+    const pick = sampleCheckIn("2026-09", today);
+    if (pick === null) continue;
+    assert.ok(pick > today, `${pick} is not after ${today}`);
+    assert.ok(pick >= "2026-09-01" && pick <= "2026-09-30", `${pick} escaped the month`);
+  }
+});
+
+test("a resort/month outside the night's rotation is never paid for", () => {
+  // The other half of the budget fix: the provider spends only where the
+  // rotation says, so the nightly allowance can't be consumed by whichever
+  // resort happens to come first in the config array.
+  mockFetch();
+  const slots = new Set(["shdr|2027-03"]);
+  const p = new SerpApiHotelProvider("key", 999, 8, slots, "2027-01-01");
+  return (async () => {
+    await p.hotelMonth("wdw", "2027-03");   // not in the rotation
+    await p.hotelMonth("dlr", "2027-03");   // not in the rotation
+    assert.equal(calls, 0, "resorts outside the plan must not spend");
+    const quotes = await p.hotelMonth("shdr", "2027-03");
+    assert.equal(calls, 1, "the resort that won the slot does spend");
+    assert.ok(quotes.some((q) => !q.onProperty), "and gets real off-property rows");
+  })();
+});
+
+test("on-property rates still come back for a resort outside the rotation", () => {
+  // Same rule as an exhausted budget: skipping the paid half must never take
+  // down the free half that needs no network call at all.
+  mockFetch();
+  const p = new SerpApiHotelProvider("key", 999, 8, new Set(["shdr|2027-03"]), "2027-01-01");
+  return (async () => {
+    const quotes = await p.hotelMonth("wdw", "2027-03");
+    assert.equal(calls, 0);
+    assert.ok(quotes.length > 0 && quotes.every((q) => q.onProperty));
+  })();
+});
+
+test("an unpriceable month costs nothing even when it holds a slot", () => {
+  mockFetch();
+  const p = new SerpApiHotelProvider("key", 999, 8, new Set(["wdw|2026-09"]), "2026-09-30");
+  return (async () => {
+    await p.hotelMonth("wdw", "2026-09");
+    assert.equal(calls, 0, "no bookable night left, so no paid question to ask");
+    assert.equal(p.callsSpent, 0);
+  })();
 });

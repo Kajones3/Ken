@@ -8,7 +8,8 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
@@ -16,13 +17,13 @@ import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
-import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
+import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, requiresPassword, verifyPassword,
-  type SessionUser,
+  setHomeAirport, HomeAirportError, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
 
@@ -219,6 +220,14 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // routes people actually search. Fire-and-forget: recordSearch swallows
   // its own errors, and nothing below reads the result.
   void recordSearch(db, params.origin, [...destinationByResort.values()], month);
+
+  // A Plus traveller's attraction picks, read from their own row — never
+  // from the query string. Same rule as promos: the client may say which
+  // account it is (via the cookie), never what that account is entitled to.
+  // A free request gets an empty list, so every resort's `attractions` comes
+  // back absent and the board shows nothing rather than a teaser.
+  const picks = plus && user ? await picksFor(db, user.id) : [];
+
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
     // A "Getting there" preset can send different resorts down different
@@ -228,9 +237,16 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const modeParams = mode === "drive" ? driveBase : flyBase;
     const resortParams = { ...params, ...modeParams, destination: iata };
     const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
+    // Deliberately attached to the row and NOT used for ordering. The board
+    // stays sorted by price — this is the app's one job — and the match is
+    // context for what a cheaper total would cost you in attractions.
+    const m = picks.length ? matchesForResort(resort.id, picks) : null;
+    const attractions = m
+      ? { ...m, summary: matchSummary(m, picks.length) }
+      : undefined;
     return best
-      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best }
-      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions }
+      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
   return {
@@ -242,6 +258,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
       ? { requested: originPick.downgradedFrom, priced: originPick.downgradedTo }
       : undefined,
     exactDate: explicitDate ?? undefined,
+    /** How many picks the matches above were measured against, so the UI can
+     *  say "3 of your 5" without a second request. */
+    attractionPicks: picks.length,
     results,
   };
 }
@@ -293,6 +312,12 @@ async function listPromos(q: URLSearchParams) {
   }));
 }
 
+/** Origins as the trip form needs them: the airport, plus which "Getting
+ *  there" preset suits someone departing from it (see gettingThere.ts). */
+function withSuggestedMode(origins: typeof ORIGINS) {
+  return origins.map((o) => ({ ...o, suggestedGettingThere: defaultGettingThere(o.iata) }));
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const send = (code: number, body: unknown, opts: { cache?: string; headers?: Record<string, string> } = {}) => {
@@ -320,8 +345,16 @@ const server = createServer(async (req, res) => {
            from fetch_runs where job = 'refresh' and errors = 0`);
       return send(200, { ok: true, db: db.kind, ...rows[0] }, { cache: "no-store" });
     }
+    // Each origin carries the "Getting there" preset to offer someone
+    // departing from it, resolved HERE rather than in the browser. The rule
+    // is a distance measured against resort coordinates, and a second copy
+    // of it in prototype.html would be free to drift from the one the
+    // pricing and the paid rotation use — the same reason trip cost lives in
+    // exactly one module. The client just reads the field.
     if (url.pathname === "/api/meta") return send(200, {
-      origins: ORIGINS, plusOrigins: PLUS_ORIGINS, resorts: RESORTS,
+      origins: withSuggestedMode(ORIGINS),
+      plusOrigins: withSuggestedMode(PLUS_ORIGINS),
+      resorts: RESORTS,
     }, { cache: "public, max-age=300" });
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
@@ -363,9 +396,69 @@ const server = createServer(async (req, res) => {
         ? { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) }
         : null;
       return send(200, {
-        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil, exactFare,
+        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
+        homeAirport: user.homeAirport, exactFare,
       }, { cache: "no-store" });
     }
+    // --- profile: free, signed in, always the caller's own row. ---------
+    // Not Plus-gated, unlike saved trips: an account is free and this is a
+    // remembered form field, not monitoring. The airport is validated against
+    // the app's own list inside setHomeAirport, so a junk code can't be
+    // stored and handed back as a pre-selected option later.
+    if (url.pathname === "/api/profile" && req.method === "PUT") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      const body = await readBody(req);
+      // An explicit null clears it. `undefined` would be ambiguous with "not
+      // sent", so the client always sends the key.
+      const raw = body.homeAirport;
+      try {
+        const homeAirport = await setHomeAirport(db, user.id, raw ? String(raw) : null);
+        return send(200, { ok: true, homeAirport }, { cache: "no-store" });
+      } catch (e) {
+        // 402 for the Plus case so it reads the same as every other paywalled
+        // route, 400 for a code we simply don't know. Disabling the option in
+        // the form is only the cosmetic half — this is the half that counts.
+        if (e instanceof HomeAirportError) {
+          return send(e.reason === "plus_required" ? 402 : 400,
+            { error: e.reason, message: e.message });
+        }
+        throw e;
+      }
+    }
+
+    // The attraction list itself is public — facts about what each resort
+    // has, the same way a curated promo is public to browse. What Plus buys
+    // is the personalisation: picking yours and having the board answer.
+    if (url.pathname === "/api/attractions") {
+      return send(200, ATTRACTIONS.map((a) => ({
+        ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null,
+      })), { cache: "public, max-age=300" });
+    }
+
+    if (url.pathname === "/api/profile/attractions") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) {
+        return send(402, {
+          error: "plus_required",
+          message: "Choosing the attractions you care about is a Plus feature. Browsing what each resort has is free.",
+        });
+      }
+      if (req.method === "GET") {
+        return send(200, { picks: await picksFor(db, user.id) }, { cache: "no-store" });
+      }
+      if (req.method === "PUT") {
+        const body = await readBody(req);
+        const ids = Array.isArray(body.picks) ? body.picks : [];
+        try {
+          return send(200, { picks: await setPicks(db, user.id, ids) }, { cache: "no-store" });
+        } catch (e) {
+          return send(400, { error: "bad_picks", message: (e as Error).message });
+        }
+      }
+    }
+
     if (url.pathname === "/api/auth/signout" && req.method === "POST") {
       const token = sessionTokenFrom(req);
       if (token) await destroySession(db, token);

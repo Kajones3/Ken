@@ -28,7 +28,7 @@ say when something is a guess.
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
-| Accounts | **Real, minimal.** Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -159,6 +159,74 @@ estimate leaves a route still unvisited. Measured: **200 lookups over 20
 simulated nights covered all 171 routes with no repeats.** This is also what
 gradually fixes international pricing, since international routes are in the
 same rotation.
+
+**Hotel lookups rotate stalest-first, exactly like flights** (2026-09-18).
+They used not to. `runRefresh` walked months and resorts in config order and
+called the provider for every pair, so the nightly hotel budget was spent by
+whoever came first in the loop: Walt Disney World and Disneyland got real
+off-property rates every single night, re-buying prices that had not moved,
+while Shanghai and Hong Kong — further down the `RESORTS` array — had never
+had a single real lookup. Position in an array decided which resorts had real
+data, which is not a decision anybody made.
+
+`rotateHotelSlots()` (`jobs/hotelRotation.ts`) now hands out the night's slots
+never-bought-first, then oldest-first, over all 13 months the app prices —
+78 resort/month slots, about 10 nights to cover every one at 8 a night, and
+each one then stays ~10 days fresh. Same shape and same reasoning as
+`rotationRoutes()` on the flight side. Two things to know:
+
+- *It rotates over the whole year, not tonight's due months.* An off-property
+  rate is bought one resort/month at a time and is worth re-buying on its own
+  staleness, not on the flight tier it happens to share. So the hotel pass is
+  its own loop, and a slot on a non-due month still gets its call.
+- *Only `on_property = false` rows count as evidence of a pull.* On-property
+  Disney rates are generated locally from `config.ts` and cost nothing, but
+  `upsertHotels` tags them with the same `serpapi_hotels` source as rows the
+  vendor really returned. Counting those would make every resort/month look
+  freshly bought and the rotation would never move. **That mislabelling is
+  still there and the real-pulls digest reads the same tag** — worth fixing
+  properly rather than working around a second time.
+
+**A profile is free; saved trips stay Plus** (2026-09-18). The first field is
+`users.home_airport` — the airport you depart from, remembered per account
+(`setHomeAirport()` in `auth.ts`, `PUT /api/profile`, shown in the account
+panel). Free, deliberately: an account is free, saving and watching a *trip*
+is Plus, and a remembered dropdown is neither. Paywalling it would be the
+already-rejected search-quota idea wearing a different hat.
+
+Three things that are decisions, not defaults:
+
+- *Null is a real value.* "I haven't said" and "I fly from Atlanta" are
+  different facts, so the column is nullable with no default and the form
+  offers a blank "ask me each time" option that clears it. A first save you
+  could never undo would be a trap.
+- *Which airports you may KEEP follows the same free/Plus split as picking
+  one.* A free account cannot save one of the 22 Plus airports —
+  `setHomeAirport` throws `plus_required` and `PUT /api/profile` answers 402.
+  Claude initially built the opposite (any airport savable, on the grounds
+  that the board already prices a downgraded trip from one) and the **owner
+  reversed it**: the smaller airports are what Plus buys, and a free account
+  quietly holding one forever hollows the split out. Plus is read from
+  `plus_until` inside the function, never passed in — a caller-supplied flag
+  would be a way to grant the tier from the client, the same rule exact-fare
+  follows. Disabling the option in the form is only the cosmetic half;
+  verified by calling the API directly past the disabled control.
+- *A lapsed account keeps what it saved while it was Plus.* Deleting a
+  setting because a subscription ran out is a punishment nobody asked for,
+  and the trip still prices — `resolveOrigin()` downgrades to the nearest
+  free metro and the board says which it used. They simply cannot move it to
+  another Plus airport until they renew, and moving to a free airport or
+  clearing it always works, so nobody is stuck.
+- *It feeds the drive/fly default.* The saved airport is what
+  `defaultGettingThere()` reads, so an LA user opens Parkfare already on
+  "drive to Disneyland, fly everywhere else" without touching anything.
+  Verified in a browser: save LAX, reload, and both the origin and the preset
+  are right with nothing typed.
+
+It lives on `users` because there is one field. **If the profile grows past a
+handful — a souvenir budget, attraction preferences — move it to a
+`user_profile` table**: identity and entitlement sharing a row with free-form
+taste data gets muddy fast.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -550,6 +618,45 @@ Found by testing an all-international demand day, not in production.
   de-duplicated rows. Caught by the owner asking whether the nightly job
   would keep pulling the same routes — it would have, forever.
 
+- **The hotel lookup asked for a check-in date in the past for half of every
+  month** (found 2026-09-18, in a real Actions log, not by a test). The sampled
+  stay was hard-coded to the 1st of the month plus 13 days — the 14th — so from
+  the 15th onward the current month's lookup was a guaranteed Google Hotels 400,
+  `check_in_date cannot be in the past`, for all six resorts. The budget counter
+  charges *before* the call (deliberately — a failing lookup must not be a free
+  infinite retry), so six of the night's eight lookups were being paid for and
+  thrown away, roughly 90 of ~240 monthly hotel lookups. The run stayed green
+  throughout: each error was caught, logged, and treated as "off-property
+  degrades to cached", which is the right behaviour for a *transient* failure
+  and total camouflage for a permanent one. `sampleCheckIn()` in
+  `providers/serpapi.ts` now returns mid-month when mid-month is still ahead,
+  the soonest bookable night otherwise, and null when the month has no night
+  left — and the rotation applies the same rule, so a slot is never handed to a
+  month that cannot be priced.
+- **The refresh asked for flights from LAX to LAX.** LAX is both a departure
+  airport and one of Disneyland's arrival airports, so every run requested
+  LAX→LAX — and LAX→SNA, which fails identically because Travelpayouts resolves
+  SNA to the Los Angeles city code. Eighteen guaranteed 400s a night, logged and
+  ignored. Free at the refresh (Travelpayouts does not charge) but **not** free
+  everywhere: both pairs sit in `rotationRoutes()`' 171-route pool, and since a
+  route that can never return an itinerary can never be recorded as bought, they
+  sat permanently at the *front* of a stalest-first queue — real SerpApi money,
+  every cycle, forever. `isLocalRoute()` in `config.ts` is the one shared rule,
+  used by the refresh, the paid rotation, the demand-driven buy and exact-fare.
+  It is 100 miles, picked against the measured distances rather than by feel:
+  LAX→Disneyland 36, SAN→Disneyland 77, TPA→WDW 81, then a clear gap to
+  RSW→WDW 133, JAX→WDW 144, MIA→WDW 193, LAS→Disneyland 226 — the last four
+  being genuine, regularly-flown routes that must never be withheld.
+  **Resolved the same day:** `defaultGettingThere()` in `gettingThere.ts`
+  pre-selects the matching drive preset (`driveDlr` from LAX or SAN,
+  `driveWdw` from TPA) so the local resort prices as a drive and the other
+  five still price as flights — one board, no gap. Verified in a real
+  browser, not just in tests: LAX + November prices Disneyland at "Driving
+  $80" with flights on the other five. The suggestion is served from
+  `/api/meta` (`origin.suggestedGettingThere`) rather than recomputed in
+  `prototype.html`, so the distance rule has one home; and it stops the
+  moment the traveller picks a preset themselves, because flying LAX→SNA on
+  points is a real thing people do.
 - Postgres returns `date` columns as JS `Date` objects; string-slicing them mangled every
   date and made all six resorts return "unavailable" with **no error at all**. See
   `dateStr()` in `src/book.ts`.
@@ -669,6 +776,68 @@ Found by testing an all-international demand day, not in production.
    previously planned as a separate "Compare Flying vs. Driving" page — turned out
    a preset on the main board served the actual ask better than a second page.
 
+**Attractions: what a resort HAS, next to what it costs** (2026-09-18, built).
+`ATTRACTIONS` in `config.ts` (hand-maintained, same pattern as `goodToKnow`),
+matching in `src/attractions.ts` (pure, no I/O, like `pricing.ts`), picks in
+`user_attractions`, and a chip on each board row.
+
+Four decisions worth not re-deriving:
+
+- **"Only here" is DERIVED from the resort list, never asserted per row.**
+  An attraction names every resort that has it and `isOnlyAt()` is
+  `resortIds.length === 1`, so a clone opening elsewhere can never leave a
+  stale exclusivity claim behind. See the correction below for why.
+- **It never touches the sort.** The board stays ordered by price — that is
+  the app's one job — and the match says what a cheaper total would cost
+  you. "The cheapest option doesn't have the one thing you came for" is a
+  decision people should make knowingly, not a reason to quietly reorder
+  their results. Verified live: with Zootopia and Ratatouille picked, the
+  board still ran WDW-first on price while Shanghai (5th) carried "Only
+  place with Zootopia".
+- **The list is free to browse; picking yours is Plus.** Exactly the promos
+  precedent — a curated promo is public to browse and Plus to apply — and
+  the owner's "keep it on the Plus side". `GET /api/attractions` is public;
+  `PUT /api/profile/attractions` answers 402 without Plus, and `compare()`
+  reads the picks from the user's own row so a free request never carries
+  matches at all. Verified by PUTting straight to the API past the disabled
+  checkboxes.
+- **An unknown pick id is dropped, not thrown.** Saved picks outlive edits
+  to the list; an attraction that closes and is removed would otherwise break
+  the board of everyone who had picked it.
+
+The shipped rows are a **starter set Claude is confident about, not a
+researched catalogue** — treat them like `seedPromos.ts`'s example rows. The
+owner is supplying the real list.
+
+**An "only here" attraction list must not assume uniqueness** (2026-09-18).
+Recorded before building it because the obvious data model is wrong:
+Claude offered "Ratatouille is only at Paris" as an example and the owner
+corrected it — Remy's Ratatouille Adventure is at EPCOT *and* Ratatouille:
+L'Aventure Totalement Toquée at Walt Disney Studios. Clones across resorts are
+common, so an attraction has to be able to belong to several resorts, and
+"only at X" has to be derived from the data rather than asserted per row.
+Same honesty rule as `dataConfidence`: a confident wrong claim about what a
+resort has is worse than a plain list. **Staleness is NOT the main risk
+here** — Claude argued it was and the owner corrected that too: major
+attractions stand for years or decades, unlike ticket prices or promos. What
+moves is openings and closures, which is what the news digest already
+watches.
+
+**Souvenir spending is a basket, not a budget — thinking, not built**
+(2026-09-18). The owner's point: the same money buys more merchandise in
+Shanghai than in Orlando, and the model should be able to say so. A flat USD
+souvenir budget cannot: it is the same number at all six resorts, so it
+raises every total equally and never changes which resort wins. The version
+that carries real information is a small hand-maintained **basket** of
+representative items (a spirit jersey, an ear headband, a popcorn bucket)
+priced per resort, so the line becomes "the same haul costs $X here and $Y
+there" — verifiable against each resort's own shop, explainable to a user,
+and the same no-API/maintain-by-hand pattern as tickets. Two traps worth
+recording before anyone builds it: merchandise is priced in local currency at
+locally-set levels, so this is **not** an exchange-rate conversion; and
+because a per-resort multiplier CAN flip the ranking, it needs to be sourced
+rather than guessed, which the ticket curve never had to be.
+
 Then: the 10-mile off-property hotel radius filter (needs a `distanceMiles` field
 on `HotelDef`, none exists today), a real per-city rental-car rate (a
 Travelpayouts/DiscoverCars adapter is the researched building block, see "NOT
@@ -676,6 +845,33 @@ verified" above), a day-by-day trip planner (itinerary, checklist, dining tracke
 budget, per-day notes, special-event floor pricing — deliberately deferred, see
 above), Travelpayouts token, hotel endpoint approval, a real ticket-price table,
 Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
+
+## What the live database actually holds (checked 2026-09-18)
+
+Run the **"Parkfare debug coverage"** workflow to re-check any of this — it is
+select-only, makes no provider calls, and reads the real Neon database from
+inside Actions, so nobody has to handle the connection string. Findings that
+matter:
+
+- **The fare trend is fine, and "trend: skipped" in a refresh log does not
+  mean estimates are broken.** `fare_trend` holds real rows — x0.945 (low
+  x0.580, high x1.242) from **74 routes** — and `book.ts` keeps using the last
+  good one, exactly as designed. "Skipped" only means no NEW row was computed
+  that night. Worth watching rather than fixing: the newest row is 2026-09-09,
+  so the multiplier every estimate is scaled by is drifting out of date even
+  though nothing looks wrong.
+- **BTS baseline coverage is good**: ~38-40 origins each for MCO, SNA, LAX and
+  TPA. Florida and California short hops are absent from their neighbours
+  (MCO has no baseline from JAX, RSW or TPA), which is DB1B agreeing with the
+  local-route rule rather than a gap.
+- **Real cached fares run about three months out**, then fall back to labelled
+  estimates — the tiered refresh working as intended on a database that has
+  only been live a few weeks.
+- **`alerts` reports `0 trips checked`**: no saved trips exist yet, so the
+  alert path has never run against real data.
+- The news digest is still printing `1 new item(s) found but OWNER_EMAIL is
+  not set`, and now also `IRS mileage rate missing for 2027` — the
+  carry-forward warning from the decision above, working, and reaching nobody.
 
 ## Nothing has ever actually emailed in production (found 2026-09-18)
 
@@ -694,6 +890,34 @@ and working — plus a Resend account, since without `RESEND_API_KEY` the consol
 sender just prints into the Actions log.
 
 **Do not add a fourth email job without checking this is fixed first.**
+
+### The owner's manual jobs ride the news digest (2026-09-18)
+
+`src/ownerTasks.ts` computes what the owner still has to do by hand and
+`renderOwnerTasks()` puts it at the top of the nightly digest — the one
+message that reliably reaches a human. Every row says **[FREE]**, **[PLUS]**
+or **[FREE+PLUS]** (the owner's ask: a broken free feature is everybody's
+problem, a broken Plus feature is a paying customer's) and whether it is
+**[BLOCKING]**.
+
+The split that keeps it honest:
+
+- **Checked** tasks are computed from real state — an empty env var, a ticket
+  row over `TICKET_STALE_DAYS` old, a resort with no `on_property = false`
+  vendor pull, a failed feed on the last run. They appear when true and
+  **disappear on their own** when fixed. This is also where the
+  ticket-staleness alarm CLAUDE.md has wanted since the beginning finally
+  lives.
+- **Standing** tasks cannot be detected from inside the program (was a rate
+  checked against a real booking? is a list still the placeholder?). They
+  stay until someone flips `done` in `STANDING_TASKS`. Kept deliberately few:
+  a long list of un-checkable reminders is how a digest becomes noise and
+  stops being read, which is the exact failure it exists to prevent.
+
+A blocking task now earns an email on a quiet news day, generalising the rule
+that used to apply only to an unpriceable mileage year. The one exception is
+the email-secrets task itself, which is circular — there is nowhere to send
+the warning that there is nowhere to send warnings.
 
 ## Known gaps in the code
 

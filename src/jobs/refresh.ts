@@ -9,7 +9,7 @@
  */
 import { randomUUID } from "node:crypto";
 import {
-  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID,
+  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute,
 } from "../config.js";
 import { addDaysISO, monthKey, todayISO, range, monthBounds } from "../dates.js";
 import { getDb, type Db } from "../db.js";
@@ -20,22 +20,33 @@ import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
 import { computeFareTrend } from "./fareTrend.js";
+import { rotateHotelSlots, slotKeys, type HotelSlot } from "./hotelRotation.js";
 
 /**
  * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
  * off-property hotel data (see providers/serpapi.ts) without needing a real
  * flight token too, and vice versa — the two vendors are unrelated.
  */
-export function pickProvider(): Provider {
+export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null): Provider {
   const flights = process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
   if (!process.env.SERPAPI_KEY) return flights;
-  const hotels = new SerpApiHotelProvider();
+  const hotels = new SerpApiHotelProvider(
+    undefined, undefined, hotelBudget(), paidHotelSlots,
+  );
   return {
     name: `${flights.name}+serpapi`,
     hotelSource: hotels.name,
     flightMonth: flights.flightMonth.bind(flights),
     hotelMonth: hotels.hotelMonth.bind(hotels),
   };
+}
+
+/** The night's ceiling on paid off-property lookups. Read here as well as
+ *  inside the provider so the rotation hands out exactly as many slots as
+ *  the provider is willing to spend — two different numbers would mean
+ *  either wasted slots or unspent budget. */
+export function hotelBudget(): number {
+  return Number(process.env.SERPAPI_HOTELS_BUDGET ?? 200);
 }
 
 /**
@@ -176,20 +187,38 @@ export async function seedTickets(db: Db, months: string[]): Promise<number> {
 
 export interface RefreshOptions {
   months?: string[]; origins?: string[]; resorts?: string[]; provider?: Provider;
+  /** Paid hotel slots for this run. Normally computed by rotation; passed
+   *  explicitly by tests and by anything that wants a fixed plan. */
+  hotelSlots?: HotelSlot[] | null;
 }
 
 export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
-  const provider = opts.provider ?? pickProvider();
   const months = opts.months ?? dueMonths();
   const origins = opts.origins ?? ORIGINS.map((o) => o.iata);
   const resorts = (opts.resorts ?? RESORTS.map((r) => r.id))
     .map((id) => RESORT_BY_ID.get(id)!).filter(Boolean);
 
+  // Decide what to spend on BEFORE building the provider, so the provider
+  // can refuse anything outside the plan. Rotation is over every month the
+  // app prices, not just tonight's due ones: off-property rates are bought
+  // one resort/month at a time and a month is worth re-buying on its own
+  // staleness, not on the flight tier it happens to share.
+  const paidSlots = opts.hotelSlots !== undefined
+    ? opts.hotelSlots
+    : (process.env.SERPAPI_KEY && !opts.provider
+      ? await rotateHotelSlots(db, {
+          months: allTierMonths(),
+          resortIds: resorts.map((r) => r.id),
+          limit: hotelBudget(),
+        })
+      : null);
+  const provider = opts.provider ?? pickProvider(paidSlots ? slotKeys(paidSlots) : null);
+
   const runId = randomUUID();
   await db.query(`insert into fetch_runs (id, job, note) values ($1,'refresh',$2)`,
     [runId, `${provider.name} · ${months.length} months`]);
 
-  let calls = 0, rows = 0, errors = 0;
+  let calls = 0, rows = 0, errors = 0, skipped = 0;
   for (const month of months) {
     for (const resort of resorts) {
       // Primary airport plus any alternates (e.g. Tampa alongside MCO for WDW) —
@@ -198,6 +227,13 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
       const destinations = [resort.iata, ...resort.altArrivalAirports.map((a) => a.iata)];
       for (const origin of origins) {
         for (const destination of destinations) {
+          // You don't fly to the city you're already in. LAX is both a
+          // departure airport and one of Disneyland's arrival airports, so
+          // without this the job asked for LAX->LAX and LAX->SNA every
+          // night and the provider rejected all six as "origin and
+          // destination are equal". Skipped before `calls++`, because a
+          // request never made is not a call.
+          if (isLocalRoute(origin, destination)) { skipped++; continue; }
           for (const bucket of TRIP_BUCKETS) {
             try {
               calls++;
@@ -210,15 +246,41 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
           }
         }
       }
-      try {
-        calls++;
-        rows += await upsertHotels(db, await provider.hotelMonth(resort.id, month), provider.hotelSource ?? provider.name);
-      } catch (e) {
-        errors++;
-        console.error(`hotels ${resort.id} ${month}:`, (e as Error).message);
-      }
     }
   }
+
+  // Hotels, in their own pass rather than riding the flight loop.
+  //
+  // Two different things happen per resort/month and they are funded
+  // differently: on-property Disney rates are generated locally from
+  // config.ts and cost nothing, so they follow the same due-month tiering
+  // flights do; off-property rates cost one metered lookup each, so they go
+  // only where the rotation says. A resort/month that won a slot but is not
+  // due tonight still gets its call — that is the whole point of rotating
+  // over the full year.
+  //
+  // NOTE: both kinds of row are written with the provider's hotelSource, so
+  // an on-property row also ends up tagged `serpapi_hotels` even though no
+  // vendor returned it. That mislabelling predates this change and the
+  // rotation works around it by counting only `on_property = false` rows;
+  // worth fixing properly, since the real-pulls digest reads the same tag.
+  const hotelWork = new Map<string, { resortId: string; month: string }>();
+  for (const month of months) {
+    for (const resort of resorts) hotelWork.set(`${resort.id}|${month}`, { resortId: resort.id, month });
+  }
+  for (const slot of paidSlots ?? []) {
+    hotelWork.set(`${slot.resortId}|${slot.month}`, { resortId: slot.resortId, month: slot.month });
+  }
+  for (const { resortId, month } of hotelWork.values()) {
+    try {
+      calls++;
+      rows += await upsertHotels(db, await provider.hotelMonth(resortId, month), provider.hotelSource ?? provider.name);
+    } catch (e) {
+      errors++;
+      console.error(`hotels ${resortId} ${month}:`, (e as Error).message);
+    }
+  }
+
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);
 
@@ -228,13 +290,16 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // right now; the last good fare_trend row keeps serving estimates.
   const trend = await computeFareTrend(db);
   const trendNote = trend ? `trend: ${trend.sampleRoutes} routes` : "trend: skipped (too few overlapping routes)";
+  const hotelNote = paidSlots
+    ? `hotel slots: ${paidSlots.map((x) => `${x.resortId}/${x.month}`).join(" ")}`
+    : "hotel slots: no rotation";
 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
        note = note || ' · ' || $5 where id = $1`,
-    [runId, calls, rows, errors, trendNote],
+    [runId, calls, rows, errors, `${trendNote} · ${hotelNote}`],
   );
-  return { runId, calls, rows, errors, months: months.length, trend };
+  return { runId, calls, rows, errors, skipped, months: months.length, trend, paidSlots };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -242,6 +307,17 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const backfill = process.env.REFRESH_BACKFILL === "true" || process.env.REFRESH_BACKFILL === "1";
   const res = await runRefresh(db, backfill ? { months: allTierMonths() } : {});
   const trendMsg = res.trend ? `, trend from ${res.trend.sampleRoutes} routes` : ", trend skipped (too few routes)";
-  console.log(`refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors${backfill ? " (full backfill)" : ""}${trendMsg}`);
+  // Printed in full because this is the only place anyone sees where the
+  // night's money went — a silent rotation is one nobody can check.
+  if (res.paidSlots) {
+    console.log(
+      `refresh hotel rotation: ${res.paidSlots.length} paid slot(s) — ` +
+      res.paidSlots.map((s) => `${s.resortId}/${s.month}${s.lastPulledAt ? "" : " (never bought)"}`).join(", "),
+    );
+  }
+  console.log(
+    `refresh done: ${res.calls} calls, ${res.rows} rows, ${res.errors} errors, ` +
+    `${res.skipped} local route(s) skipped${backfill ? " (full backfill)" : ""}${trendMsg}`,
+  );
   await db.close();
 }

@@ -20,11 +20,19 @@ import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
+import { ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
 
 const COOKIE_NAME = "pf_session";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
-export interface SessionUser { id: string; email: string; plusUntil: ISODate | null }
+export interface SessionUser {
+  id: string;
+  email: string;
+  plusUntil: ISODate | null;
+  /** The airport this traveller flies out of, or null if they've never said.
+   *  Null and "ATL" are different facts — see setHomeAirport. */
+  homeAirport: string | null;
+}
 
 export function randomToken(): string {
   return randomBytes(32).toString("hex");
@@ -84,14 +92,77 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until
+    `select u.id, u.email, u.plus_until, u.home_airport
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
   );
   const row = rows[0];
   if (!row) return null;
-  return { id: row.id, email: row.email, plusUntil: row.plus_until ? dateStr(row.plus_until) : null };
+  return {
+    id: row.id, email: row.email,
+    plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
+    homeAirport: row.home_airport ?? null,
+  };
+}
+
+/**
+ * Remembers (or forgets) the airport someone departs from.
+ *
+ * Validated against the app's own airport list rather than stored as typed:
+ * a code we don't know would price nothing, and the value comes back out as
+ * a pre-selected form field, so a junk code would be a permanently broken
+ * form the traveller couldn't explain. `null` clears it — "I haven't said"
+ * has to stay reachable, otherwise the first save is irreversible.
+ *
+ * Having one is free: an account is free, saving and watching a TRIP is Plus,
+ * and remembering a dropdown is neither.
+ *
+ * But WHICH airports you may keep follows the same tiering as picking one.
+ * The 22 smaller airports are Plus, and a non-Plus account cannot store one
+ * even though the board will still price a trip from it (downgraded to the
+ * nearest free metro, and said so). Owner's call, and the consistent one:
+ * the split is what makes the free/Plus line mean something, and a free
+ * account quietly holding a Plus airport forever would hollow it out.
+ *
+ * Plus is read from the database here, never passed in. A caller-supplied
+ * "they're Plus" flag would be a way to grant the tier from the client, the
+ * same rule exact-fare follows for the same reason.
+ *
+ * A lapsed account KEEPS whatever it saved while it was Plus. Deleting a
+ * setting because a subscription ran out is a punishment nobody asked for,
+ * and the trip still prices — resolveOrigin() downgrades it to the nearest
+ * free metro and the board says which it used, exactly as if they had picked
+ * it by hand. They just cannot move it to another Plus airport until they
+ * renew.
+ */
+export class HomeAirportError extends Error {
+  constructor(message: string, readonly reason: "unknown_airport" | "plus_required") {
+    super(message);
+  }
+}
+
+export async function setHomeAirport(
+  db: Db, userId: string, iata: string | null,
+): Promise<string | null> {
+  const clean = iata ? iata.trim().toUpperCase() : null;
+  if (clean && !ORIGIN_BY_IATA.has(clean)) {
+    throw new HomeAirportError(`unknown airport ${clean}`, "unknown_airport");
+  }
+  if (clean && originNeedsPlus(clean)) {
+    const { rows } = await db.query<{ plus_until: unknown }>(
+      `select plus_until from users where id = $1`, [userId],
+    );
+    const plusUntil = rows[0]?.plus_until ? dateStr(rows[0].plus_until as never) : null;
+    if (!isPlus(plusUntil)) {
+      throw new HomeAirportError(
+        `${clean} is a Plus airport — a free account can't save it as a home airport.`,
+        "plus_required",
+      );
+    }
+  }
+  await db.query(`update users set home_airport = $2 where id = $1`, [userId, clean]);
+  return clean;
 }
 
 /** Pure and exported so it's unit-testable without a database. */
