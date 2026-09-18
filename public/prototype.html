@@ -130,6 +130,16 @@ a{color:var(--ink)}
    chip, because the complaint it fixes was "I have no real idea that I am
    signed in" — a small grey chip among other small grey chips was not
    telling anybody anything. */
+.attrline{margin-top:5px}
+.attr{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px;
+  border-radius:999px; border:1px solid var(--rule-strong); color:var(--ink-2); background:var(--surface-2)}
+.attr-only{border-color:var(--accent, var(--ink)); color:var(--accent, var(--ink))}
+.attr-none{opacity:.6}
+.attrpick{display:flex; flex-direction:column; gap:7px; max-height:230px; overflow-y:auto;
+  border:1px solid var(--rule); border-radius:10px; padding:11px 12px; margin-top:7px}
+.attrpick label{display:flex; gap:9px; align-items:flex-start; font-size:13px; line-height:1.4}
+.attrpick input{margin-top:2px; flex:none}
+.attrpick .who{color:var(--muted); font-size:11.5px; display:block}
 .acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1px solid var(--rule-strong);
   border-radius:999px; background:var(--surface-2); text-align:left; max-width:260px}
 .acctbtn:hover{border-color:var(--ink-2)}
@@ -727,6 +737,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
           <small id="homeAirportLapsed" class="downgrade" hidden>Saved while you had Plus. It's kept, and trips still price from the nearest free airport — renew Plus to change it to another Plus airport.</small>
           <small id="homeAirportSaved" class="downgrade" hidden></small>
+        </div>
+        <div class="authfield" style="margin:16px 0 4px">
+          <label for="attrPick">Attractions you care about</label>
+          <div class="attrpick" id="attrPick"></div>
+          <small id="attrPickNote" style="color:var(--muted); font-size:12px"></small>
         </div>
         <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
       </div>
@@ -1367,6 +1382,28 @@ function sparkSVG(pts){
   </svg>`;
 }
 
+/* The attraction match, on the board row where people actually decide.
+ *
+ * Note what it deliberately is NOT: part of the sort. The board stays
+ * ordered by price, because that is the app's one job. This says what a
+ * cheaper total would cost you — "the cheapest option doesn't have the one
+ * thing you came for" is a decision people want to make knowingly, not a
+ * reason to quietly reorder their results.
+ *
+ * Nothing renders at all without picks, so a free user sees no teaser and
+ * no empty space. Server-side, a non-Plus request never carries matches in
+ * the first place. */
+function attractionChip(item){
+  const a = item.attractions;
+  if(!a || !a.summary) return "";
+  const only = a.matched.filter(m=>m.onlyHere);
+  const cls = only.length ? "attr attr-only" : (a.matched.length ? "attr" : "attr attr-none");
+  const detail = a.matched.length
+    ? a.matched.map(m=>m.name + (m.onlyHere ? " (only here)" : "")).join(", ")
+    : "Missing: " + a.missing.map(m=>m.name).join(", ");
+  return `<div class="attrline"><span class="${cls}" title="${esc(detail)}">${esc(a.summary)}</span></div>`;
+}
+
 function renderBoard(){
   const board = $("#board");
   if(!results.length){
@@ -1387,6 +1424,7 @@ function renderBoard(){
         <div class="ident">
           <div class="rname">${item.name}</div>
           <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
+          ${attractionChip(item)}
         </div>
         <div></div><div></div>
         <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
@@ -1424,6 +1462,7 @@ function renderBoard(){
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
           ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
         </div>
+        ${attractionChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
       ${sparkSVG(spark)}
@@ -2189,6 +2228,7 @@ function openAuth(){
       : "Comparing all six resorts, the fare calendars and your own rates are free and unlimited. Plus adds saving, watching and exact fares.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
+    loadAttractions().then(renderAttractionPicker);
   } else {
     $("#signinError").hidden = true;
     $("#signinPassword").value = "";
@@ -2205,6 +2245,82 @@ $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
+/* ------------------------------ attractions ------------------------------
+ * Price answers "which of these can we afford". It never answers "which of
+ * these is our trip", and that is where people actually start. Someone who
+ * wants Zootopia has exactly one option and should know that before they
+ * compare six totals.
+ *
+ * The LIST is public — facts about what each resort has, the same way a
+ * curated promo is public to browse. What Plus buys is the personalisation:
+ * ticking yours and having the board answer. That split is the house
+ * pattern, and the server enforces it (402 on PUT without Plus); this is
+ * only the part that saves a wasted click.
+ *
+ * "Only here" is never written down. It arrives derived from how many
+ * resorts an attraction lists, so a clone opening elsewhere can't leave a
+ * stale exclusivity claim behind — the mistake this feature was corrected
+ * on before a line of it was written. */
+let allAttractions = [];
+let attractionPicks = [];
+
+async function loadAttractions(){
+  if(!allAttractions.length){
+    allAttractions = await apiGet("/api/attractions", {}).catch(()=>[]);
+  }
+  if(session.plus){
+    const r = await apiGet("/api/profile/attractions", {}).catch(()=>null);
+    attractionPicks = (r && Array.isArray(r.picks)) ? r.picks : [];
+  } else {
+    attractionPicks = [];
+  }
+}
+
+function renderAttractionPicker(){
+  const box = $("#attrPick"), note = $("#attrPickNote");
+  if(!box) return;
+  const picked = new Set(attractionPicks);
+  box.innerHTML = allAttractions.map(a=>{
+    const where = a.onlyAt
+      ? "Only at " + ((RESORT_BY_ID.get(a.onlyAt)||{}).name || a.onlyAt)
+      : a.resortIds.map(id=>(RESORT_BY_ID.get(id)||{}).name || id).join(" · ");
+    return `<label><input type="checkbox" data-attr="${esc(a.id)}"
+      ${picked.has(a.id)?"checked":""} ${session.plus?"":"disabled"}>
+      <span>${esc(a.name)}<span class="who">${esc(where)}${a.note?" — "+esc(a.note):""}</span></span></label>`;
+  }).join("") || `<small style="color:var(--muted)">No attractions listed yet.</small>`;
+  note.textContent = session.plus
+    ? "Ticked attractions show on the board — which resorts have them, and which are the only place you can ride them. It never changes the price order."
+    : "Browsing what each resort has is free. Plus is what lets you tick yours and have the board answer.";
+}
+
+document.addEventListener("change", async (e)=>{
+  const box = e.target.closest("[data-attr]");
+  if(!box) return;
+  if(!session.plus){ box.checked = false; return; }
+  const id = box.dataset.attr;
+  attractionPicks = box.checked
+    ? attractionPicks.concat([id])
+    : attractionPicks.filter(x=>x !== id);
+  const res = await fetch("/api/profile/attractions", {
+    method:"PUT", headers:{"content-type":"application/json"},
+    body: JSON.stringify({ picks: attractionPicks }),
+  });
+  if(!res.ok){
+    // Put the checkbox back rather than leaving the page claiming something
+    // the server didn't accept.
+    box.checked = !box.checked;
+    await loadAttractions();
+    renderAttractionPicker();
+    return;
+  }
+  const body = await res.json().catch(()=>({}));
+  if(Array.isArray(body.picks)) attractionPicks = body.picks;
+  // Re-run the search rather than re-render: matches are computed server-side
+  // from the saved picks, so the results in hand are stale the moment they
+  // change — the same reason signing in re-runs it.
+  if(results.length) await runSearch(results[selected] && results[selected].resortId);
+});
 
 /* -------------------------------- profile --------------------------------
  * One field so far, and the one worth having first: the airport you leave

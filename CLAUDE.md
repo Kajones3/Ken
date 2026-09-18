@@ -776,9 +776,41 @@ Found by testing an all-international demand day, not in production.
    previously planned as a separate "Compare Flying vs. Driving" page — turned out
    a preset on the main board served the actual ask better than a second page.
 
+**Attractions: what a resort HAS, next to what it costs** (2026-09-18, built).
+`ATTRACTIONS` in `config.ts` (hand-maintained, same pattern as `goodToKnow`),
+matching in `src/attractions.ts` (pure, no I/O, like `pricing.ts`), picks in
+`user_attractions`, and a chip on each board row.
+
+Four decisions worth not re-deriving:
+
+- **"Only here" is DERIVED from the resort list, never asserted per row.**
+  An attraction names every resort that has it and `isOnlyAt()` is
+  `resortIds.length === 1`, so a clone opening elsewhere can never leave a
+  stale exclusivity claim behind. See the correction below for why.
+- **It never touches the sort.** The board stays ordered by price — that is
+  the app's one job — and the match says what a cheaper total would cost
+  you. "The cheapest option doesn't have the one thing you came for" is a
+  decision people should make knowingly, not a reason to quietly reorder
+  their results. Verified live: with Zootopia and Ratatouille picked, the
+  board still ran WDW-first on price while Shanghai (5th) carried "Only
+  place with Zootopia".
+- **The list is free to browse; picking yours is Plus.** Exactly the promos
+  precedent — a curated promo is public to browse and Plus to apply — and
+  the owner's "keep it on the Plus side". `GET /api/attractions` is public;
+  `PUT /api/profile/attractions` answers 402 without Plus, and `compare()`
+  reads the picks from the user's own row so a free request never carries
+  matches at all. Verified by PUTting straight to the API past the disabled
+  checkboxes.
+- **An unknown pick id is dropped, not thrown.** Saved picks outlive edits
+  to the list; an attraction that closes and is removed would otherwise break
+  the board of everyone who had picked it.
+
+The shipped rows are a **starter set Claude is confident about, not a
+researched catalogue** — treat them like `seedPromos.ts`'s example rows. The
+owner is supplying the real list.
+
 **An "only here" attraction list must not assume uniqueness** (2026-09-18).
-Planned as a resort-differentiator alongside price — the owner is supplying
-the list. Recorded before building it because the obvious data model is wrong:
+Recorded before building it because the obvious data model is wrong:
 Claude offered "Ratatouille is only at Paris" as an example and the owner
 corrected it — Remy's Ratatouille Adventure is at EPCOT *and* Ratatouille:
 L'Aventure Totalement Toquée at Walt Disney Studios. Clones across resorts are

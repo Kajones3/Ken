@@ -8,7 +8,8 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
@@ -219,6 +220,14 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // routes people actually search. Fire-and-forget: recordSearch swallows
   // its own errors, and nothing below reads the result.
   void recordSearch(db, params.origin, [...destinationByResort.values()], month);
+
+  // A Plus traveller's attraction picks, read from their own row — never
+  // from the query string. Same rule as promos: the client may say which
+  // account it is (via the cookie), never what that account is entitled to.
+  // A free request gets an empty list, so every resort's `attractions` comes
+  // back absent and the board shows nothing rather than a teaser.
+  const picks = plus && user ? await picksFor(db, user.id) : [];
+
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
     // A "Getting there" preset can send different resorts down different
@@ -228,9 +237,16 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const modeParams = mode === "drive" ? driveBase : flyBase;
     const resortParams = { ...params, ...modeParams, destination: iata };
     const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
+    // Deliberately attached to the row and NOT used for ordering. The board
+    // stays sorted by price — this is the app's one job — and the match is
+    // context for what a cheaper total would cost you in attractions.
+    const m = picks.length ? matchesForResort(resort.id, picks) : null;
+    const attractions = m
+      ? { ...m, summary: matchSummary(m, picks.length) }
+      : undefined;
     return best
-      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best }
-      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data" };
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions }
+      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
   return {
@@ -242,6 +258,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
       ? { requested: originPick.downgradedFrom, priced: originPick.downgradedTo }
       : undefined,
     exactDate: explicitDate ?? undefined,
+    /** How many picks the matches above were measured against, so the UI can
+     *  say "3 of your 5" without a second request. */
+    attractionPicks: picks.length,
     results,
   };
 }
@@ -405,6 +424,38 @@ const server = createServer(async (req, res) => {
             { error: e.reason, message: e.message });
         }
         throw e;
+      }
+    }
+
+    // The attraction list itself is public — facts about what each resort
+    // has, the same way a curated promo is public to browse. What Plus buys
+    // is the personalisation: picking yours and having the board answer.
+    if (url.pathname === "/api/attractions") {
+      return send(200, ATTRACTIONS.map((a) => ({
+        ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null,
+      })), { cache: "public, max-age=300" });
+    }
+
+    if (url.pathname === "/api/profile/attractions") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) {
+        return send(402, {
+          error: "plus_required",
+          message: "Choosing the attractions you care about is a Plus feature. Browsing what each resort has is free.",
+        });
+      }
+      if (req.method === "GET") {
+        return send(200, { picks: await picksFor(db, user.id) }, { cache: "no-store" });
+      }
+      if (req.method === "PUT") {
+        const body = await readBody(req);
+        const ids = Array.isArray(body.picks) ? body.picks : [];
+        try {
+          return send(200, { picks: await setPicks(db, user.id, ids) }, { cache: "no-store" });
+        } catch (e) {
+          return send(400, { error: "bad_picks", message: (e as Error).message });
+        }
       }
     }
 

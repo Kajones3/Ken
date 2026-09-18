@@ -342,6 +342,87 @@ export const RESORTS: Resort[] = [
 
 export const RESORT_BY_ID = new Map(RESORTS.map((r) => [r.id, r]));
 
+/* =========================================================================
+ * Attractions — what a resort HAS, next to what it costs.
+ *
+ * Price answers "which of these can we afford". It never answers "which of
+ * these is our trip", and that is the question people actually start from.
+ * A family who wants Zootopia has exactly one option and should be told so
+ * before they compare six totals.
+ *
+ * ONE RULE ABOVE ALL: an attraction lists every resort that has it, and
+ * "only here" is DERIVED from that list, never asserted per row. Clones
+ * across resorts are normal — Ratatouille runs at both EPCOT and Walt
+ * Disney Studios, TRON at both Shanghai and the Magic Kingdom — and the
+ * first draft of this idea got that wrong out loud. A row that claims
+ * exclusivity it doesn't have is worse than no row: it sends someone to the
+ * wrong side of the planet.
+ *
+ * Hand-maintained here, same as goodToKnow and closuresUrl and for the same
+ * reason: no API exposes this for any of the six resorts. Unlike ticket
+ * prices, it does not rot quickly — headline attractions stand for years,
+ * and what moves is openings and closures, which the news digest already
+ * watches.
+ * ====================================================================== */
+
+export interface AttractionDef {
+  /** Stable key. Never reuse one for a different attraction — a user's saved
+   *  picks reference it, and a recycled id silently changes what they chose. */
+  id: string;
+  /** What a traveller would call it. Where resorts use different names for
+   *  the same ride, pick the one most people search for and let `note` carry
+   *  the difference. */
+  name: string;
+  /** EVERY resort that has it. One entry means genuinely only there. */
+  resortIds: string[];
+  /** Optional: what makes a resort's version different from its clones.
+   *  Worth writing only when it would change where someone goes. */
+  note?: string;
+}
+
+/**
+ * STARTER SET — the owner is replacing this with their own list.
+ *
+ * Kept short on purpose: every row here is one Claude is confident about,
+ * because a confident wrong entry is the failure this whole file is shaped
+ * to avoid. Treat it the way `seedPromos.ts`'s example rows are treated —
+ * real enough to build and test against, not a researched catalogue.
+ */
+export const ATTRACTIONS: AttractionDef[] = [
+  { id: "zootopia", name: "Zootopia", resortIds: ["shdr"],
+    note: "A whole themed land, and the only one anywhere." },
+  { id: "mystic-manor", name: "Mystic Manor", resortIds: ["hkdl"],
+    note: "Hong Kong's own take on the haunted-house idea — no Doom Buggies, a different story entirely." },
+  { id: "journey-center-earth", name: "Journey to the Center of the Earth", resortIds: ["tdr"],
+    note: "Tokyo DisneySea only." },
+  { id: "radiator-springs-racers", name: "Radiator Springs Racers", resortIds: ["dlr"] },
+  { id: "guardians-cosmic-rewind", name: "Guardians of the Galaxy: Cosmic Rewind", resortIds: ["wdw"] },
+  { id: "pirates-sunken-treasure", name: "Pirates of the Caribbean: Battle for the Sunken Treasure", resortIds: ["shdr"],
+    note: "Shares a name with the Pirates rides elsewhere and is a completely different attraction." },
+  { id: "ratatouille", name: "Ratatouille", resortIds: ["wdw", "dlp"],
+    note: "Remy's Ratatouille Adventure at EPCOT, Ratatouille: L'Aventure Totalement Toquée at Walt Disney Studios." },
+  { id: "tron", name: "TRON Lightcycle / Run", resortIds: ["wdw", "shdr"] },
+  { id: "rise-of-the-resistance", name: "Star Wars: Rise of the Resistance", resortIds: ["wdw", "dlr"] },
+  { id: "crush-coaster", name: "Crush's Coaster", resortIds: ["dlp"] },
+];
+
+export const ATTRACTION_BY_ID = new Map(ATTRACTIONS.map((a) => [a.id, a]));
+
+/** Every attraction this resort has. */
+export function attractionsFor(resortId: string): AttractionDef[] {
+  return ATTRACTIONS.filter((a) => a.resortIds.includes(resortId));
+}
+
+/**
+ * True when this resort is the ONLY place you can ride it — computed from
+ * `resortIds`, so it can never disagree with the data. This is the whole
+ * reason the shape is a list: "only at X" is a fact about the list, not a
+ * flag someone remembers to update when a clone opens.
+ */
+export function isOnlyAt(attraction: AttractionDef): boolean {
+  return attraction.resortIds.length === 1;
+}
+
 export interface Origin { iata: string; name: string; lat: number; lon: number }
 export const ORIGINS: Origin[] = [
   { iata: "ATL", name: "Atlanta", lat: 33.64, lon: -84.43 },

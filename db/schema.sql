@@ -302,3 +302,22 @@ create index if not exists flight_prices_fetched_at on flight_prices (fetched_at
 -- move it to a `user_profile` table keyed on user_id — identity and
 -- entitlement living in the same row as free-form taste data gets muddy fast.
 alter table users add column if not exists home_airport text;
+
+-- Which attractions a traveller says they care about. Plus-only to SET (the
+-- personalisation is the feature); the ATTRACTIONS list itself is public,
+-- exactly as a curated promo is public to browse but Plus to apply.
+--
+-- Its own table rather than a column on users: it is a list, and the profile
+-- had already reached the "move it out before it gets muddy" point flagged
+-- when home_airport went on `users`.
+--
+-- attraction_id is a plain text key into config.ts's ATTRACTIONS, with no
+-- foreign key — the list lives in code, not in the database, and a pick must
+-- survive an attraction being removed from it (resolvePicks drops unknown
+-- ids rather than breaking the board).
+create table if not exists user_attractions (
+  user_id       uuid not null references users(id) on delete cascade,
+  attraction_id text not null,
+  added_at      timestamptz not null default now(),
+  primary key (user_id, attraction_id)
+);
