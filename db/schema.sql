@@ -321,3 +321,25 @@ create table if not exists user_attractions (
   added_at      timestamptz not null default now(),
   primary key (user_id, attraction_id)
 );
+
+-- ---------------------------------------------------------------------------
+-- Email verification. Nothing anywhere confirmed that an address belonged to
+-- whoever typed it, which is the gap CLAUDE.md has flagged since accounts
+-- were built: a password protects an existing account but does not stop
+-- somebody claiming a fresh one on your address.
+--
+-- Nullable with no default, and NOT backfilled: an account that existed
+-- before this is honestly unverified rather than grandfathered in, because
+-- claiming it verified would be asserting something nobody ever checked.
+alter table users add column if not exists email_verified_at timestamptz;
+
+-- One outstanding link per account (primary key on user_id, upserted), so
+-- asking for a new link silently invalidates the old one — a link sent to
+-- the wrong person stops working the moment the right person asks again.
+create table if not exists email_verifications (
+  user_id     uuid primary key references users(id) on delete cascade,
+  token       text unique not null,
+  expires_at  timestamptz not null,
+  sent_at     timestamptz not null default now()
+);
+create index if not exists email_verifications_token on email_verifications (token);

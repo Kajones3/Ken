@@ -744,7 +744,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="acctline"><span class="k">Signed in as</span><span class="v" id="emailChip"></span></div>
         <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
         <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
+        <div class="acctline"><span class="k">Email</span><span class="v" id="acctVerified"></span></div>
         <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
+        <small id="verifyRow" class="downgrade" hidden>
+          Price alerts only go to a confirmed address, so they're paused until you confirm.
+          <button type="button" id="resendVerify" class="linkbtn" style="margin-left:6px">Send the link again</button>
+          <span id="resendMsg"></span>
+        </small>
         <div class="authfield" style="margin:16px 0 4px">
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
@@ -940,7 +946,7 @@ const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, exc
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
 
-let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
+let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
@@ -2268,6 +2274,9 @@ function openAuth(mode){
     const until = fmtPlusUntil(session.plusUntil);
     $("#acctExpiryRow").hidden = !(session.plus && until);
     if(until) $("#acctExpiry").textContent = until;
+    $("#acctVerified").textContent = session.emailVerified ? "Confirmed" : "Not confirmed";
+    $("#verifyRow").hidden = session.emailVerified;
+    $("#resendMsg").textContent = "";
     $("#acctTrips").textContent = session.plus
       ? String(savedTripCount)
       : "Plus only";
@@ -2293,6 +2302,27 @@ $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
+/* Confirming an address. Verification does not block sign-in (see
+ * src/verifyEmail.ts for why — no email has ever actually been delivered
+ * from this project, so a hard gate today would lock everyone out including
+ * the owner). What it does gate is alerts: we never email an address nobody
+ * confirmed. The panel says exactly that rather than nagging without a
+ * reason. */
+$("#resendVerify").addEventListener("click", async ()=>{
+  const msg = $("#resendMsg");
+  msg.textContent = " sending…";
+  const res = await fetch("/api/auth/resend-verification", { method:"POST" });
+  const body = await res.json().catch(()=>({}));
+  if(!res.ok){ msg.textContent = " couldn't send that — try again in a moment."; return; }
+  if(body.alreadyVerified){ msg.textContent = " already confirmed."; await refreshSession(); return; }
+  // Don't tell someone to check an inbox that will stay empty. Without a
+  // real sender the link goes to a server log, and saying so is the honest
+  // answer while the owner still hasn't configured Resend.
+  msg.textContent = body.delivers
+    ? " sent — check your inbox."
+    : " queued, but this deployment can't send email yet, so the link went to the server log. Ask the owner.";
+});
 
 /* ------------------------------ attractions ------------------------------
  * Price answers "which of these can we afford". It never answers "which of
@@ -2503,8 +2533,8 @@ $("#planYearly").addEventListener("click", ()=>{
 async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
-    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null }
-    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null, emailVerified:!!me.emailVerified }
+    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going
   // through a render, and a stale "Sign in" button after signing in is the

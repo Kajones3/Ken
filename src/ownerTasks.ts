@@ -29,6 +29,7 @@
 import { NEWS_FEEDS, RESORTS, mileageRateStatus } from "./config.js";
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
+import { requireVerifiedEmail } from "./verifyEmail.js";
 
 /** Which side of the paywall a task affects. */
 export type TaskSide = "free" | "plus" | "both";
@@ -136,6 +137,21 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
         + ' Look up "IRS standard mileage rates" at irs.gov, then add a row to IRS_MILEAGE_RATES in src/config.ts.',
       side: "free",
       blocking: mileage.pricingBroken,
+    });
+  }
+
+  // --- 2b. The verification gate is off until mail really delivers -------
+  if (!requireVerifiedEmail(env)) {
+    checked({
+      id: "verify-gate",
+      title: env.RESEND_API_KEY
+        ? "Turn on REQUIRE_VERIFIED_EMAIL now that email can send"
+        : "Email verification is issuing links it cannot deliver",
+      why: env.RESEND_API_KEY
+        ? "Mail is configured, so the hard gate is safe to switch on: set REQUIRE_VERIFIED_EMAIL=true and an unconfirmed address can no longer sign in. Send yourself a link first and confirm it actually arrives."
+        : "Sign-ups create a confirmation link and the console sender prints it to a server log instead of sending it. Nobody can confirm an address, so price alerts reach nobody — alerts require a confirmed address by design. Leave REQUIRE_VERIFIED_EMAIL off until RESEND_API_KEY is set, or every new sign-up is locked out.",
+      side: "both",
+      blocking: false,
     });
   }
 

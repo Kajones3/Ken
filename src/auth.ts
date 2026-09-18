@@ -21,6 +21,7 @@ import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
+import { requireVerifiedEmail } from "./verifyEmail.js";
 
 const COOKIE_NAME = "pf_session";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
@@ -32,6 +33,9 @@ export interface SessionUser {
   /** The airport this traveller flies out of, or null if they've never said.
    *  Null and "ATL" are different facts — see setHomeAirport. */
   homeAirport: string | null;
+  /** Whether this address has been confirmed. Never backfilled for accounts
+   *  that predate verification — see src/verifyEmail.ts. */
+  emailVerified: boolean;
 }
 
 export function randomToken(): string {
@@ -92,7 +96,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until, u.home_airport
+    `select u.id, u.email, u.plus_until, u.home_airport, u.email_verified_at
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
@@ -103,6 +107,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
     id: row.id, email: row.email,
     plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
     homeAirport: row.home_airport ?? null,
+    emailVerified: row.email_verified_at != null,
   };
 }
 
@@ -228,7 +233,7 @@ export const MIN_PASSWORD_LENGTH = 8;
 export class AuthError extends Error {
   constructor(
     message: string,
-    readonly reason: "bad_email" | "weak_password" | "already_registered" | "bad_credentials",
+    readonly reason: "bad_email" | "weak_password" | "already_registered" | "bad_credentials" | "unverified",
   ) { super(message); }
 }
 
@@ -284,7 +289,7 @@ export async function signUp(
   const { rows } = await db.query(
     `insert into users (id, email, password_hash) values ($1,$2,$3)
      on conflict (email) do update set password_hash = excluded.password_hash
-     returning id, email, plus_until, home_airport`,
+     returning id, email, plus_until, home_airport, email_verified_at`,
     [row?.id ?? randomUUID(), email, hash],
   );
   const u = rows[0];
@@ -292,6 +297,7 @@ export async function signUp(
     id: u.id, email: u.email,
     plusUntil: u.plus_until ? dateStr(u.plus_until) : null,
     homeAirport: u.home_airport ?? null,
+    emailVerified: u.email_verified_at != null,
   };
 }
 
@@ -311,17 +317,28 @@ export async function signIn(
   const email = cleanEmail(rawEmail);
   const bad = new AuthError("That email and password don't match.", "bad_credentials");
   const { rows } = await db.query<{
-    id: string; email: string; plus_until: unknown; home_airport: string | null; password_hash: string | null;
+    id: string; email: string; plus_until: unknown; home_airport: string | null;
+    password_hash: string | null; email_verified_at: unknown;
   }>(
-    `select id, email, plus_until, home_airport, password_hash from users where email = $1`,
+    `select id, email, plus_until, home_airport, password_hash, email_verified_at
+       from users where email = $1`,
     [email],
   );
   const row = rows[0];
   if (!row || !hasPassword(row.password_hash)) throw bad;
   if (!(await verifyPassword(password, row.password_hash))) throw bad;
+  // The hard gate, off by default. Checked AFTER the password so an
+  // unverified account still can't be probed by anyone who doesn't have it.
+  if (requireVerifiedEmail() && row.email_verified_at == null) {
+    throw new AuthError(
+      "Confirm your email address before signing in — check your inbox for the link we sent.",
+      "unverified",
+    );
+  }
   return {
     id: row.id, email: row.email,
     plusUntil: row.plus_until ? dateStr(row.plus_until as never) : null,
     homeAirport: row.home_airport ?? null,
+    emailVerified: row.email_verified_at != null,
   };
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { applyCap, suppressAnomalies, runAlerts, type Candidate } from "./alerts.js";
+import { applyCap, suppressAnomalies, runAlerts, findAlerts, type Candidate } from "./alerts.js";
 import { memoryDb } from "../db.js";
 import { loadBook } from "../book.js";
 import { cheapestIn, type TripParams } from "../pricing.js";
@@ -51,7 +51,7 @@ test("a real gas-price swing is never suppressed as 'bad data', even alone in th
 test("a failed send leaves the alert for next run to retry — it is not lost", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+  await db.query(`insert into users (id, email, plus_until, email_verified_at) values ($1,$2,'2099-01-01', now())`,
     [userId, "flaky@example.com"]);
   await db.query(
     `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
@@ -147,7 +147,7 @@ test("a user who has never been Plus gets no alerts, however far the price drops
 test("a driving trip gets a gas-price alert when the price has moved enough since it was saved", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+  await db.query(`insert into users (id, email, plus_until, email_verified_at) values ($1,$2,'2099-01-01', now())`,
     [userId, "driver@example.com"]);
   await db.query(
     `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
@@ -181,7 +181,7 @@ test("a driving trip gets a gas-price alert when the price has moved enough sinc
 test("a new curated promo for a saved trip's resort fires a deal alert, once", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+  await db.query(`insert into users (id, email, plus_until, email_verified_at) values ($1,$2,'2099-01-01', now())`,
     [userId, "dealseeker@example.com"]);
   await db.query(
     `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
@@ -227,7 +227,7 @@ test("a new curated promo for a saved trip's resort fires a deal alert, once", a
 test("a promo that predates the saved trip is not treated as new", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+  await db.query(`insert into users (id, email, plus_until, email_verified_at) values ($1,$2,'2099-01-01', now())`,
     [userId, "latecomer@example.com"]);
   await db.query(
     `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
@@ -263,7 +263,7 @@ test("a promo that predates the saved trip is not treated as new", async () => {
 test("a driving trip gets no gas-price alert when the price has barely moved", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  await db.query(`insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+  await db.query(`insert into users (id, email, plus_until, email_verified_at) values ($1,$2,'2099-01-01', now())`,
     [userId, "driver2@example.com"]);
   await db.query(
     `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
@@ -286,5 +286,46 @@ test("a driving trip gets no gas-price alert when the price has barely moved", a
   const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
   assert.equal(result.fired, 0);
 
+  await db.close();
+});
+
+test("an unconfirmed email address gets no alerts, even with real Plus", async () => {
+  // The concrete harm an unverified address does: mail to a stranger, in
+  // their name, about a trip they never saved. Same class of mistake as the
+  // `plus_until is null` bug one column over, so it is pinned the same way.
+  const db = await memoryDb();
+  const userId = randomUUID(), tripId = randomUUID();
+  await db.query(
+    `insert into users (id, email, plus_until) values ($1,$2,'2099-01-01')`,
+    [userId, "unconfirmed@example.com"],
+  );
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
+     values ('ATL','MCO','2027-03-01',4,100,0)`);
+  await db.query(
+    `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd)
+     values ('wdw','2027-03-01',100,90)`);
+  const params: TripParams = {
+    origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
+    stay: "on", tier: 0, food: "qs",
+  };
+  await db.query(
+    // A baseline this high guarantees a drop, so the only thing that can
+    // keep this trip out of the candidate list is the unconfirmed address.
+    `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
+     values ($1,$2,$3,'{}',100000,0)`,
+    [tripId, userId, JSON.stringify({ ...params, month: "2027-03", resortId: "wdw" })],
+  );
+
+  // Assert on `checked` — the row count from the eligibility query — rather
+  // than on `candidates`, which additionally depends on the trip pricing and
+  // actually dropping. This isolates the one thing the rule changed: whether
+  // the trip is even considered.
+  assert.equal((await findAlerts(db)).checked, 0,
+    "an unconfirmed address must not even be considered");
+
+  await db.query(`update users set email_verified_at = now() where id = $1`, [userId]);
+  assert.equal((await findAlerts(db)).checked, 1,
+    "and confirming the address is the only thing that was missing");
   await db.close();
 });

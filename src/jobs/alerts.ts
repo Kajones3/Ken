@@ -69,12 +69,23 @@ function describePromoEffectForEmail(kind: string, value: number): string {
   }
 }
 
+/**
+ * Two conditions, and the second is newer: real current Plus, AND a
+ * confirmed email address.
+ *
+ * Emailing an unconfirmed address is the concrete harm an unverified
+ * account does — mail to a stranger, in their name, about a trip they never
+ * saved. A wrong `plus_until` check once made every brand-new account
+ * alert-eligible; this is the same class of mistake one column over, so it
+ * is pinned by a test too.
+ */
 export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidates: Candidate[]; checked: number }> {
   const { rows } = await db.query(
     `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct, t.created_at
        from saved_trips t
        join users u on u.id = t.user_id
-      where t.active and u.plus_until is not null and u.plus_until >= $1`,
+      where t.active and u.plus_until is not null and u.plus_until >= $1
+        and u.email_verified_at is not null`,
     [today],
   );
 

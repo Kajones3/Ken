@@ -26,10 +26,17 @@ import {
   setHomeAirport, HomeAirportError, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
+import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS } from "./verifyEmail.js";
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
 const PUBLIC_DIR = new URL("../public/", import.meta.url);
+
+/** The address goes into a page we render, and an address is user input. */
+function escapeHtml(v: string): string {
+  return v.replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+}
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
 
 /**
@@ -325,6 +332,12 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(body));
   };
   const withCookie = (setCookie: string) => ({ headers: { "set-cookie": setCookie } });
+  // The verification link is clicked from an inbox, so it has to answer with
+  // a page a human can read rather than JSON. `send` always stringifies.
+  const sendHtml = (code: number, html: string) => {
+    res.writeHead(code, { "content-type": MIME[".html"]!, "cache-control": "no-store" });
+    res.end(html);
+  };
   try {
     if (url.pathname === "/" || url.pathname === "/prototype.html") {
       const file = await readFile(new URL("prototype.html", PUBLIC_DIR));
@@ -373,9 +386,14 @@ const server = createServer(async (req, res) => {
         const user = isSignup
           ? await signUp(db, body.email, password)
           : await signIn(db, body.email, password);
+        // Fire the confirmation link on sign-up. Never blocks the sign-up
+        // itself: the account exists either way and another link is one
+        // button away.
+        if (isSignup) void sendVerification(db, user.id, user.email, pickEmailSender());
         const token = await createSession(db, user.id);
         return send(200, {
           email: user.email, plus: isPlus(user.plusUntil), plusUntil: user.plusUntil,
+          emailVerified: user.emailVerified,
         }, withCookie(sessionCookieHeader(token)));
       } catch (e) {
         if (e instanceof AuthError) {
@@ -387,6 +405,43 @@ const server = createServer(async (req, res) => {
         throw e;
       }
     }
+    // Clicked from an inbox, so it answers with a page rather than JSON.
+    if (url.pathname === "/api/auth/verify" && req.method === "GET") {
+      const result = await verifyEmailToken(db, url.searchParams.get("token") ?? "");
+      const page = (title: string, body: string) =>
+        `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+        + `<title>${title} · Parkfare</title>`
+        + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
+        + `<h1 style="font-size:1.4rem">${title}</h1><p>${body}</p>`
+        + `<p><a href="/">Back to Parkfare</a></p></div>`;
+      if (result.ok) {
+        return sendHtml(200, page(
+          result.alreadyVerified ? "Already confirmed" : "Email confirmed",
+          result.alreadyVerified
+            ? `${escapeHtml(result.email)} was already confirmed. Nothing more to do.`
+            : `Thanks — ${escapeHtml(result.email)} is confirmed. Price alerts can now reach you.`,
+        ));
+      }
+      return sendHtml(result.reason === "expired" ? 410 : 404, page(
+        result.reason === "expired" ? "That link has expired" : "That link isn't valid",
+        result.reason === "expired"
+          ? `Confirmation links last ${VERIFY_TOKEN_HOURS} hours. Sign in and ask for a new one.`
+          : "It may already have been used, or replaced by a newer link. Sign in and ask for a new one.",
+      ));
+    }
+
+    if (url.pathname === "/api/auth/resend-verification" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (user.emailVerified) return send(200, { ok: true, alreadyVerified: true }, { cache: "no-store" });
+      const sender = pickEmailSender();
+      const sent = await sendVerification(db, user.id, user.email, sender);
+      // `delivers` is the honest part: the console sender "succeeds" by
+      // printing to a log the user will never see, and telling them to check
+      // an inbox that will stay empty would be a lie.
+      return send(200, { ok: sent, delivers: sender.name !== "console" }, { cache: "no-store" });
+    }
+
     if (url.pathname === "/api/auth/me") {
       const user = await currentUser(db, req);
       if (!user) return send(200, { authenticated: false });
@@ -398,7 +453,7 @@ const server = createServer(async (req, res) => {
         : null;
       return send(200, {
         authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
-        homeAirport: user.homeAirport, exactFare,
+        homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
       }, { cache: "no-store" });
     }
     // --- profile: free, signed in, always the caller's own row. ---------

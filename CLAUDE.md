@@ -989,6 +989,19 @@ the warning that there is nowhere to send warnings.
   Sign-in keeps one message for every failure so it can't be used to enumerate
   addresses; **sign-up necessarily leaks that an email is registered**, which is
   unavoidable on any sign-up form without verification.
+- **Email verification exists but does not block sign-in yet** (`src/verifyEmail.ts`,
+  2026-09-18). Sign-up issues a single-use link (48h, one live link per account —
+  asking for a new one kills the old), `GET /api/auth/verify` consumes it and answers
+  with a readable page rather than JSON. **The gate is where the harm is: the alert job
+  now requires `email_verified_at`, so this app never emails an address nobody
+  confirmed.** Sign-in still works unverified, deliberately: no email has ever actually
+  been delivered from this project, so a hard gate today would lock out every user
+  including the owner, with the key printed into a server log. `REQUIRE_VERIFIED_EMAIL=true`
+  turns the hard gate on, and the owner's nightly job list says when that is safe.
+  **Existing accounts were NOT backfilled as verified** — claiming an address was
+  confirmed when nobody checked is the kind of comfortable lie the rest of this project
+  refuses to tell. `PUBLIC_BASE_URL` sets the link's host; unset gives a relative link,
+  which works locally but not in a real email.
 - **A password is only as good as the transport.** The session cookie now carries
   `Secure` whenever `DATABASE_URL` is set (i.e. on Render, over https), off locally
   where the dev loop is plain http, and forceable either way with `SECURE_COOKIES`.
