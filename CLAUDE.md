@@ -18,7 +18,7 @@ say when something is a guess.
 |---|---|
 | Backend (`src/`, `db/`) | **Working.** 82 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost now includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRatePerMile()` in `config.ts`, month-only lookup). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). Plus-only add-on unchanged: an alert when the cached gas price has moved since a driving trip was saved. |
+| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). Plus-only add-on unchanged: an alert when the cached gas price has moved since a driving trip was saved. |
 | Park Hopper | **Wired, free.** A flat per-ticket add-on at the four multi-park resorts (WDW, Disneyland, Tokyo, Paris); silently has no effect at Hong Kong or Shanghai, which each have one park. WDW/Disneyland's differentials are researched against real 2026 pricing; Tokyo/Paris are unresearched guesses, flagged weaker-confidence below. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
@@ -281,10 +281,12 @@ than it is — this is the comparison people get wrong.
   resorts' off-peak floor is no longer inverted (see "Mistakes made" below) — not a claim
   that the resulting curve matches real per-date pricing, which is genuinely tiered and
   which this flat curve can only approximate.
-- **2026 IRS standard mileage rate**: $0.725/mile (Jan–Jun), $0.76/mile (Jul–Dec) — now
-  wired into every driving trip's `wearAndTearUsd` line via `irsMileageRatePerMile()`
-  in `config.ts` (month-only lookup, same "ignore the year" convention `seasonality.ts`
-  already uses). Needs a real annual refresh — the IRS sets a new rate each December.
+- **2026 IRS standard mileage rate**: $0.725/mile (Jan–Jun), $0.76/mile (Jul–Dec) —
+  wired into every driving trip's `wearAndTearUsd` line via `irsMileageRate()` in
+  `config.ts`. **Year-aware since 2026-09-17**: rates live in `IRS_MILEAGE_RATES`,
+  one row per year, each tagged with the year it was published for. The IRS sets a
+  new rate each December and adding it is a manual job — see the year-awareness
+  decision below for what happens until you do.
 - **Nominatim** (OpenStreetMap geocoding) and **ip-api.com** (IP geolocation): both free,
   keyless, no per-request charge — Nominatim capped at 1 req/sec with a caching
   requirement (see `src/geo/cache.ts`), ip-api at ~45 req/min for non-commercial use.
@@ -404,6 +406,38 @@ those same fares against it always yields 1.0 and would claim "0% adjustment" as
 though something had been checked. `routeSamples` is surfaced because a
 correction built on one fare (possibly a peak date) deserves less confidence than
 one built on ten.
+
+**The IRS mileage rate knows its own year, and going stale is an owner
+problem, not a user one** (2026-09-17). `irsMileageRatePerMile()` read only the
+month and handed back the 2026 figure for any date in any year — so a 2029 trip
+was priced on a three-year-old rate with nothing, anywhere, saying so. Now
+`IRS_MILEAGE_RATES` holds one row per year and `irsMileageRate()` returns which
+year's rate it used and whether that rate is the trip's own.
+
+Three parts, each decided rather than defaulted:
+
+- *A year with no rate on file still prices.* The app books 365 days ahead, so
+  from 1 January every driving comparison would refuse until the new figure was
+  typed in — and the IRS doesn't publish until mid-December. Refusing would break
+  the product for months by design. The newest rate is carried forward instead,
+  flagged as such.
+- *But not forever.* `MILEAGE_RATE_CARRY_FORWARD_YEARS = 1` is the limit, which
+  is exactly the booking window: the furthest bookable trip is at most one
+  calendar year past the current one, so a one-year allowance never breaks normal
+  operation, and anything past it means the warnings were ignored for a full
+  year. Past the limit `priceTrip` returns `{ok:false, reason}` — no guess.
+- *The warning goes to the owner, not to users.* Owner's explicit call. A
+  stale-rate banner on a trip page is noise to a traveller, and the figure barely
+  moves year to year. `mileageRateStatus()` drives a note in the existing
+  owner-only news-digest email — riding that cron rather than adding a workflow,
+  so it repeats until dealt with — which names the missing year and says to look
+  up "IRS standard mileage rates" at irs.gov. It forces an email of its own only
+  in the urgent case, where trips genuinely won't price. `drivingPick.mileageRate`
+  is in the API payload so the calculation stays inspectable and testable;
+  nothing in `prototype.html` renders it.
+
+**Never hardcode a future year's rate.** An unpublished figure is exactly what
+the warning exists to tell you about.
 
 **Airports are tiered: 19 free metros, 22 more with Plus.** Every origin
 multiplies the pre-caching bill, so the free list stays at the big metros — but
