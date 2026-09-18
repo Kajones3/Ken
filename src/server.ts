@@ -22,7 +22,7 @@ import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
-  sessionCookieHeader, clearCookieHeader, isPlus, requiresPassword, verifyPassword,
+  sessionCookieHeader, clearCookieHeader, isPlus, signUp, signIn, AuthError,
   setHomeAirport, HomeAirportError, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
@@ -359,32 +359,33 @@ const server = createServer(async (req, res) => {
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
     // --- explicitly not enough for a public launch (see src/auth.ts).    ---
-    if (url.pathname === "/api/auth/signin" && req.method === "POST") {
+    // Sign up and sign in are two routes now, not one. The old single route
+    // created an account on any unknown email, which meant a typo silently
+    // became a second empty account — and with a password now required on
+    // every account, "create it if missing" and "check the password" are
+    // simply different operations.
+    if ((url.pathname === "/api/auth/signup" || url.pathname === "/api/auth/signin")
+        && req.method === "POST") {
       const body = await readBody(req);
-      const email = String(body.email ?? "").trim().toLowerCase();
       const password = typeof body.password === "string" ? body.password : "";
-      if (!email || !email.includes("@")) return send(400, { error: "a valid email is required" });
-      const { rows } = await db.query(
-        `insert into users (id, email) values ($1,$2)
-         on conflict (email) do update set email = excluded.email
-         returning id, email, plus_until, password_hash`,
-        [randomUUID(), email],
-      );
-      const row = rows[0];
-      // An account with a password hash requires it; one without keeps the
-      // original email-only sign-in. Checked server-side against the stored
-      // hash, never against anything the client sends about itself.
-      if (requiresPassword(row.password_hash)) {
-        if (!(await verifyPassword(password, row.password_hash))) {
-          // One message for a wrong password and for a wrong email on an
-          // account that has one, so this can't be used to discover which
-          // addresses have accounts.
-          return send(401, { error: "that email and password don't match" });
+      const isSignup = url.pathname === "/api/auth/signup";
+      try {
+        const user = isSignup
+          ? await signUp(db, body.email, password)
+          : await signIn(db, body.email, password);
+        const token = await createSession(db, user.id);
+        return send(200, {
+          email: user.email, plus: isPlus(user.plusUntil), plusUntil: user.plusUntil,
+        }, withCookie(sessionCookieHeader(token)));
+      } catch (e) {
+        if (e instanceof AuthError) {
+          // 401 for a credential mismatch, 400 for something the form can
+          // fix (bad address, weak password, wrong form entirely).
+          return send(e.reason === "bad_credentials" ? 401 : 400,
+            { error: e.reason, message: e.message });
         }
+        throw e;
       }
-      const token = await createSession(db, row.id);
-      const plusUntil = row.plus_until ? dateStr(row.plus_until) : null;
-      return send(200, { email: row.email, plus: isPlus(plusUntil), plusUntil }, withCookie(sessionCookieHeader(token)));
     }
     if (url.pathname === "/api/auth/me") {
       const user = await currentUser(db, req);

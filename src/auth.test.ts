@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  hashPassword, verifyPassword, requiresPassword, isPlus, setHomeAirport, currentUser,
+  hashPassword, verifyPassword, hasPassword, isPlus, setHomeAirport, currentUser,
+  signUp, signIn, AuthError, MIN_PASSWORD_LENGTH,
   createSession, sessionCookieHeader, HomeAirportError,
 } from "./auth.js";
 import { memoryDb, type Db } from "./db.js";
@@ -45,10 +46,12 @@ test("a missing or malformed hash fails closed, never open", async () => {
 });
 
 test("only an account with a stored hash requires a password", () => {
-  assert.equal(requiresPassword(null), false, "an account with no password keeps email-only sign-in");
-  assert.equal(requiresPassword(undefined), false);
-  assert.equal(requiresPassword(""), false);
-  assert.equal(requiresPassword("scrypt$aa$bb"), true);
+  // Every account NEEDS a password now; this only reports whether one has
+  // been set yet, which is what the legacy-account migration turns on.
+  assert.equal(hasPassword(null), false, "a legacy account has not set one yet");
+  assert.equal(hasPassword(undefined), false);
+  assert.equal(hasPassword(""), false);
+  assert.equal(hasPassword("scrypt$aa$bb"), true);
 });
 
 test("set-password stores a hash, and --clear returns the account to email-only", async () => {
@@ -235,5 +238,123 @@ test("a home airport of LAX lands the traveller on the drive-to-Disneyland prese
   await setHomeAirport(db, id, "LAX");
   const user = await sessionUser(db, id);
   assert.equal(defaultGettingThere(user!.homeAirport!), "driveDlr");
+  await db.close();
+});
+
+/* ---------------------------------------------------------------------------
+ * Every account needs a password (owner's call, 2026-09-18). These pin the
+ * rules that would otherwise regress quietly: no email-only sign-in left, no
+ * account created by a typo'd sign-in, and a legacy account can still be
+ * claimed rather than bricked.
+ * ------------------------------------------------------------------------ */
+
+test("signing up creates an account that can then sign in", async () => {
+  const db = await memoryDb();
+  const created = await signUp(db, "new@example.test", "correcthorse");
+  assert.equal(created.email, "new@example.test");
+  const back = await signIn(db, "new@example.test", "correcthorse");
+  assert.equal(back.id, created.id);
+  await db.close();
+});
+
+test("a short password is refused", async () => {
+  const db = await memoryDb();
+  await assert.rejects(
+    () => signUp(db, "new@example.test", "a".repeat(MIN_PASSWORD_LENGTH - 1)),
+    (e: AuthError) => e.reason === "weak_password",
+  );
+  await assert.rejects(() => signIn(db, "new@example.test", "whatever"),
+    (e: AuthError) => e.reason === "bad_credentials", "and no account was left behind");
+  await db.close();
+});
+
+test("email-only sign-in is gone", async () => {
+  // The whole point of the change. An account exists, a real password is
+  // set, and an empty password must not get in.
+  const db = await memoryDb();
+  await signUp(db, "friend@example.test", "correcthorse");
+  await assert.rejects(() => signIn(db, "friend@example.test", ""),
+    (e: AuthError) => e.reason === "bad_credentials");
+  await db.close();
+});
+
+test("a wrong password does not get in", async () => {
+  const db = await memoryDb();
+  await signUp(db, "friend@example.test", "correcthorse");
+  await assert.rejects(() => signIn(db, "friend@example.test", "correcthors"),
+    (e: AuthError) => e.reason === "bad_credentials");
+  await db.close();
+});
+
+test("signing in never creates an account", async () => {
+  // The old route upserted on any unknown email, so a typo silently became a
+  // second empty account — and, before passwords, signed you into it.
+  const db = await memoryDb();
+  await assert.rejects(() => signIn(db, "typo@example.test", "correcthorse"),
+    (e: AuthError) => e.reason === "bad_credentials");
+  const { rows } = await db.query(`select count(*)::int as n from users`);
+  assert.equal(rows[0].n, 0, "no account may be created by a failed sign-in");
+  await db.close();
+});
+
+test("an unknown email and a wrong password are indistinguishable", async () => {
+  // So the sign-in form can't be used to discover which addresses have
+  // accounts. (The sign-up form necessarily does leak that — see signUp.)
+  const db = await memoryDb();
+  await signUp(db, "real@example.test", "correcthorse");
+  const fail = async (email: string) => {
+    try { await signIn(db, email, "wrong"); throw new Error("should not have signed in"); }
+    catch (e) { return e as AuthError; }
+  };
+  const a = await fail("real@example.test");
+  const b = await fail("nobody@example.test");
+  assert.equal(a.message, b.message);
+  assert.equal(a.reason, b.reason);
+  await db.close();
+});
+
+test("a legacy account with no password can be claimed, keeping its Plus and its id", async () => {
+  // The migration the opt-in scheme was waiting for. Bricking these would
+  // lock out every comped friend at once, which is exactly what the old
+  // design existed to avoid.
+  const db = await memoryDb();
+  const id = randomUUID();
+  await db.query(
+    `insert into users (id, email, plus_until) values ($1,'legacy@example.test','2099-01-01')`, [id],
+  );
+  await assert.rejects(() => signIn(db, "legacy@example.test", "anything"),
+    (e: AuthError) => e.reason === "bad_credentials", "no password set means no way in yet");
+
+  const claimed = await signUp(db, "legacy@example.test", "correcthorse");
+  assert.equal(claimed.id, id, "the same account, not a new one");
+  assert.equal(claimed.plusUntil, "2099-01-01", "comped Plus survives the claim");
+  assert.equal((await signIn(db, "legacy@example.test", "correcthorse")).id, id);
+  await db.close();
+});
+
+test("signing up twice on a registered email is refused, not silently overwritten", async () => {
+  // Otherwise sign-up is a password reset for anyone who knows the address.
+  const db = await memoryDb();
+  await signUp(db, "taken@example.test", "correcthorse");
+  await assert.rejects(() => signUp(db, "taken@example.test", "differentpass"),
+    (e: AuthError) => e.reason === "already_registered");
+  assert.ok(await signIn(db, "taken@example.test", "correcthorse"), "the original password still works");
+  await db.close();
+});
+
+test("email is normalised the same way on both routes", async () => {
+  const db = await memoryDb();
+  await signUp(db, "  Mixed@Example.TEST  ", "correcthorse");
+  assert.ok(await signIn(db, "mixed@example.test", "correcthorse"));
+  assert.ok(await signIn(db, "MIXED@EXAMPLE.TEST", "correcthorse"));
+  await db.close();
+});
+
+test("a malformed email is refused on both routes", async () => {
+  const db = await memoryDb();
+  for (const bad of ["", "   ", "notanemail"]) {
+    await assert.rejects(() => signUp(db, bad, "correcthorse"), (e: AuthError) => e.reason === "bad_email");
+    await assert.rejects(() => signIn(db, bad, "correcthorse"), (e: AuthError) => e.reason === "bad_email");
+  }
   await db.close();
 });

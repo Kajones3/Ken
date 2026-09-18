@@ -261,6 +261,25 @@ paywall (not have it faked or hidden). So: no search quota on free comparisons
 and `npm run grant-plus` grants real Plus status without a payment step. This is a
 demo-stage decision, not a permanent pricing change.
 
+**The paywall does not promise a cheaper trip** (2026-09-18, owner's
+correction). It used to be headed "Want to make it cheaper?" — which the app
+cannot deliver and frequently contradicts: the exact fare a Plus lookup
+returns is often HIGHER than the free estimate, and that is the feature
+working, not failing. It now reads "Plan your specific trip" and says in the
+body that a real number may come back higher, because a number you can book
+against beats a cheerful one you can't. Same rule as the `est.` chip and the
+`dataConfidence` badges: never let the copy write a cheque the data won't
+cash.
+
+**Sign up leads, sign in follows, and there is only one auth surface.** The
+paywall used to carry its own email box posting to `/api/auth/signin` with
+no password and `if(!res.ok) return` — so for the owner it did nothing at
+all, silently, and once passwords became mandatory it could never have
+worked. It now hands off to the real dialog. `requestPlus()` had the same
+shape of bug (a bare `return` when signed out) and now says what to do.
+**Never end a click handler with a silent `return`**: the user cannot tell
+that from a broken build.
+
 **No search quota on free comparisons — considered and rejected.** A "N free searches
 a day" limit was floated to nudge Plus conversion. Rejected because it contradicts the
 app's own thesis: comparisons read a cache that's already been paid for, so a quota
@@ -953,14 +972,23 @@ the warning that there is nowhere to send warnings.
   actually right). Check the first real GitHub Actions "Parkfare news digest" run's
   log for per-feed errors before assuming these are correct.
 - Shanghai height-based ticket banding is not modelled.
-- **Accounts have no email verification, and a password is opt-in.** An account with
-  no `password_hash` is still open to anyone who knows the email — that's every account
-  except ones a password was deliberately set on, and it stays that way on purpose so
-  setting one password doesn't lock every comped friend out at once. Nothing anywhere
-  verifies that an address belongs to whoever typed it, so a password protects an
-  existing account but doesn't stop someone claiming a fresh one. A one-time emailed
-  link through the existing `EmailSender` interface is still the real fix before any
-  public launch — and that needs the email secrets above actually set.
+- **Every account requires a password (owner's call, 2026-09-18) — but still no email
+  verification.** The opt-in scheme is gone: `signUp()` and `signIn()` in `auth.ts` are
+  two separate operations, `/api/auth/signup` and `/api/auth/signin` are two routes, and
+  email-only sign-in no longer exists anywhere. Sign-in never creates an account, so a
+  typo'd address can't silently become a second empty one the way it used to.
+  **Legacy accounts are claimed, not bricked**: an account with no hash keeps its id,
+  its saved trips and any comped Plus, and gets a password the first time someone signs
+  up with that address. That migration is what the old opt-in design was waiting for.
+  **The open risk is unchanged and now sharper**: nothing verifies that an address
+  belongs to whoever typed it, so claiming a legacy account is first-come — set
+  passwords for comped friends with `npm run set-password` before someone else does.
+  `--clear` is now the password-reset path rather than "back to email-only": it makes
+  the account unreachable until re-claimed through Sign up. A one-time emailed link
+  through `EmailSender` is still the real fix, and it needs the email secrets set.
+  Sign-in keeps one message for every failure so it can't be used to enumerate
+  addresses; **sign-up necessarily leaks that an email is registered**, which is
+  unavoidable on any sign-up form without verification.
 - **A password is only as good as the transport.** The session cookie now carries
   `Secure` whenever `DATABASE_URL` is set (i.e. on Render, over https), off locally
   where the dev loop is plain http, and forceable either way with `SECURE_COOKIES`.

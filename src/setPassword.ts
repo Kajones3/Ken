@@ -6,6 +6,14 @@
  *   npm run set-password -- you@example.com 'your password'
  *   npm run set-password -- you@example.com --clear
  *
+ * Every account requires a password now (see signUp/signIn in auth.ts), so
+ * --clear no longer means "back to email-only sign-in" — it means the
+ * account cannot be signed into until somebody sets a password on it again.
+ * That makes it the password RESET for a friend who forgot theirs: clear it,
+ * and they re-claim the account through Sign up with the same address,
+ * keeping their id, their saved trips and any comped Plus. Do it knowing
+ * nothing verifies the address, so whoever gets there first claims it.
+ *
  * Deliberately a command rather than a value written into this repo: a
  * password committed to a git history is a password everyone with the
  * history has, forever, including after it's "changed".
