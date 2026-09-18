@@ -725,6 +725,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
           <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
+          <small id="homeAirportLapsed" class="downgrade" hidden>Saved while you had Plus. It's kept, and trips still price from the nearest free airport — renew Plus to change it to another Plus airport.</small>
           <small id="homeAirportSaved" class="downgrade" hidden></small>
         </div>
         <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
@@ -2221,9 +2222,25 @@ function fillHomeAirportOptions(){
   const sel = $("#homeAirport");
   const opts = [["", "Not set — ask me each time"]]
     .concat(ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]))
-    .concat(PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (Plus airport)")]));
+    .concat(PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (needs Plus)")]));
   fillSelect(sel, opts);
+  // Which airports you may KEEP follows the same free/Plus split as picking
+  // one. Disabled rather than hidden, on the same reasoning as the rest of
+  // the paywall: show what Plus unlocks instead of pretending it isn't there.
+  // The server refuses it too — this is only the half that saves a wasted
+  // click.
+  if(!session.plus){
+    const plusCodes = new Set(PLUS_ORIGINS.map(o=>o.iata));
+    for(const opt of sel.options) if(plusCodes.has(opt.value)) opt.disabled = true;
+  }
   sel.value = session.homeAirport || "";
+  // An airport saved while Plus was active stays saved after it lapses — the
+  // board still prices it, downgraded to the nearest free airport, and says
+  // so. Say it here too rather than letting a disabled-looking selection sit
+  // there unexplained.
+  const lapsed = !session.plus && session.homeAirport
+    && PLUS_ORIGINS.some(o=>o.iata === session.homeAirport);
+  $("#homeAirportLapsed").hidden = !lapsed;
 }
 
 $("#homeAirport").addEventListener("change", async (e)=>{
@@ -2234,8 +2251,10 @@ $("#homeAirport").addEventListener("change", async (e)=>{
     body: JSON.stringify({ homeAirport: value }),
   });
   if(!res.ok){
-    note.textContent = "Couldn't save that airport.";
+    const body = await res.json().catch(()=>({}));
+    note.textContent = body.message || "Couldn't save that airport.";
     note.hidden = false;
+    e.target.value = session.homeAirport || "";   // put the control back
     return;
   }
   const body = await res.json().catch(()=>({}));

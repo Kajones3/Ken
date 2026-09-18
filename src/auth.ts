@@ -20,7 +20,7 @@ import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
-import { ORIGIN_BY_IATA } from "./config.js";
+import { ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
 
 const COOKIE_NAME = "pf_session";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
@@ -115,22 +115,51 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
  * form the traveller couldn't explain. `null` clears it — "I haven't said"
  * has to stay reachable, otherwise the first save is irreversible.
  *
- * Free on purpose. An account is free, saving a trip is Plus, and this is
- * neither: it costs nothing to serve and paywalling a remembered dropdown
- * would be the rejected search-quota idea in different clothes.
+ * Having one is free: an account is free, saving and watching a TRIP is Plus,
+ * and remembering a dropdown is neither.
  *
- * Both airport lists are accepted, not just the free 19. A free user picking
- * a Plus airport is already a supported, non-error case — resolveOrigin()
- * prices the nearest free metro and the board says which it used — so
- * refusing to REMEMBER a choice the form lets them MAKE would be a rule
- * that contradicts itself.
+ * But WHICH airports you may keep follows the same tiering as picking one.
+ * The 22 smaller airports are Plus, and a non-Plus account cannot store one
+ * even though the board will still price a trip from it (downgraded to the
+ * nearest free metro, and said so). Owner's call, and the consistent one:
+ * the split is what makes the free/Plus line mean something, and a free
+ * account quietly holding a Plus airport forever would hollow it out.
+ *
+ * Plus is read from the database here, never passed in. A caller-supplied
+ * "they're Plus" flag would be a way to grant the tier from the client, the
+ * same rule exact-fare follows for the same reason.
+ *
+ * A lapsed account KEEPS whatever it saved while it was Plus. Deleting a
+ * setting because a subscription ran out is a punishment nobody asked for,
+ * and the trip still prices — resolveOrigin() downgrades it to the nearest
+ * free metro and the board says which it used, exactly as if they had picked
+ * it by hand. They just cannot move it to another Plus airport until they
+ * renew.
  */
+export class HomeAirportError extends Error {
+  constructor(message: string, readonly reason: "unknown_airport" | "plus_required") {
+    super(message);
+  }
+}
+
 export async function setHomeAirport(
   db: Db, userId: string, iata: string | null,
 ): Promise<string | null> {
   const clean = iata ? iata.trim().toUpperCase() : null;
   if (clean && !ORIGIN_BY_IATA.has(clean)) {
-    throw new Error(`unknown airport ${clean}`);
+    throw new HomeAirportError(`unknown airport ${clean}`, "unknown_airport");
+  }
+  if (clean && originNeedsPlus(clean)) {
+    const { rows } = await db.query<{ plus_until: unknown }>(
+      `select plus_until from users where id = $1`, [userId],
+    );
+    const plusUntil = rows[0]?.plus_until ? dateStr(rows[0].plus_until as never) : null;
+    if (!isPlus(plusUntil)) {
+      throw new HomeAirportError(
+        `${clean} is a Plus airport — a free account can't save it as a home airport.`,
+        "plus_required",
+      );
+    }
   }
   await db.query(`update users set home_airport = $2 where id = $1`, [userId, clean]);
   return clean;

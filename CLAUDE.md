@@ -200,10 +200,23 @@ Three things that are decisions, not defaults:
   different facts, so the column is nullable with no default and the form
   offers a blank "ask me each time" option that clears it. A first save you
   could never undo would be a trap.
-- *Both airport lists are accepted.* A free user picking a Plus airport is
-  already a supported non-error case (`resolveOrigin()` prices the nearest
-  free metro and the board says so), so refusing to REMEMBER a choice the
-  form lets you MAKE would contradict that.
+- *Which airports you may KEEP follows the same free/Plus split as picking
+  one.* A free account cannot save one of the 22 Plus airports —
+  `setHomeAirport` throws `plus_required` and `PUT /api/profile` answers 402.
+  Claude initially built the opposite (any airport savable, on the grounds
+  that the board already prices a downgraded trip from one) and the **owner
+  reversed it**: the smaller airports are what Plus buys, and a free account
+  quietly holding one forever hollows the split out. Plus is read from
+  `plus_until` inside the function, never passed in — a caller-supplied flag
+  would be a way to grant the tier from the client, the same rule exact-fare
+  follows. Disabling the option in the form is only the cosmetic half;
+  verified by calling the API directly past the disabled control.
+- *A lapsed account keeps what it saved while it was Plus.* Deleting a
+  setting because a subscription ran out is a punishment nobody asked for,
+  and the trip still prices — `resolveOrigin()` downgrades to the nearest
+  free metro and the board says which it used. They simply cannot move it to
+  another Plus airport until they renew, and moving to a free airport or
+  clearing it always works, so nobody is stuck.
 - *It feeds the drive/fly default.* The saved airport is what
   `defaultGettingThere()` reads, so an LA user opens Parkfare already on
   "drive to Disneyland, fly everywhere else" without touching anything.
@@ -772,7 +785,26 @@ L'Aventure Totalement Toquée at Walt Disney Studios. Clones across resorts are
 common, so an attraction has to be able to belong to several resorts, and
 "only at X" has to be derived from the data rather than asserted per row.
 Same honesty rule as `dataConfidence`: a confident wrong claim about what a
-resort has is worse than a plain list.
+resort has is worse than a plain list. **Staleness is NOT the main risk
+here** — Claude argued it was and the owner corrected that too: major
+attractions stand for years or decades, unlike ticket prices or promos. What
+moves is openings and closures, which is what the news digest already
+watches.
+
+**Souvenir spending is a basket, not a budget — thinking, not built**
+(2026-09-18). The owner's point: the same money buys more merchandise in
+Shanghai than in Orlando, and the model should be able to say so. A flat USD
+souvenir budget cannot: it is the same number at all six resorts, so it
+raises every total equally and never changes which resort wins. The version
+that carries real information is a small hand-maintained **basket** of
+representative items (a spirit jersey, an ear headband, a popcorn bucket)
+priced per resort, so the line becomes "the same haul costs $X here and $Y
+there" — verifiable against each resort's own shop, explainable to a user,
+and the same no-API/maintain-by-hand pattern as tickets. Two traps worth
+recording before anyone builds it: merchandise is priced in local currency at
+locally-set levels, so this is **not** an exchange-rate conversion; and
+because a per-resort multiplier CAN flip the ranking, it needs to be sourced
+rather than guessed, which the ticket curve never had to be.
 
 Then: the 10-mile off-property hotel radius filter (needs a `distanceMiles` field
 on `HotelDef`, none exists today), a real per-city rental-car rate (a

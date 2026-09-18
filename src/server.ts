@@ -22,7 +22,7 @@ import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, requiresPassword, verifyPassword,
-  setHomeAirport, type SessionUser,
+  setHomeAirport, HomeAirportError, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
 
@@ -397,7 +397,14 @@ const server = createServer(async (req, res) => {
         const homeAirport = await setHomeAirport(db, user.id, raw ? String(raw) : null);
         return send(200, { ok: true, homeAirport }, { cache: "no-store" });
       } catch (e) {
-        return send(400, { error: "unknown_airport", message: (e as Error).message });
+        // 402 for the Plus case so it reads the same as every other paywalled
+        // route, 400 for a code we simply don't know. Disabling the option in
+        // the form is only the cosmetic half — this is the half that counts.
+        if (e instanceof HomeAirportError) {
+          return send(e.reason === "plus_required" ? 402 : 400,
+            { error: e.reason, message: e.message });
+        }
+        throw e;
       }
     }
 
