@@ -11,7 +11,18 @@ export class ResendEmailSender implements EmailSender {
   readonly name = "resend";
 
   async send(msg: EmailMessage): Promise<void> {
-    const from = process.env.ALERT_FROM_EMAIL ?? "alerts@parkfare.app";
+    // No default from-address. There used to be one — alerts@parkfare.app —
+    // and a default here is worse than no default: Resend refuses to send
+    // from a domain you have not verified, so an unset variable would fail
+    // at the provider with an error about a domain nobody recognises,
+    // instead of naming the setting that is actually missing.
+    const from = process.env.ALERT_FROM_EMAIL;
+    if (!from) {
+      throw new Error(
+        "ALERT_FROM_EMAIL is not set. Resend will only send from an address on a domain "
+        + "you have verified — use onboarding@resend.dev until you have verified one.",
+      );
+    }
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
