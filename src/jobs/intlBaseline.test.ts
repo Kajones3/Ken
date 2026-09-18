@@ -197,9 +197,14 @@ test("the sweep's destination shard cannot be widened past the app's own list", 
     /no international destinations to sweep/,
   );
   // A domestic airport mixed in with a real one is dropped, not swept.
+  // Two months, not one: the sweep correctly refuses to buy a departure date
+  // that has already been (`date < today`), and one month's single sample
+  // date lands mid-month — so pinning this to the current month alone made
+  // the test fail every day from the 16th onward, for no reason to do with
+  // what it is checking.
   let asked: string[] = [];
   const res = await runIntlSweep(db, {
-    destinations: ["CDG", "MCO"], months: 1, datesPerMonth: 1, origins: ["JFK"],
+    destinations: ["CDG", "MCO"], months: 2, datesPerMonth: 1, origins: ["JFK"],
     provider: {
       budgetRemaining: 10,
       async quote(o: string, d: string, date: string, len: number) {

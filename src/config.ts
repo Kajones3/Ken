@@ -1,4 +1,5 @@
 import type { ISODate } from "./dates.js";
+import { haversineMiles } from "./geo.js";
 
 export type OnTier = "value" | "moderate" | "deluxe";
 export type OffTier = "budget" | "mid" | "upscale";
@@ -415,6 +416,56 @@ export const ORIGIN_BY_IATA = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 /** Is this airport free for everyone, or does picking it need Plus? */
 export function originNeedsPlus(iata: string): boolean {
   return PLUS_ORIGINS.some((o) => o.iata === iata);
+}
+
+/** Every arrival airport the app prices, mapped back to the resort it serves.
+ *  Primaries and alternates both, so a lookup can start from a bare IATA code
+ *  that came out of a route table rather than a resort object. */
+export const RESORT_BY_ARRIVAL_AIRPORT = new Map(
+  RESORTS.flatMap((r) => [r.iata, ...r.altArrivalAirports.map((a) => a.iata)].map((iata) => [iata, r] as const)),
+);
+
+/**
+ * Below this, flying is not a thing anyone does — you drive.
+ *
+ * Picked against the real distances rather than by feel. Every origin the app
+ * knows, measured to the two domestic resorts: LAX→Disneyland 36 miles,
+ * SAN→Disneyland 77, TPA→WDW 81, then a clear gap to RSW→WDW 133, JAX→WDW
+ * 144, MIA→WDW 193 and LAS→Disneyland 226. The first three are drives nobody
+ * would fly; the last four are genuine, scheduled, regularly-flown routes.
+ * 100 sits in the gap, so the rule catches the nonsense without ever
+ * withholding a fare someone might really book.
+ */
+export const NO_FLY_RADIUS_MILES = 100;
+
+/**
+ * True when pricing this route is pointless because the traveller is already
+ * there. Two cases, and both were really happening every night:
+ *
+ *   1. The same airport at both ends. LAX is a departure airport AND one of
+ *      Disneyland's arrival airports, so the refresh asked for LAX→LAX six
+ *      times a night and Travelpayouts rejected every one of them.
+ *   2. Different airports, same metro. LAX→SNA failed the same way, because
+ *      Travelpayouts resolves SNA to the Los Angeles city code and then sees
+ *      an origin and destination that are equal.
+ *
+ * Worth catching in one shared place rather than at each call site: the
+ * nightly rotation would otherwise spend real SerpApi money on these (they
+ * are in its 171-route pool and have never been bought, so they sort to the
+ * FRONT of the stalest-first queue), and an exact-fare click would spend a
+ * metered lookup to be told what we already know.
+ *
+ * Deliberately NOT a claim about whether the trip is worth taking — someone
+ * in Los Angeles absolutely may visit Disneyland. It is a claim about the
+ * flight only. Driving is priced separately and is unaffected.
+ */
+export function isLocalRoute(originIata: string, destinationIata: string): boolean {
+  if (!originIata || !destinationIata) return false;
+  if (originIata === destinationIata) return true;
+  const origin = ORIGIN_BY_IATA.get(originIata);
+  const resort = RESORT_BY_ARRIVAL_AIRPORT.get(destinationIata);
+  if (!origin || !resort) return false;
+  return haversineMiles(origin.lat, origin.lon, resort.lat, resort.lon) < NO_FLY_RADIUS_MILES;
 }
 
 /** Tiered freshness: near dates move, far dates don't. */

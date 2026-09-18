@@ -14,7 +14,7 @@
  * nightly job only ever needs "how many people asked about ATL-MCO in
  * March", never who they were.
  */
-import { ORIGINS, RESORTS } from "./config.js";
+import { ORIGINS, RESORTS, isLocalRoute } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface PopularRoute {
@@ -164,6 +164,12 @@ export async function rotationRoutes(
     for (const d of dests) {
       const key = `${o.iata}|${d}`;
       if (exclude.has(key)) continue;
+      // Never buy a fare for a route nobody flies. LAX->LAX and LAX->SNA are
+      // both in this 171-route pool and neither can ever return an
+      // itinerary, so they would sit at `at: 0` (never bought) for ever —
+      // permanently at the FRONT of a stalest-first queue, re-bought every
+      // cycle, paid for every time.
+      if (isLocalRoute(o.iata, d)) continue;
       candidates.push({ origin: o.iata, destination: d, at: lastBought.get(key) ?? 0 });
     }
   }

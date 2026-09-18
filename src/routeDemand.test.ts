@@ -182,3 +182,20 @@ test("runPopularRoutes stops at its budget instead of spending without limit", a
   assert.equal(res.calls, 2, "must stop the moment the budget is gone");
   await db.close();
 });
+
+test("rotation never buys a route nobody flies", async () => {
+  // LAX is a departure airport AND one of Disneyland's arrival airports, so
+  // LAX->LAX and LAX->SNA are both in the 171-route pool. Neither can ever
+  // return an itinerary, so neither can ever be recorded as bought — which
+  // left them permanently at the FRONT of a stalest-first queue, re-bought
+  // and re-paid-for every cycle, forever.
+  const db = await memoryDb();
+  const routes = await rotationRoutes(db, 400, "2027-03");
+  const local = routes.filter((r) =>
+    r.origin === r.destination || (r.origin === "LAX" && r.destination === "SNA"));
+  assert.deepEqual(local, [], "local routes must never reach a paid lookup");
+  assert.ok(routes.length > 100, "the rest of the rotation is untouched");
+  assert.ok(routes.some((r) => r.origin === "LAX" && r.destination === "MCO"),
+    "LAX still flies to Orlando");
+  await db.close();
+});

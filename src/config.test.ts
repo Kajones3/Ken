@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   RESORTS, RESORT_BY_ID, IRS_MILEAGE_RATES, MILEAGE_RATE_CARRY_FORWARD_YEARS,
   irsMileageRate, newestMileageRateYear, mileageRateStatus,
+  isLocalRoute, ORIGINS, PLUS_ORIGINS,
 } from "./config.js";
 
 /**
@@ -168,4 +169,63 @@ test("a fully covered booking window warns about nothing", () => {
   const s = mileageRateStatus(`${oldest}-02-01`, 1);
   assert.deepEqual(s.uncoveredYears, []);
   assert.equal(s.pricingBroken, false);
+});
+
+
+/* ---------------------------------------------------------------------------
+ * isLocalRoute — "you don't fly to the city you're already in".
+ *
+ * Every one of these was really being requested every night, and every one
+ * came back as an error the job then logged and moved on from.
+ * ------------------------------------------------------------------------ */
+
+test("the same airport at both ends is never a flight", () => {
+  // The literal bug: LAX is a departure airport AND one of Disneyland's
+  // arrival airports, so the refresh asked for LAX->LAX three times a month.
+  assert.equal(isLocalRoute("LAX", "LAX"), true);
+  assert.equal(isLocalRoute("MCO", "MCO"), true);
+});
+
+test("a different airport in the same metro is not a flight either", () => {
+  // The half of the bug a plain origin === destination check would miss:
+  // LAX->SNA failed with the identical "origin and destination are equal"
+  // error, because the provider resolves SNA to the Los Angeles city code.
+  assert.equal(isLocalRoute("LAX", "SNA"), true, "LAX to Anaheim is a drive");
+  assert.equal(isLocalRoute("SAN", "SNA"), true, "San Diego to Anaheim is a drive");
+  assert.equal(isLocalRoute("TPA", "MCO"), true, "Tampa to Orlando is a drive");
+});
+
+test("real, regularly-flown routes are left alone", () => {
+  // The rule must never withhold a fare somebody might actually book. These
+  // are the four closest origin/resort pairs that are still genuine routes,
+  // so they pin the radius from the other side: if someone widens it, this
+  // fails rather than a user silently losing a price.
+  assert.equal(isLocalRoute("MIA", "MCO"), false, "Miami-Orlando is a real route");
+  assert.equal(isLocalRoute("LAS", "SNA"), false, "Vegas-Orange County is a real route");
+  assert.equal(isLocalRoute("JAX", "MCO"), false);
+  assert.equal(isLocalRoute("RSW", "MCO"), false);
+  assert.equal(isLocalRoute("ATL", "MCO"), false);
+  assert.equal(isLocalRoute("JFK", "CDG"), false);
+});
+
+test("an unknown airport is never guessed at", () => {
+  // A code we don't recognise gets the benefit of the doubt: refusing to
+  // price it would be a silent gap, and this rule is an optimisation, not a
+  // validation step. Real validation happens at the API boundary.
+  assert.equal(isLocalRoute("XXX", "MCO"), false);
+  assert.equal(isLocalRoute("ATL", "XXX"), false);
+  assert.equal(isLocalRoute("", "MCO"), false);
+});
+
+test("no resort is cut off from every departure airport it has", () => {
+  // The failure mode worth guarding against: a radius wide enough to strand
+  // a resort, so the board shows it as permanently unavailable to everyone.
+  const airports = new Set([...ORIGINS, ...PLUS_ORIGINS].map((o) => o.iata));
+  for (const resort of RESORTS) {
+    for (const dest of [resort.iata, ...resort.altArrivalAirports.map((a) => a.iata)]) {
+      const reachable = [...airports].filter((o) => !isLocalRoute(o, dest));
+      assert.ok(reachable.length > airports.size - 5,
+        `${dest} lost too many origins to the local-route rule`);
+    }
+  }
 });

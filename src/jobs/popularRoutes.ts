@@ -27,7 +27,7 @@ import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates
 import { getDb, type Db } from "../db.js";
 import { popularRoutes, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
-import { TRIP_BUCKETS } from "../config.js";
+import { TRIP_BUCKETS, isLocalRoute } from "../config.js";
 
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
@@ -101,6 +101,20 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
       const key = `${a.origin}|${a.destination}|${a.departMonth}`;
       if (!seen.has(key)) { routes.push(a); seen.add(key); }
     }
+  }
+
+  // Backstop for the routes that did not come from rotation (which filters
+  // these out itself): a real user in Los Angeles searching Disneyland writes
+  // LAX->SNA into route_searches, and demand-driven buying would then treat
+  // that as the busiest route in the app and pay for a fare that cannot
+  // exist. Demand is evidence of interest, not evidence a flight is sold.
+  const localRoutes = routes.filter((r) => isLocalRoute(r.origin, r.destination));
+  if (localRoutes.length) {
+    console.log(
+      `popular-routes: skipping ${localRoutes.length} local route(s) — ` +
+      localRoutes.map((r) => `${r.origin}->${r.destination}`).join(", "),
+    );
+    routes = routes.filter((r) => !isLocalRoute(r.origin, r.destination));
   }
 
   let calls = 0, rows = 0, errors = 0, misses = 0;

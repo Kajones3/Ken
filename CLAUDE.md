@@ -160,6 +160,33 @@ simulated nights covered all 171 routes with no repeats.** This is also what
 gradually fixes international pricing, since international routes are in the
 same rotation.
 
+**Hotel lookups rotate stalest-first, exactly like flights** (2026-09-18).
+They used not to. `runRefresh` walked months and resorts in config order and
+called the provider for every pair, so the nightly hotel budget was spent by
+whoever came first in the loop: Walt Disney World and Disneyland got real
+off-property rates every single night, re-buying prices that had not moved,
+while Shanghai and Hong Kong — further down the `RESORTS` array — had never
+had a single real lookup. Position in an array decided which resorts had real
+data, which is not a decision anybody made.
+
+`rotateHotelSlots()` (`jobs/hotelRotation.ts`) now hands out the night's slots
+never-bought-first, then oldest-first, over all 13 months the app prices —
+78 resort/month slots, about 10 nights to cover every one at 8 a night, and
+each one then stays ~10 days fresh. Same shape and same reasoning as
+`rotationRoutes()` on the flight side. Two things to know:
+
+- *It rotates over the whole year, not tonight's due months.* An off-property
+  rate is bought one resort/month at a time and is worth re-buying on its own
+  staleness, not on the flight tier it happens to share. So the hotel pass is
+  its own loop, and a slot on a non-due month still gets its call.
+- *Only `on_property = false` rows count as evidence of a pull.* On-property
+  Disney rates are generated locally from `config.ts` and cost nothing, but
+  `upsertHotels` tags them with the same `serpapi_hotels` source as rows the
+  vendor really returned. Counting those would make every resort/month look
+  freshly bought and the rotation would never move. **That mislabelling is
+  still there and the real-pulls digest reads the same tag** — worth fixing
+  properly rather than working around a second time.
+
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
 calendar endpoint at 300 req/min, so live per-search fetching doesn't just cost money,
@@ -550,6 +577,40 @@ Found by testing an all-international demand day, not in production.
   de-duplicated rows. Caught by the owner asking whether the nightly job
   would keep pulling the same routes — it would have, forever.
 
+- **The hotel lookup asked for a check-in date in the past for half of every
+  month** (found 2026-09-18, in a real Actions log, not by a test). The sampled
+  stay was hard-coded to the 1st of the month plus 13 days — the 14th — so from
+  the 15th onward the current month's lookup was a guaranteed Google Hotels 400,
+  `check_in_date cannot be in the past`, for all six resorts. The budget counter
+  charges *before* the call (deliberately — a failing lookup must not be a free
+  infinite retry), so six of the night's eight lookups were being paid for and
+  thrown away, roughly 90 of ~240 monthly hotel lookups. The run stayed green
+  throughout: each error was caught, logged, and treated as "off-property
+  degrades to cached", which is the right behaviour for a *transient* failure
+  and total camouflage for a permanent one. `sampleCheckIn()` in
+  `providers/serpapi.ts` now returns mid-month when mid-month is still ahead,
+  the soonest bookable night otherwise, and null when the month has no night
+  left — and the rotation applies the same rule, so a slot is never handed to a
+  month that cannot be priced.
+- **The refresh asked for flights from LAX to LAX.** LAX is both a departure
+  airport and one of Disneyland's arrival airports, so every run requested
+  LAX→LAX — and LAX→SNA, which fails identically because Travelpayouts resolves
+  SNA to the Los Angeles city code. Eighteen guaranteed 400s a night, logged and
+  ignored. Free at the refresh (Travelpayouts does not charge) but **not** free
+  everywhere: both pairs sit in `rotationRoutes()`' 171-route pool, and since a
+  route that can never return an itinerary can never be recorded as bought, they
+  sat permanently at the *front* of a stalest-first queue — real SerpApi money,
+  every cycle, forever. `isLocalRoute()` in `config.ts` is the one shared rule,
+  used by the refresh, the paid rotation, the demand-driven buy and exact-fare.
+  It is 100 miles, picked against the measured distances rather than by feel:
+  LAX→Disneyland 36, SAN→Disneyland 77, TPA→WDW 81, then a clear gap to
+  RSW→WDW 133, JAX→WDW 144, MIA→WDW 193, LAS→Disneyland 226 — the last four
+  being genuine, regularly-flown routes that must never be withheld.
+  **Open consequence:** someone departing LAX now sees no flight to Disneyland
+  at all, which on a six-resort board reads as "the closest resort is
+  unavailable". It is honest and it is not new (nothing was ever cached for
+  those pairs), but the right answer is to steer them to the driving preset
+  rather than show a gap.
 - Postgres returns `date` columns as JS `Date` objects; string-slicing them mangled every
   date and made all six resorts return "unavailable" with **no error at all**. See
   `dateStr()` in `src/book.ts`.

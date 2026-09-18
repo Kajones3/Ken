@@ -22,11 +22,41 @@
  * as every other real provider in this project.
  */
 import { RESORT_BY_ID } from "../config.js";
-import { monthBounds, range, addDaysISO } from "../dates.js";
+import { monthBounds, range, addDaysISO, todayISO, type ISODate } from "../dates.js";
 import { hotelSeasonFactor } from "../seasonality.js";
 import type { HotelQuote } from "./types.js";
 
 const BASE = "https://serpapi.com/search.json";
+
+/** How many nights the sampled stay covers. */
+const SAMPLE_NIGHTS = 4;
+
+/**
+ * Which night to price for a given month, or null if the month has no
+ * priceable night left.
+ *
+ * Mid-month (the 14th) is the ideal: away from both edges, so it represents
+ * the month rather than its boundary. But Google Hotels rejects a check-in
+ * date in the past — `check_in_date cannot be in the past` — and the old code
+ * asked for the 14th unconditionally. From the 15th of any month onward that
+ * made the current month's lookup a guaranteed 400, for all six resorts, and
+ * the budget counter charged for each one because it counts before the call.
+ * Six of eight nightly lookups were being thrown away roughly half of every
+ * month.
+ *
+ * So: mid-month when mid-month is still ahead of us, otherwise the soonest
+ * night we can actually book, and null once even tomorrow has left the month
+ * behind. Exported because the rotation must apply the same rule when it
+ * decides what is worth a slot — a slot handed to an unpriceable month is a
+ * slot wasted, which is the bug over again one level up.
+ */
+export function sampleCheckIn(month: string, today: ISODate = todayISO()): ISODate | null {
+  const [first, last] = monthBounds(month);
+  const midMonth = addDaysISO(first, 13);
+  const soonest = addDaysISO(today, 1);
+  const pick = midMonth > soonest ? midMonth : soonest;
+  return pick > last ? null : pick;
+}
 
 interface SerpApiProperty {
   name: string;
@@ -75,6 +105,11 @@ export class SerpApiHotelProvider {
     private readonly apiKey = process.env.SERPAPI_KEY ?? "",
     perHour = Number(process.env.SERPAPI_MAX_PER_HOUR ?? 180),
     private readonly budget = Number(process.env.SERPAPI_HOTELS_BUDGET ?? 200),
+    /** `resortId|month` keys this run is allowed to pay for, from
+     *  jobs/hotelRotation.ts. Null means no rotation — spend on anything,
+     *  up to the budget, which is the old behaviour. */
+    private readonly paidSlots: ReadonlySet<string> | null = null,
+    private readonly today: ISODate = todayISO(),
   ) {
     if (!this.apiKey) throw new Error("SERPAPI_KEY is not set");
     this.limiter = new HourlyLimiter(perHour);
@@ -136,6 +171,11 @@ export class SerpApiHotelProvider {
   private async offPropertyMonth(resortId: string, month: string): Promise<HotelQuote[]> {
     const resort = RESORT_BY_ID.get(resortId);
     if (!resort) return [];
+    // Is this resort/month one of tonight's paid slots? When the caller has
+    // handed us a rotation, everything outside it is on-property only — no
+    // spend, no call. A null slot set means "no rotation in play" (a test, a
+    // one-off script), and every month is fair game as before.
+    if (this.paidSlots && !this.paidSlots.has(`${resortId}|${month}`)) return [];
     // Budget before anything else: an exhausted budget degrades to whatever
     // off-property rates are already cached (refresh upserts on success
     // only), exactly like a 429 does. On-property is unaffected either way.
@@ -149,14 +189,16 @@ export class SerpApiHotelProvider {
       }
       return [];
     }
-    const [from] = monthBounds(month);
-    const sampleCheckIn = addDaysISO(from, 13);
-    const sampleCheckOut = addDaysISO(sampleCheckIn, 4);
+    const checkIn = sampleCheckIn(month, this.today);
+    // Nothing left to price in this month (we are past its last night), so
+    // there is no question worth paying to ask.
+    if (!checkIn) return [];
+    const sampleCheckOut = addDaysISO(checkIn, SAMPLE_NIGHTS);
 
     const url = new URL(BASE);
     url.searchParams.set("engine", "google_hotels");
     url.searchParams.set("q", `hotels near ${resort.name}`);
-    url.searchParams.set("check_in_date", sampleCheckIn);
+    url.searchParams.set("check_in_date", checkIn);
     url.searchParams.set("check_out_date", sampleCheckOut);
     url.searchParams.set("adults", "2");
     url.searchParams.set("currency", "USD");
@@ -191,7 +233,7 @@ export class SerpApiHotelProvider {
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
 
-    const anchorFactor = hotelSeasonFactor(resortId, sampleCheckIn);
+    const anchorFactor = hotelSeasonFactor(resortId, checkIn);
     const [monthFrom, monthTo] = monthBounds(month);
     const out: HotelQuote[] = [];
     for (const date of range(monthFrom, monthTo)) {
