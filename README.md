@@ -132,9 +132,67 @@ Steps:
    DATABASE_URL="<your neon connection string>" npm run grant-plus -- friend@example.com 90
    ```
 
-Nothing here needs Stripe, a domain, or a paid tier — everyone signs in
-with just an email (see "Accounts have no password" in What is not done
-below before treating this as more than a friends demo).
+Nothing here needs Stripe or a paid tier. A domain is optional but it is
+what lets you email anyone other than yourself — see the next section.
+
+### Environment variables, and where each one goes
+
+Three places read configuration, and they are not interchangeable. **Render**
+runs the website, so it needs everything the site does at request time.
+**GitHub Actions secrets** are what the nightly jobs read — the website's
+settings are invisible to them. Some values belong in both.
+
+| Variable | Render | Actions | What breaks without it |
+|---|---|---|---|
+| `DATABASE_URL` | yes | yes | Everything. Both write to the same Neon database. |
+| `RESEND_API_KEY` | yes | yes | No email sends anywhere; the console sender prints to a log. |
+| `ALERT_FROM_EMAIL` | yes | yes | Sending throws by design, naming this variable. |
+| `OWNER_EMAIL` | — | yes | The digests and your job list reach nobody. |
+| `PUBLIC_BASE_URL` | yes | — | Confirmation links come out relative, so they are dead inside an email. |
+| `REQUIRE_VERIFIED_EMAIL` | optional | — | Nothing — leave it unset until a link has genuinely arrived. |
+| `TRAVELPAYOUTS_TOKEN`, `SERPAPI_KEY` | optional | yes | The nightly jobs buy the real prices, so Actions is where these matter. |
+
+On **Render**: your service → **Environment** in the left sidebar → **Add
+Environment Variable** for each, then **Save Changes**. Saving triggers a
+redeploy, which also re-runs `npm run migrate`.
+
+On **GitHub**: repo → **Settings → Secrets and variables → Actions → New
+repository secret**.
+
+### Using your own domain
+
+Two separate jobs that both need DNS records, and they are independent —
+do either, or both, in any order.
+
+**To email anyone but yourself**, verify the domain in Resend. A brand-new
+Resend account can only send FROM `onboarding@resend.dev` and only TO the
+address you signed up with, which is fine for the owner-only digests and
+useless for a friend's price alert.
+
+1. Resend → **Domains → Add Domain** → enter your domain.
+2. Resend generates DNS records for *your* domain — a DKIM `TXT`, an `MX`
+   and `TXT` pair for the return path, usually on a `send.` subdomain. Copy
+   the values it shows you; they are account-specific, so do not copy them
+   from any guide, including this one.
+3. Add those records wherever the domain's DNS lives (the registrar, or
+   Cloudflare, or whoever you point the nameservers at).
+4. Back in Resend, **Verify**. DNS usually settles in minutes and can take
+   longer.
+5. Then set `ALERT_FROM_EMAIL` to an address on that domain — it does not
+   need a real mailbox behind it, because nothing here reads replies.
+
+**To serve the site from your domain** rather than `*.onrender.com`:
+
+1. Render → your service → **Settings → Custom Domains → Add Custom Domain**.
+2. Render shows the record to create — a `CNAME` for a subdomain like
+   `www`, or an `A` record if you are pointing the bare domain at it.
+3. Add it at your DNS provider. Render issues the TLS certificate itself
+   once it resolves.
+4. Update **`PUBLIC_BASE_URL`** to the new address, or confirmation links
+   will keep pointing at the old one.
+
+Before treating any of this as more than a friends demo, read "Accounts"
+in What is not done below.
 
 ### If you deploy on mock data (no TRAVELPAYOUTS_TOKEN), international prices need one extra step
 

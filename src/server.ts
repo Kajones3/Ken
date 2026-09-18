@@ -8,7 +8,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
@@ -367,6 +367,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/meta") return send(200, {
       origins: withSuggestedMode(ORIGINS),
       plusOrigins: withSuggestedMode(PLUS_ORIGINS),
+      // The order to OFFER them in — by city, free and Plus interleaved.
+      // Sent as codes rather than a third copy of the airports, so the rule
+      // itself stays in config.ts and the browser only obeys it.
+      originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
       resorts: RESORTS,
     }, { cache: "public, max-age=300" });
 

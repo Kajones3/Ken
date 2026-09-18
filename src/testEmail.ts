@@ -23,7 +23,7 @@ if (!to || !to.includes("@")) {
 }
 
 const sender = pickEmailSender();
-const from = process.env.ALERT_FROM_EMAIL ?? "(unset — resend.ts falls back to alerts@parkfare.app)";
+const from = process.env.ALERT_FROM_EMAIL ?? "(unset — sending will fail; see below)";
 
 console.log(`sender:  ${sender.name}`);
 console.log(`from:    ${from}`);

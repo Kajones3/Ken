@@ -426,24 +426,24 @@ export function isOnlyAt(attraction: AttractionDef): boolean {
 export interface Origin { iata: string; name: string; lat: number; lon: number }
 export const ORIGINS: Origin[] = [
   { iata: "ATL", name: "Atlanta", lat: 33.64, lon: -84.43 },
-  { iata: "BOS", name: "Boston", lat: 42.36, lon: -71.01 },
   { iata: "BWI", name: "Baltimore", lat: 39.18, lon: -76.67 },
+  { iata: "BOS", name: "Boston", lat: 42.36, lon: -71.01 },
   { iata: "CLT", name: "Charlotte", lat: 35.21, lon: -80.94 },
-  { iata: "DEN", name: "Denver", lat: 39.86, lon: -104.67 },
+  { iata: "ORD", name: "Chicago O'Hare", lat: 41.98, lon: -87.9 },
   { iata: "DFW", name: "Dallas–Fort Worth", lat: 32.9, lon: -97.04 },
+  { iata: "DEN", name: "Denver", lat: 39.86, lon: -104.67 },
   { iata: "DTW", name: "Detroit", lat: 42.21, lon: -83.35 },
-  { iata: "IAD", name: "Washington, D.C. (Dulles)", lat: 38.94, lon: -77.46 },
   { iata: "IAH", name: "Houston", lat: 29.98, lon: -95.34 },
-  { iata: "JFK", name: "New York JFK", lat: 40.64, lon: -73.78 },
   { iata: "LAS", name: "Las Vegas", lat: 36.08, lon: -115.15 },
   { iata: "LAX", name: "Los Angeles", lat: 33.94, lon: -118.41 },
   { iata: "MIA", name: "Miami", lat: 25.79, lon: -80.29 },
   { iata: "MSP", name: "Minneapolis", lat: 44.88, lon: -93.22 },
-  { iata: "ORD", name: "Chicago O'Hare", lat: 41.98, lon: -87.9 },
+  { iata: "JFK", name: "New York JFK", lat: 40.64, lon: -73.78 },
   { iata: "PHL", name: "Philadelphia", lat: 39.87, lon: -75.24 },
   { iata: "PHX", name: "Phoenix", lat: 33.43, lon: -112.01 },
-  { iata: "SEA", name: "Seattle", lat: 47.45, lon: -122.31 },
   { iata: "SFO", name: "San Francisco", lat: 37.62, lon: -122.38 },
+  { iata: "SEA", name: "Seattle", lat: 47.45, lon: -122.31 },
+  { iata: "IAD", name: "Washington, D.C. (Dulles)", lat: 38.94, lon: -77.46 },
 ];
 /**
  * Extra departure airports a Plus subscriber can pick, beyond the 19 free
@@ -462,32 +462,54 @@ export const ORIGINS: Origin[] = [
  * immediately, and can pay to check any specific date exactly.
  */
 export const PLUS_ORIGINS: Origin[] = [
-  { iata: "RDU", name: "Raleigh–Durham", lat: 35.88, lon: -78.79 },
   { iata: "AUS", name: "Austin", lat: 30.19, lon: -97.67 },
-  { iata: "BNA", name: "Nashville", lat: 36.13, lon: -86.68 },
+  { iata: "CVG", name: "Cincinnati", lat: 39.05, lon: -84.67 },
   { iata: "CLE", name: "Cleveland", lat: 41.41, lon: -81.85 },
   { iata: "CMH", name: "Columbus", lat: 39.998, lon: -82.89 },
-  { iata: "CVG", name: "Cincinnati", lat: 39.05, lon: -84.67 },
+  { iata: "RSW", name: "Fort Myers", lat: 26.54, lon: -81.76 },
   { iata: "IND", name: "Indianapolis", lat: 39.72, lon: -86.29 },
   { iata: "JAX", name: "Jacksonville", lat: 30.49, lon: -81.69 },
   { iata: "MCI", name: "Kansas City", lat: 39.3, lon: -94.71 },
   { iata: "MKE", name: "Milwaukee", lat: 42.95, lon: -87.9 },
+  { iata: "BNA", name: "Nashville", lat: 36.13, lon: -86.68 },
   { iata: "MSY", name: "New Orleans", lat: 29.99, lon: -90.26 },
   { iata: "OAK", name: "Oakland", lat: 37.71, lon: -122.22 },
-  { iata: "PDX", name: "Portland", lat: 45.59, lon: -122.6 },
   { iata: "PIT", name: "Pittsburgh", lat: 40.49, lon: -80.23 },
-  { iata: "RSW", name: "Fort Myers", lat: 26.54, lon: -81.76 },
-  { iata: "SAN", name: "San Diego", lat: 32.73, lon: -117.19 },
-  { iata: "SAT", name: "San Antonio", lat: 29.53, lon: -98.47 },
-  { iata: "SJC", name: "San Jose", lat: 37.36, lon: -121.93 },
-  { iata: "SLC", name: "Salt Lake City", lat: 40.79, lon: -111.98 },
+  { iata: "PDX", name: "Portland", lat: 45.59, lon: -122.6 },
+  { iata: "RDU", name: "Raleigh–Durham", lat: 35.88, lon: -78.79 },
   { iata: "SMF", name: "Sacramento", lat: 38.7, lon: -121.59 },
+  { iata: "SLC", name: "Salt Lake City", lat: 40.79, lon: -111.98 },
+  { iata: "SAT", name: "San Antonio", lat: 29.53, lon: -98.47 },
+  { iata: "SAN", name: "San Diego", lat: 32.73, lon: -117.19 },
+  { iata: "SJC", name: "San Jose", lat: 37.36, lon: -121.93 },
   { iata: "STL", name: "St. Louis", lat: 38.75, lon: -90.37 },
   { iata: "TPA", name: "Tampa", lat: 27.98, lon: -82.53 },
 ];
 
 /** Every departure airport the app knows, free and Plus together. */
 export const ALL_ORIGINS: Origin[] = [...ORIGINS, ...PLUS_ORIGINS];
+
+/**
+ * The order a person should be offered airports in: by the CITY they live
+ * near, never by the IATA code.
+ *
+ * Both lists above are also declared in this order, and `config.test.ts`
+ * pins that — because sorting by code produces something that looks
+ * alphabetical and isn't (Atlanta, Boston, Baltimore), which is worse than
+ * an obviously arbitrary order: it reads as a list you can scan and then
+ * hides the entry you were scanning for.
+ *
+ * Free and Plus airports interleave here rather than sitting in two blocks.
+ * Somebody looking for Tampa should not first have to know which side of the
+ * paywall Tampa is on; the label on the row says that.
+ */
+export function compareOriginsByCity(a: Origin, b: Origin): number {
+  return a.name.localeCompare(b.name, "en");
+}
+
+/** Every airport, free and Plus interleaved, in picker order. Sent to the
+ *  browser as a list of codes so the rule lives here and nowhere else. */
+export const ORIGINS_BY_CITY: Origin[] = [...ALL_ORIGINS].sort(compareOriginsByCity);
 
 /** Resolves any known origin. Callers that must enforce the free/Plus split
  *  check membership of ORIGINS separately — this map deliberately does not,

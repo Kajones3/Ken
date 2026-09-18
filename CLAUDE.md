@@ -187,6 +187,33 @@ each one then stays ~10 days fresh. Same shape and same reasoning as
   still there and the real-pulls digest reads the same tag** — worth fixing
   properly rather than working around a second time.
 
+**Getting out is a masthead control, and airports are listed by city**
+(2026-09-18, owner's report: "I need to be able to sign out and I need to
+have the airports in alphabetical order by their city").
+
+- *Sign out was built but only reachable from the account dialog's footer.*
+  It worked; nobody could find it. Signing out now has a button in the
+  masthead beside the account button (`#signoutTop`), sharing one
+  `doSignOut()` with the panel one. Same lesson as the buried override
+  controls: a control you have to hunt for is one people conclude isn't
+  there.
+- *Both airport dropdowns were ordered by IATA code*, which reads as
+  alphabetical and isn't — the free list ran Atlanta, Boston, Baltimore.
+  Worse than an obviously arbitrary order, because it invites you to scan
+  and then hides what you were scanning for. Both lists are now declared in
+  city order and `config.test.ts` pins it, so adding an airport in the wrong
+  place fails a test rather than quietly in a dropdown.
+- *Free and Plus airports interleave rather than sitting in two blocks.*
+  Somebody looking for Tampa should not first have to know which side of the
+  paywall Tampa is on; the `(Plus)` / `(needs Plus)` label on the row says
+  that, and the free/Plus split itself is unchanged — still two arrays
+  server-side, still enforced in `setHomeAirport()`.
+- *The order has one home.* `compareOriginsByCity()` and `ORIGINS_BY_CITY`
+  live in `config.ts`; `/api/meta` sends `originOrder` as a list of codes
+  rather than a third copy of the airports, and `originOptions()` in
+  `prototype.html` just obeys it. Verified in a real browser: 41 options,
+  city-ordered, Austin sitting between Atlanta and Baltimore.
+
 **A profile is free; saved trips stay Plus** (2026-09-18). The first field is
 `users.home_airport` — the airport you depart from, remembered per account
 (`setHomeAirport()` in `auth.ts`, `PUT /api/profile`, shown in the account

@@ -456,6 +456,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <span class="acctplan" id="acctPlan"></span>
         </span>
       </button>
+      <button class="btn btn-sm" id="signoutTop" hidden>Sign out</button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
   </header>
@@ -849,6 +850,7 @@ async function apiGet(path, params){
 
 let ORIGINS = [];        // [{iata,name,lat,lon}] — free, pre-cached metros
 let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus only
+let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
 let RESORT_BY_ID = new Map();
@@ -994,11 +996,36 @@ const CAL_TO = (()=>{
  * of pretending it doesn't exist. Picking one as a free user is handled
  * server-side — it prices the nearest free metro and says so.
  */
+
+/**
+ * Every airport as [value, label], in one city-alphabetical run rather than
+ * a free block followed by a Plus block.
+ *
+ * The order comes from the server (`originOrder`), so the rule has one home
+ * in config.ts. Somebody hunting for Tampa shouldn't have to know which side
+ * of the paywall Tampa is on before they know where to look — the label on
+ * the row says that, and `plusSuffix` is how each caller words it.
+ */
+function originOptions(plusSuffix){
+  const byIata = new Map(ORIGINS.concat(PLUS_ORIGINS).map(o=>[o.iata, o]));
+  const plusCodes = new Set(PLUS_ORIGINS.map(o=>o.iata));
+  // Fall back to whatever order we were given if the server is older than
+  // this page — a stale-but-present dropdown beats an empty one.
+  const order = ORIGIN_ORDER.length ? ORIGIN_ORDER
+    : ORIGINS.concat(PLUS_ORIGINS).map(o=>o.iata);
+  const out = [];
+  for(const code of order){
+    const o = byIata.get(code);
+    if(!o) continue;
+    const needsPlus = plusCodes.has(code) && !session.plus;
+    out.push([o.iata, o.name+" — "+o.iata+(needsPlus ? plusSuffix : "")]);
+  }
+  return out;
+}
+
 function fillOriginOptions(){
   const keep = $("#origin").value;
-  const free = ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]);
-  const plus = PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (Plus)")]);
-  fillSelect($("#origin"), free.concat(plus));
+  fillSelect($("#origin"), originOptions(" (Plus)"));
   if(keep) $("#origin").value = keep;
 }
 
@@ -2207,6 +2234,11 @@ function syncAccountUi(){
   const on = session.authenticated;
   $("#signinTop").hidden = on;
   $("#accountTop").hidden = !on;
+  // Sign out sits in the masthead, not only in the account panel's footer.
+  // Getting OUT should not require first finding your way IN to a dialog —
+  // same reasoning as the buried override controls: a control you have to
+  // hunt for is one people conclude isn't there.
+  $("#signoutTop").hidden = !on;
   if(on){
     $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
     $("#acctEmail").textContent = session.email || "";
@@ -2415,8 +2447,7 @@ document.addEventListener("change", async (e)=>{
 function fillHomeAirportOptions(){
   const sel = $("#homeAirport");
   const opts = [["", "Not set — ask me each time"]]
-    .concat(ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]))
-    .concat(PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (needs Plus)")]));
+    .concat(originOptions(" (needs Plus)"));
   fillSelect(sel, opts);
   // Which airports you may KEEP follows the same free/Plus split as picking
   // one. Disabled rather than hidden, on the same reasoning as the rest of
@@ -2581,14 +2612,19 @@ $("#signinBtn").addEventListener("click", async ()=>{
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
-$("#signoutBtn").addEventListener("click", async ()=>{
+async function doSignOut(){
   await fetch("/api/auth/signout", { method:"POST" });
   await refreshSession();
   closeAuth();
   syncAccountUi();
+  // Plus is resolved server-side per request, so the results on screen were
+  // priced for someone who is no longer signed in. Re-run rather than
+  // re-render, for the same reason signing IN does.
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
-});
+}
+$("#signoutBtn").addEventListener("click", doSignOut);
+$("#signoutTop").addEventListener("click", doSignOut);
 
 /** Kept at module scope purely so the account panel can report it without
  *  firing another request every time the dialog opens. */
@@ -2863,6 +2899,7 @@ async function boot(){
   const meta = await apiGet("/api/meta", {});
   ORIGINS = meta.origins;
   PLUS_ORIGINS = meta.plusOrigins || [];
+  ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
