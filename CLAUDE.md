@@ -22,6 +22,7 @@ say when something is a guess.
 | Park Hopper | **Wired, free.** A flat per-ticket add-on at the four multi-park resorts (WDW, Disneyland, Tokyo, Paris); silently has no effect at Hong Kong or Shanghai, which each have one park. WDW/Disneyland's differentials are researched against real 2026 pricing; Tokyo/Paris are unresearched guesses, flagged weaker-confidence below. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
+| Real-pulls digest | **Wired, owner-only.** `npm run pulls-digest` emails a daily list of every flight route and hotel a real provider actually returned prices for in the last 15 days (`PULLS_WINDOW_DAYS` to change it), grouped by route/hotel and source, with the departure/stay dates covered and when it was last pulled. Sends even when the answer is "nothing" — a quiet cache is the signal worth having. Mock and unlabelled rows are excluded and footnoted, never folded in. `hotel_rates.source` was added for this: without it there was no way to tell a rate a vendor returned from one the mock provider invented. Read-only; no provider calls. |
 | Disney news digest | **Wired, owner-only.** `npm run news-digest` reads a few RSS feeds (`NEWS_FEEDS` in `config.ts`) and emails whatever's new — never shown to end users automatically; the owner reviews and hand-adds anything worth surfacing to a resort's `goodToKnow`. |
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
@@ -675,6 +676,24 @@ verified" above), a day-by-day trip planner (itinerary, checklist, dining tracke
 budget, per-day notes, special-event floor pricing — deliberately deferred, see
 above), Travelpayouts token, hotel endpoint approval, a real ticket-price table,
 Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
+
+## Nothing has ever actually emailed in production (found 2026-09-18)
+
+`RESEND_API_KEY`, `ALERT_FROM_EMAIL` and `OWNER_EMAIL` are all **empty** in the
+GitHub Actions environment. Checked against a real run log, not assumed: the
+"Parkfare news digest" run of 2026-09-17 finished green and printed
+`1 new item(s), 0 email(s) sent — 1 new item(s) found but OWNER_EMAIL is not
+set — not sent`. Every email job in this repo behaves the same way, which is
+why none of them has ever failed loudly: a missing owner address is treated as
+"nothing to send", so the workflow succeeds and the mail silently never goes.
+
+So the news digest, price alerts, the IRS mileage-rate warning and the
+real-pulls digest are all built, all running nightly, and all reaching nobody.
+Setting the three repository secrets is the only thing standing between them
+and working — plus a Resend account, since without `RESEND_API_KEY` the console
+sender just prints into the Actions log.
+
+**Do not add a fourth email job without checking this is fixed first.**
 
 ## Known gaps in the code
 

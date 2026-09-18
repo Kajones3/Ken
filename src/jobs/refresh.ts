@@ -32,6 +32,7 @@ export function pickProvider(): Provider {
   const hotels = new SerpApiHotelProvider();
   return {
     name: `${flights.name}+serpapi`,
+    hotelSource: hotels.name,
     flightMonth: flights.flightMonth.bind(flights),
     hotelMonth: hotels.hotelMonth.bind(hotels),
   };
@@ -111,26 +112,26 @@ async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promi
   return rows.length;
 }
 
-async function upsertHotels(db: Db, rows: HotelQuote[]): Promise<number> {
+async function upsertHotels(db: Db, rows: HotelQuote[], source: string): Promise<number> {
   if (!rows.length) return 0;
   let written = 0;
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
     const vals: unknown[] = [];
     const tuples = chunk.map((r, j) => {
-      const b = j * 9;
-      vals.push(r.hotelId, r.resortId, r.hotelName, r.descriptor, r.stayDate, r.nightlyUsd, r.tier, r.onProperty, r.deepLink ?? null);
-      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},now())`;
+      const b = j * 10;
+      vals.push(r.hotelId, r.resortId, r.hotelName, r.descriptor, r.stayDate, r.nightlyUsd, r.tier, r.onProperty, r.deepLink ?? null, source);
+      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},now())`;
     });
     await db.query(
       `insert into hotel_rates
-         (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property,deep_link,fetched_at)
+         (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property,deep_link,source,fetched_at)
        values ${tuples.join(",")}
        on conflict (hotel_id,stay_date) do update set
          nightly_usd = excluded.nightly_usd, hotel_name = excluded.hotel_name,
          descriptor = excluded.descriptor, tier = excluded.tier,
          on_property = excluded.on_property, deep_link = excluded.deep_link,
-         fetched_at = excluded.fetched_at`,
+         source = excluded.source, fetched_at = excluded.fetched_at`,
       vals,
     );
     written += chunk.length;
@@ -211,7 +212,7 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
       }
       try {
         calls++;
-        rows += await upsertHotels(db, await provider.hotelMonth(resort.id, month));
+        rows += await upsertHotels(db, await provider.hotelMonth(resort.id, month), provider.hotelSource ?? provider.name);
       } catch (e) {
         errors++;
         console.error(`hotels ${resort.id} ${month}:`, (e as Error).message);
