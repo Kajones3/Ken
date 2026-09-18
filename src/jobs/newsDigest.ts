@@ -17,6 +17,7 @@ import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { parseRssItems } from "../rss.js";
 import { todayISO } from "../dates.js";
+import { ownerTasks, renderOwnerTasks, type OwnerTask } from "../ownerTasks.js";
 
 export interface NewsDigestOptions {
   sender?: EmailSender;
@@ -25,6 +26,9 @@ export interface NewsDigestOptions {
   feeds?: typeof NEWS_FEEDS;
   /** Overridable so a test can ask "what would this say next January?". */
   todayISO?: string;
+  /** Injected by tests so the chore list can be exercised without staging a
+   *  whole database's worth of stale rows. */
+  tasks?: OwnerTask[];
 }
 
 export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
@@ -65,38 +69,43 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   // would just quietly reuse an old one and nobody would ever find out.
   const mileage = mileageRateStatus(opts.todayISO ?? todayISO());
   const years = mileage.uncoveredYears;
-  const mileageNote = years.length
-    ? `IRS MILEAGE RATE — no published rate on file for ${years.join(", ")}.\n`
-      + `The newest year we have is ${mileage.newestYearOnFile}. Driving trips in `
-      + `${years.join(" and ")} are priced on the ${mileage.newestYearOnFile} rate for now. `
-      + `Nothing on the site says so — this email is the only place it surfaces.\n`
-      + (mileage.pricingBroken
-          ? "URGENT: some driving trips that far out will NOT price at all until you add the missing year.\n"
-          : "")
-      + 'Look up "IRS standard mileage rates" at irs.gov, then add a row to '
-      + "IRS_MILEAGE_RATES in src/config.ts."
-    : "";
 
-  // The note rides along on whatever digest was going out anyway, at the top of
-  // the email and in the subject line, so a year that's merely carried forward
-  // gets repeated until it's dealt with rather than announced once and lost.
-  // Only the urgent case — driving trips that genuinely won't price — is worth
-  // an email of its own on a week with no news.
-  const mileageForcesSend = mileage.pricingBroken;
+  // Every hand-maintained thing in this project can go stale silently, and
+  // this is the only message that reliably reaches a human — so the whole
+  // chore list rides here rather than becoming a fourth email nobody reads.
+  // It supersedes the standalone IRS note that used to live in this function:
+  // the mileage rate is now just one task among several, with the same
+  // urgency marker and the same irs.gov instruction.
+  const tasks = opts.tasks ?? await ownerTasks(db, { today: opts.todayISO ?? todayISO() });
+  const taskNote = renderOwnerTasks(tasks);
+
+  // A blocking task is worth an email on a week with no news — that was
+  // already true of an unpriceable mileage year and is just as true of
+  // anything else that is actually broken. The email-secrets task is the one
+  // exception, and only because it is circular: if OWNER_EMAIL is unset
+  // there is nowhere to send the warning that OWNER_EMAIL is unset.
+  const blocking = tasks.filter((t) => t.blocking && t.id !== "email-secrets");
+  const tasksForceSend = blocking.length > 0;
 
   let sent = 0;
-  const shouldSend = Boolean(ownerEmail) && (newItems.length > 0 || mileageForcesSend);
+  const shouldSend = Boolean(ownerEmail) && (newItems.length > 0 || tasksForceSend);
   if (shouldSend) {
-    const parts: string[] = [];
-    if (mileageNote) parts.push(mileageNote);
+    const parts: string[] = [taskNote];
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")
         + "\n\n— Review and hand-add anything worth surfacing to a resort's goodToKnow in config.ts.");
     }
+    // The job count belongs in the SUBJECT, not just the body. That was the
+    // original reasoning for putting the mileage warning there — something
+    // merely getting worse should be repeated until it is dealt with, rather
+    // than announced once and lost under a pile of news links — and it
+    // generalises to every chore now that they live in one list.
+    const jobTag = blocking.length
+      ? ` + ${blocking.length} blocking job${blocking.length === 1 ? "" : "s"}`
+      : tasks.length ? ` + ${tasks.length} job${tasks.length === 1 ? "" : "s"} for you` : "";
     const subject = newItems.length
-      ? `Parkfare: ${newItems.length} new Disney news item${newItems.length === 1 ? "" : "s"}`
-        + (mileageNote ? " + IRS mileage rate needs updating" : "")
-      : "Parkfare: IRS mileage rate needs updating";
+      ? `Parkfare: ${newItems.length} new Disney news item${newItems.length === 1 ? "" : "s"}${jobTag}`
+      : `Parkfare: ${blocking.length} job${blocking.length === 1 ? "" : "s"} need${blocking.length === 1 ? "s" : ""} you`;
     try {
       await sender.send({ to: ownerEmail, subject, text: parts.join("\n\n———\n\n") });
       sent = 1;
@@ -105,15 +114,16 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
     }
   }
 
-  const mileageSuffix = years.length ? `; IRS mileage rate missing for ${years.join(", ")}` : "";
-  const note = (!newItems.length && !mileageForcesSend) ? `nothing new${mileageSuffix}`
+  const mileageSuffix = (years.length ? `; IRS mileage rate missing for ${years.join(", ")}` : "")
+    + `; ${tasks.length} manual job(s) outstanding`;
+  const note = (!newItems.length && !tasksForceSend) ? `nothing new${mileageSuffix}`
     : !ownerEmail ? `${newItems.length} new item(s) found but OWNER_EMAIL is not set — not sent${mileageSuffix}`
     : `${newItems.length} new item(s), ${sent ? "sent" : "send failed"}${mileageSuffix}`;
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, errors = $3, note = $4 where id = $1`,
     [runId, newItems.length, errors, note],
   );
-  return { newItems: newItems.length, sent, errors, note };
+  return { newItems: newItems.length, sent, errors, note, tasks };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

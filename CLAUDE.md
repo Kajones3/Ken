@@ -891,6 +891,34 @@ sender just prints into the Actions log.
 
 **Do not add a fourth email job without checking this is fixed first.**
 
+### The owner's manual jobs ride the news digest (2026-09-18)
+
+`src/ownerTasks.ts` computes what the owner still has to do by hand and
+`renderOwnerTasks()` puts it at the top of the nightly digest — the one
+message that reliably reaches a human. Every row says **[FREE]**, **[PLUS]**
+or **[FREE+PLUS]** (the owner's ask: a broken free feature is everybody's
+problem, a broken Plus feature is a paying customer's) and whether it is
+**[BLOCKING]**.
+
+The split that keeps it honest:
+
+- **Checked** tasks are computed from real state — an empty env var, a ticket
+  row over `TICKET_STALE_DAYS` old, a resort with no `on_property = false`
+  vendor pull, a failed feed on the last run. They appear when true and
+  **disappear on their own** when fixed. This is also where the
+  ticket-staleness alarm CLAUDE.md has wanted since the beginning finally
+  lives.
+- **Standing** tasks cannot be detected from inside the program (was a rate
+  checked against a real booking? is a list still the placeholder?). They
+  stay until someone flips `done` in `STANDING_TASKS`. Kept deliberately few:
+  a long list of un-checkable reminders is how a digest becomes noise and
+  stops being read, which is the exact failure it exists to prevent.
+
+A blocking task now earns an email on a quiet news day, generalising the rule
+that used to apply only to an unpriceable mileage year. The one exception is
+the email-secrets task itself, which is circular — there is nowhere to send
+the warning that there is nowhere to send warnings.
+
 ## Known gaps in the code
 
 - `TravelpayoutsProvider.hotelMonth` **throws deliberately** — flights are wired, hotels
