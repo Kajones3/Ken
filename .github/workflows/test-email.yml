@@ -1,0 +1,33 @@
+name: Parkfare test email
+
+# Send one email and say exactly what happened.
+#
+# Run this FIRST after setting RESEND_API_KEY, rather than waiting for a
+# nightly job: every email job in this project treats a missing address as
+# "nothing to send", so a cron can finish green while nothing arrives. This
+# one fails loudly, with Resend's own error text.
+#
+# It runs here rather than only locally because GitHub Actions is where the
+# alerts, news-digest and pulls-digest crons actually read their secrets
+# from — testing on a laptop proves nothing about those.
+on:
+  workflow_dispatch:
+    inputs:
+      to:
+        description: Send the test to this address (use your Resend account's own address first)
+        required: true
+        type: string
+
+jobs:
+  test-email:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run test-email -- "${{ inputs.to }}"
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}

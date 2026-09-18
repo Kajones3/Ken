@@ -26,7 +26,8 @@
     "intl-sweep": "tsx src/jobs/intlSweep.ts",
     "intl-baseline": "tsx src/jobs/intlBaseline.ts",
     "seed-intl": "tsx src/seedInternational.ts",
-    "clear-geocode-cache": "tsx src/clearGeocodeCache.ts"
+    "clear-geocode-cache": "tsx src/clearGeocodeCache.ts",
+    "test-email": "tsx src/testEmail.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

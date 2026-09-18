@@ -908,6 +908,26 @@ Setting the three repository secrets is the only thing standing between them
 and working — plus a Resend account, since without `RESEND_API_KEY` the console
 sender just prints into the Actions log.
 
+**Test a new key with `npm run test-email -- you@example.com`** (or the
+"Parkfare test email" workflow, which runs on GitHub's runners with the
+repository secrets — the environment the crons actually use). It is the one
+loud thing in a project full of quiet ones: it fails with Resend's own words
+rather than treating "couldn't send" as "nothing to send". Its hints match on
+Resend's wording and never on a bare status code — a 403 from a proxy or an
+egress allowlist is not a Resend account limit, and saying it is sends you to
+fix the wrong thing. (Learned immediately: the first run of that script
+misdiagnosed exactly that.)
+
+Order to turn things on: `RESEND_API_KEY` + `ALERT_FROM_EMAIL` +
+`OWNER_EMAIL` as repository secrets and in Render → run the test → set
+`PUBLIC_BASE_URL` in Render so confirmation links are absolute rather than
+relative → only once a link has genuinely arrived in an inbox, set
+`REQUIRE_VERIFIED_EMAIL=true`. **Until a domain is verified in Resend, the
+only from-address that works is `onboarding@resend.dev` and the only
+recipient is the Resend account's own address** — which is why
+`ALERT_FROM_EMAIL` is `sync: false` in render.yaml rather than hardcoded to
+`alerts@parkfare.app` as it used to be.
+
 **Do not add a fourth email job without checking this is fixed first.**
 
 ### The owner's manual jobs ride the news digest (2026-09-18)
