@@ -126,6 +126,31 @@ a{color:var(--ink)}
 :root[data-theme="light"] .spinner, :root:not([data-theme="dark"]) .spinner{border-color:rgba(20,22,31,.25); border-top-color:var(--plane)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
+/* The signed-in indicator. A bordered button with an avatar rather than a
+   chip, because the complaint it fixes was "I have no real idea that I am
+   signed in" — a small grey chip among other small grey chips was not
+   telling anybody anything. */
+.acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1px solid var(--rule-strong);
+  border-radius:999px; background:var(--surface-2); text-align:left; max-width:260px}
+.acctbtn:hover{border-color:var(--ink-2)}
+.acctbtn[hidden]{display:none}
+.avatar{width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--plane); flex:none;
+  display:grid; place-items:center; font-weight:800; font-size:12.5px; text-transform:uppercase}
+.acctmeta{display:flex; flex-direction:column; min-width:0; line-height:1.25}
+.acctname{font-size:12.5px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.acctplan{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.acctplan.plus{color:var(--accent, var(--ink))}
+/* A real sign-in panel, so signing in is a page you go to rather than two
+   inputs wedged into the masthead. */
+.authfield{display:flex; flex-direction:column; gap:6px; margin-bottom:14px}
+.authfield label{font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.authfield input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong);
+  border-radius:9px; padding:10px 12px; font-size:14px; width:100%}
+.authrow{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+.acctline{display:flex; justify-content:space-between; gap:14px; padding:10px 0; border-bottom:1px solid var(--rule); font-size:13.5px}
+.acctline:last-child{border-bottom:0}
+.acctline .k{color:var(--muted)}
+.acctline .v{font-weight:650; text-align:right; overflow-wrap:anywhere}
 .signin{display:flex; gap:6px; align-items:center}
 .signin[hidden]{display:none}
 .signin input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px; width:168px; max-width:44vw; min-width:0}
@@ -404,17 +429,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="acct">
       <span class="chip" id="planChip">Free plan</span>
       <span class="chip" id="searchChip" hidden></span>
-      <span class="signin" id="signinBox">
-        <input type="email" id="signinEmail" placeholder="you@example.com" aria-label="Email">
-        <input type="password" id="signinPassword" placeholder="Password (if set)" aria-label="Password"
-               autocomplete="current-password">
-        <button class="btn btn-sm" id="signinBtn">Sign in</button>
-        <small id="signinError" class="downgrade" hidden></small>
-      </span>
-      <span class="signin" id="signedinBox" hidden>
-        <span class="chip" id="emailChip"></span>
-        <button class="btn btn-sm" id="signoutBtn">Sign out</button>
-      </span>
+      <button class="btn btn-sm" id="signinTop">Sign in</button>
+      <button class="acctbtn" id="accountTop" hidden aria-haspopup="dialog">
+        <span class="avatar" id="acctInitial" aria-hidden="true"></span>
+        <span class="acctmeta">
+          <span class="acctname" id="acctEmail"></span>
+          <span class="acctplan" id="acctPlan"></span>
+        </span>
+      </button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
   </header>
@@ -664,6 +686,51 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <p><b>Currency.</b> Local prices are converted at illustrative rates. A live FX feed replaces them.</p>
     </div>
   </footer>
+</div>
+
+<!-- Sign in / your account. One dialog, two states: the form when signed
+     out, a real account panel when signed in. The account panel exists
+     mostly to answer "am I actually signed in?" with something bigger than
+     a chip — who you are, which plan, and when it runs out. -->
+<div class="back" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="modal" style="max-width:460px">
+    <div class="mhead">
+      <h3 id="authTitle">Sign in</h3>
+      <p id="authIntro"></p>
+    </div>
+
+    <div style="padding:18px 22px 4px">
+      <div id="authForm">
+        <div class="authfield">
+          <label for="signinEmail">Email</label>
+          <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="authfield">
+          <label for="signinPassword">Password <span style="text-transform:none; letter-spacing:0; font-weight:500">— only if you've set one</span></label>
+          <input type="password" id="signinPassword" placeholder="Leave blank if you haven't" autocomplete="current-password">
+        </div>
+        <div class="authrow">
+          <button class="btn btn-primary" id="signinBtn">Sign in</button>
+          <small style="color:var(--muted); font-size:12px">Accounts are free. Plus is comped by the owner.</small>
+        </div>
+        <small id="signinError" class="downgrade" hidden></small>
+      </div>
+
+      <div id="authAccount" hidden>
+        <div class="acctline"><span class="k">Signed in as</span><span class="v" id="emailChip"></span></div>
+        <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
+        <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
+        <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
+        <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
+      </div>
+    </div>
+
+    <div class="mfoot">
+      <button class="btn" id="acctUpgradeBtn" hidden>Get Plus</button>
+      <button class="btn" id="signoutBtn" hidden>Sign out</button>
+      <button class="btn" id="closeAuth">Close</button>
+    </div>
+  </div>
 </div>
 
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
@@ -1939,9 +2006,7 @@ function render(){
     }
   }
   $("#upgradeTop").hidden = session.plus;
-  $("#signinBox").hidden = session.authenticated;
-  $("#signedinBox").hidden = !session.authenticated;
-  if(session.authenticated) $("#emailChip").textContent = session.email + (session.plus?" · Plus":"");
+  syncAccountUi();
   renderBoard(); renderTable(); renderDetail();
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
@@ -2050,6 +2115,85 @@ document.addEventListener("click", async e=>{
   $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
 });
 
+/* ================================ account ================================
+ * Signing in used to be two inputs wedged into the masthead, and being
+ * signed in was a small grey chip among other small grey chips — so the
+ * honest report was "I have no real idea that I am signed in".
+ *
+ * Now: a Sign in button that opens a real panel, and once you're in, an
+ * account button carrying your initial, your email and your plan. Clicking
+ * it opens the same dialog showing who you are, what you're on, and when
+ * Plus runs out. Nothing about entitlement changed — Plus is still resolved
+ * server-side from the session cookie on every request that matters, and
+ * this is only the part that tells you about it. */
+function syncAccountUi(){
+  const on = session.authenticated;
+  $("#signinTop").hidden = on;
+  $("#accountTop").hidden = !on;
+  if(on){
+    $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
+    $("#acctEmail").textContent = session.email || "";
+    $("#acctPlan").textContent = session.plus ? "Plus" : "Free plan";
+    $("#acctPlan").className = "acctplan" + (session.plus ? " plus" : "");
+    $("#accountTop").title = "Signed in as " + session.email;
+  } else {
+    // Clear it rather than just hiding it. A hidden element still holding
+    // the last person's address is one CSS accident away from showing a
+    // signed-out browser someone else's email.
+    $("#acctInitial").textContent = "";
+    $("#acctEmail").textContent = "";
+    $("#acctPlan").textContent = "";
+    $("#accountTop").removeAttribute("title");
+  }
+}
+
+function fmtPlusUntil(d){
+  if(!d) return null;
+  try{
+    return new Date(d + "T00:00:00").toLocaleDateString(undefined,
+      { year:"numeric", month:"long", day:"numeric" });
+  }catch(e){ return d; }
+}
+
+function openAuth(){
+  const on = session.authenticated;
+  $("#authForm").hidden = on;
+  $("#authAccount").hidden = !on;
+  $("#signoutBtn").hidden = !on;
+  $("#acctUpgradeBtn").hidden = !on || session.plus;
+  $("#authTitle").textContent = on ? "Your account" : "Sign in";
+  $("#authIntro").textContent = on
+    ? "Everything below is tied to this account — saved trips, alerts and Plus all follow the email, not this browser."
+    : "An account is free and takes one field. It's what saved trips, price alerts and Plus attach to. There's no email verification yet, so use an address you'd actually want alerts sent to.";
+  if(on){
+    $("#emailChip").textContent = session.email;
+    $("#acctPlanRow").textContent = session.plus ? "Plus" : "Free";
+    const until = fmtPlusUntil(session.plusUntil);
+    $("#acctExpiryRow").hidden = !(session.plus && until);
+    if(until) $("#acctExpiry").textContent = until;
+    $("#acctTrips").textContent = session.plus
+      ? String(savedTripCount)
+      : "Plus only";
+    $("#acctHint").textContent = session.plus
+      ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
+      : "Comparing all six resorts, the fare calendars and your own rates are free and unlimited. Plus adds saving, watching and exact fares.";
+  } else {
+    $("#signinError").hidden = true;
+    $("#signinPassword").value = "";
+  }
+  $("#authModal").classList.add("on");
+  if(!on) setTimeout(()=> $("#signinEmail").focus(), 30);
+}
+function closeAuth(){ $("#authModal").classList.remove("on"); }
+
+$("#signinTop").addEventListener("click", openAuth);
+$("#accountTop").addEventListener("click", openAuth);
+$("#closeAuth").addEventListener("click", closeAuth);
+$("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
+$("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
+$("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+$("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
 function openPw(){
   const msg = $("#pwFootMsg");
   $("#pwSigninBox").hidden = session.authenticated;
@@ -2061,7 +2205,11 @@ function openPw(){
 $("#closePw").addEventListener("click", ()=> $("#paywall").classList.remove("on"));
 $("#upgradeTop").addEventListener("click", openPw);
 $("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
-document.addEventListener("keydown", e=>{ if(e.key==="Escape") $("#paywall").classList.remove("on"); });
+document.addEventListener("keydown", e=>{
+  if(e.key !== "Escape") return;
+  $("#paywall").classList.remove("on");
+  closeAuth();
+});
 
 $("#pwSigninBtn").addEventListener("click", async ()=>{
   const email = $("#pwEmail").value.trim();
@@ -2100,6 +2248,11 @@ async function refreshSession(){
   session = me.authenticated
     ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil }
     : { authenticated:false, email:null, plus:false, plusUntil:null };
+  // Repaint the masthead here rather than only in render(): boot() and the
+  // paywall's own sign-in path both refresh the session without going
+  // through a render, and a stale "Sign in" button after signing in is the
+  // exact confusion this change exists to remove.
+  syncAccountUi();
 }
 
 $("#signinBtn").addEventListener("click", async ()=>{
@@ -2119,6 +2272,10 @@ $("#signinBtn").addEventListener("click", async ()=>{
   }
   $("#signinPassword").value = "";
   await refreshSession();
+  // Straight back to the board, signed in — the dialog has done its job and
+  // the account button in the masthead now carries the state.
+  closeAuth();
+  syncAccountUi();
   // Plus status changes whether a promoId override actually applies
   // server-side, so the already-fetched results are stale — re-run the
   // search, don't just re-render.
@@ -2128,15 +2285,22 @@ $("#signinBtn").addEventListener("click", async ()=>{
 $("#signoutBtn").addEventListener("click", async ()=>{
   await fetch("/api/auth/signout", { method:"POST" });
   await refreshSession();
+  closeAuth();
+  syncAccountUi();
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
 
+/** Kept at module scope purely so the account panel can report it without
+ *  firing another request every time the dialog opens. */
+let savedTripCount = 0;
+
 async function loadSavedTrips(){
   const box = $("#savedTripsPanel"), list = $("#savedTripsList");
-  if(!session.plus){ box.hidden = true; return; }
+  if(!session.plus){ box.hidden = true; savedTripCount = 0; return; }
   box.hidden = false;
   const trips = await apiGet("/api/trips", {});
+  savedTripCount = Array.isArray(trips) ? trips.length : 0;
   if(!Array.isArray(trips) || !trips.length){
     list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
     return;
