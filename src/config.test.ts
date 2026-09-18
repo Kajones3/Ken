@@ -3,7 +3,8 @@ import { test } from "node:test";
 import {
   RESORTS, RESORT_BY_ID, IRS_MILEAGE_RATES, MILEAGE_RATE_CARRY_FORWARD_YEARS,
   irsMileageRate, newestMileageRateYear, mileageRateStatus,
-  isLocalRoute, ORIGINS, PLUS_ORIGINS,
+  isLocalRoute, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ALL_ORIGINS, compareOriginsByCity,
+  type Origin,
 } from "./config.js";
 
 /**
@@ -228,4 +229,46 @@ test("no resort is cut off from every departure airport it has", () => {
         `${dest} lost too many origins to the local-route rule`);
     }
   }
+});
+
+/* ---------------------------------------------------------------------------
+ * Airport picker order.
+ *
+ * Sorting by IATA code yields something that LOOKS alphabetical and isn't:
+ * the free list used to read Atlanta, Boston, Baltimore. That is worse than
+ * an obviously arbitrary order, because it invites you to scan and then
+ * hides the entry you were scanning for. These tests pin the declaration
+ * order so adding an airport in the wrong place fails here rather than
+ * quietly in a dropdown nobody is auditing.
+ * ------------------------------------------------------------------------ */
+
+function isCityOrdered(list: readonly Origin[]): boolean {
+  for (let i = 1; i < list.length; i++) {
+    if (compareOriginsByCity(list[i - 1]!, list[i]!) > 0) return false;
+  }
+  return true;
+}
+
+test("both airport lists are declared in city order", () => {
+  assert.ok(isCityOrdered(ORIGINS), "free origins are out of city order");
+  assert.ok(isCityOrdered(PLUS_ORIGINS), "Plus origins are out of city order");
+  // The specific pair that was wrong: BWI before BOS by city, the other way
+  // round by code.
+  const codes = ORIGINS.map((o) => o.iata);
+  assert.ok(codes.indexOf("BWI") < codes.indexOf("BOS"), "Baltimore comes before Boston");
+});
+
+test("the picker order interleaves free and Plus airports", () => {
+  assert.ok(isCityOrdered(ORIGINS_BY_CITY));
+  assert.equal(ORIGINS_BY_CITY.length, ALL_ORIGINS.length, "every airport is offered");
+  assert.equal(new Set(ORIGINS_BY_CITY.map((o) => o.iata)).size, ALL_ORIGINS.length,
+    "and exactly once");
+
+  // Austin is Plus and Baltimore is free; by city Austin comes first. If the
+  // list were still two blocks, every Plus airport would sit after every
+  // free one and this would fail.
+  const at = (iata: string) => ORIGINS_BY_CITY.findIndex((o) => o.iata === iata);
+  assert.ok(at("AUS") > at("ATL") && at("AUS") < at("BWI"),
+    "Austin sits between Atlanta and Baltimore, not in a Plus block at the end");
+  assert.ok(at("TPA") < at("IAD"), "Tampa (Plus) still comes before Washington (free)");
 });
