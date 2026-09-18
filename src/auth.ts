@@ -1,14 +1,21 @@
 /**
- * Minimal real identity: an email, no password, no OAuth. Enough to make
+ * Minimal real identity: an email, and optionally a password. Enough to make
  * "Plus" a real server-checked thing instead of a browser toggle, and to
  * have a real address for alert emails and saved trips to belong to.
  *
- * Explicitly not good enough for a public launch: anyone who knows a
- * friend's email can sign in as them. Right trade-off for a friends demo
- * where the owner is comping accounts by hand — cheap to upgrade later to
- * a one-time emailed link through the existing EmailSender interface.
+ * A password is per account and opt-in. An account with no `password_hash`
+ * signs in on its email alone, exactly as before; an account with one
+ * requires it. That split is deliberate: the owner needed to lock down their
+ * own account without invalidating every comped friend account in the same
+ * change, and a demo nobody can get into is worse than a demo anyone can.
+ *
+ * Still not enough for a public launch: an account with no password is open
+ * to anyone who knows the email, and nothing verifies that an address
+ * belongs to whoever typed it. A one-time emailed link through the existing
+ * EmailSender interface remains the real fix.
  */
-import { randomBytes } from "node:crypto";
+import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
@@ -34,14 +41,29 @@ function parseCookies(header?: string | null): Record<string, string> {
   return out;
 }
 
+/**
+ * `Secure` is added whenever the app is actually served over https, which
+ * on Render means DATABASE_URL is set (SECURE_COOKIES=false forces it off).
+ * It can't be unconditional: a Secure cookie is never sent over plain http,
+ * so hardcoding it would break the local dev loop entirely. It matters more
+ * now that an account can carry a real password — a session cookie is the
+ * credential once you're in, and one sent in the clear is worth stealing.
+ */
+export function secureCookies(): boolean {
+  if (process.env.SECURE_COOKIES === "false") return false;
+  return process.env.SECURE_COOKIES === "true" || Boolean(process.env.DATABASE_URL);
+}
+
 export function sessionCookieHeader(token: string): string {
-  // No `Secure` yet — this runs over plain http for the friends demo.
-  // Add it before any deploy that serves over https.
-  return `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${MAX_AGE_SECONDS}; SameSite=Lax`;
+  const secure = secureCookies() ? "; Secure" : "";
+  return `${COOKIE_NAME}=${token}; HttpOnly; Path=/; Max-Age=${MAX_AGE_SECONDS}; SameSite=Lax${secure}`;
 }
 
 export function clearCookieHeader(): string {
-  return `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`;
+  // Must match sessionCookieHeader's attributes or the browser keeps the old
+  // cookie and "sign out" silently does nothing.
+  const secure = secureCookies() ? "; Secure" : "";
+  return `${COOKIE_NAME}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${secure}`;
 }
 
 export async function createSession(db: Db, userId: string): Promise<string> {
@@ -75,4 +97,51 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
 /** Pure and exported so it's unit-testable without a database. */
 export function isPlus(plusUntil: ISODate | null, today: ISODate = todayISO()): boolean {
   return plusUntil != null && plusUntil >= today;
+}
+
+// ------------------------------------------------------------- passwords
+
+const scrypt = promisify(scryptCb) as (p: string, s: Buffer, k: number) => Promise<Buffer>;
+const SCRYPT_KEY_BYTES = 64;
+const SALT_BYTES = 16;
+
+/**
+ * scrypt from node:crypto — deliberately no new dependency. Deliberately not
+ * a plain sha256 either: a fast hash is brute-forceable, and the whole point
+ * of storing a hash rather than the password is that the database leaking
+ * shouldn't hand over the password too.
+ *
+ * Format: `scrypt$<salt-hex>$<key-hex>`. The salt is per account and random,
+ * so two accounts choosing the same password still store different hashes.
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(SALT_BYTES);
+  const key = await scrypt(password, salt, SCRYPT_KEY_BYTES);
+  return `scrypt$${salt.toString("hex")}$${key.toString("hex")}`;
+}
+
+/**
+ * Constant-time compare, so the time this takes can't be measured to learn
+ * how much of a guess was right. Returns false rather than throwing on a
+ * malformed stored value — a corrupt row must lock the account, never crash
+ * the sign-in route or (worse) fall through to "no password required".
+ */
+export async function verifyPassword(password: string, stored: string | null): Promise<boolean> {
+  if (!stored) return false;
+  const parts = stored.split("$");
+  if (parts.length !== 3 || parts[0] !== "scrypt") return false;
+  try {
+    const salt = Buffer.from(parts[1]!, "hex");
+    const expected = Buffer.from(parts[2]!, "hex");
+    if (!salt.length || expected.length !== SCRYPT_KEY_BYTES) return false;
+    const actual = await scrypt(password, salt, SCRYPT_KEY_BYTES);
+    return timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether this account requires a password. Null hash = email-only, as before. */
+export function requiresPassword(passwordHash: string | null | undefined): boolean {
+  return typeof passwordHash === "string" && passwordHash.length > 0;
 }

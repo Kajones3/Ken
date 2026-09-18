@@ -448,17 +448,121 @@ export const DRIVING = {
 } as const;
 
 /**
- * 2026 IRS standard mileage rate — the real published figure, not a guess,
- * covering wear and tear on the user's own car (depreciation, maintenance,
- * insurance — everything gas doesn't already cover). Two rates a year;
- * month-only lookup so it works the same way regardless of which year a
- * cached trip date falls in, same "ignore the year" convention seasonality.ts
- * already uses. Needs a real annual refresh — the IRS sets a new rate every
- * December for the following year.
+ * The IRS standard mileage rates we actually have on file, newest last, each
+ * tagged with the year it was published FOR. This covers wear and tear on the
+ * user's own car (depreciation, maintenance, insurance — everything gas
+ * doesn't already cover). The IRS can change the rate mid-year, so each year
+ * carries both halves.
+ *
+ * These are real published figures, not guesses. ADDING A YEAR IS A MANUAL
+ * JOB: the IRS publishes the next year's rate around the middle of December.
+ * Look it up at irs.gov ("standard mileage rates"), then add one row here.
+ * Never invent a future year's number — an unpublished rate is exactly what
+ * the carry-forward warning below exists to tell you about.
  */
-export function irsMileageRatePerMile(dateISO: string): number {
+export const IRS_MILEAGE_RATES: readonly {
+  year: number; janToJunPerMile: number; julToDecPerMile: number;
+}[] = [
+  { year: 2026, janToJunPerMile: 0.725, julToDecPerMile: 0.76 },
+];
+
+/**
+ * How far past the newest year on file a trip may still be priced, by carrying
+ * that year's rate forward with a label on it.
+ *
+ * One year, deliberately. The app prices 365 days ahead, so at any moment the
+ * furthest-out bookable trip is at most one calendar year past the current
+ * one — which means a one-year allowance covers the whole booking window and
+ * the app never breaks just because it's January and the IRS hasn't published
+ * yet. Past that, the rate on file is old enough that quietly reusing it would
+ * be a real misstatement of cost, so priceTrip refuses instead. In practice
+ * that only happens if the warnings get ignored for more than a full year.
+ */
+export const MILEAGE_RATE_CARRY_FORWARD_YEARS = 1;
+
+export type MileageRateLookup =
+  | {
+      ok: true;
+      ratePerMile: number;
+      /** The year the IRS published this rate for. */
+      rateYear: number;
+      /** The year the trip itself falls in. */
+      tripYear: number;
+      /** True when tripYear has no published rate and rateYear's was reused. */
+      carriedForward: boolean;
+    }
+  | { ok: false; tripYear: number; newestYearOnFile: number; reason: string };
+
+/** The most recent year IRS_MILEAGE_RATES has a published rate for. */
+export function newestMileageRateYear(): number {
+  return Math.max(...IRS_MILEAGE_RATES.map((r) => r.year));
+}
+
+/**
+ * The IRS rate to use for a trip starting on `dateISO`, and whether it's the
+ * real rate for that year or an older one carried forward.
+ *
+ * Year-aware on purpose. This used to read only the month and hand back the
+ * 2026 figure for any date in any year, which meant a 2028 trip was silently
+ * priced on a two-year-old rate with nothing anywhere saying so. Now a trip in
+ * a year with no rate on file still prices — the alternative is breaking every
+ * driving comparison each January — but it comes back flagged, and the owner
+ * gets told (news-digest email) that a new figure is due. Deliberately NOT
+ * shown to end users; see mileageRateStatus below and MileageRateUsed in
+ * pricing.ts.
+ */
+export function irsMileageRate(dateISO: string): MileageRateLookup {
+  const tripYear = Number(dateISO.slice(0, 4));
   const month = Number(dateISO.slice(5, 7));
-  return month <= 6 ? 0.725 : 0.76;
+  const newestYearOnFile = newestMileageRateYear();
+  if (!Number.isFinite(tripYear) || !Number.isFinite(month)) {
+    return { ok: false, tripYear, newestYearOnFile, reason: `not a real date: ${dateISO}` };
+  }
+  const exact = IRS_MILEAGE_RATES.find((r) => r.year === tripYear);
+  const half = (r: { janToJunPerMile: number; julToDecPerMile: number }) =>
+    (month <= 6 ? r.janToJunPerMile : r.julToDecPerMile);
+  if (exact) {
+    return { ok: true, ratePerMile: half(exact), rateYear: tripYear, tripYear, carriedForward: false };
+  }
+  // A trip in a year we have no figure for yet. Carry the newest one forward
+  // if it's recent enough to still be defensible, otherwise refuse — pricing
+  // must never quietly guess (see the {ok:false} contract in pricing.ts).
+  const newest = IRS_MILEAGE_RATES.find((r) => r.year === newestYearOnFile)!;
+  const gap = tripYear - newestYearOnFile;
+  if (gap > 0 && gap <= MILEAGE_RATE_CARRY_FORWARD_YEARS) {
+    return { ok: true, ratePerMile: half(newest), rateYear: newestYearOnFile, tripYear, carriedForward: true };
+  }
+  return {
+    ok: false, tripYear, newestYearOnFile,
+    reason: gap > 0
+      ? `no IRS mileage rate on file for ${tripYear} — the newest one we have is ${newestYearOnFile}`
+      : `no IRS mileage rate on file for ${tripYear} — rates only go back to ${Math.min(...IRS_MILEAGE_RATES.map((r) => r.year))}`,
+  };
+}
+
+/**
+ * Whether the rates on file still cover everything the app can price, for the
+ * owner-facing warning. `horizonDays` is the booking window the app actually
+ * offers (365 days — see calendar() in server.ts).
+ */
+export function mileageRateStatus(todayISO: string, horizonDays = 365): {
+  newestYearOnFile: number;
+  /** Years inside the booking window with no published rate. Empty when covered. */
+  uncoveredYears: number[];
+  /** True when some bookable date is beyond the carry-forward window, so driving trips there won't price at all. */
+  pricingBroken: boolean;
+} {
+  const newestYearOnFile = newestMileageRateYear();
+  const start = new Date(`${todayISO}T00:00:00Z`);
+  const end = new Date(start.getTime() + horizonDays * 86_400_000);
+  const uncoveredYears: number[] = [];
+  let pricingBroken = false;
+  for (let y = start.getUTCFullYear(); y <= end.getUTCFullYear(); y++) {
+    if (IRS_MILEAGE_RATES.some((r) => r.year === y)) continue;
+    uncoveredYears.push(y);
+    if (y - newestYearOnFile > MILEAGE_RATE_CARRY_FORWARD_YEARS || y < newestYearOnFile) pricingBroken = true;
+  }
+  return { newestYearOnFile, uncoveredYears, pricingBroken };
 }
 
 /**

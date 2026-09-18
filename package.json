@@ -15,6 +15,7 @@
     "pulls-digest": "tsx src/jobs/pullsDigest.ts",
     "migrate": "tsx src/migrate.ts",
     "grant-plus": "tsx src/grantPlus.ts",
+    "set-password": "tsx src/setPassword.ts",
     "seed-promos": "tsx src/seedPromos.ts",
     "bts-baseline": "tsx src/jobs/btsBaseline.ts",
     "test": "tsx --test $(find src -name '*.test.ts')",
