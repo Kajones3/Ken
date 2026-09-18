@@ -406,7 +406,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <span class="chip" id="searchChip" hidden></span>
       <span class="signin" id="signinBox">
         <input type="email" id="signinEmail" placeholder="you@example.com" aria-label="Email">
+        <input type="password" id="signinPassword" placeholder="Password (if set)" aria-label="Password"
+               autocomplete="current-password">
         <button class="btn btn-sm" id="signinBtn">Sign in</button>
+        <small id="signinError" class="downgrade" hidden></small>
       </span>
       <span class="signin" id="signedinBox" hidden>
         <span class="chip" id="emailChip"></span>
@@ -2055,8 +2058,19 @@ async function refreshSession(){
 $("#signinBtn").addEventListener("click", async ()=>{
   const email = $("#signinEmail").value.trim();
   if(!email) return;
-  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email}) });
-  if(!res.ok) return;
+  const password = $("#signinPassword").value;
+  const err = $("#signinError");
+  err.hidden = true;
+  // Accounts with no password set still sign in on the email alone, so this
+  // sends whatever is typed and lets the server decide whether it's needed.
+  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  if(!res.ok){
+    const body = await res.json().catch(()=>({}));
+    err.textContent = body.error || "Could not sign in.";
+    err.hidden = false;
+    return;
+  }
+  $("#signinPassword").value = "";
   await refreshSession();
   // Plus status changes whether a promoId override actually applies
   // server-side, so the already-fetched results are stale — re-run the

@@ -21,7 +21,8 @@ import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
-  sessionCookieHeader, clearCookieHeader, isPlus, type SessionUser,
+  sessionCookieHeader, clearCookieHeader, isPlus, requiresPassword, verifyPassword,
+  type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
 
@@ -328,14 +329,26 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/auth/signin" && req.method === "POST") {
       const body = await readBody(req);
       const email = String(body.email ?? "").trim().toLowerCase();
+      const password = typeof body.password === "string" ? body.password : "";
       if (!email || !email.includes("@")) return send(400, { error: "a valid email is required" });
       const { rows } = await db.query(
         `insert into users (id, email) values ($1,$2)
          on conflict (email) do update set email = excluded.email
-         returning id, email, plus_until`,
+         returning id, email, plus_until, password_hash`,
         [randomUUID(), email],
       );
       const row = rows[0];
+      // An account with a password hash requires it; one without keeps the
+      // original email-only sign-in. Checked server-side against the stored
+      // hash, never against anything the client sends about itself.
+      if (requiresPassword(row.password_hash)) {
+        if (!(await verifyPassword(password, row.password_hash))) {
+          // One message for a wrong password and for a wrong email on an
+          // account that has one, so this can't be used to discover which
+          // addresses have accounts.
+          return send(401, { error: "that email and password don't match" });
+        }
+      }
       const token = await createSession(db, row.id);
       const plusUntil = row.plus_until ? dateStr(row.plus_until) : null;
       return send(200, { email: row.email, plus: isPlus(plusUntil), plusUntil }, withCookie(sessionCookieHeader(token)));

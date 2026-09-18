@@ -27,7 +27,7 @@ say when something is a guess.
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
-| Accounts | **Real, minimal.** Email-only sign-in (no password), a real `sessions` table, real `plus_until`-based entitlement. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Accounts | **Real, minimal.** Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -710,10 +710,19 @@ Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
   actually right). Check the first real GitHub Actions "Parkfare news digest" run's
   log for per-feed errors before assuming these are correct.
 - Shanghai height-based ticket banding is not modelled.
-- **Accounts have no password and no email verification.** Anyone who knows a friend's
-  email can sign in as them. Correct trade-off for a friends demo where the owner is
-  comping accounts by hand; needs a real verification step (e.g. a one-time emailed
-  link through the existing `EmailSender` interface) before any public launch.
+- **Accounts have no email verification, and a password is opt-in.** An account with
+  no `password_hash` is still open to anyone who knows the email — that's every account
+  except ones a password was deliberately set on, and it stays that way on purpose so
+  setting one password doesn't lock every comped friend out at once. Nothing anywhere
+  verifies that an address belongs to whoever typed it, so a password protects an
+  existing account but doesn't stop someone claiming a fresh one. A one-time emailed
+  link through the existing `EmailSender` interface is still the real fix before any
+  public launch — and that needs the email secrets above actually set.
+- **A password is only as good as the transport.** The session cookie now carries
+  `Secure` whenever `DATABASE_URL` is set (i.e. on Render, over https), off locally
+  where the dev loop is plain http, and forceable either way with `SECURE_COOKIES`.
+  There's no rate limiting on `/api/auth/signin`, so nothing slows down someone
+  guessing; scrypt makes each guess cost real work, which is the only brake there is.
 - **No admin UI for `promos`, `goodToKnow`, or `closuresUrl`.** All are hand-maintained
   directly in code/database (`goodToKnow`/`closuresUrl`/`closuresLabel` live in
   `config.ts`, right on each `Resort`) — same pattern as `ticket_prices`, and just

@@ -264,3 +264,10 @@ create table if not exists exact_fare_usage (
   spent_at  timestamptz not null default now(),
   primary key (user_id, day)
 );
+
+-- Optional password on an account. Nullable on purpose: an account with no
+-- hash keeps the original email-only sign-in, so setting a password locks
+-- down one account without breaking every comped friend account at once.
+-- Stored as a scrypt hash with a per-account random salt, never plaintext.
+-- See hashPassword()/verifyPassword() in src/auth.ts.
+alter table users add column if not exists password_hash text;
