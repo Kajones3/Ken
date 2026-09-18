@@ -28,7 +28,7 @@ say when something is a guess.
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
-| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out and how many trips you've saved. The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -186,6 +186,34 @@ each one then stays ~10 days fresh. Same shape and same reasoning as
   freshly bought and the rotation would never move. **That mislabelling is
   still there and the real-pulls digest reads the same tag** — worth fixing
   properly rather than working around a second time.
+
+**A profile is free; saved trips stay Plus** (2026-09-18). The first field is
+`users.home_airport` — the airport you depart from, remembered per account
+(`setHomeAirport()` in `auth.ts`, `PUT /api/profile`, shown in the account
+panel). Free, deliberately: an account is free, saving and watching a *trip*
+is Plus, and a remembered dropdown is neither. Paywalling it would be the
+already-rejected search-quota idea wearing a different hat.
+
+Three things that are decisions, not defaults:
+
+- *Null is a real value.* "I haven't said" and "I fly from Atlanta" are
+  different facts, so the column is nullable with no default and the form
+  offers a blank "ask me each time" option that clears it. A first save you
+  could never undo would be a trap.
+- *Both airport lists are accepted.* A free user picking a Plus airport is
+  already a supported non-error case (`resolveOrigin()` prices the nearest
+  free metro and the board says so), so refusing to REMEMBER a choice the
+  form lets you MAKE would contradict that.
+- *It feeds the drive/fly default.* The saved airport is what
+  `defaultGettingThere()` reads, so an LA user opens Parkfare already on
+  "drive to Disneyland, fly everywhere else" without touching anything.
+  Verified in a browser: save LAX, reload, and both the origin and the preset
+  are right with nothing typed.
+
+It lives on `users` because there is one field. **If the profile grows past a
+handful — a souvenir budget, attraction preferences — move it to a
+`user_profile` table**: identity and entitlement sharing a row with free-form
+taste data gets muddy fast.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -734,6 +762,17 @@ Found by testing an all-international demand day, not in production.
    wear-and-tear) or at the destination after flying. This absorbed what was
    previously planned as a separate "Compare Flying vs. Driving" page — turned out
    a preset on the main board served the actual ask better than a second page.
+
+**An "only here" attraction list must not assume uniqueness** (2026-09-18).
+Planned as a resort-differentiator alongside price — the owner is supplying
+the list. Recorded before building it because the obvious data model is wrong:
+Claude offered "Ratatouille is only at Paris" as an example and the owner
+corrected it — Remy's Ratatouille Adventure is at EPCOT *and* Ratatouille:
+L'Aventure Totalement Toquée at Walt Disney Studios. Clones across resorts are
+common, so an attraction has to be able to belong to several resorts, and
+"only at X" has to be derived from the data rather than asserted per row.
+Same honesty rule as `dataConfidence`: a confident wrong claim about what a
+resort has is worse than a plain list.
 
 Then: the 10-mile off-property hotel radius filter (needs a `distanceMiles` field
 on `HotelDef`, none exists today), a real per-city rental-car rate (a

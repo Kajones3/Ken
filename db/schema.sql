@@ -283,3 +283,22 @@ create index if not exists hotel_rates_source on hotel_rates (source, fetched_at
 
 -- The digest scans flight_prices by when a row was fetched, not by route.
 create index if not exists flight_prices_fetched_at on flight_prices (fetched_at);
+
+-- ---------------------------------------------------------------------------
+-- Profile: things a signed-in traveller tells us about themselves, as opposed
+-- to things they tell us about one trip.
+--
+-- Free, deliberately. An account is free, saving a trip is Plus, and
+-- remembering which airport you fly out of is neither — it is a convenience
+-- that costs nothing to serve, and paywalling it would be the "no search
+-- quota" mistake wearing a different hat.
+--
+-- Nullable with no default: "I haven't said" and "I fly from Atlanta" are
+-- different facts, and a default would quietly turn the first into the
+-- second for every account that already exists.
+--
+-- On `users` rather than its own table because there is one field. If the
+-- profile grows past a handful (a souvenir budget, attraction preferences),
+-- move it to a `user_profile` table keyed on user_id — identity and
+-- entitlement living in the same row as free-form taste data gets muddy fast.
+alter table users add column if not exists home_airport text;

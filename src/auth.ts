@@ -20,11 +20,19 @@ import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
+import { ORIGIN_BY_IATA } from "./config.js";
 
 const COOKIE_NAME = "pf_session";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
-export interface SessionUser { id: string; email: string; plusUntil: ISODate | null }
+export interface SessionUser {
+  id: string;
+  email: string;
+  plusUntil: ISODate | null;
+  /** The airport this traveller flies out of, or null if they've never said.
+   *  Null and "ATL" are different facts — see setHomeAirport. */
+  homeAirport: string | null;
+}
 
 export function randomToken(): string {
   return randomBytes(32).toString("hex");
@@ -84,14 +92,48 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until
+    `select u.id, u.email, u.plus_until, u.home_airport
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
   );
   const row = rows[0];
   if (!row) return null;
-  return { id: row.id, email: row.email, plusUntil: row.plus_until ? dateStr(row.plus_until) : null };
+  return {
+    id: row.id, email: row.email,
+    plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
+    homeAirport: row.home_airport ?? null,
+  };
+}
+
+/**
+ * Remembers (or forgets) the airport someone departs from.
+ *
+ * Validated against the app's own airport list rather than stored as typed:
+ * a code we don't know would price nothing, and the value comes back out as
+ * a pre-selected form field, so a junk code would be a permanently broken
+ * form the traveller couldn't explain. `null` clears it — "I haven't said"
+ * has to stay reachable, otherwise the first save is irreversible.
+ *
+ * Free on purpose. An account is free, saving a trip is Plus, and this is
+ * neither: it costs nothing to serve and paywalling a remembered dropdown
+ * would be the rejected search-quota idea in different clothes.
+ *
+ * Both airport lists are accepted, not just the free 19. A free user picking
+ * a Plus airport is already a supported, non-error case — resolveOrigin()
+ * prices the nearest free metro and the board says which it used — so
+ * refusing to REMEMBER a choice the form lets them MAKE would be a rule
+ * that contradicts itself.
+ */
+export async function setHomeAirport(
+  db: Db, userId: string, iata: string | null,
+): Promise<string | null> {
+  const clean = iata ? iata.trim().toUpperCase() : null;
+  if (clean && !ORIGIN_BY_IATA.has(clean)) {
+    throw new Error(`unknown airport ${clean}`);
+  }
+  await db.query(`update users set home_airport = $2 where id = $1`, [userId, clean]);
+  return clean;
 }
 
 /** Pure and exported so it's unit-testable without a database. */

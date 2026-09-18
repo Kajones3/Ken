@@ -721,6 +721,12 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
         <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
         <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
+        <div class="authfield" style="margin:16px 0 4px">
+          <label for="homeAirport">Home airport</label>
+          <select id="homeAirport"></select>
+          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
+          <small id="homeAirportSaved" class="downgrade" hidden></small>
+        </div>
         <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
       </div>
     </div>
@@ -896,7 +902,7 @@ const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, exc
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
 
-let session = { authenticated:false, email:null, plus:false, plusUntil:null };
+let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
@@ -1077,7 +1083,10 @@ $("#gettingThere").addEventListener("change", () => {
   $("#gettingThereNote").hidden = true;
   syncGettingThere();
 });
-$("#origin").addEventListener("change", applySuggestedGettingThere);
+$("#origin").addEventListener("change", ()=>{
+  originPickedByUser = true;
+  applySuggestedGettingThere();
+});
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
 /** Wear-and-tear is already zero on a rental (its own fee covers it), so
@@ -2177,6 +2186,8 @@ function openAuth(){
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
       : "Comparing all six resorts, the fare calendars and your own rates are free and unlimited. Plus adds saving, watching and exact fares.";
+    fillHomeAirportOptions();
+    $("#homeAirportSaved").hidden = true;
   } else {
     $("#signinError").hidden = true;
     $("#signinPassword").value = "";
@@ -2193,6 +2204,64 @@ $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
+/* -------------------------------- profile --------------------------------
+ * One field so far, and the one worth having first: the airport you leave
+ * from. It is the first thing every search needs, it now also decides the
+ * drive/fly preset, and it is the same answer every time — so asking for it
+ * on every visit was pure friction.
+ *
+ * Free, not Plus. An account is free, saving a TRIP is Plus, and a
+ * remembered dropdown is neither.
+ *
+ * "Not set" is a real, reachable state, not just the starting one — picking
+ * the blank option clears it server-side. A first save that could never be
+ * undone would be a trap. */
+function fillHomeAirportOptions(){
+  const sel = $("#homeAirport");
+  const opts = [["", "Not set — ask me each time"]]
+    .concat(ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata]))
+    .concat(PLUS_ORIGINS.map(o=>[o.iata, o.name+" — "+o.iata+(session.plus?"":" (Plus airport)")]));
+  fillSelect(sel, opts);
+  sel.value = session.homeAirport || "";
+}
+
+$("#homeAirport").addEventListener("change", async (e)=>{
+  const value = e.target.value || null;
+  const note = $("#homeAirportSaved");
+  const res = await fetch("/api/profile", {
+    method: "PUT", headers: {"content-type":"application/json"},
+    body: JSON.stringify({ homeAirport: value }),
+  });
+  if(!res.ok){
+    note.textContent = "Couldn't save that airport.";
+    note.hidden = false;
+    return;
+  }
+  const body = await res.json().catch(()=>({}));
+  session.homeAirport = body.homeAirport ?? null;
+  note.textContent = session.homeAirport
+    ? "Saved — we'll start from " + session.homeAirport + " next time."
+    : "Cleared — we'll ask each time.";
+  note.hidden = false;
+  // Apply it to the form immediately rather than only on the next visit:
+  // being told "saved" while the form still says Atlanta is the kind of
+  // half-applied change that makes people doubt the save happened at all.
+  applyHomeAirport();
+});
+
+/** Point the trip form at the saved airport, and let the drive/fly preset
+ *  follow it — an LA user should land on "drive to Disneyland" without
+ *  touching anything. Never overrides a choice made in this session. */
+function applyHomeAirport(){
+  if(!session.homeAirport) return;
+  const sel = $("#origin");
+  if(!sel || originPickedByUser) return;
+  if(![...sel.options].some(o=>o.value === session.homeAirport)) return;
+  sel.value = session.homeAirport;
+  applySuggestedGettingThere();
+}
+let originPickedByUser = false;
 
 function openPw(){
   const msg = $("#pwFootMsg");
@@ -2246,13 +2315,16 @@ $("#planYearly").addEventListener("click", ()=>{
 async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
-    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil }
-    : { authenticated:false, email:null, plus:false, plusUntil:null };
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null }
+    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going
   // through a render, and a stale "Sign in" button after signing in is the
   // exact confusion this change exists to remove.
   syncAccountUi();
+  // And point the form at their saved airport, which is why this runs on
+  // boot rather than only when the account panel is opened.
+  applyHomeAirport();
 }
 
 $("#signinBtn").addEventListener("click", async ()=>{

@@ -22,7 +22,7 @@ import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, requiresPassword, verifyPassword,
-  type SessionUser,
+  setHomeAirport, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
 
@@ -377,9 +377,30 @@ const server = createServer(async (req, res) => {
         ? { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) }
         : null;
       return send(200, {
-        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil, exactFare,
+        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
+        homeAirport: user.homeAirport, exactFare,
       }, { cache: "no-store" });
     }
+    // --- profile: free, signed in, always the caller's own row. ---------
+    // Not Plus-gated, unlike saved trips: an account is free and this is a
+    // remembered form field, not monitoring. The airport is validated against
+    // the app's own list inside setHomeAirport, so a junk code can't be
+    // stored and handed back as a pre-selected option later.
+    if (url.pathname === "/api/profile" && req.method === "PUT") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      const body = await readBody(req);
+      // An explicit null clears it. `undefined` would be ambiguous with "not
+      // sent", so the client always sends the key.
+      const raw = body.homeAirport;
+      try {
+        const homeAirport = await setHomeAirport(db, user.id, raw ? String(raw) : null);
+        return send(200, { ok: true, homeAirport }, { cache: "no-store" });
+      } catch (e) {
+        return send(400, { error: "unknown_airport", message: (e as Error).message });
+      }
+    }
+
     if (url.pathname === "/api/auth/signout" && req.method === "POST") {
       const token = sessionTokenFrom(req);
       if (token) await destroySession(db, token);
