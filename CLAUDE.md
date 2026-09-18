@@ -261,6 +261,25 @@ paywall (not have it faked or hidden). So: no search quota on free comparisons
 and `npm run grant-plus` grants real Plus status without a payment step. This is a
 demo-stage decision, not a permanent pricing change.
 
+**The paywall does not promise a cheaper trip** (2026-09-18, owner's
+correction). It used to be headed "Want to make it cheaper?" — which the app
+cannot deliver and frequently contradicts: the exact fare a Plus lookup
+returns is often HIGHER than the free estimate, and that is the feature
+working, not failing. It now reads "Plan your specific trip" and says in the
+body that a real number may come back higher, because a number you can book
+against beats a cheerful one you can't. Same rule as the `est.` chip and the
+`dataConfidence` badges: never let the copy write a cheque the data won't
+cash.
+
+**Sign up leads, sign in follows, and there is only one auth surface.** The
+paywall used to carry its own email box posting to `/api/auth/signin` with
+no password and `if(!res.ok) return` — so for the owner it did nothing at
+all, silently, and once passwords became mandatory it could never have
+worked. It now hands off to the real dialog. `requestPlus()` had the same
+shape of bug (a bare `return` when signed out) and now says what to do.
+**Never end a click handler with a silent `return`**: the user cannot tell
+that from a broken build.
+
 **No search quota on free comparisons — considered and rejected.** A "N free searches
 a day" limit was floated to nudge Plus conversion. Rejected because it contradicts the
 app's own thesis: comparisons read a cache that's already been paid for, so a quota
@@ -889,6 +908,26 @@ Setting the three repository secrets is the only thing standing between them
 and working — plus a Resend account, since without `RESEND_API_KEY` the console
 sender just prints into the Actions log.
 
+**Test a new key with `npm run test-email -- you@example.com`** (or the
+"Parkfare test email" workflow, which runs on GitHub's runners with the
+repository secrets — the environment the crons actually use). It is the one
+loud thing in a project full of quiet ones: it fails with Resend's own words
+rather than treating "couldn't send" as "nothing to send". Its hints match on
+Resend's wording and never on a bare status code — a 403 from a proxy or an
+egress allowlist is not a Resend account limit, and saying it is sends you to
+fix the wrong thing. (Learned immediately: the first run of that script
+misdiagnosed exactly that.)
+
+Order to turn things on: `RESEND_API_KEY` + `ALERT_FROM_EMAIL` +
+`OWNER_EMAIL` as repository secrets and in Render → run the test → set
+`PUBLIC_BASE_URL` in Render so confirmation links are absolute rather than
+relative → only once a link has genuinely arrived in an inbox, set
+`REQUIRE_VERIFIED_EMAIL=true`. **Until a domain is verified in Resend, the
+only from-address that works is `onboarding@resend.dev` and the only
+recipient is the Resend account's own address** — which is why
+`ALERT_FROM_EMAIL` is `sync: false` in render.yaml rather than hardcoded to
+`alerts@parkfare.app` as it used to be.
+
 **Do not add a fourth email job without checking this is fixed first.**
 
 ### The owner's manual jobs ride the news digest (2026-09-18)
@@ -953,14 +992,36 @@ the warning that there is nowhere to send warnings.
   actually right). Check the first real GitHub Actions "Parkfare news digest" run's
   log for per-feed errors before assuming these are correct.
 - Shanghai height-based ticket banding is not modelled.
-- **Accounts have no email verification, and a password is opt-in.** An account with
-  no `password_hash` is still open to anyone who knows the email — that's every account
-  except ones a password was deliberately set on, and it stays that way on purpose so
-  setting one password doesn't lock every comped friend out at once. Nothing anywhere
-  verifies that an address belongs to whoever typed it, so a password protects an
-  existing account but doesn't stop someone claiming a fresh one. A one-time emailed
-  link through the existing `EmailSender` interface is still the real fix before any
-  public launch — and that needs the email secrets above actually set.
+- **Every account requires a password (owner's call, 2026-09-18) — but still no email
+  verification.** The opt-in scheme is gone: `signUp()` and `signIn()` in `auth.ts` are
+  two separate operations, `/api/auth/signup` and `/api/auth/signin` are two routes, and
+  email-only sign-in no longer exists anywhere. Sign-in never creates an account, so a
+  typo'd address can't silently become a second empty one the way it used to.
+  **Legacy accounts are claimed, not bricked**: an account with no hash keeps its id,
+  its saved trips and any comped Plus, and gets a password the first time someone signs
+  up with that address. That migration is what the old opt-in design was waiting for.
+  **The open risk is unchanged and now sharper**: nothing verifies that an address
+  belongs to whoever typed it, so claiming a legacy account is first-come — set
+  passwords for comped friends with `npm run set-password` before someone else does.
+  `--clear` is now the password-reset path rather than "back to email-only": it makes
+  the account unreachable until re-claimed through Sign up. A one-time emailed link
+  through `EmailSender` is still the real fix, and it needs the email secrets set.
+  Sign-in keeps one message for every failure so it can't be used to enumerate
+  addresses; **sign-up necessarily leaks that an email is registered**, which is
+  unavoidable on any sign-up form without verification.
+- **Email verification exists but does not block sign-in yet** (`src/verifyEmail.ts`,
+  2026-09-18). Sign-up issues a single-use link (48h, one live link per account —
+  asking for a new one kills the old), `GET /api/auth/verify` consumes it and answers
+  with a readable page rather than JSON. **The gate is where the harm is: the alert job
+  now requires `email_verified_at`, so this app never emails an address nobody
+  confirmed.** Sign-in still works unverified, deliberately: no email has ever actually
+  been delivered from this project, so a hard gate today would lock out every user
+  including the owner, with the key printed into a server log. `REQUIRE_VERIFIED_EMAIL=true`
+  turns the hard gate on, and the owner's nightly job list says when that is safe.
+  **Existing accounts were NOT backfilled as verified** — claiming an address was
+  confirmed when nobody checked is the kind of comfortable lie the rest of this project
+  refuses to tell. `PUBLIC_BASE_URL` sets the link's host; unset gives a relative link,
+  which works locally but not in a real email.
 - **A password is only as good as the transport.** The session cookie now carries
   `Secure` whenever `DATABASE_URL` is set (i.e. on Render, over https), off locally
   where the dev loop is plain http, and forceable either way with `SECURE_COOKIES`.

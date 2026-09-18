@@ -20,8 +20,22 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Set in the dashboard, not here. Resend will not send from a domain
+      # you have not verified, and until you verify one the only address
+      # that works is onboarding@resend.dev — so a hardcoded parkfare.app
+      # here would make every verification email fail on a new account.
       - key: ALERT_FROM_EMAIL
-        value: alerts@parkfare.app
+        sync: false
+      # Where confirmation links point. Unset gives a RELATIVE link, which
+      # works in a local dev loop and is useless inside a real email.
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # Leave unset until a confirmation link has actually arrived in an
+      # inbox. "true" stops an unconfirmed address signing in at all — which
+      # locks out every user, including the owner, if mail is not really
+      # working yet. See src/verifyEmail.ts.
+      - key: REQUIRE_VERIFIED_EMAIL
+        sync: false
       - key: MAX_REQUESTS_PER_MINUTE
         value: "240"
       - key: ALERT_MAX_PER_USER_PER_DAY

@@ -14,13 +14,14 @@
  * belongs to whoever typed it. A one-time emailed link through the existing
  * EmailSender interface remains the real fix.
  */
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
+import { randomBytes, randomUUID, scrypt as scryptCb, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
+import { requireVerifiedEmail } from "./verifyEmail.js";
 
 const COOKIE_NAME = "pf_session";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
@@ -32,6 +33,9 @@ export interface SessionUser {
   /** The airport this traveller flies out of, or null if they've never said.
    *  Null and "ATL" are different facts — see setHomeAirport. */
   homeAirport: string | null;
+  /** Whether this address has been confirmed. Never backfilled for accounts
+   *  that predate verification — see src/verifyEmail.ts. */
+  emailVerified: boolean;
 }
 
 export function randomToken(): string {
@@ -92,7 +96,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until, u.home_airport
+    `select u.id, u.email, u.plus_until, u.home_airport, u.email_verified_at
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
@@ -103,6 +107,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
     id: row.id, email: row.email,
     plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
     homeAirport: row.home_airport ?? null,
+    emailVerified: row.email_verified_at != null,
   };
 }
 
@@ -212,7 +217,128 @@ export async function verifyPassword(password: string, stored: string | null): P
   }
 }
 
-/** Whether this account requires a password. Null hash = email-only, as before. */
-export function requiresPassword(passwordHash: string | null | undefined): boolean {
+/** Whether this account has a password set yet. Every account NEEDS one now
+ *  (see signUp/signIn); this only answers whether it has got there. */
+export function hasPassword(passwordHash: string | null | undefined): boolean {
   return typeof passwordHash === "string" && passwordHash.length > 0;
+}
+
+/**
+ * Short enough not to annoy a friend testing a demo, long enough that a
+ * guess is not free. scrypt is what makes each guess expensive; this is
+ * what stops the guess space being tiny.
+ */
+export const MIN_PASSWORD_LENGTH = 8;
+
+export class AuthError extends Error {
+  constructor(
+    message: string,
+    readonly reason: "bad_email" | "weak_password" | "already_registered" | "bad_credentials" | "unverified",
+  ) { super(message); }
+}
+
+function cleanEmail(raw: unknown): string {
+  const email = String(raw ?? "").trim().toLowerCase();
+  if (!email || !email.includes("@")) {
+    throw new AuthError("Enter a valid email address.", "bad_email");
+  }
+  return email;
+}
+
+/**
+ * Create an account, or finish one that predates passwords being required.
+ *
+ * Every account needs a password now — the owner's call, replacing the
+ * opt-in scheme where an account with no hash signed in on its email alone.
+ * That scheme existed so setting one password wouldn't lock out every
+ * comped friend at once, and this is the migration it was waiting for: an
+ * account that has no hash yet can still be claimed here by setting one,
+ * rather than being bricked.
+ *
+ * The honest caveat, unchanged and now more consequential: **nothing
+ * verifies that an address belongs to whoever typed it**, so claiming a
+ * legacy account is first-come. That is not a regression — until today,
+ * anyone who knew the address could simply sign in as them — but if an
+ * account carries comped Plus, set its password with
+ * `npm run set-password` before anyone else gets there. A one-time emailed
+ * link through the existing EmailSender remains the real fix.
+ */
+export async function signUp(
+  db: Db, rawEmail: unknown, password: string,
+): Promise<SessionUser> {
+  const email = cleanEmail(rawEmail);
+  if (typeof password !== "string" || password.length < MIN_PASSWORD_LENGTH) {
+    throw new AuthError(
+      `Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`, "weak_password",
+    );
+  }
+  const existing = await db.query<{ id: string; password_hash: string | null }>(
+    `select id, password_hash from users where email = $1`, [email],
+  );
+  const row = existing.rows[0];
+  // An email that already has a password belongs to somebody. Saying so
+  // does leak that the account exists — unavoidable on any sign-up form
+  // without email verification, and the alternative (a generic failure)
+  // strands a returning user who forgot they had signed up.
+  if (row && hasPassword(row.password_hash)) {
+    throw new AuthError(
+      "That email already has an account. Sign in instead.", "already_registered",
+    );
+  }
+  const hash = await hashPassword(password);
+  const { rows } = await db.query(
+    `insert into users (id, email, password_hash) values ($1,$2,$3)
+     on conflict (email) do update set password_hash = excluded.password_hash
+     returning id, email, plus_until, home_airport, email_verified_at`,
+    [row?.id ?? randomUUID(), email, hash],
+  );
+  const u = rows[0];
+  return {
+    id: u.id, email: u.email,
+    plusUntil: u.plus_until ? dateStr(u.plus_until) : null,
+    homeAirport: u.home_airport ?? null,
+    emailVerified: u.email_verified_at != null,
+  };
+}
+
+/**
+ * Sign in to an existing account. Never creates one — that is signUp's job,
+ * and the old route doing both is what allowed a typo'd address to silently
+ * become a second empty account.
+ *
+ * One message for every failure: wrong password, unknown email, and an
+ * account that has not set a password yet all answer the same thing, so
+ * this form cannot be used to discover which addresses have accounts. (The
+ * sign-up form necessarily does leak that; see signUp.)
+ */
+export async function signIn(
+  db: Db, rawEmail: unknown, password: string,
+): Promise<SessionUser> {
+  const email = cleanEmail(rawEmail);
+  const bad = new AuthError("That email and password don't match.", "bad_credentials");
+  const { rows } = await db.query<{
+    id: string; email: string; plus_until: unknown; home_airport: string | null;
+    password_hash: string | null; email_verified_at: unknown;
+  }>(
+    `select id, email, plus_until, home_airport, password_hash, email_verified_at
+       from users where email = $1`,
+    [email],
+  );
+  const row = rows[0];
+  if (!row || !hasPassword(row.password_hash)) throw bad;
+  if (!(await verifyPassword(password, row.password_hash))) throw bad;
+  // The hard gate, off by default. Checked AFTER the password so an
+  // unverified account still can't be probed by anyone who doesn't have it.
+  if (requireVerifiedEmail() && row.email_verified_at == null) {
+    throw new AuthError(
+      "Confirm your email address before signing in — check your inbox for the link we sent.",
+      "unverified",
+    );
+  }
+  return {
+    id: row.id, email: row.email,
+    plusUntil: row.plus_until ? dateStr(row.plus_until as never) : null,
+    homeAirport: row.home_airport ?? null,
+    emailVerified: row.email_verified_at != null,
+  };
 }

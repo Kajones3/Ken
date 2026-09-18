@@ -265,6 +265,9 @@ a{color:var(--ink)}
 .demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
 .downgrade{display:block; margin-top:6px; font-size:11px; line-height:1.5;
   color:var(--warnfg,#f0c674)}
+.linkbtn{background:none; border:0; padding:0; font:inherit; font-weight:700;
+  color:var(--accent, var(--ink)); text-decoration:underline; cursor:pointer}
+.linkbtn:hover{opacity:.75}
 .labelrow{display:flex; align-items:center; gap:2px}
 .labelrow label{margin:0}
 .pluspill{display:inline-block; margin-left:6px; padding:1px 7px; border-radius:999px;
@@ -723,21 +726,31 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <input type="email" id="signinEmail" placeholder="you@example.com" autocomplete="email">
         </div>
         <div class="authfield">
-          <label for="signinPassword">Password <span style="text-transform:none; letter-spacing:0; font-weight:500">— only if you've set one</span></label>
-          <input type="password" id="signinPassword" placeholder="Leave blank if you haven't" autocomplete="current-password">
+          <label for="signinPassword">Password</label>
+          <input type="password" id="signinPassword" placeholder="At least 8 characters" autocomplete="current-password">
         </div>
         <div class="authrow">
-          <button class="btn btn-primary" id="signinBtn">Sign in</button>
+          <button class="btn btn-primary" id="signinBtn">Create account</button>
           <small style="color:var(--muted); font-size:12px">Accounts are free. Plus is comped by the owner.</small>
         </div>
         <small id="signinError" class="downgrade" hidden></small>
+        <p style="margin:14px 0 0; font-size:13px; color:var(--ink-2)">
+          <span id="authSwapText">Already have an account?</span>
+          <button type="button" id="authSwap" class="linkbtn">Sign in</button>
+        </p>
       </div>
 
       <div id="authAccount" hidden>
         <div class="acctline"><span class="k">Signed in as</span><span class="v" id="emailChip"></span></div>
         <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
         <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
+        <div class="acctline"><span class="k">Email</span><span class="v" id="acctVerified"></span></div>
         <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
+        <small id="verifyRow" class="downgrade" hidden>
+          Price alerts only go to a confirmed address, so they're paused until you confirm.
+          <button type="button" id="resendVerify" class="linkbtn" style="margin-left:6px">Send the link again</button>
+          <span id="resendMsg"></span>
+        </small>
         <div class="authfield" style="margin:16px 0 4px">
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
@@ -765,12 +778,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
-      <h3 id="pwTitle">Want to make it cheaper?</h3>
+      <h3 id="pwTitle">Plan your specific trip</h3>
       <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
       you should never have to pay to see what a trip costs. Flight numbers on the free plan are real estimates, built
-      from what people actually paid on that route, and shown with the range they sit in. Plus adds the exact live fare
-      for a date you're serious about, plus monitoring: your trip saved and watched, a message when the price falls or
-      we spot a new deal, and room for the extra costs (VIP tours, PhotoPass, anything else) that don't fit the model.</p>
+      from what people actually paid on that route, and shown with the range they sit in. Plus swaps the estimate for
+      the exact live fare on the dates you're actually travelling, and then watches them. <b>It may well come back
+      higher than the estimate</b> — that is the point: a real number you can book against beats a cheerful one
+      you can't.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -793,9 +807,16 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <li><span class="tick">✓</span><span><b>Custom planning expenses</b> — add your own line items (a VIP tour, PhotoPass, anything not modeled here) to a saved trip's total</span></li>
       <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, estimated flight prices with their range, driving-cost estimates, park hopper, promos browsing — stays free and unlimited</span></li>
     </ul>
-    <div class="signin" id="pwSigninBox" style="padding:0 22px 6px" hidden>
-      <input type="email" id="pwEmail" placeholder="you@example.com" aria-label="Email">
-      <button class="btn btn-sm" id="pwSigninBtn">Sign in to continue</button>
+    <!-- One auth surface, not two. This used to be its own email box posting
+         to /api/auth/signin with no password and `if(!res.ok) return` — so
+         it failed in total silence, which is exactly what the owner saw.
+         It now hands off to the real dialog. -->
+    <div id="pwSignupBox" style="padding:0 22px 6px" hidden>
+      <button class="btn btn-primary" id="pwSignupBtn">Create an account</button>
+      <p style="margin:10px 0 0; font-size:13px; color:var(--ink-2)">
+        Already have an account?
+        <button type="button" id="pwSigninBtn" class="linkbtn">Sign in</button>
+      </p>
     </div>
     <div class="mfoot">
       <span class="stub" id="pwFootMsg"></span>
@@ -925,7 +946,7 @@ const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, exc
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
 
-let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
+let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
@@ -2211,7 +2232,33 @@ function fmtPlusUntil(d){
   }catch(e){ return d; }
 }
 
-function openAuth(){
+/* "signup" or "signin". Sign up leads, because the paywall's job is to turn
+ * a visitor into an account and most people arriving at it don't have one —
+ * which is the owner's point about the button saying the wrong thing. */
+let authMode = "signup";
+
+function syncAuthMode(){
+  const up = authMode === "signup";
+  $("#authTitle").textContent = up ? "Create your account" : "Sign in";
+  $("#authIntro").textContent = up
+    ? "An account is free and takes two fields. It's what saved trips, price alerts and Plus attach to. There's no email verification yet, so use an address you'd actually want alerts sent to."
+    : "Welcome back. Every account needs a password now — if yours predates that, create the account again with the same email to set one.";
+  $("#signinBtn").textContent = up ? "Create account" : "Sign in";
+  $("#signinPassword").setAttribute("autocomplete", up ? "new-password" : "current-password");
+  $("#signinPassword").placeholder = up ? "At least 8 characters" : "Your password";
+  $("#authSwapText").textContent = up ? "Already have an account?" : "Need an account?";
+  $("#authSwap").textContent = up ? "Sign in" : "Sign up";
+  $("#signinError").hidden = true;
+}
+
+$("#authSwap").addEventListener("click", ()=>{
+  authMode = authMode === "signup" ? "signin" : "signup";
+  syncAuthMode();
+  $("#signinEmail").focus();
+});
+
+function openAuth(mode){
+  if(mode) authMode = mode;
   const on = session.authenticated;
   $("#authForm").hidden = on;
   $("#authAccount").hidden = !on;
@@ -2227,6 +2274,9 @@ function openAuth(){
     const until = fmtPlusUntil(session.plusUntil);
     $("#acctExpiryRow").hidden = !(session.plus && until);
     if(until) $("#acctExpiry").textContent = until;
+    $("#acctVerified").textContent = session.emailVerified ? "Confirmed" : "Not confirmed";
+    $("#verifyRow").hidden = session.emailVerified;
+    $("#resendMsg").textContent = "";
     $("#acctTrips").textContent = session.plus
       ? String(savedTripCount)
       : "Plus only";
@@ -2237,7 +2287,7 @@ function openAuth(){
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
   } else {
-    $("#signinError").hidden = true;
+    syncAuthMode();
     $("#signinPassword").value = "";
   }
   $("#authModal").classList.add("on");
@@ -2245,13 +2295,34 @@ function openAuth(){
 }
 function closeAuth(){ $("#authModal").classList.remove("on"); }
 
-$("#signinTop").addEventListener("click", openAuth);
-$("#accountTop").addEventListener("click", openAuth);
+$("#signinTop").addEventListener("click", ()=>openAuth("signin"));
+$("#accountTop").addEventListener("click", ()=>openAuth());
 $("#closeAuth").addEventListener("click", closeAuth);
 $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
+
+/* Confirming an address. Verification does not block sign-in (see
+ * src/verifyEmail.ts for why — no email has ever actually been delivered
+ * from this project, so a hard gate today would lock everyone out including
+ * the owner). What it does gate is alerts: we never email an address nobody
+ * confirmed. The panel says exactly that rather than nagging without a
+ * reason. */
+$("#resendVerify").addEventListener("click", async ()=>{
+  const msg = $("#resendMsg");
+  msg.textContent = " sending…";
+  const res = await fetch("/api/auth/resend-verification", { method:"POST" });
+  const body = await res.json().catch(()=>({}));
+  if(!res.ok){ msg.textContent = " couldn't send that — try again in a moment."; return; }
+  if(body.alreadyVerified){ msg.textContent = " already confirmed."; await refreshSession(); return; }
+  // Don't tell someone to check an inbox that will stay empty. Without a
+  // real sender the link goes to a server log, and saying so is the honest
+  // answer while the owner still hasn't configured Resend.
+  msg.textContent = body.delivers
+    ? " sent — check your inbox."
+    : " queued, but this deployment can't send email yet, so the link went to the server log. Ask the owner.";
+});
 
 /* ------------------------------ attractions ------------------------------
  * Price answers "which of these can we afford". It never answers "which of
@@ -2407,13 +2478,14 @@ let originPickedByUser = false;
 
 function openPw(){
   const msg = $("#pwFootMsg");
-  $("#pwSigninBox").hidden = session.authenticated;
-  if(!session.authenticated) msg.textContent = "Enter your email below to sign in — then pick a plan and we'll let the owner know.";
+  $("#pwSignupBox").hidden = session.authenticated;
+  if(!session.authenticated) msg.textContent = "Create an account first — then pick a plan and we'll let the owner know.";
   else if(session.plus) msg.textContent = "You already have Plus on this account — thanks!";
   else msg.textContent = `Signed in as ${session.email}. Pick a plan below — there's no payment yet, just a demo, so it lets the owner know you want in.`;
   $("#paywall").classList.add("on");
 }
-$("#closePw").addEventListener("click", ()=> $("#paywall").classList.remove("on"));
+function closePw(){ $("#paywall").classList.remove("on"); }
+$("#closePw").addEventListener("click", closePw);
 $("#upgradeTop").addEventListener("click", openPw);
 $("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
 document.addEventListener("keydown", e=>{
@@ -2422,21 +2494,25 @@ document.addEventListener("keydown", e=>{
   closeAuth();
 });
 
-$("#pwSigninBtn").addEventListener("click", async ()=>{
-  const email = $("#pwEmail").value.trim();
-  if(!email) return;
-  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email}) });
-  if(!res.ok) return;
-  await refreshSession();
-  await runSearch(results[selected] && results[selected].resortId);
-  await loadSavedTrips();
-  openPw(); // re-render the modal now that we're signed in
-});
+/* Both buttons hand off to the real auth dialog rather than running a second
+   half-built copy of it. The old inline version posted an email with no
+   password and swallowed every failure, which is why clicking it appeared to
+   do nothing at all. */
+$("#pwSignupBtn").addEventListener("click", ()=>{ closePw(); openAuth("signup"); });
+$("#pwSigninBtn").addEventListener("click", ()=>{ closePw(); openAuth("signin"); });
 
 async function requestPlus(plan){
-  if(!session.authenticated) return; // pwSigninBox is already visible for this case
-  if(session.plus) return; // nothing to request, already Plus
   const msg = $("#pwFootMsg");
+  // Both of these used to `return` with no word to the user, so picking a
+  // plan while signed out looked identical to picking one successfully.
+  if(!session.authenticated){
+    msg.textContent = "Create an account first — then pick a plan and we'll pass the request on.";
+    return;
+  }
+  if(session.plus){
+    msg.textContent = "You already have Plus on this account — nothing to request.";
+    return;
+  }
   const res = await fetch("/api/plus/request", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({plan}) });
   msg.textContent = res.ok
     ? "Request sent — the owner will reach out to enable Plus for your account."
@@ -2457,8 +2533,8 @@ $("#planYearly").addEventListener("click", ()=>{
 async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
-    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null }
-    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null };
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null, emailVerified:!!me.emailVerified }
+    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going
   // through a render, and a stale "Sign in" button after signing in is the
@@ -2471,17 +2547,26 @@ async function refreshSession(){
 
 $("#signinBtn").addEventListener("click", async ()=>{
   const email = $("#signinEmail").value.trim();
-  if(!email) return;
   const password = $("#signinPassword").value;
   const err = $("#signinError");
   err.hidden = true;
-  // Accounts with no password set still sign in on the email alone, so this
-  // sends whatever is typed and lets the server decide whether it's needed.
-  const res = await fetch("/api/auth/signin", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  // Never return silently. Every path from here either signs you in or says
+  // why it didn't — the bug the owner hit was a handler that just stopped.
+  if(!email || !password){
+    err.textContent = "Enter your email and password.";
+    err.hidden = false;
+    return;
+  }
+  const route = authMode === "signup" ? "/api/auth/signup" : "/api/auth/signin";
+  const res = await fetch(route, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
   if(!res.ok){
     const body = await res.json().catch(()=>({}));
-    err.textContent = body.error || "Could not sign in.";
+    err.textContent = body.message || body.error || "Could not sign in.";
     err.hidden = false;
+    // Land them on the form that can actually work rather than making them
+    // find it: an existing account needs sign-in, a wrong password on a
+    // legacy account needs sign-up to set one.
+    if(body.error === "already_registered"){ authMode = "signin"; syncAuthMode(); err.textContent = body.message; err.hidden = false; }
     return;
   }
   $("#signinPassword").value = "";
