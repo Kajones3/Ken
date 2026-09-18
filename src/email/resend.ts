@@ -23,13 +23,23 @@ export class ResendEmailSender implements EmailSender {
         + "you have verified — use onboarding@resend.dev until you have verified one.",
       );
     }
+    // A display name and a real reply-to. Both are deliverability, not
+    // decoration: a bare address with no name and nowhere to reply is a
+    // shape spam filters have learned to distrust, and a reply that
+    // disappears is worse than no reply at all.
+    const fromHeader = from.includes("<") ? from : `Parkfare <${from}>`;
+    const replyTo = process.env.OWNER_EMAIL || undefined;
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ from, to: msg.to, subject: msg.subject, text: msg.text }),
+      body: JSON.stringify({
+        from: fromHeader, to: msg.to, subject: msg.subject, text: msg.text,
+        ...(replyTo ? { reply_to: replyTo } : {}),
+      }),
     });
     if (!res.ok) {
       throw new Error(`resend ${res.status}: ${await res.text()}`);
