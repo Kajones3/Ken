@@ -16,7 +16,7 @@ import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
-import { resortTransportMode, GETTING_THERE_MODES, type GettingThereMode } from "./gettingThere.js";
+import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
@@ -293,6 +293,12 @@ async function listPromos(q: URLSearchParams) {
   }));
 }
 
+/** Origins as the trip form needs them: the airport, plus which "Getting
+ *  there" preset suits someone departing from it (see gettingThere.ts). */
+function withSuggestedMode(origins: typeof ORIGINS) {
+  return origins.map((o) => ({ ...o, suggestedGettingThere: defaultGettingThere(o.iata) }));
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const send = (code: number, body: unknown, opts: { cache?: string; headers?: Record<string, string> } = {}) => {
@@ -320,8 +326,16 @@ const server = createServer(async (req, res) => {
            from fetch_runs where job = 'refresh' and errors = 0`);
       return send(200, { ok: true, db: db.kind, ...rows[0] }, { cache: "no-store" });
     }
+    // Each origin carries the "Getting there" preset to offer someone
+    // departing from it, resolved HERE rather than in the browser. The rule
+    // is a distance measured against resort coordinates, and a second copy
+    // of it in prototype.html would be free to drift from the one the
+    // pricing and the paid rotation use — the same reason trip cost lives in
+    // exactly one module. The client just reads the field.
     if (url.pathname === "/api/meta") return send(200, {
-      origins: ORIGINS, plusOrigins: PLUS_ORIGINS, resorts: RESORTS,
+      origins: withSuggestedMode(ORIGINS),
+      plusOrigins: withSuggestedMode(PLUS_ORIGINS),
+      resorts: RESORTS,
     }, { cache: "public, max-age=300" });
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---

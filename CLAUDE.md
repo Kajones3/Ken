@@ -606,11 +606,16 @@ Found by testing an all-international demand day, not in production.
   LAX→Disneyland 36, SAN→Disneyland 77, TPA→WDW 81, then a clear gap to
   RSW→WDW 133, JAX→WDW 144, MIA→WDW 193, LAS→Disneyland 226 — the last four
   being genuine, regularly-flown routes that must never be withheld.
-  **Open consequence:** someone departing LAX now sees no flight to Disneyland
-  at all, which on a six-resort board reads as "the closest resort is
-  unavailable". It is honest and it is not new (nothing was ever cached for
-  those pairs), but the right answer is to steer them to the driving preset
-  rather than show a gap.
+  **Resolved the same day:** `defaultGettingThere()` in `gettingThere.ts`
+  pre-selects the matching drive preset (`driveDlr` from LAX or SAN,
+  `driveWdw` from TPA) so the local resort prices as a drive and the other
+  five still price as flights — one board, no gap. Verified in a real
+  browser, not just in tests: LAX + November prices Disneyland at "Driving
+  $80" with flights on the other five. The suggestion is served from
+  `/api/meta` (`origin.suggestedGettingThere`) rather than recomputed in
+  `prototype.html`, so the distance rule has one home; and it stops the
+  moment the traveller picks a preset themselves, because flying LAX→SNA on
+  points is a real thing people do.
 - Postgres returns `date` columns as JS `Date` objects; string-slicing them mangled every
   date and made all six resorts return "unavailable" with **no error at all**. See
   `dateStr()` in `src/book.ts`.
@@ -737,6 +742,33 @@ verified" above), a day-by-day trip planner (itinerary, checklist, dining tracke
 budget, per-day notes, special-event floor pricing — deliberately deferred, see
 above), Travelpayouts token, hotel endpoint approval, a real ticket-price table,
 Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
+
+## What the live database actually holds (checked 2026-09-18)
+
+Run the **"Parkfare debug coverage"** workflow to re-check any of this — it is
+select-only, makes no provider calls, and reads the real Neon database from
+inside Actions, so nobody has to handle the connection string. Findings that
+matter:
+
+- **The fare trend is fine, and "trend: skipped" in a refresh log does not
+  mean estimates are broken.** `fare_trend` holds real rows — x0.945 (low
+  x0.580, high x1.242) from **74 routes** — and `book.ts` keeps using the last
+  good one, exactly as designed. "Skipped" only means no NEW row was computed
+  that night. Worth watching rather than fixing: the newest row is 2026-09-09,
+  so the multiplier every estimate is scaled by is drifting out of date even
+  though nothing looks wrong.
+- **BTS baseline coverage is good**: ~38-40 origins each for MCO, SNA, LAX and
+  TPA. Florida and California short hops are absent from their neighbours
+  (MCO has no baseline from JAX, RSW or TPA), which is DB1B agreeing with the
+  local-route rule rather than a gap.
+- **Real cached fares run about three months out**, then fall back to labelled
+  estimates — the tiered refresh working as intended on a database that has
+  only been live a few weeks.
+- **`alerts` reports `0 trips checked`**: no saved trips exist yet, so the
+  alert path has never run against real data.
+- The news digest is still printing `1 new item(s) found but OWNER_EMAIL is
+  not set`, and now also `IRS mileage rate missing for 2027` — the
+  carry-forward warning from the decision above, working, and reaching nobody.
 
 ## Nothing has ever actually emailed in production (found 2026-09-18)
 

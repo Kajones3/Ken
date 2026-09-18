@@ -474,6 +474,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
             <option value="driveDlr">Driving to Disneyland Resort, flying everywhere else</option>
             <option value="driveDomestic">Driving domestically (WDW + Disneyland), flying internationally</option>
           </select>
+          <small id="gettingThereNote" class="downgrade" hidden></small>
         </div>
         <div class="f" id="originAirportField">
           <label for="origin">Departing from</label>
@@ -963,7 +964,53 @@ function syncGettingThere(){
   $("#driveBlock").hidden = !DRIVE_PRESETS.includes(mode);
   $("#milesExtra").hidden = mode !== "flyMiles";
 }
-$("#gettingThere").addEventListener("change", syncGettingThere);
+
+/* Someone departing LAX is not going to fly to Disneyland, and someone
+ * departing Orlando is not going to fly to Walt Disney World. Before this
+ * they got a blank cell where the nearest resort's price belonged — which
+ * reads as "this app has no data", not "you'd drive that one".
+ *
+ * So the preset follows the departure airport: the local resort switches to
+ * its drive preset, the other five keep flying, and a note says so. The
+ * server decides which airports count as local (/api/meta's
+ * suggestedGettingThere) — the rule is a distance against resort
+ * coordinates and a second copy of it here would be free to drift from the
+ * one pricing uses.
+ *
+ * It stops the moment the traveller picks a preset themselves. Plenty of
+ * people really do fly LAX->SNA on points; the app should suggest, not
+ * insist. */
+let gettingTherePickedByUser = false;
+
+function suggestedModeFor(iata){
+  const all = ORIGINS.concat(PLUS_ORIGINS);
+  return (all.find(o => o.iata === iata) || {}).suggestedGettingThere || "fly";
+}
+
+function applySuggestedGettingThere(){
+  const note = $("#gettingThereNote");
+  const suggestion = suggestedModeFor($("#origin").value);
+  if(gettingTherePickedByUser || suggestion === "fly"){
+    if(note) note.hidden = true;
+    return;
+  }
+  $("#gettingThere").value = suggestion;
+  syncGettingThere();
+  if(note){
+    const resortName = suggestion === "driveWdw" ? "Walt Disney World" : "Disneyland Resort";
+    const originName = ($("#origin").selectedOptions[0] || {}).textContent || $("#origin").value;
+    note.hidden = false;
+    note.innerHTML = `${esc(resortName)} is a drive from ${esc(originName)}, so we've set that up —
+      the other five resorts still price as flights. Change this if you'd rather fly.`;
+  }
+}
+
+$("#gettingThere").addEventListener("change", () => {
+  gettingTherePickedByUser = true;
+  $("#gettingThereNote").hidden = true;
+  syncGettingThere();
+});
+$("#origin").addEventListener("change", applySuggestedGettingThere);
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
 /** Wear-and-tear is already zero on a rental (its own fee covers it), so
@@ -2356,6 +2403,10 @@ async function boot(){
   RESORTS = meta.resorts;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
+  // After the form's defaults are in place, so a returning visitor whose
+  // saved origin is Los Angeles or Orlando lands on the drive preset rather
+  // than on a blank cell for the resort they live next to.
+  applySuggestedGettingThere();
   fillJumpRow();
   buildAges();
   await refreshSession();

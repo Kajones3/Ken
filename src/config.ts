@@ -462,10 +462,42 @@ export const NO_FLY_RADIUS_MILES = 100;
 export function isLocalRoute(originIata: string, destinationIata: string): boolean {
   if (!originIata || !destinationIata) return false;
   if (originIata === destinationIata) return true;
-  const origin = ORIGIN_BY_IATA.get(originIata);
   const resort = RESORT_BY_ARRIVAL_AIRPORT.get(destinationIata);
-  if (!origin || !resort) return false;
+  return Boolean(resort && isLocalToResort(originIata, resort));
+}
+
+/** Shared by both directions of the rule, so "too close to fly" and "close
+ *  enough to drive" can never disagree about the same pair of points. */
+function isLocalToResort(originIata: string, resort: Resort): boolean {
+  const origin = ORIGIN_BY_IATA.get(originIata);
+  if (!origin) return false;
   return haversineMiles(origin.lat, origin.lon, resort.lat, resort.lon) < NO_FLY_RADIUS_MILES;
+}
+
+/**
+ * The resort this departure airport is close enough to drive to, if any.
+ *
+ * The other half of `isLocalRoute`, and the useful half for a traveller:
+ * having established that someone departing LAX will not be flying to
+ * Disneyland, the board should say what they WILL do — drive to Disneyland,
+ * fly to the other five — rather than show a gap where the nearest resort's
+ * price ought to be.
+ *
+ * Domestic only, and that is a real limit rather than an oversight:
+ * `priceTrip` refuses to price a drive to any resort outside the US, so
+ * "local to Paris" has nowhere to go even if someone departed from CDG.
+ * Nearest wins if two ever qualify (none do today — Orlando and Anaheim are
+ * 2,000 miles apart).
+ */
+export function localResortFor(originIata: string): Resort | null {
+  if (!originIata) return null;
+  const origin = ORIGIN_BY_IATA.get(originIata);
+  if (!origin) return null;
+  return RESORTS
+    .filter((r) => r.region === "dom" && isLocalToResort(originIata, r))
+    .sort((a, b) =>
+      haversineMiles(origin.lat, origin.lon, a.lat, a.lon)
+      - haversineMiles(origin.lat, origin.lon, b.lat, b.lon))[0] ?? null;
 }
 
 /** Tiered freshness: near dates move, far dates don't. */
