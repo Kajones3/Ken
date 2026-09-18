@@ -60,6 +60,9 @@ function tierFromClass(hotelClass: number | undefined): "budget" | "mid" | "upsc
 }
 
 export class SerpApiHotelProvider {
+  /** Recorded in hotel_rates.source, so a rate this vendor really returned is
+   *  distinguishable from one the mock provider invented. */
+  readonly name = "serpapi_hotels";
   private readonly limiter: HourlyLimiter;
   /** Hard ceiling on paid lookups for one process, so a loop bug or an
    *  unexpectedly long month list can't quietly run up a bill. The hourly

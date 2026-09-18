@@ -15,6 +15,13 @@ export interface HotelQuote {
  */
 export interface Provider {
   readonly name: string;
+  /**
+   * What to record in hotel_rates.source for rows this provider returns.
+   * Defaults to `name`. pickProvider() composes flights and hotels from two
+   * unrelated vendors and its `name` names both, so a hotel row tagged with
+   * that combined name would claim a vendor that never touched it.
+   */
+  readonly hotelSource?: string;
   flightMonth(origin: string, destination: string, month: string, tripLength: number): Promise<FlightQuote[]>;
   hotelMonth(resortId: string, month: string): Promise<HotelQuote[]>;
 }

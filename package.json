@@ -12,6 +12,7 @@
     "refresh": "tsx src/jobs/refresh.ts",
     "alerts": "tsx src/jobs/alerts.ts",
     "news-digest": "tsx src/jobs/newsDigest.ts",
+    "pulls-digest": "tsx src/jobs/pullsDigest.ts",
     "migrate": "tsx src/migrate.ts",
     "grant-plus": "tsx src/grantPlus.ts",
     "seed-promos": "tsx src/seedPromos.ts",

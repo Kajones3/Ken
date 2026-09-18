@@ -264,3 +264,15 @@ create table if not exists exact_fare_usage (
   spent_at  timestamptz not null default now(),
   primary key (user_id, day)
 );
+
+-- Which provider wrote a hotel row, mirroring flight_prices.source above.
+-- Without it there is no way to tell a rate a vendor actually returned from
+-- one the mock provider invented, which is exactly the question the daily
+-- real-pulls digest exists to answer (see src/jobs/pullsDigest.ts).
+-- Nullable with no default, so rows written before this existed stay
+-- honestly unlabelled rather than being claimed by whoever is current.
+alter table hotel_rates add column if not exists source text;
+create index if not exists hotel_rates_source on hotel_rates (source, fetched_at);
+
+-- The digest scans flight_prices by when a row was fetched, not by route.
+create index if not exists flight_prices_fetched_at on flight_prices (fetched_at);
