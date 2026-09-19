@@ -652,10 +652,15 @@ const server = createServer(async (req, res) => {
       if (!user) return send(401, { error: "sign_in_required" });
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const { rows } = await db.query(
-        `select id, label, params, baseline_total, active, created_at from saved_trips
+        `select id, label, params, overrides, baseline_total, active, created_at from saved_trips
           where user_id = $1 order by created_at desc`, [user.id]);
+      // params/overrides are returned so a saved trip can be REOPENED, not
+      // just listed — without them the list was a read-only receipt and the
+      // only way back to a trip you had saved was to key it in again.
+      // They are the user's own row, already Plus-gated above.
       return send(200, rows.map((r) => ({
         id: r.id, label: r.label, resortId: r.params?.resortId ?? null,
+        params: r.params ?? {}, overrides: r.overrides ?? {},
         baselineTotal: Number(r.baseline_total), active: r.active, createdAt: r.created_at,
       })));
     }

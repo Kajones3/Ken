@@ -234,6 +234,22 @@ a{color:var(--ink)}
 .f.stooddown label{text-decoration:line-through}
 #exactDatesHint.needsend{color:var(--accent); font-weight:600}
 .estnote.staynote{color:var(--ink-2)}
+.tripsmenu{position:relative}
+.tripsdrop{position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:270px; max-height:60vh; overflow-y:auto;
+  background:var(--surface); border:1px solid var(--rule-strong); border-radius:12px; box-shadow:0 18px 44px -14px rgba(0,0,0,.5); padding:6px}
+.tripsdrop .tripitem{display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border-radius:8px}
+.tripsdrop .tripitem:hover{background:var(--surface-2)}
+.tripsdrop .tripopen{flex:1; text-align:left; background:none; border:0; color:var(--ink); font:inherit; cursor:pointer; padding:0}
+.tripsdrop .tripopen small{display:block; color:var(--muted); font-size:11.5px; margin-top:2px}
+.tripsdrop .empty{padding:10px; color:var(--muted); font-size:12.5px}
+.namefield{display:grid; gap:6px; padding:18px 22px}
+.namefield input{background:var(--surface-2); border:1px solid var(--rule-strong); border-radius:9px; padding:10px 12px; color:var(--ink); font:inherit}
+@media print{
+  header .acct, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn, #printTop{display:none!important}
+  body{background:#fff; color:#000}
+  .row, .card, .panel{break-inside:avoid; box-shadow:none}
+  a[href]:after{content:" (" attr(href) ")"; font-size:9px; color:#555; word-break:break-all}
+}
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
 
@@ -460,6 +476,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <span class="acctplan" id="acctPlan"></span>
         </span>
       </button>
+      <div class="tripsmenu" id="tripsMenu" hidden>
+        <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My trips</button>
+        <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
+      </div>
+      <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
       <button class="btn btn-sm" id="signoutTop" hidden>Sign out</button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
@@ -717,6 +738,24 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
      out, a real account panel when signed in. The account panel exists
      mostly to answer "am I actually signed in?" with something bigger than
      a chip — who you are, which plan, and when it runs out. -->
+<div class="back" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
+  <div class="modal" style="max-width:420px">
+    <div class="mhead">
+      <h3 id="nameTitle">Save this trip</h3>
+      <p id="nameIntro">Give it a name you'll recognise later.</p>
+    </div>
+    <div class="namefield">
+      <label for="tripName">Name</label>
+      <input type="text" id="tripName" maxlength="80" placeholder="Spring break with the kids">
+      <small id="nameError" class="downgrade" hidden></small>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-sm" id="nameCancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="nameSave">Save &amp; watch it</button>
+    </div>
+  </div>
+</div>
+
 <div class="back" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="modal" style="max-width:460px">
     <div class="mhead">
@@ -2741,10 +2780,15 @@ let savedTripCount = 0;
 
 async function loadSavedTrips(){
   const box = $("#savedTripsPanel"), list = $("#savedTripsList");
-  if(!session.plus){ box.hidden = true; savedTripCount = 0; return; }
+  if(!session.plus){
+    box.hidden = true; savedTripCount = 0; savedTrips = []; renderTripsMenu();
+    return;
+  }
   box.hidden = false;
   const trips = await apiGet("/api/trips", {});
   savedTripCount = Array.isArray(trips) ? trips.length : 0;
+  savedTrips = Array.isArray(trips) ? trips : [];
+  renderTripsMenu();
   if(!Array.isArray(trips) || !trips.length){
     list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
     return;
@@ -2808,21 +2852,143 @@ document.addEventListener("click", async e=>{
   const resortId = s.dataset.resort;
   const item = results.find(r=>r.resortId===resortId);
   if(!item || !item.ok) return;
+  // Ask what to call it. A list of six identically-named "Walt Disney World
+  // — 2027-03" rows is not something anybody can navigate a month later, and
+  // naming it is the one moment the traveller knows what this trip is for.
+  openNameDialog(item, s);
+});
+
+/* ------------------------- naming and reopening -------------------------
+ * A saved trip used to be write-only: the list showed a name and a baseline
+ * and there was no way back into it, so re-visiting a trip meant keying the
+ * whole form in again. The masthead dropdown is the way back.
+ */
+let pendingSave = null;
+function defaultTripName(item){
+  const when = exactDatesActive()
+    ? `${fmtDate($("#exactDate").value)}–${fmtDate($("#exactReturn").value)}`
+    : MONTHSFULL[+params.month.split("-")[1]-1] + " " + params.month.split("-")[0];
+  return `${item.resort.name} — ${when}`;
+}
+function openNameDialog(item, btn){
+  pendingSave = { item, btn };
+  $("#nameError").hidden = true;
+  $("#tripName").value = defaultTripName(item);
+  $("#nameIntro").textContent = `${item.resort.name}, ${usd(item.price.total)} for ${item.price.partySize}. Give it a name you'll recognise later.`;
+  $("#nameModal").classList.add("on");
+  $("#tripName").focus();
+  $("#tripName").select();
+}
+function closeNameDialog(){ $("#nameModal").classList.remove("on"); pendingSave = null; }
+$("#nameCancel").addEventListener("click", closeNameDialog);
+$("#nameModal").addEventListener("click", e=>{ if(e.target.id === "nameModal") closeNameDialog(); });
+$("#tripName").addEventListener("keydown", e=>{ if(e.key === "Enter") $("#nameSave").click(); });
+
+$("#nameSave").addEventListener("click", async ()=>{
+  if(!pendingSave) return;
+  const { item, btn } = pendingSave;
+  const label = $("#tripName").value.trim() || defaultTripName(item);
+  const resortId = item.resortId;
   const res = await fetch("/api/trips", {
     method:"POST", headers:{"content-type":"application/json"},
     body: JSON.stringify({
-      label: `${item.resort.name} — ${params.month}`,
-      params: { ...tripQuery(), month: params.month, resortId },
+      label,
+      // exactDate/exactReturn ride along so reopening a Plus trip comes back
+      // on the real travel dates it was priced for, not just its month.
+      params: { ...tripQuery(), month: params.month, resortId,
+                exactDate: params.exactDate || "", exactReturn: params.exactReturn || "" },
       overrides: { [resortId]: ovOf(resortId) },
       baselineTotal: item.price.total,
     }),
   });
   if(res.ok){
-    s.textContent = "Saved & watching";
-    setTimeout(()=>{ if(s.isConnected) s.textContent = "Save this trip & watch it"; }, 1800);
+    closeNameDialog();
+    if(btn && btn.isConnected){
+      btn.textContent = "Saved & watching";
+      setTimeout(()=>{ if(btn.isConnected) btn.textContent = "Save this trip & watch it"; }, 1800);
+    }
     await loadSavedTrips();
-  } else if(res.status === 402){ openPw(); }
+  } else if(res.status === 402){ closeNameDialog(); openPw(); }
+  else {
+    // Never a silent return: the owner's report about the old paywall box was
+    // that a dead click is indistinguishable from a broken build.
+    const body = await res.json().catch(()=>({}));
+    $("#nameError").textContent = body.message || "Couldn't save that trip — try again in a moment.";
+    $("#nameError").hidden = false;
+  }
 });
+
+/** Reopen a saved trip: put its own parameters back in the form, restore the
+ *  numbers that were typed for that resort, and re-run the search on it. */
+async function openSavedTrip(trip){
+  const q = trip.params || {};
+  const setIf = (sel, v) => { if(v !== undefined && v !== null && v !== "") $(sel).value = String(v); };
+  setIf("#origin", q.origin); setIf("#adults", q.adults); setIf("#nights", q.nights);
+  setIf("#parkdays", q.parkDays); setIf("#tier", q.tier); setIf("#food", q.food);
+  setIf("#month", q.month); setIf("#gettingThere", q.gettingThere);
+  // "Need a hotel?" and "Where you stay" are two controls over one saved
+  // value: stay === "none" is the no-hotel case, anything else is a pick.
+  if(q.stay){
+    $("#needHotel").value = q.stay === "none" ? "no" : "yes";
+    if(q.stay !== "none") $("#stay").value = q.stay;
+  }
+  $("#hopper").value = q.hopper ? "1" : "0";
+  const ages = String(q.childAges || "").split(",").filter(Boolean);
+  $("#kids").value = String(ages.length);
+  buildAges();
+  ages.forEach((a,i)=>{ const el = document.getElementById("age"+i); if(el) el.value = a; });
+  $("#exactDate").value = q.exactDate || "";
+  $("#exactReturn").value = q.exactReturn || "";
+  // The trip's own numbers, restored under the same resort they were typed
+  // for — merged, not swapped in, so reopening one trip doesn't wipe what
+  // you've typed for the other five resorts on the board.
+  for(const [rid, ov] of Object.entries(trip.overrides || {})){
+    if(ov && Object.keys(ov).length) OV[rid] = { ...ov };
+  }
+  store.set("ov", OV);
+  syncNeedHotel(); syncGettingThere(); syncExactDatesUi();
+  closeTripsDrop();
+  view = "board"; detailOpen = true;
+  await runSearch(trip.resortId);
+  const box = $("#detail");
+  if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+let savedTrips = [];
+function closeTripsDrop(){
+  $("#tripsDrop").hidden = true;
+  $("#tripsTop").setAttribute("aria-expanded", "false");
+}
+function renderTripsMenu(){
+  $("#tripsMenu").hidden = !session.plus;
+  $("#tripsTop").textContent = savedTrips.length ? `My trips (${savedTrips.length})` : "My trips";
+  $("#tripsDrop").innerHTML = savedTrips.length
+    ? savedTrips.map((t,i)=>{
+        const r = RESORT_BY_ID.get(t.resortId);
+        return `<div class="tripitem"><button class="tripopen" data-opentrip="${i}">
+          ${esc(t.label || (r ? r.name : t.resortId))}
+          <small>${r ? esc(r.name) : ""} · baseline ${usd(t.baselineTotal)}${t.active ? "" : " · paused"}</small>
+        </button><button class="btn btn-sm" data-deltrip="${t.id}" title="Remove">×</button></div>`;
+      }).join("")
+    : `<p class="empty">Nothing saved yet. Open a resort's details and use "Save this trip &amp; watch it".</p>`;
+}
+$("#tripsTop").addEventListener("click", ()=>{
+  const d = $("#tripsDrop");
+  d.hidden = !d.hidden;
+  $("#tripsTop").setAttribute("aria-expanded", String(!d.hidden));
+});
+document.addEventListener("click", async e=>{
+  const o = e.target.closest("[data-opentrip]");
+  if(o){ await openSavedTrip(savedTrips[+o.dataset.opentrip]); return; }
+  if(!e.target.closest("#tripsMenu")) closeTripsDrop();
+});
+
+/* Print to PDF. Deliberately the browser's own print dialog rather than a
+ * generated file: it works on a phone and a laptop, costs nothing to run,
+ * and spends none of the email allowance. The @media print rules drop the
+ * controls nobody can use on paper and spell out every link's destination,
+ * since a printed "Book this fare →" is useless without its URL. */
+$("#printTop").addEventListener("click", ()=>window.print());
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */
