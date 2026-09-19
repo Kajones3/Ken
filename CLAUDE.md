@@ -14,6 +14,30 @@ say when something is a guess.
 
 ## Where things stand — 2026-09-19 (read this first in a new session)
 
+**Latest session: a round of owner UX fixes.** Five trip-form bugs, the
+hotel links, an all-six hotel re-baseline, free-text override boxes, and
+saved trips you can get back to. Read the decision notes below before
+re-litigating any of them; the short version:
+
+- *Dates.* Typed travel dates no longer vanish, a half-filled pair is
+  refused instead of silently falling back to the month, the return date
+  is guarded on a phone as well as a laptop, and both inputs cap at the
+  13-month booking horizon.
+- *Hotels.* On-property rooms link to Disney's own site (Walt Disney World
+  by category), and every resort's category medians were re-based
+  together. **The four international sets are Claude drafts the owner is
+  correcting**, and the four international hotel URLs have never been
+  fetched — the egress proxy blocks every Disney domain.
+- *Your numbers.* The airfare slider is gone and its floor is now advisory
+  — a reversal, on the owner's instruction. Food can be typed as a
+  whole-party daily total.
+- *Saved trips.* Named on save, reopened from a "My trips" masthead
+  dropdown. "Save as PDF" prints the board.
+
+**Open with the owner:** whether Disney's hotel pages accept dates in the
+URL (a candidate link is with them to click-test), and corrections to the
+four international hotel baselines.
+
 **Live at https://pricingthemagic.com**, serving the current `master`
 (`18f12f4`). Version check in the browser: the paywall reads "Plan your
 specific trip" and there is a **Sign out** button in the masthead. If you see
@@ -285,6 +309,80 @@ It lives on `users` because there is one field. **If the profile grows past a
 handful — a souvenir budget, attraction preferences — move it to a
 `user_profile` table**: identity and entitlement sharing a row with free-form
 taste data gets muddy fast.
+
+**The airfare override's floor is advisory, not enforced** (2026-09-19,
+owner's reversal of an earlier decision — recorded so the old rule isn't
+restored by someone reading only the older note above). Typing a fare
+below the cheapest known one used to be silently raised to that floor, so
+the box overruled what you typed and showed a total nobody asked for. Your
+number now stands; `fareBelowFloor` is reported and the card says the cache
+has nothing that cheap. **Warn, don't overrule** — the same rule the `est.`
+chip and the `dataConfidence` badges already follow. Still floored at zero:
+a trip can be cheap, never negative.
+
+**The food override is a whole-party daily total, not per person**
+(2026-09-19, owner's call). "We spend about $250 a day" is a number people
+know about themselves; a per-head figure is one they have to work out. The
+cost, said in the UI rather than hidden: per-age scaling stops applying, so
+changing the party size afterwards no longer moves it. Part-days still do.
+A dining plan still wins — there is nothing to estimate about food already
+bought.
+
+**On-property rooms link to Disney, never a reseller.** Every hotel row
+used to link to a Booking.com search for its name, Disney's own included.
+Walt Disney World publishes a page per category and the owner asked for
+the category page, so somebody pricing Moderate lands on the Moderate
+list. `onPropertyHotelUrl()` in `config.ts` is the one home for the rule;
+`config.test.ts` pins that no resort sends an on-property guest to a
+reseller. **Dates are deliberately not appended** — Disney's category
+pages are hash-routed and no date parameter has been confirmed to work, and
+a link landing on an error page is worse than one landing on the right
+page. The four international URLs are **unverified from this environment**,
+same standing as the `goodToKnow` visa notes.
+
+**Hotel bases are a category median with the per-hotel spread kept around
+it** (2026-09-19). The owner supplies a researched range per category, each
+category's median lands on it, and `config.test.ts` pins every median so
+nudging a base is a test failure rather than a silent change to which
+resort wins the board. Walt Disney World moved a long way (Deluxe roughly
+doubled) because it was built on older rack rates.
+
+**All six were re-baselined together, and that mattered more than the
+numbers.** Fixing Orlando alone would have made it lose to resorts still
+carrying older, lower guesses — not because they are cheaper, but because
+their numbers are staler. That is precisely the six-resort comparison this
+app exists to get right, so a better number for one resort can make the
+product worse. Disneyland didn't move (already on midpoints of researched
+per-hotel ranges). **Paris, Tokyo, Shanghai and Hong Kong are Claude
+drafts from web search for the owner to correct**, same standing as the
+starter attraction rows; Hong Kong is the weakest, since the only figures
+found were "starts at" rates during an active 40%-off promotion, which is
+neither a median nor a rack rate.
+
+**"Compare both" now says what it found.** It always widened the hotel pool
+to on- and off-property and picked the cheaper — correctly and completely
+silently, so the owner's read that the control did nothing was fair. Each
+board row carries the gap per night and over the trip, **parking and
+transfers included**, that last part being exactly the cost people leave
+out when they conclude off-property is cheaper. Computed in `priceTrip`
+from the book slice already loaded: no extra request, no provider call.
+
+**No Airbnb/VRBO rates, decided rather than deferred** (2026-09-19). Airbnb
+killed its affiliate program in 2021 and has no public API; Vrbo has an
+affiliate program but no rate-data API (MarketMaker is host-side). So the
+only options were a hand-maintained guess or a paid scraper, and the owner
+declined both — "I don't want to maintain that". A made-up per-resort
+Airbnb number could flip which resort wins with nothing to defend it,
+which is the souvenir-basket trap in another costume. **Deluxe Villas is
+also deliberately out**: it's a Walt Disney World-only category and the
+model has three tiers.
+
+**Other resellers worth knowing about, if a second hotel source is ever
+wanted:** Expedia's Travel Creator Program covers Expedia, Hotels.com AND
+Vrbo from one account (Rapid, the real API, still wants a corporate
+entity); Priceline pays ~3% on hotels and is joined through Sovrn Commerce,
+not directly; and the Travelpayouts account this project already has
+brokers Booking.com and Agoda, which is the cheapest path of the three.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -1091,9 +1189,14 @@ the warning that there is nowhere to send warnings.
   `distanceMiles`/`lat`/`lon` field, only a free-text `descriptor` — building this needs
   new structured data across ~30-40 hotels, deliberately deferred (the owner picked the
   cheaper "Need a hotel?" toggle for this round instead).
-- **The trip form's "Arriving" field is still a month picker, not a real date.** Reordered
-  in this round per the owner's spec, but "Arriving Date" was interpreted as a relabel of
-  the existing control, not a scope change — flag if a real single-date picker is wanted.
+- **The trip form's "Arriving" field is a month picker**, with real travel dates as a
+  separate Plus control beside it. Filling both dates now stands the month down visibly
+  and the search refuses a half-filled pair rather than falling back to the month —
+  which is how a February trip came back priced for March, and how the Booking.com link
+  then carried March's dates.
+- **Disney's own hotel pages are not known to accept dates in a URL.** The card tells the
+  traveller to enter their dates rather than guessing a parameter; confirming this needs
+  a human clicking a real link, same as `PUBLIC_BASE_URL`.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.
