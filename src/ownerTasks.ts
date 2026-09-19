@@ -60,7 +60,7 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
   {
     id: "attraction-list",
     title: "Replace the starter attraction list with your own",
-    why: "ATTRACTIONS in config.ts ships ~10 rows Claude was confident about, not a researched catalogue. Until it is yours, the Plus attraction picker is matching against a sample.",
+    why: "ATTRACTIONS in config.ts ships ~10 rows Claude was confident about, not a researched catalogue. Until it is yours, the Plus attraction picker is matching against a sample. Next step is not a scrape (Disney's list is client-rendered, covers only WDW, and cannot tell that Remy's Ratatouille Adventure and Ratatouille: L'Aventure Totalement Toquee are the same ride): paste WDW and Disneyland names in any rough form and have them structured into rows, with every cross-resort clone flagged for you to confirm. Aim for 40-80 headline attractions across all six resorts, not a complete inventory.",
     side: "plus",
     blocking: false,
     done: false,

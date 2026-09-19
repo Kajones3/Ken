@@ -12,6 +12,37 @@ say when something is a guess.
 
 ---
 
+## Where things stand — 2026-09-19 (read this first in a new session)
+
+**Live at https://pricingthemagic.com**, serving the current `master`
+(`18f12f4`). Version check in the browser: the paywall reads "Plan your
+specific trip" and there is a **Sign out** button in the masthead. If you see
+"Want to make it cheaper?" instead, Render is serving a stale build —
+Manual Deploy → Deploy latest commit.
+
+Shipped in the last two sessions: mandatory passwords, email verification
+that actually delivers, honest paywall copy, a masthead sign-out, airports
+listed by city, attractions (starter data), and the owner's manual-job list
+riding the nightly digest.
+
+**The next piece of work is the real attraction list** — see "Building the
+real attraction list" below for why scraping is out and what the agreed
+route is. Short version: the owner pastes Walt Disney World and Disneyland
+names in any rough form, Claude structures them into `ATTRACTIONS` rows and
+**flags candidate cross-resort clones for the owner to confirm**, never
+asserting one itself; the four international resorts get a Claude draft the
+owner corrects. Aim for 40–80 headline attractions total, not a complete
+inventory.
+
+**Three loose ends, each with a one-line check** (details in the email
+section below): is `OWNER_EMAIL` set in GitHub Actions; is
+`REQUIRE_VERIFIED_EMAIL=true` on Render; is `PUBLIC_BASE_URL` pointed at the
+apex rather than `www`.
+
+**Still unbuilt and deliberately so:** the day-by-day trip planner, the
+souvenir basket, a per-city rental-car rate, the 10-mile hotel radius
+filter, and Stripe.
+
 ## Current state
 
 | Piece | State |
@@ -28,7 +59,7 @@ say when something is a guess.
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
-| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. Email sign-in with an **optional per-account password**, a real `sessions` table, real `plus_until`-based entitlement. An account with no `password_hash` signs in on its email alone as before; one with a hash requires it (scrypt, salted, `node:crypto`, no new dependency). Set with `npm run set-password -- email 'value'` or the "Parkfare set password" Actions workflow; `--clear` reverts to email-only. The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. Reset a password with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -855,6 +886,48 @@ The shipped rows are a **starter set Claude is confident about, not a
 researched catalogue** — treat them like `seedPromos.ts`'s example rows. The
 owner is supplying the real list.
 
+**Building the real attraction list — scraping is out; the hard part is not
+collecting names** (2026-09-19). The owner asked whether Claude could scrape
+`disneyworld.disney.go.com/attractions/`. Findings, so nobody re-derives
+them:
+
+- **Not from this sandbox.** The egress proxy refuses Disney, Wikipedia and
+  Disney fan sites alike (`EGRESS_BLOCKED` / `CONNECT tunnel failed, 403`).
+  Web *search* works and returns titles and summaries; fetching a page to
+  read it does not. This is an environment limit, not a Disney one.
+- **That page could not be scraped anyway.** Its `#/sort=alpha` route is
+  client-side, so the HTML is a shell — you would need a headless browser,
+  against a site that runs bot protection.
+- **It would only cover Walt Disney World.** One of six resorts, and the
+  other five publish in different shapes and partly other languages.
+
+**The real obstacle is clone matching, and no scrape can solve it.** A
+scraper yields `Remy's Ratatouille Adventure` (EPCOT) and `Ratatouille:
+L'Aventure Totalement Toquée` (Walt Disney Studios) as two unrelated rows
+sharing no words. Load those and `isOnlyAt()` returns true for **both** —
+the app then tells a user that Paris is the only place to ride Ratatouille
+*and* that EPCOT is. That is precisely the confident-wrong-claim the
+derived-not-asserted model exists to prevent, and it is human judgment, not
+data collection.
+
+**Volume is the other trap: a scrape gives too much, not too little.** Magic
+Kingdom alone has 40+ attractions; all six resorts is several hundred rows,
+most of which nobody picks a destination over. The picker is a checklist
+someone scans, so the useful list is roughly **40–80 headline attractions
+across all six resorts** — the ones that would genuinely move a decision.
+Completeness is the wrong goal here.
+
+**The agreed route** (recommended, owner to start): *paste-and-structure*
+for Walt Disney World and Disneyland, where the owner can sanity-check a
+name instantly — paste the names in any rough form, Claude turns them into
+`ATTRACTIONS` rows and **flags every candidate cross-resort match for the
+owner to confirm or reject**, never asserting one itself. For the four
+international resorts, Claude drafts from its own knowledge and the owner
+corrects, which carries the same caveat as today's starter rows and must be
+labelled that way until checked. A locally-run Playwright scraper was
+considered and is a poor trade: fragile against markup changes, and it still
+hands back the clone problem unsolved.
+
 **An "only here" attraction list must not assume uniqueness** (2026-09-18).
 Recorded before building it because the obvious data model is wrong:
 Claude offered "Ratatouille is only at Paris" as an example and the owner
@@ -919,43 +992,58 @@ matter:
   not set`, and now also `IRS mileage rate missing for 2027` — the
   carry-forward warning from the decision above, working, and reaching nobody.
 
-## Nothing has ever actually emailed in production (found 2026-09-18)
+## Email works now — sent, delivered, and the domain is verified (2026-09-19)
 
-`RESEND_API_KEY`, `ALERT_FROM_EMAIL` and `OWNER_EMAIL` are all **empty** in the
-GitHub Actions environment. Checked against a real run log, not assumed: the
-"Parkfare news digest" run of 2026-09-17 finished green and printed
-`1 new item(s), 0 email(s) sent — 1 new item(s) found but OWNER_EMAIL is not
-set — not sent`. Every email job in this repo behaves the same way, which is
-why none of them has ever failed loudly: a missing owner address is treated as
-"nothing to send", so the workflow succeeds and the mail silently never goes.
+This section used to read "Nothing has ever actually emailed in production."
+That is no longer true, and the change is load-bearing enough that the old
+text would actively mislead: **real mail now leaves this project and arrives.**
 
-So the news digest, price alerts, the IRS mileage-rate warning and the
-real-pulls digest are all built, all running nightly, and all reaching nobody.
-Setting the three repository secrets is the only thing standing between them
-and working — plus a Resend account, since without `RESEND_API_KEY` the console
-sender just prints into the Actions log.
+Established against real logs and real DNS, not assumed:
 
-**Test a new key with `npm run test-email -- you@example.com`** (or the
-"Parkfare test email" workflow, which runs on GitHub's runners with the
-repository secrets — the environment the crons actually use). It is the one
-loud thing in a project full of quiet ones: it fails with Resend's own words
-rather than treating "couldn't send" as "nothing to send". Its hints match on
-Resend's wording and never on a bare status code — a 403 from a proxy or an
-egress allowlist is not a Resend account limit, and saying it is sends you to
-fix the wrong thing. (Learned immediately: the first run of that script
-misdiagnosed exactly that.)
+- **A real email sent from GitHub Actions** on 2026-09-18 23:06 UTC. The
+  "Parkfare test email" run printed `sender: resend` … `Sent.` and it
+  arrived. So the Actions environment has `RESEND_API_KEY` and
+  `ALERT_FROM_EMAIL`.
+- **Render has them too**, plus `PUBLIC_BASE_URL` — a sign-up confirmation
+  email went out from the live site carrying an absolute link.
+- **`pricingthemagic.com` is verified in Resend**, with DKIM/SPF as Bluehost
+  CNAMEs and a `_dmarc` TXT record (`v=DMARC1; p=none;`) added after the
+  first delivered mail landed in spam.
+- **The owner's own account is confirmed.** `kajones3@gmail.com` has a real
+  `email_verified_at`, so the alert job will finally email it.
+- **DNS:** apex → `216.24.57.1`, `www` → CNAME to
+  `magic-around-the-world.onrender.com`. Both resolve.
 
-Order to turn things on: `RESEND_API_KEY` + `ALERT_FROM_EMAIL` +
-`OWNER_EMAIL` as repository secrets and in Render → run the test → set
-`PUBLIC_BASE_URL` in Render so confirmation links are absolute rather than
-relative → only once a link has genuinely arrived in an inbox, set
-`REQUIRE_VERIFIED_EMAIL=true`. **Until a domain is verified in Resend, the
-only from-address that works is `onboarding@resend.dev` and the only
-recipient is the Resend account's own address** — which is why
-`ALERT_FROM_EMAIL` is `sync: false` in render.yaml rather than hardcoded to
-`alerts@parkfare.app` as it used to be.
+**Still unconfirmed, and each has one cheap check:**
 
-**Do not add a fourth email job without checking this is fixed first.**
+| Unknown | How to settle it |
+|---|---|
+| Is `OWNER_EMAIL` set in **Actions**? | The next "Parkfare news digest" run (cron `40 4 * * *`). Its log says `OWNER_EMAIL is not set` if not. Nothing else in the repo reads it. |
+| Is `REQUIRE_VERIFIED_EMAIL=true` on Render? | The nightly job list drops the `verify-gate` row once it is on. Or sign out and back in — it still works either way for a confirmed account. |
+| Is `PUBLIC_BASE_URL` now the apex? | Sign up a throwaway address and look at the link in the mail. |
+
+### The www trap — the one config value whose wrongness is invisible
+
+`PUBLIC_BASE_URL` was set to `https://www.pricingthemagic.com` while the
+`www` CNAME in Bluehost pointed at itself and did not resolve. So every
+verification link was addressed to a hostname that does not exist: mail sent
+fine, Resend reported success, the owner clicked, got "site can't be
+reached", and the account stayed unverified with **nothing anywhere
+reporting a problem**.
+
+That is structural, not a one-off. The program only ever *composes* that URL
+(`verifyUrl()`); it never fetches it, so no test, log line or health check
+can tell you the host is wrong — only a human clicking a link in a real
+inbox can. Treat `PUBLIC_BASE_URL` as the one setting that must be confirmed
+end to end by an actual click, and prefer the **apex** over `www`: the apex
+is what Render verifies first and what resolved throughout.
+
+**`npm run test-email -- you@example.com`** (or the workflow, which runs with
+the Actions secrets) remains the loud check. It reports Resend's own words
+rather than treating "couldn't send" as "nothing to send" — but note what it
+cannot catch: it proves mail *sends*, never that a link inside it *works*.
+
+**Do not add a fourth email job without checking all of the above.**
 
 ### The owner's manual jobs ride the news digest (2026-09-18)
 
