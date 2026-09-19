@@ -34,9 +34,9 @@ re-litigating any of them; the short version:
 - *Saved trips.* Named on save, reopened from a "My trips" masthead
   dropdown. "Save as PDF" prints the board.
 
-**Open with the owner:** whether Disney's hotel pages accept dates in the
-URL (a candidate link is with them to click-test), and corrections to the
-four international hotel baselines.
+**Open with the owner:** corrections to the four international hotel
+baselines. (The Disney URL question is closed — dates can't be carried,
+party size can; see the decision note.)
 
 **Live at https://pricingthemagic.com**, serving the current `master`
 (`18f12f4`). Version check in the browser: the paywall reads "Plan your
@@ -334,11 +334,33 @@ Walt Disney World publishes a page per category and the owner asked for
 the category page, so somebody pricing Moderate lands on the Moderate
 list. `onPropertyHotelUrl()` in `config.ts` is the one home for the rule;
 `config.test.ts` pins that no resort sends an on-property guest to a
-reseller. **Dates are deliberately not appended** — Disney's category
-pages are hash-routed and no date parameter has been confirmed to work, and
-a link landing on an error page is worse than one landing on the right
-page. The four international URLs are **unverified from this environment**,
-same standing as the `goodToKnow` visa notes.
+reseller. The four international URLs are **unverified from this
+environment**, same standing as the `goodToKnow` visa notes.
+
+**Disney's pages take a party size in the URL and cannot take dates —
+settled by the owner clicking, not deferred** (2026-09-19). None of this is
+documented anywhere and the page is a JavaScript app that can't be fetched
+from this sandbox, so it was established the only way available:
+
+- *The query must sit BEFORE the fragment.*
+  `.../resorts/?numAdults=4#/moderate/` opens on 4 adults.
+  `.../resorts/#/moderate/?numAdults=4` is ignored — it's a fragment, not a
+  query string. Appending naively produces the second, silently-dead form,
+  which is exactly the first mistake made here.
+- *Dates are not addressable, and there is no parameter left to find.*
+  Entering dates by hand on Disney's own page **leaves the URL unchanged**,
+  so they live in page state, not the address. That is a stronger finding
+  than "the name I guessed didn't work" and closes the question — don't
+  re-open it by guessing more names.
+- *Children are left off deliberately rather than guessed.* Sending
+  `numAdults` alone for a family would open a page quietly priced for fewer
+  people than are travelling — a wrong number presented as a real one, which
+  is worse than sending nothing. A party with children gets the plain link
+  until somebody verifies what Disney calls them.
+- *Beware the default when testing a parameter.* The first test used
+  `numAdults=2`, which is Disney's own default, so "it came in with the
+  adults" could not be told apart from the page doing what it always does.
+  Test with a non-default value.
 
 **Hotel bases are a category median with the per-hotel spread kept around
 it** (2026-09-19). The owner supplies a researched range per category, each
@@ -1194,9 +1216,10 @@ the warning that there is nowhere to send warnings.
   and the search refuses a half-filled pair rather than falling back to the month —
   which is how a February trip came back priced for March, and how the Booking.com link
   then carried March's dates.
-- **Disney's own hotel pages are not known to accept dates in a URL.** The card tells the
-  traveller to enter their dates rather than guessing a parameter; confirming this needs
-  a human clicking a real link, same as `PUBLIC_BASE_URL`.
+- **Disney's own hotel pages cannot accept dates in a URL** — established, not assumed;
+  see the decision note above. The card carries the party size instead and tells the
+  traveller to enter their dates. Whether Disney has a children parameter is the one
+  part still unknown, and a party with children gets the plain link until it's checked.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.

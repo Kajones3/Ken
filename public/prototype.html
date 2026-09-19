@@ -2048,6 +2048,33 @@ async function renderDetail(){
   const bkSearchTerm = (!noHotel && hp.name) ? hp.name : r.city;
   const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(bkSearchTerm)}`
     + `&checkin=${x.start}&checkout=${checkout}&group_adults=${p.adults}&group_children=${p.ages.length}${childAgeParams}&no_rooms=1`;
+  /* Carry the party size to Disney, and nothing else.
+   *
+   * Owner-verified by clicking both forms, because none of this is
+   * documented anywhere and the page is a JavaScript app that can't be
+   * fetched from this environment:
+   *
+   *   .../resorts/?numAdults=4#/moderate/   — works, the page opens on 4
+   *   .../resorts/#/moderate/?numAdults=4   — does not, it's a fragment
+   *
+   * So the query has to go BEFORE the fragment. Appending it naively is the
+   * obvious mistake and produces the second, silently-ignored form.
+   *
+   * DATES ARE NOT ADDRESSABLE and there is no parameter left to find:
+   * entering them by hand on Disney's own page leaves the URL unchanged, so
+   * they live in page state, not the address. Settled, not deferred.
+   *
+   * Children are left off deliberately rather than guessed. Sending
+   * numAdults alone for a family would open a page quietly priced for fewer
+   * people than are travelling — a wrong number presented as a real one,
+   * which is worse than sending nothing at all. So a party with children
+   * gets the plain link until someone verifies what Disney calls them. */
+  const withDisneyParty = (url, tp) => {
+    if(tp.ages.length) return url;
+    const [base, frag] = url.split("#");
+    return `${base}${base.includes("?") ? "&" : "?"}numAdults=${tp.adults}${frag ? "#" + frag : ""}`;
+  };
+
   /* An on-property room is Disney's own product, so it goes to Disney's own
    * site — a Booking.com search for "Disney's Pop Century" is a worse answer
    * whatever it does for commission. Walt Disney World publishes a page per
@@ -2060,7 +2087,7 @@ async function renderDetail(){
    * right page with dates to re-enter. */
   const onTierName = ON_TIERS[x.hotelTier.actual];
   const stayLink = stayNow && r.onPropertyHotels
-    ? { href: (r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url,
+    ? { href: withDisneyParty((r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url, p),
         label: `Book ${TIER_LABEL[onTierName].toLowerCase()} rooms on Disney's site` }
     : { href: bkUrl, label: "Check live rates on Booking.com" };
   const sd = new Date(x.start+"T00:00:00Z");
@@ -2150,8 +2177,8 @@ async function renderDetail(){
               `${x.stayCompare.cheaper === "on" ? "on" : "off"} property is ${usd(x.stayCompare.savesTotal)} cheaper`}.
             The total above uses whichever came out lower.</p>` : ""}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
-          ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page — it won't have your dates
-            pre-filled, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} when you get there.</p>` : ""}
+          ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
+            Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
