@@ -84,9 +84,21 @@ export interface TripParams {
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
 
-/** A rate or fare the user supplied themselves. Never below the cheapest known fare. */
+/** A rate or fare the user supplied themselves. */
 export interface ResortOverride {
   nightly?: number; farePerSeat?: number;
+  /** What this whole party spends on food in a day, all of them together —
+   *  NOT per person. The owner's call, on the grounds that "we spend about
+   *  $250 a day" is a number people actually know about themselves, where a
+   *  per-head figure is one they have to do arithmetic to produce.
+   *
+   *  The cost of that choice, stated rather than hidden: the model's own
+   *  per-age scaling (an infant eats free, a child eats less) stops applying,
+   *  because a party total already contains whatever the party eats. Changing
+   *  the party size afterwards therefore does NOT move this number — the
+   *  detail card says so. Part-days are still applied, so it is multiplied by
+   *  nights + FOOD_DAY_ALLOWANCE, not by nights. */
+  foodPerDayUsd?: number;
   /** "I've already got this sorted — don't count it in the total" (a free
    *  family/points room, flights already booked separately, etc.). Not a
    *  price claim like nightly/farePerSeat — it says the line doesn't belong
@@ -181,6 +193,11 @@ export interface TripPrice {
   transport: number;
   food: number;
   perSeatFare: number;
+  /** Set when the traveller's own airfare number is below the cheapest fare
+   *  the cache knows about for this route and date. It used to be impossible
+   *  to be here at all — the override was clamped up to that floor. It now
+   *  stands, and this is what the detail card says so on. */
+  fareBelowFloor: { yours: number; cheapestKnown: number } | null;
   /** The cached flight this fare came from — price is the real floor, even
    *  when an override raised it. Carries `.estimate` instead of a real
    *  `.stops`/`.deepLink` when there was no exact cache hit and this fell
@@ -190,6 +207,16 @@ export interface TripPrice {
     | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean }
     | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
+  /** Only when the search asked to compare on- AND off-property. What the two
+   *  sides actually cost over these dates, parking and transfers included, so
+   *  "Compare both" can say what it found instead of silently picking. */
+  stayCompare: {
+    on: { name: string; nightly: number; total: number };
+    off: { name: string; nightly: number; total: number };
+    cheaper: "on" | "off";
+    savesPerNight: number;
+    savesTotal: number;
+  } | null;
   foodPlan: { label: string; adult: number; child: number } | null;
   partySize: number;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
@@ -302,6 +329,37 @@ export function poolFor(nights: HotelNight[], stay: Stay, tier: TierIndex): Hote
   return { pool: all, actual: tier, swapped: true };
 }
 
+/**
+ * The cheapest hotel in the requested pool that has a rate for EVERY night of
+ * the stay. Extracted from priceTrip so "Compare both" can ask the same
+ * question of each side separately without a second pass over the book —
+ * a partial-week hotel is not a cheaper hotel, it is a gap in the cache, and
+ * that rule must not be re-implemented per caller.
+ */
+export function cheapestStay(
+  book: PriceBook, resortId: string, start: ISODate, nights: number, stay: Stay, tier: TierIndex,
+): { rooms: number; hotel: HotelNight; actual: TierIndex; swapped: boolean } | null {
+  const firstNight = book.hotelNights(resortId, start);
+  if (!firstNight.length) return null;
+  const pick = poolFor(firstNight, stay, tier);
+  if (!pick.pool.length) return null;
+
+  let best: HotelNight | null = null;
+  let bestCost = Infinity;
+  for (const candidate of pick.pool) {
+    let cost = 0;
+    let complete = true;
+    for (let i = 0; i < nights; i++) {
+      const night = book.hotelNights(resortId, addDaysISO(start, i))
+        .find((x) => x.hotelId === candidate.hotelId);
+      if (!night) { complete = false; break; }
+      cost += night.nightly;
+    }
+    if (complete && cost < bestCost) { bestCost = cost; best = candidate; }
+  }
+  return best ? { rooms: bestCost, hotel: best, actual: pick.actual, swapped: pick.swapped } : null;
+}
+
 // ---------------------------------------------------------------- food
 
 export function planFor(resort: Resort, p: TripParams, stay: Stay) {
@@ -331,6 +389,7 @@ export function priceTrip(
   const transportMode: TransportMode = params.transportMode ?? "fly";
   const destination = params.destination ?? resort.iata;
   let flights = 0, perSeatFare = 0;
+  let fareBelowFloor: TripPrice["fareBelowFloor"] = null;
   let flightPick: TripPrice["flightPick"] = null;
   let driving = 0;
   let drivingPick: TripPrice["drivingPick"] = null;
@@ -427,7 +486,16 @@ export function priceTrip(
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
       perSeatFare = Math.max(0, base * (1 - milesPct / 100));
     } else {
-      perSeatFare = ov.farePerSeat !== undefined ? Math.max(ov.farePerSeat, floor) : modelFare;
+      // The floor used to be ENFORCED here (Math.max), so typing a number
+      // below the cheapest known fare silently priced the trip at the floor
+      // instead. The owner reversed that: the box is now a plain number and
+      // your number is your number. The claim is still worth flagging, so
+      // fareBelowFloor is reported and the detail card says plainly that the
+      // cache has nothing this cheap — warn, don't overrule.
+      perSeatFare = ov.farePerSeat !== undefined ? Math.max(0, ov.farePerSeat) : modelFare;
+      if (ov.farePerSeat !== undefined && floor > 0 && perSeatFare < floor) {
+        fareBelowFloor = { yours: perSeatFare, cheapestKnown: floor };
+      }
     }
     flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
     flightPick = useRow
@@ -482,6 +550,9 @@ export function priceTrip(
       if (band === "infant") continue;
       food += (band === "child" ? foodPlan.child : foodPlan.adult) * params.nights;
     }
+  } else if (ov.foodPerDayUsd !== undefined) {
+    // A party total, so no per-age scaling — see ResortOverride.foodPerDayUsd.
+    food = Math.max(0, ov.foodPerDayUsd) * (params.nights + FOOD_DAY_ALLOWANCE);
   } else {
     const style = params.food === "plan" ? "qs" : params.food;
     const rate = resort.food[style];
@@ -510,26 +581,40 @@ export function priceTrip(
   } else {
     const firstNight = book.hotelNights(resort.id, start);
     if (!firstNight.length) return { ok: false, reason: `no cached hotel rates for ${resort.id} on ${start}` };
-    const pick = poolFor(firstNight, stay, params.tier);
-    if (!pick.pool.length) return { ok: false, reason: `no hotel matches stay=${stay} tier=${params.tier}` };
-
-    let best: HotelNight | null = null;
-    let bestCost = Infinity;
-    for (const candidate of pick.pool) {
-      let cost = 0;
-      let complete = true;
-      for (let i = 0; i < params.nights; i++) {
-        const night = book.hotelNights(resort.id, addDaysISO(start, i))
-          .find((x) => x.hotelId === candidate.hotelId);
-        if (!night) { complete = false; break; }
-        cost += night.nightly;
-      }
-      if (complete && cost < bestCost) { bestCost = cost; best = candidate; }
-    }
-    if (!best) return { ok: false, reason: `incomplete hotel data for ${resort.id} from ${start}` };
-    rooms = bestCost;
-    hotelPick = best;
+    const pick = cheapestStay(book, resort.id, start, params.nights, stay, params.tier);
+    if (!pick) return { ok: false, reason: `no hotel matches stay=${stay} tier=${params.tier} for ${resort.id} from ${start}` };
+    rooms = pick.rooms;
+    hotelPick = pick.hotel;
     hotelTier = { requested: params.tier, actual: pick.actual, swapped: pick.swapped, custom: false };
+  }
+
+  /* "Compare both" widened the hotel pool to on- AND off-property and picked
+   * whichever was cheaper — correctly, and completely silently, so the owner's
+   * reasonable read was that the control did nothing at all.
+   *
+   * This is what it costs, priced the same way the rest of the card is: the
+   * two sides compared over the dates actually being priced, INCLUDING
+   * parking and transfers, because off-property's parking is exactly the cost
+   * people leave out when they conclude off-property is cheaper. Computed
+   * here from the book slice already loaded — no extra request, no provider
+   * call. Null whenever there is nothing to compare (one side has no cached
+   * rate, a typed nightly rate has replaced both, or the search wasn't
+   * comparing in the first place). */
+  let stayCompare: TripPrice["stayCompare"] = null;
+  if (params.stay === "both" && stay === "both" && ov.nightly === undefined) {
+    const on = cheapestStay(book, resort.id, start, params.nights, "on", params.tier);
+    const off = cheapestStay(book, resort.id, start, params.nights, "off", params.tier);
+    if (on && off) {
+      const onTotal = on.rooms + resort.transport.on * params.nights;
+      const offTotal = off.rooms + resort.transport.off * params.nights;
+      stayCompare = {
+        on: { name: on.hotel.name, nightly: on.rooms / params.nights, total: onTotal },
+        off: { name: off.hotel.name, nightly: off.rooms / params.nights, total: offTotal },
+        cheaper: onTotal <= offTotal ? "on" : "off",
+        savesPerNight: Math.abs(onTotal - offTotal) / params.nights,
+        savesTotal: Math.abs(onTotal - offTotal),
+      };
+    }
   }
 
   // --- promos: a curated guess (looked up server-side, never trusted from --
@@ -605,8 +690,8 @@ export function priceTrip(
     ok: true,
     price: {
       start, destination, total, flights, tickets, hotel, rooms, transport, food,
-      perSeatFare, flightPick,
-      hotelPick, hotelTier, foodPlan, partySize: ages.length,
+      perSeatFare, flightPick, fareBelowFloor,
+      hotelPick, hotelTier, stayCompare, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd,
       rentalCarUsd, rentalCarPick,

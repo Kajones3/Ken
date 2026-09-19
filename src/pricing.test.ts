@@ -100,7 +100,11 @@ test("under-2s fly as lap infants at 10%", () => {
   assert.equal(Math.round(seat.price.flights), 1500);
 });
 
-test("a fare override can raise the price but never fall below the cached fare", () => {
+test("a fare override stands even below the cached fare, and says that it is", () => {
+  // This reverses an earlier decision, on the owner's instruction. The
+  // override used to be raised up to the cheapest known fare, so typing $50
+  // silently priced $400 and the box lied about what it had done. It now
+  // holds, and fareBelowFloor is what the card warns on.
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 400 });
   const under: Overrides = { wdw: { farePerSeat: 50 } };
@@ -108,8 +112,45 @@ test("a fare override can raise the price but never fall below the cached fare",
   const a = priceTrip(book, wdw, base, under, START);
   const b = priceTrip(book, wdw, base, over, START);
   assert.ok(a.ok && b.ok);
-  assert.equal(a.price.perSeatFare, 400, "clamped to the floor");
+  assert.equal(a.price.perSeatFare, 50, "your number is your number");
+  assert.deepEqual(a.price.fareBelowFloor, { yours: 50, cheapestKnown: 400 }, "and it is flagged");
   assert.equal(b.price.perSeatFare, 900, "raised as asked");
+  assert.equal(b.price.fareBelowFloor, null, "nothing to warn about above the floor");
+});
+
+test("a negative fare override is floored at zero, not turned into a discount", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const r = priceTrip(book, wdw, base, { wdw: { farePerSeat: -500 } }, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 0);
+  assert.ok(r.price.flights >= 0, "a trip can be cheap, never negative");
+});
+
+test("a food override is a whole-party daily total, so party size stops moving it", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const ov: Overrides = { wdw: { foodPerDayUsd: 250 } };
+  const two = priceTrip(book, wdw, base, ov, START);
+  const four = priceTrip(book, wdw, { ...base, adults: 4, childAges: [...base.childAges, 8, 5] }, ov, START);
+  assert.ok(two.ok && four.ok);
+  if (!two.ok || !four.ok) return;
+  assert.equal(two.price.food, four.price.food,
+    "a party total already contains whatever the party eats");
+  // Part-days still apply: arrival and departure are not whole eating days.
+  assert.equal(Math.round(two.price.food), Math.round(250 * (base.nights + 0.4)));
+});
+
+test("a food override loses to a dining plan, which is a real purchased product", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400 });
+  const withPlan = priceTrip(book, wdw, { ...base, food: "plan", stay: "on" },
+    { wdw: { foodPerDayUsd: 1 } }, START);
+  assert.ok(withPlan.ok);
+  if (!withPlan.ok) return;
+  assert.ok(withPlan.price.foodPlan, "the plan is what was bought");
+  assert.ok(withPlan.price.food > 100, "a $1/day guess can't undercut a plan you've paid for");
 });
 
 test("excludeFlights: a completely empty book still prices, instead of hard-failing", () => {
@@ -142,14 +183,14 @@ test("excludeFlights wins over a farePerSeat set on the same override", () => {
   assert.equal(r.price.perSeatFare, 0, "excludeFlights is ignored-farePerSeat, not the other way round");
 });
 
-test("excludeFlights: the existing floor test is untouched (no excludeFlights set)", () => {
+test("excludeFlights: a farePerSeat below the cache still stands when flights are counted", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 400 });
   const under: Overrides = { wdw: { farePerSeat: 50 } };
   const r = priceTrip(book, wdw, base, under, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  assert.equal(r.price.perSeatFare, 400, "clamped to the floor, same as before this feature existed");
+  assert.equal(r.price.perSeatFare, 50, "your own number, same as any other non-excluded override");
 });
 
 test("excludeFlights behaves the same under miles transport mode", () => {
@@ -387,10 +428,13 @@ test("flight estimate: a farePerSeat override still floors against the real row'
   const r = priceTrip(highEstimate, wdw, base, { wdw: { farePerSeat: 100 } }, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  // 100 is below the median-corrected 450, but still above the real floor
-  // of 90 -- "never claim below the cheapest fare we know of" means the
-  // real $90 finding, not the higher median it gets displayed as.
+  // 100 is below the median-corrected 450 but above the real $90 finding, so
+  // it stands and nothing is flagged. The floor that fareBelowFloor measures
+  // against is still the real row's price, not the higher median it displays
+  // as -- warning somebody off $100 because a BTS median says $450 would be
+  // the estimate overruling the evidence.
   assert.equal(r.price.perSeatFare, 100);
+  assert.equal(r.price.fareBelowFloor, null);
 });
 
 test("a gap mid-stay is refused rather than silently under-counted", () => {

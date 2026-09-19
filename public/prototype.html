@@ -233,6 +233,7 @@ a{color:var(--ink)}
 .f.stooddown{opacity:.42}
 .f.stooddown label{text-decoration:line-through}
 #exactDatesHint.needsend{color:var(--accent); font-weight:600}
+.estnote.staynote{color:var(--ink-2)}
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
 
@@ -949,7 +950,7 @@ const store = {
 
 const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, excludeHotel?, excludeFlights?} } — your numbers, not the model's
 const ovOf = id => OV[id] || {};
-const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.excludeHotel || o.excludeFlights); };
 
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
 let params = null;
@@ -1558,6 +1559,9 @@ function renderBoard(){
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}${est.seasonMatched===false?" · based on a different season, treat as rough":""}</div>`:""}
+        ${x.stayCompare ? `<div class="estnote staynote">${x.stayCompare.savesPerNight < 1
+          ? "On and off property come out about the same here, once parking and transfers are counted."
+          : `Staying ${x.stayCompare.cheaper === "off" ? "off" : "on"} property saves ${usd(x.stayCompare.savesPerNight)} a night here — ${usd(x.stayCompare.savesTotal)} over ${params.nights} nights, parking and transfers included.`}</div>` : ""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -1931,7 +1935,11 @@ async function renderDetail(){
 
   // ---- your numbers: free to set and use, Plus to save and watch ----
   const ovR = ovOf(r.id);
-  const fareNow = ovR.farePerSeat ? Math.max(ovR.farePerSeat, floor) : x.perSeatFare;
+  // No longer raised to the floor. The owner's call: a box that silently
+  // overrules what you typed is worse than one that takes your number and
+  // tells you the cache disagrees.
+  const fareNow = ovR.farePerSeat || x.perSeatFare;
+  const belowFloor = x.fareBelowFloor;
   const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
   const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
   const fareCtl = `<div class="ovcell">
@@ -1939,17 +1947,40 @@ async function renderDetail(){
       <span>I've already got flights sorted — don't count it in the total</span></label>
     ${ovR.excludeFlights ? `<div class="ovexcluded">Flights excluded from ${r.name}'s total. Uncheck to price a fare again.</div>` : `
     <div class="lab"><span>Airfare you expect, per person</span><b id="fareVal">${usd(fareNow)}</b></div>
-    <input type="range" id="fareSlider" min="${Math.round(floor)}" max="${Math.round(floor*2.6)}" step="5"
-           value="${Math.round(fareNow)}" aria-label="Airfare you expect per person">
-    <div class="ovends"><span>${usd(floor)} cheapest found</span><span>${usd(floor*2.6)}</span></div>
-    <div class="ovhint">The slider stops at ${usd(floor)} — the cheapest fare the cache has for this route near ${monthName}.
-      You can assume more than that, never less. ${overPct > 0 ? `Right now you're ${overPct}% above it.` : ""}</div>
+    <input type="number" id="fareOv" step="5" min="0" value="${ovR.farePerSeat || ""}"
+           placeholder="${Math.round(x.perSeatFare)}" aria-label="Airfare you expect per person">
+    <div class="ovhint">${belowFloor
+      ? `Heads up: the cheapest fare we've found for this route near ${monthName} is ${usd(floor)}, so ${usd(belowFloor.yours)} is below anything we can see. Your number is what's in the total — we're just saying we can't back it up.`
+      : ovR.farePerSeat
+      ? `Your number is in the total. The cheapest fare the cache has for this route near ${monthName} is ${usd(floor)}${overPct > 0 ? `, so you're ${overPct}% above it` : ""}.`
+      : `Type what you expect to pay per person. Blank uses ${usd(x.perSeatFare)}, the cheapest the cache has for this route near ${monthName}.`}</div>
     ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
   </div>`;
 
   const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
+  /* Food, typed as what the WHOLE PARTY spends in a day — the owner's call,
+   * because "we spend about $250 a day" is a number people know about
+   * themselves and a per-head figure is one they have to work out. The cost
+   * of that, said out loud rather than hidden: the model's own per-age
+   * scaling stops applying, so changing the party size afterwards does not
+   * move this number.
+   *
+   * A dining plan is a real purchased product, so it wins — there is nothing
+   * to estimate when you have already bought the food. */
+  const foodModelPerDay = fi ? 0 : x.food / (p.nights + 0.4);
+  const foodCtl = fi ? "" : `<div class="ovcell">
+    <div class="lab"><span>Food per day, everyone together</span><b>${usd(ovR.foodPerDayUsd || foodModelPerDay)}</b></div>
+    <input type="number" id="foodOv" step="10" min="0" value="${ovR.foodPerDayUsd || ""}"
+           placeholder="${Math.round(foodModelPerDay)}" aria-label="What your whole party spends on food per day">
+    <div class="ovhint">${ovR.foodPerDayUsd
+      ? `Your number, for everyone in the party together. Because it's a party total it no longer changes when you change the party size. Arrival and departure still count as part-days, so the trip works out at ${usd(ovR.foodPerDayUsd)} × ${p.nights + 0.4} days.`
+      : `Type what all ${pax} of you spend in a day, together. Blank uses ${usd(foodModelPerDay)} a day from the food style above.`}</div>
+    ${ovR.foodPerDayUsd ? `<div class="ovacts"><button class="btn btn-sm" data-reset="foodPerDayUsd">Back to the model</button>
+      <span class="yourchip">Your number</span></div>` : ""}
+  </div>`;
+
   const hotelCtl = `<div class="ovcell">
     <label class="ovexclude"><input type="checkbox" id="excludeHotelCk" ${ovR.excludeHotel ? "checked" : ""}>
       <span>I've already got a room sorted — don't count it in the total</span></label>
@@ -1959,7 +1990,7 @@ async function renderDetail(){
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
     <div class="ovhint">${ovR.nightly
       ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The cache says " + usd(modelNightly) + "."
-      : "Type what you know you can get. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
+      : "Type what you know you can get, for one night. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
@@ -2073,6 +2104,12 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
+          ${x.stayCompare ? `<p class="sub" style="margin:12px 0 0">Comparing both: ${x.stayCompare.on.name}
+            works out at ${usd(x.stayCompare.on.total)} and ${x.stayCompare.off.name} at ${usd(x.stayCompare.off.total)}
+            for these ${p.nights} nights, parking and transfers included — so
+            ${x.stayCompare.savesPerNight < 1 ? "there's almost nothing in it" :
+              `${x.stayCompare.cheaper === "on" ? "on" : "off"} property is ${usd(x.stayCompare.savesTotal)} cheaper`}.
+            The total above uses whichever came out lower.</p>` : ""}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page — it won't have your dates
             pre-filled, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} when you get there.</p>` : ""}
@@ -2080,6 +2117,7 @@ async function renderDetail(){
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
           <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          ${foodCtl}
           ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
         </div>
       </div>
@@ -2837,7 +2875,7 @@ document.addEventListener("click", async (e) => {
 
 /* your-numbers controls */
 function ovEmpty(o){
-  return !o.nightly && !o.farePerSeat && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
+  return !o.nightly && !o.farePerSeat && !o.foodPerDayUsd && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
 }
 
 function setOv(id, key, val){
@@ -2879,9 +2917,11 @@ function setPersonalPromo(id, kind, value, label){
 }
 
 document.addEventListener("input", e=>{
-  if(e.target.id === "fareSlider"){
+  // Live label while typing, without re-pricing on every keystroke — the
+  // `change` handler below does the actual work on blur.
+  if(e.target.id === "fareOv"){
     const el = document.getElementById("fareVal");
-    if(el) el.textContent = usd(+e.target.value);          // live label, no re-fetch mid-drag
+    if(el) el.textContent = usd(+e.target.value || 0);
   }
 });
 document.addEventListener("change", e=>{
@@ -2889,15 +2929,18 @@ document.addEventListener("change", e=>{
   if(rid){
     // Typing a specific rate/fare is a different claim than "don't count
     // this" — mutual exclusivity the other direction from setExclude().
-    if(e.target.id === "fareSlider"){
+    if(e.target.id === "fareOv"){
       const o = OV[rid] || (OV[rid] = {});
       delete o.excludeFlights;
-      setOv(rid, "farePerSeat", +e.target.value);
+      setOv(rid, "farePerSeat", Math.max(0, +e.target.value) || 0);
     }
     if(e.target.id === "hotelOv"){
       const o = OV[rid] || (OV[rid] = {});
       delete o.excludeHotel;
       setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
+    }
+    if(e.target.id === "foodOv"){
+      setOv(rid, "foodPerDayUsd", Math.max(0, +e.target.value) || 0);
     }
     if(e.target.id === "excludeHotelCk")   setExclude(rid, "excludeHotel", e.target.checked);
     if(e.target.id === "excludeFlightsCk") setExclude(rid, "excludeFlights", e.target.checked);
