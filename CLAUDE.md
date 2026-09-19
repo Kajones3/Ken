@@ -352,11 +352,13 @@ from this sandbox, so it was established the only way available:
   so they live in page state, not the address. That is a stronger finding
   than "the name I guessed didn't work" and closes the question — don't
   re-open it by guessing more names.
-- *Children are left off deliberately rather than guessed.* Sending
-  `numAdults` alone for a family would open a page quietly priced for fewer
-  people than are travelling — a wrong number presented as a real one, which
-  is worse than sending nothing. A party with children gets the plain link
-  until somebody verifies what Disney calls them.
+- *Children cannot be carried either — `numChildren` was tested and does
+  nothing* (owner clicked `?numAdults=3&numChildren=2`: three adults came
+  through, no children). So a party with children gets the plain link, which
+  is deliberate: sending `numAdults` alone for a family would open a page
+  quietly priced for fewer people than are travelling — a wrong number
+  presented as a real one, which is worse than sending nothing. Closed; do
+  not guess further names.
 - *Beware the default when testing a parameter.* The first test used
   `numAdults=2`, which is Disney's own default, so "it came in with the
   adults" could not be told apart from the page doing what it always does.
@@ -1138,7 +1140,7 @@ Established against real logs and real DNS, not assumed:
 
 | Unknown | How to settle it |
 |---|---|
-| Is `OWNER_EMAIL` set in **Actions**? | The next "Parkfare news digest" run (cron `40 4 * * *`). Its log says `OWNER_EMAIL is not set` if not. Nothing else in the repo reads it. |
+| ~~Is `OWNER_EMAIL` set in **Actions**?~~ | **Settled 2026-09-19: yes.** The real-pulls digest run would have logged "OWNER_EMAIL is not set, not sent" and instead reported a send. `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are confirmed there too. |
 | Is `REQUIRE_VERIFIED_EMAIL=true` on Render? | The nightly job list drops the `verify-gate` row once it is on. Or sign out and back in — it still works either way for a confirmed account. |
 | Is `PUBLIC_BASE_URL` now the apex? | Sign up a throwaway address and look at the link in the mail. |
 
@@ -1157,6 +1159,47 @@ can tell you the host is wrong — only a human clicking a link in a real
 inbox can. Treat `PUBLIC_BASE_URL` as the one setting that must be confirmed
 end to end by an actual click, and prefer the **apex** over `www`: the apex
 is what Render verifies first and what resolved throughout.
+
+### "Sent" means accepted, not delivered — and now says so (2026-09-19)
+
+The owner didn't receive a nightly real-pulls digest. The trail: the workflow
+ran, exited 0, and logged `pulls digest: 160 routes, 101 hotels, sent`. That
+was every piece of evidence in existence, and it was not enough to tell a run
+Resend accepted from a run that reached an inbox.
+
+What was established, in this order, and worth not re-deriving:
+
+- **The job is scheduled and did run.** `pulls-digest.yml` exists, cron
+  `10 11 * * *`, `conclusion: success`. GitHub starts scheduled runs late
+  under load — the run fired at 14:19 UTC, not 11:10. Not a fault.
+- **`OWNER_EMAIL` IS set in Actions.** The note would have read
+  "OWNER_EMAIL is not set, not sent" otherwise. That settles one of the three
+  loose ends above.
+- **Resend really ran, not the console fallback.** The digest text in the log
+  is the CLI's own `console.log(r.text)`; the console SENDER prefixes
+  `[email:console]`, which appears nowhere. So `RESEND_API_KEY` is set too.
+- **Resend accepted it.** `ResendEmailSender` checks `res.ok` and throws, so a
+  resolved send means a 2xx. The message left the building.
+
+So the fault is between Resend and the inbox — spam placement, a bounce, or
+filtering — **none of which this program can observe**. That is the real
+defect the episode exposed: `sent` was set by "the sender didn't throw", and
+the response body was thrown away, so nothing survived that a human could
+trace. It is the `PUBLIC_BASE_URL` trap in another costume: the program only
+ever sees its own half of the exchange.
+
+Fixed by recording the handle that reaches the other half. `ResendEmailSender`
+now logs Resend's message id with every accepted send and says in the same
+line that acceptance is not delivery — **look the id up in the Resend
+dashboard** to see delivered vs bounced vs spam. All four email paths gain it
+from one change. `fetch_runs` notes say "handed to resend" rather than "sent".
+`resend.test.ts` pins that a rejected send throws (callers treat a resolved
+promise as sent and stamp it into `price_alerts`), that the id is surfaced,
+and that a missing `ALERT_FROM_EMAIL` names the setting instead of failing at
+the provider.
+
+**Do not read "sent" anywhere in this project as "arrived."** Nothing here can
+know that.
 
 **`npm run test-email -- you@example.com`** (or the workflow, which runs with
 the Actions secrets) remains the loud check. It reports Resend's own words

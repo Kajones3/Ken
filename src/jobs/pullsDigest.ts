@@ -224,7 +224,10 @@ export async function runPullsDigest(db: Db, opts: PullsDigestOptions = {}) {
 
   const note = !ownerEmail
     ? `${routes.length} routes, ${hotels.length} hotels — OWNER_EMAIL is not set, not sent`
-    : `${routes.length} routes, ${hotels.length} hotels, ${sent ? "sent" : "send failed"}`;
+    // "handed to", not "sent". The sender resolving means the provider ACCEPTED
+    // the message, which is not the same as it arriving — a distinction a
+    // missing digest turned out to hinge on, and one this note used to blur.
+    : `${routes.length} routes, ${hotels.length} hotels, ${sent ? `handed to ${sender.name}` : "send failed"}`;
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,
     [runId, routes.length + hotels.length, note],
