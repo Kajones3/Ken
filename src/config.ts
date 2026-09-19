@@ -69,6 +69,19 @@ export interface Resort {
   closuresUrl: string;
   closuresLabel: string;
   ticketUrl: string;
+  /** Where to send somebody who wants to book a Disney-owned hotel. Disney's
+   *  own site, never Booking.com: an on-property room is Disney's product and
+   *  a Booking.com search for "Disney's Pop Century" is a worse answer than
+   *  Disney's own page, whatever it does for commission.
+   *
+   *  `byTier` exists because Walt Disney World publishes a page per category
+   *  and the owner asked for the category page, not the index — somebody who
+   *  picked Moderate should land on the Moderate list. Every other resort has
+   *  one hotel page, so they set `url` alone and every tier resolves to it.
+   *
+   *  Resolve with onPropertyHotelUrl(), never by reading these directly, so
+   *  the "category page if there is one, index otherwise" rule has one home. */
+  onPropertyHotels: { url: string; byTier?: Partial<Record<OnTier, string>> };
   /** Other airports that reasonably serve this resort, besides the primary
    *  `iata`. Free to browse (board/compare always price the primary), but
    *  picking one of these is the one place a user can ask for a different
@@ -109,6 +122,14 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://disneyworld.disney.go.com/calendars/day/#/magic-kingdom/",
     closuresLabel: "Official WDW closure calendar",
     ticketUrl: "https://disneyworld.disney.go.com/admission/tickets/",
+    onPropertyHotels: {
+      url: "https://disneyworld.disney.go.com/resorts/",
+      byTier: {
+        value: "https://disneyworld.disney.go.com/resorts/#/value/",
+        moderate: "https://disneyworld.disney.go.com/resorts/#/moderate/",
+        deluxe: "https://disneyworld.disney.go.com/resorts/#/deluxe/",
+      },
+    },
     altArrivalAirports: [{ iata: "TPA", label: "Tampa — about 75 min from the resort" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     // base recalibrated against real 2026 published one-day pricing ($119-209,
@@ -125,15 +146,15 @@ export const RESORTS: Resort[] = [
     ],
     transport: { on: 0, off: 35 },
     hotels: [
-      h("wdw-asm", "Disney's All-Star Movies", "Value resort", 178, "value", true),
-      h("wdw-pop", "Disney's Pop Century", "Value resort", 265, "value", true),
-      h("wdw-cbr", "Disney's Caribbean Beach", "Moderate resort", 271, "moderate", true),
-      h("wdw-por", "Port Orleans Riverside", "Moderate resort", 268, "moderate", true),
-      h("wdw-gdt", "Coronado Springs · Gran Destino", "Moderate resort", 328, "moderate", true),
-      h("wdw-akl", "Animal Kingdom Lodge", "Deluxe resort", 509, "deluxe", true),
-      h("wdw-wl", "Wilderness Lodge", "Deluxe resort", 533, "deluxe", true),
-      h("wdw-cr", "Contemporary Resort", "Deluxe resort", 608, "deluxe", true),
-      h("wdw-gf", "Grand Floridian", "Deluxe resort", 729, "deluxe", true),
+      h("wdw-asm", "Disney's All-Star Movies", "Value resort", 217, "value", true),
+      h("wdw-pop", "Disney's Pop Century", "Value resort", 323, "value", true),
+      h("wdw-cbr", "Disney's Caribbean Beach", "Moderate resort", 450, "moderate", true),
+      h("wdw-por", "Port Orleans Riverside", "Moderate resort", 445, "moderate", true),
+      h("wdw-gdt", "Coronado Springs · Gran Destino", "Moderate resort", 545, "moderate", true),
+      h("wdw-akl", "Animal Kingdom Lodge", "Deluxe resort", 972, "deluxe", true),
+      h("wdw-wl", "Wilderness Lodge", "Deluxe resort", 1018, "deluxe", true),
+      h("wdw-cr", "Contemporary Resort", "Deluxe resort", 1162, "deluxe", true),
+      h("wdw-gf", "Grand Floridian", "Deluxe resort", 1393, "deluxe", true),
       h("wdw-kis", "Kissimmee value chain", "Off property · 20 min", 195, "budget", false),
       h("wdw-lbv", "Lake Buena Vista 3-star", "Off property · 15 min", 215, "budget", false),
       h("wdw-bc", "Bonnet Creek area", "Off property · 10 min", 265, "mid", false),
@@ -152,6 +173,11 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://disneyland.disney.go.com/construction-closures-updates/",
     closuresLabel: "Official Disneyland closure calendar",
     ticketUrl: "https://disneyland.disney.go.com/tickets/",
+    // Disneyland doesn't publish Walt Disney World's Value/Moderate/Deluxe
+    // split, so there is one page and every tier lands on it. Our own three
+    // on-property rows here are a convenience for the category picker, not a
+    // claim that Disney markets them that way.
+    onPropertyHotels: { url: "https://disneyland.disney.go.com/hotels/" },
     altArrivalAirports: [{ iata: "LAX", label: "Los Angeles — about 45 min from the resort, often more fare options" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     // base recalibrated against real 2026 published one-day pricing ($104-224,
@@ -188,6 +214,11 @@ export const RESORTS: Resort[] = [
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
+    // UNVERIFIED from this environment — every Disney domain is blocked by
+    // the egress proxy here, so this path could not be fetched. Same caveat
+    // as goodToKnow's visa notes: plausible and conventional, not checked.
+    // The owner click-tests these; fix here if one 404s.
+    onPropertyHotels: { url: "https://www.disneylandparis.com/en-gb/hotels/" },
     // Disney sells Paris as a hotel + ticket PACKAGE by default — a room-only
     // stay exists but is not sold online. We price room and tickets as two
     // separate lines, which matches the room-only booking most people will
@@ -215,11 +246,11 @@ export const RESORTS: Resort[] = [
     // flagship, castle-adjacent property) had no comparably reliable
     // research figure to check against — left unchanged, still a guess.
     hotels: [
-      h("dlp-sf", "Disney Hotel Santa Fe", "Value · shuttle", 190, "value", true),
-      h("dlp-ch", "Disney Hotel Cheyenne", "Value · shuttle", 205, "value", true),
-      h("dlp-sl", "Disney Sequoia Lodge", "Moderate · walkable", 270, "moderate", true),
-      h("dlp-nb", "Disney Newport Bay Club", "Moderate · walkable", 320, "moderate", true),
-      h("dlp-dlh", "Disneyland Hotel", "Deluxe · park gates", 820, "deluxe", true),
+      h("dlp-sf", "Disney Hotel Santa Fe", "Value · shuttle", 250, "value", true),
+      h("dlp-ch", "Disney Hotel Cheyenne", "Value · shuttle", 278, "value", true),
+      h("dlp-sl", "Disney Sequoia Lodge", "Moderate · walkable", 298, "moderate", true),
+      h("dlp-nb", "Disney Newport Bay Club", "Moderate · walkable", 355, "moderate", true),
+      h("dlp-dlh", "Disneyland Hotel", "Deluxe · park gates", 826, "deluxe", true),
       h("dlp-bsg", "Bussy-Saint-Georges hotel", "Off property · 12 min", 135, "budget", false),
       h("dlp-vde", "Val d'Europe hotel", "Off property · 8 min", 178, "mid", false),
       h("dlp-par", "Paris centre (RER A)", "Off property · 45 min", 245, "upscale", false),
@@ -235,6 +266,11 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://touringplans.com/tokyo-disney/closures",
     closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
     ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
+    // UNVERIFIED from this environment — every Disney domain is blocked by
+    // the egress proxy here, so this path could not be fetched. Same caveat
+    // as goodToKnow's visa notes: plausible and conventional, not checked.
+    // The owner click-tests these; fix here if one 404s.
+    onPropertyHotels: { url: "https://www.tokyodisneyresort.jp/en/hotel/" },
     altArrivalAirports: [{ iata: "HND", label: "Haneda — closer to central Tokyo, often cheaper than Narita" }],
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
@@ -253,11 +289,11 @@ export const RESORTS: Resort[] = [
     // Fantasy Springs specifically (themed suites vs. standard rooms), so
     // those two remain a rougher approximation than the other three.
     hotels: [
-      h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 195, "value", true),
-      h("tdr-ts", "Toy Story Hotel", "Value · monorail", 300, "value", true),
-      h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 420, "deluxe", true),
-      h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 560, "deluxe", true),
-      h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 680, "deluxe", true),
+      h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 180, "value", true),
+      h("tdr-ts", "Toy Story Hotel", "Value · monorail", 250, "value", true),
+      h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 460, "deluxe", true),
+      h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 620, "deluxe", true),
+      h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 700, "deluxe", true),
       h("tdr-su", "Shin-Urayasu business hotel", "Off property · 10 min", 138, "budget", false),
       h("tdr-ar", "Tokyo Bay Ariake", "Off property · 30 min", 178, "mid", false),
       h("tdr-mh", "Maihama partner hotel", "Off property · monorail", 215, "mid", false),
@@ -275,6 +311,11 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.shanghaidisneyresort.com/en/tickets/",
+    // UNVERIFIED from this environment — every Disney domain is blocked by
+    // the egress proxy here, so this path could not be fetched. Same caveat
+    // as goodToKnow's visa notes: plausible and conventional, not checked.
+    // The owner click-tests these; fix here if one 404s.
+    onPropertyHotels: { url: "https://www.shanghaidisneyresort.com/en/hotels/" },
     // Hongqiao dropped (2026-09-10): mostly domestic/regional China routes,
     // so a US-origin lookup returns nothing and still costs a metered search.
     // PVG is the real gateway.
@@ -298,8 +339,8 @@ export const RESORTS: Resort[] = [
     // Shanghai Disneyland Hotel ~CNY1,800-3,500, at roughly CNY7/USD) — the
     // old bases sat below even the low end of the researched range.
     hotels: [
-      h("shdr-ts", "Toy Story Hotel", "Value · shuttle", 215, "value", true),
-      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 370, "deluxe", true),
+      h("shdr-ts", "Toy Story Hotel", "Value · shuttle", 210, "value", true),
+      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 450, "deluxe", true),
       h("shdr-pd", "Pudong business hotel", "Off property · 20 min", 98, "budget", false),
       h("shdr-adj", "Resort-adjacent hotel", "Off property · 10 min", 148, "mid", false),
       h("shdr-cty", "Shanghai city 5-star", "Off property · 45 min", 225, "upscale", false),
@@ -315,6 +356,11 @@ export const RESORTS: Resort[] = [
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
     ticketUrl: "https://www.hongkongdisneyland.com/book/tickets/",
+    // UNVERIFIED from this environment — every Disney domain is blocked by
+    // the egress proxy here, so this path could not be fetched. Same caveat
+    // as goodToKnow's visa notes: plausible and conventional, not checked.
+    // The owner click-tests these; fix here if one 404s.
+    onPropertyHotels: { url: "https://www.hongkongdisneyland.com/hotels/" },
     altArrivalAirports: [],
     // Hong Kong's age bands come from model knowledge, not a checked source
     // — unlike Tokyo's and Paris's, which were verified against official
@@ -330,9 +376,9 @@ export const RESORTS: Resort[] = [
     plans: [],
     transport: { on: 0, off: 12 },
     hotels: [
-      h("hkdl-hh", "Disney Hollywood Hotel", "Value · shuttle", 178, "value", true),
-      h("hkdl-el", "Disney Explorers Lodge", "Moderate · shuttle", 232, "moderate", true),
-      h("hkdl-hkd", "Hong Kong Disneyland Hotel", "Deluxe · walkable", 348, "deluxe", true),
+      h("hkdl-hh", "Disney Hollywood Hotel", "Value · shuttle", 200, "value", true),
+      h("hkdl-el", "Disney Explorers Lodge", "Moderate · shuttle", 260, "moderate", true),
+      h("hkdl-hkd", "Hong Kong Disneyland Hotel", "Deluxe · walkable", 320, "deluxe", true),
       h("hkdl-kln", "Kowloon hotel", "Off property · 30 min MTR", 148, "budget", false),
       h("hkdl-tc", "Tung Chung hotel", "Off property · 10 min", 188, "mid", false),
       h("hkdl-hki", "Hong Kong Island 4-star", "Off property · 40 min", 275, "upscale", false),
@@ -562,6 +608,27 @@ export const NO_FLY_RADIUS_MILES = 100;
  * in Los Angeles absolutely may visit Disneyland. It is a claim about the
  * flight only. Driving is priced separately and is unaffected.
  */
+/**
+ * Where to send somebody who wants to book this resort's own hotel.
+ *
+ * Disney's site, not Booking.com. On-property rooms were linking to a
+ * Booking.com search for the hotel's name, which is both a worse answer than
+ * Disney's own page and, at Walt Disney World, the wrong shape of answer —
+ * the owner asked for the category page, so somebody pricing Moderate lands
+ * on the Moderate list rather than an index of fifty hotels.
+ *
+ * `tier` is the ON-property category. Anything else (an off-property tier, a
+ * resort with no per-category pages) falls through to the resort's one hotel
+ * page, which is always a correct destination if not the most specific one.
+ */
+export function onPropertyHotelUrl(resort: Resort, tier?: Tier): string {
+  const byTier = resort.onPropertyHotels.byTier;
+  if (byTier && tier && (ON_TIERS as readonly string[]).includes(tier)) {
+    return byTier[tier as OnTier] ?? resort.onPropertyHotels.url;
+  }
+  return resort.onPropertyHotels.url;
+}
+
 export function isLocalRoute(originIata: string, destinationIata: string): boolean {
   if (!originIata || !destinationIata) return false;
   if (originIata === destinationIata) return true;

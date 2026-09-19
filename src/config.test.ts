@@ -272,3 +272,88 @@ test("the picker order interleaves free and Plus airports", () => {
     "Austin sits between Atlanta and Baltimore, not in a Plus block at the end");
   assert.ok(at("TPA") < at("IAD"), "Tampa (Plus) still comes before Washington (free)");
 });
+
+/**
+ * On-property nightly rates are a baseline the seasonal multiplier moves
+ * around, so what matters is where each CATEGORY sits, not any one hotel.
+ * The owner's instruction was to pick a median per category and keep the
+ * per-hotel spread around it, then replace the median with real data later.
+ *
+ * Pinning the medians here is the drift alarm that pattern needs: the bases
+ * are ordinary numbers in a long list, and nudging one is exactly the kind of
+ * edit that silently moves which resort wins the board — the app's one job.
+ * If you are deliberately re-baselining, change the number here too and say
+ * in the commit where it came from.
+ */
+const CATEGORY_MEDIANS: Record<string, Partial<Record<string, number>>> = {
+  // Researched by the owner against 2026 published ranges: Value $150-390,
+  // Moderate $300-600+, Deluxe $680-1500+.
+  wdw:  { value: 270, moderate: 450, deluxe: 1090 },
+  // Midpoints of per-hotel ranges researched earlier (Pixar Place $355-466,
+  // Disneyland Hotel $464-631, Grand Californian $584-767).
+  dlr:  { moderate: 410, deluxe: 611.5 },
+  // The four below are CLAUDE DRAFTS from web search, corrected by the owner
+  // as they get checked — same standing as the starter attraction rows. Hong
+  // Kong is the weakest: the only figures found were "starts at" rates during
+  // an active 40%-off promotion, which is neither a median nor a rack rate.
+  dlp:  { value: 264, moderate: 326.5, deluxe: 826 },
+  tdr:  { value: 215, deluxe: 620 },
+  shdr: { value: 210, deluxe: 450 },
+  hkdl: { value: 200, moderate: 260, deluxe: 320 },
+};
+
+function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
+test("every on-property category sits on its pinned median", () => {
+  for (const resort of RESORTS) {
+    const expected = CATEGORY_MEDIANS[resort.id];
+    assert.ok(expected, `${resort.id} has no pinned medians — add them`);
+    const byTier = new Map<string, number[]>();
+    for (const h of resort.hotels.filter((h) => h.onProperty)) {
+      byTier.set(h.tier, [...(byTier.get(h.tier) ?? []), h.base]);
+    }
+    assert.deepEqual([...byTier.keys()].sort(), Object.keys(expected).sort(),
+      `${resort.id} offers different on-property categories than are pinned`);
+    for (const [tier, bases] of byTier) {
+      assert.equal(median(bases), expected[tier],
+        `${resort.id} ${tier} median moved`);
+    }
+  }
+});
+
+test("no on-property hotel is priced below a cheaper category's median", () => {
+  // The spread around each median is allowed to be wide, but a Deluxe room
+  // costing less than the typical Moderate one means the categories have
+  // crossed over and the "Resort Category" picker is lying to somebody.
+  const order = ["value", "moderate", "deluxe"];
+  for (const resort of RESORTS) {
+    const meds = CATEGORY_MEDIANS[resort.id]!;
+    for (const h of resort.hotels.filter((h) => h.onProperty)) {
+      for (const lower of order.slice(0, order.indexOf(h.tier))) {
+        const m = meds[lower];
+        if (m === undefined) continue;
+        assert.ok(h.base > m,
+          `${resort.id}: ${h.name} (${h.tier}, $${h.base}) is under the ${lower} median $${m}`);
+      }
+    }
+  }
+});
+
+test("every resort sends on-property bookings to Disney, not a reseller", () => {
+  for (const r of RESORTS) {
+    assert.match(r.onPropertyHotels.url, /^https:\/\//, `${r.id} hotel url`);
+    assert.ok(!/booking\.com|agoda|expedia/i.test(r.onPropertyHotels.url),
+      `${r.id} points on-property guests at a reseller`);
+    for (const url of Object.values(r.onPropertyHotels.byTier ?? {})) {
+      assert.match(url!, /^https:\/\//);
+    }
+  }
+  // Walt Disney World is the only resort that publishes a page per category,
+  // and the owner asked for the category page rather than the index.
+  assert.deepEqual(Object.keys(RESORT_BY_ID.get("wdw")!.onPropertyHotels.byTier ?? {}).sort(),
+    ["deluxe", "moderate", "value"]);
+});
