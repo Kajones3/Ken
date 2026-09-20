@@ -1,0 +1,233 @@
+/**
+ * Regenerate src/climateData.ts from real daily weather observations.
+ *
+ * WHY A BUILD-TIME SCRIPT AND NOT A REQUEST PATH. Climate normals move once a
+ * decade. Fetching them when somebody opens a board would spend a provider
+ * call on data that is, by construction, stale-proof — exactly what the
+ * cache-first invariant exists to prevent. This runs when a human asks it to,
+ * writes a file, and the file is committed. Same shape as bts-baseline.
+ *
+ * WHY OPEN-METEO AND NOT NOAA. NOAA's NCEI publishes the authoritative US
+ * Climate Normals, and for Orlando and Anaheim it would be the better source.
+ * It covers no other resort. Four of the six parks are outside the United
+ * States, and this app's single job is comparing all six side by side — so one
+ * consistent method across every resort beats two better-but-different methods
+ * for two of them. Same reasoning as re-baselining all six hotels together.
+ * (api.weather.gov is neither: it serves forecasts and current observations,
+ * not normals, and is US-only as well.)
+ *
+ * Open-Meteo's archive is free, needs no key, and covers the whole globe.
+ * Validate the output against NCEI for Orlando and Anaheim if you want the
+ * method checked against a primary source.
+ *
+ * WHAT IT COMPUTES, per resort per calendar month:
+ *   - average daily high  (mean of every day's max over the whole window)
+ *   - average daily low   (mean of every day's min)
+ *   - rain days           (days with >= 0.01in precipitation, per year)
+ *
+ * IT REFUSES TO WRITE GARBAGE. Every resort must come back with twelve
+ * complete, physically plausible months or nothing is written at all. A
+ * half-fetched year overwriting a good table is worse than no run — the same
+ * rule the refresh job follows by upserting only on success.
+ */
+import { writeFileSync } from "node:fs";
+import { RESORTS } from "../config.js";
+
+/** Days with at least this much precipitation count as a rain day. 0.01in is
+ *  the US convention for "measurable", and what NOAA's own normals use. */
+export const RAIN_DAY_INCHES = 0.01;
+
+/** How many years of history to average. Twenty is long enough to wash out a
+ *  freak year and short enough to still describe today's climate. */
+const DEFAULT_YEARS = 20;
+
+/** Open-Meteo's archive lags real time by about five days, so the window ends
+ *  at the last complete calendar year rather than "today". */
+const LAST_COMPLETE_YEAR = new Date().getUTCFullYear() - 1;
+
+export interface DailyObservation {
+  /** ISO date, used only to find the calendar month. */
+  date: string;
+  highF: number | null;
+  lowF: number | null;
+  precipIn: number | null;
+}
+
+export type NormalRow = [highF: number, lowF: number, rainDays: number];
+
+/**
+ * Twelve monthly rows from a pile of daily observations.
+ *
+ * Pure, so the arithmetic can be tested without the network — which matters
+ * here more than usual, because the fetch itself cannot be exercised from the
+ * sandbox this was written in.
+ *
+ * Null readings are skipped rather than counted as zero: a missing temperature
+ * is not a cold day, and a missing precipitation reading is not a dry one.
+ * Rain days are divided by the number of distinct YEARS actually seen for that
+ * month, not by the number of days, so a partial fetch understates rather than
+ * inventing a wet month — and the caller rejects partial fetches anyway.
+ */
+export function monthlyNormals(days: DailyObservation[]): (NormalRow | null)[] {
+  const acc = Array.from({ length: 12 }, () => ({
+    highSum: 0, highN: 0, lowSum: 0, lowN: 0, rainDays: 0, years: new Set<number>(),
+  }));
+
+  for (const d of days) {
+    // ISO dates only; anything else is a bug upstream and must not be averaged.
+    const m = Number(d.date.slice(5, 7));
+    const y = Number(d.date.slice(0, 4));
+    if (!(m >= 1 && m <= 12) || !Number.isFinite(y)) continue;
+    const a = acc[m - 1]!;
+    a.years.add(y);
+    if (d.highF !== null && Number.isFinite(d.highF)) { a.highSum += d.highF; a.highN++; }
+    if (d.lowF !== null && Number.isFinite(d.lowF)) { a.lowSum += d.lowF; a.lowN++; }
+    if (d.precipIn !== null && Number.isFinite(d.precipIn) && d.precipIn >= RAIN_DAY_INCHES) {
+      a.rainDays++;
+    }
+  }
+
+  return acc.map((a) => {
+    if (!a.highN || !a.lowN || !a.years.size) return null;
+    return [
+      Math.round(a.highSum / a.highN),
+      Math.round(a.lowSum / a.lowN),
+      Math.round(a.rainDays / a.years.size),
+    ] as NormalRow;
+  });
+}
+
+/** A month is only usable if it is physically possible. Catches a transposed
+ *  high/low or a units mix-up before it reaches the table. */
+export function rowIsPlausible(row: NormalRow): boolean {
+  const [highF, lowF, rainDays] = row;
+  return highF > lowF && lowF > -40 && highF < 130 && rainDays >= 0 && rainDays <= 31;
+}
+
+/** Twelve complete, plausible months, or an explanation of why not. */
+export function validateYear(rows: (NormalRow | null)[]): { ok: true; rows: NormalRow[] } | { ok: false; reason: string } {
+  if (rows.length !== 12) return { ok: false, reason: `got ${rows.length} months, need 12` };
+  const missing = rows.map((r, i) => (r ? null : i + 1)).filter((m) => m !== null);
+  if (missing.length) return { ok: false, reason: `no data for month(s) ${missing.join(", ")}` };
+  const bad = (rows as NormalRow[]).findIndex((r) => !rowIsPlausible(r));
+  if (bad >= 0) return { ok: false, reason: `month ${bad + 1} is not a real climate: ${JSON.stringify(rows[bad])}` };
+  return { ok: true, rows: rows as NormalRow[] };
+}
+
+/** Daily history for one point. Split by year so one oversized response can't
+ *  fail the whole window, and so a partial failure is visible per year. */
+export async function fetchDaily(
+  lat: number, lon: number, fromYear: number, toYear: number,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DailyObservation[]> {
+  const out: DailyObservation[] = [];
+  for (let y = fromYear; y <= toYear; y++) {
+    const url = "https://archive-api.open-meteo.com/v1/archive"
+      + `?latitude=${lat}&longitude=${lon}`
+      + `&start_date=${y}-01-01&end_date=${y}-12-31`
+      + "&daily=temperature_2m_max,temperature_2m_min,precipitation_sum"
+      + "&temperature_unit=fahrenheit&precipitation_unit=inch&timezone=UTC";
+    const res = await fetchImpl(url);
+    if (!res.ok) throw new Error(`open-meteo ${res.status} for ${lat},${lon} ${y}: ${await res.text()}`);
+    const body = await res.json() as {
+      daily?: {
+        time?: string[];
+        temperature_2m_max?: (number | null)[];
+        temperature_2m_min?: (number | null)[];
+        precipitation_sum?: (number | null)[];
+      };
+    };
+    const d = body.daily;
+    if (!d?.time?.length) throw new Error(`open-meteo returned no daily rows for ${lat},${lon} ${y}`);
+    d.time.forEach((date, i) => {
+      out.push({
+        date,
+        highF: d.temperature_2m_max?.[i] ?? null,
+        lowF: d.temperature_2m_min?.[i] ?? null,
+        precipIn: d.precipitation_sum?.[i] ?? null,
+      });
+    });
+  }
+  return out;
+}
+
+/** The generated file, rendered. Kept here so the format lives next to the
+ *  code that produces it rather than in a template nobody updates. */
+export function renderFile(byResort: Record<string, NormalRow[]>, source: string): string {
+  const order = RESORTS.map((r) => r.id).filter((id) => byResort[id]);
+  const body = order.map((id) => {
+    const rows = byResort[id]!;
+    const half = (a: NormalRow[]) => a.map((r) => `[${r[0]}, ${r[1]}, ${r[2]}]`).join(", ");
+    return `  ${id}: [${half(rows.slice(0, 6))},\n        ${half(rows.slice(6))}]`;
+  }).join(",\n");
+  return `/**
+ * GENERATED DATA — the numbers only. Do not hand-edit rows here.
+ *
+ * \`npm run climate-normals\` (or the "Parkfare climate normals" workflow)
+ * rewrites this whole file from real daily observations. Anything you type in
+ * it is lost on the next run.
+ *
+ * WHY THIS IS A SEPARATE FILE FROM config.ts. The season notes next to these
+ * numbers in config.ts ("Atlantic hurricane season", "spring break is the
+ * busiest week") are editorial judgement, not data — no API produces them, and
+ * regenerating the numbers must never wipe them. Splitting generated data from
+ * hand-written commentary is what makes the generator safe to re-run.
+ *
+ * Each row is [average daily high °F, average daily low °F, days with
+ * measurable rain (>= ${RAIN_DAY_INCHES}in)], January first.
+ */
+export type ClimateRow = [highF: number, lowF: number, rainDays: number];
+
+/** Where these numbers came from. Rewritten by the generator. */
+export const CLIMATE_SOURCE = ${JSON.stringify(source)};
+
+export const CLIMATE_ROWS: Record<string, ClimateRow[]> = {
+${body},
+};
+`;
+}
+
+export interface ClimateNormalsOptions {
+  years?: number;
+  dryRun?: boolean;
+  outPath?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export async function runClimateNormals(opts: ClimateNormalsOptions = {}) {
+  const years = opts.years ?? Number(process.env.CLIMATE_YEARS ?? DEFAULT_YEARS);
+  const dryRun = opts.dryRun ?? process.env.CLIMATE_DRY_RUN === "true";
+  const outPath = opts.outPath ?? new URL("../climateData.ts", import.meta.url).pathname;
+  const fromYear = LAST_COMPLETE_YEAR - years + 1;
+
+  const byResort: Record<string, NormalRow[]> = {};
+  for (const resort of RESORTS) {
+    process.stdout.write(`${resort.id.padEnd(5)} ${resort.city} … `);
+    const days = await fetchDaily(resort.lat, resort.lon, fromYear, LAST_COMPLETE_YEAR, opts.fetchImpl);
+    const check = validateYear(monthlyNormals(days));
+    if (!check.ok) {
+      // Loud and fatal. A resort that cannot be computed must not quietly keep
+      // its old hand-seeded row while the header claims the file is generated.
+      throw new Error(`${resort.id}: ${check.reason} (from ${days.length} days)`);
+    }
+    byResort[resort.id] = check.rows;
+    const jul = check.rows[6]!;
+    console.log(`${days.length} days — July ${jul[0]}/${jul[1]}°F, ${jul[2]} rain days`);
+  }
+
+  const source = `Open-Meteo archive (ERA5), daily observations ${fromYear}-${LAST_COMPLETE_YEAR}, generated ${new Date().toISOString().slice(0, 10)}`;
+  const file = renderFile(byResort, source);
+
+  if (dryRun) {
+    console.log(`\n--- dry run, nothing written ---\n${file}`);
+  } else {
+    writeFileSync(outPath, file, "utf8");
+    console.log(`\nwrote ${outPath}`);
+  }
+  console.log(source);
+  return { byResort, source, file, dryRun };
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  await runClimateNormals();
+}

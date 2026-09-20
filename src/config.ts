@@ -1,3 +1,4 @@
+import { CLIMATE_ROWS, CLIMATE_SOURCE, type ClimateRow } from "./climateData.js";
 import type { ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
 
@@ -914,7 +915,7 @@ const mo = (a: number, b: number): number[] => {
  * once rather than copied into six rows that could drift apart.
  */
 function climate(
-  rows: [number, number, number][],
+  rows: ClimateRow[],
   seasons: { months: number[]; emoji: string; text: string }[] = [],
 ): ClimateMonth[] {
   const out: ClimateMonth[] = rows.map(([highF, lowF, rainDays]) => ({ highF, lowF, rainDays }));
@@ -927,11 +928,19 @@ function climate(
   return out;
 }
 
+/** The generated rows for one resort. Throws rather than silently yielding an
+ *  empty year: a resort missing from the generated file is a broken build, not
+ *  a resort with no weather. */
+function rowsFor(resortId: string): ClimateRow[] {
+  const rows = CLIMATE_ROWS[resortId];
+  if (!rows || rows.length !== 12) {
+    throw new Error(`climateData.ts has no twelve-month row set for ${resortId} — re-run climate-normals`);
+  }
+  return rows;
+}
+
 export const CLIMATE: Record<string, ClimateMonth[]> = {
-  wdw: climate(
-    [[71, 50, 6], [74, 53, 6], [78, 57, 7], [83, 61, 5], [88, 67, 8], [91, 72, 15],
-     [92, 74, 17], [92, 74, 17], [90, 73, 13], [85, 67, 9], [79, 59, 6], [73, 53, 6]],
-    [
+  wdw: climate(rowsFor("wdw"),    [
       { months: mo(6, 11), emoji: "🌀",
         text: "Atlantic hurricane season runs June through November. Direct hits are rare, but September is the peak and travel insurance is worth pricing." },
       { months: mo(7, 8), emoji: "🥵",
@@ -944,10 +953,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
         text: "Warm, sunny and not yet humid — arguably the best weather of the year, which is why spring break and Easter are among the busiest weeks." },
     ],
   ),
-  dlr: climate(
-    [[68, 48, 6], [68, 49, 6], [71, 51, 5], [74, 54, 3], [76, 58, 2], [80, 61, 1],
-     [85, 65, 0], [86, 66, 1], [84, 64, 1], [79, 59, 2], [73, 52, 3], [68, 47, 5]],
-    [
+  dlr: climate(rowsFor("dlr"),    [
       { months: mo(5, 6), emoji: "🌫️",
         text: "\"May Gray\" and \"June Gloom\" — mornings often start overcast and burn off by midday. It rarely actually rains." },
       { months: mo(7, 9), emoji: "☀️",
@@ -960,10 +966,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
         text: "Warm days, cool evenings and almost no rain — the quietest good-weather stretch of the year." },
     ],
   ),
-  dlp: climate(
-    [[45, 36, 10], [47, 36, 9], [54, 39, 10], [60, 43, 9], [68, 50, 10], [73, 55, 9],
-     [77, 58, 8], [77, 58, 8], [71, 53, 8], [61, 47, 11], [51, 40, 11], [46, 37, 11]],
-    [
+  dlp: climate(rowsFor("dlp"),    [
       { months: mo(11, 2), emoji: "🌂",
         text: "Cold, grey and dark — the sun sets before 5pm around the solstice. Rain is frequent but usually light rather than heavy." },
       { months: mo(6, 8), emoji: "🌤️",
@@ -972,10 +975,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
         text: "Mild and changeable. Rain is spread evenly through the year here rather than concentrated in a season, so pack for showers whenever you go." },
     ],
   ),
-  tdr: climate(
-    [[49, 36, 5], [51, 37, 6], [57, 43, 10], [65, 51, 10], [73, 60, 10], [78, 67, 12],
-     [85, 74, 10], [88, 76, 9], [82, 70, 12], [72, 60, 10], [63, 50, 8], [53, 41, 5]],
-    [
+  tdr: climate(rowsFor("tdr"),    [
       { months: mo(6, 7), emoji: "🌧️",
         text: "Tsuyu, the rainy season — roughly mid-June to mid-July. Not constant downpours, but grey, humid and wet more often than not." },
       { months: mo(8, 9), emoji: "🌀",
@@ -986,10 +986,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
         text: "Cold, dry and often clear. Crisp rather than harsh, but the parks are exposed to wind off Tokyo Bay." },
     ],
   ),
-  shdr: climate(
-    [[47, 34, 9], [50, 36, 9], [57, 42, 12], [67, 51, 11], [76, 60, 11], [81, 68, 13],
-     [89, 76, 11], [88, 76, 10], [81, 69, 9], [73, 60, 7], [63, 49, 7], [52, 38, 7]],
-    [
+  shdr: climate(rowsFor("shdr"),    [
       { months: mo(6, 7), emoji: "🌧️",
         text: "Meiyu, the \"plum rain\" season — mid-June into July is the wettest, most humid stretch of the year." },
       { months: mo(7, 9), emoji: "🌀",
@@ -1000,10 +997,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
         text: "Cold and damp. Shanghai sits below freezing overnight only occasionally, but buildings are often unheated by US standards." },
     ],
   ),
-  hkdl: climate(
-    [[65, 56, 6], [66, 57, 9], [70, 61, 11], [76, 68, 12], [82, 75, 15], [86, 79, 19],
-     [88, 80, 18], [88, 79, 17], [86, 78, 15], [82, 73, 8], [75, 66, 6], [68, 59, 5]],
-    [
+  hkdl: climate(rowsFor("hkdl"),    [
       { months: mo(5, 11), emoji: "🌀",
         text: "Typhoon season, peaking July to September. Hong Kong's warning system can close the parks at a few hours' notice." },
       { months: mo(6, 8), emoji: "🥵",
@@ -1023,3 +1017,7 @@ export function climateFor(resortId: string, month1: number): ClimateMonth | nul
   if (!rows || month1 < 1 || month1 > 12) return null;
   return rows[month1 - 1] ?? null;
 }
+
+/** Re-exported so the UI can say where the weather numbers came from without
+ *  importing the generated file directly. */
+export { CLIMATE_SOURCE };

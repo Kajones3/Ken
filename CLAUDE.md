@@ -408,6 +408,51 @@ entity); Priceline pays ~3% on hotels and is joined through Sovrn Commerce,
 not directly; and the Travelpayouts account this project already has
 brokers Booking.com and Agoda, which is the cheapest path of the three.
 
+**Weather is a generated table, and the generator runs in Actions because it
+cannot run here** (2026-09-20). Each resort's detail view carries a weather box
+— average high, average low, rainy days for the month being priced, plus a
+season note. Four decisions, so nobody re-derives them:
+
+- *Normals, not last year.* The owner asked for "rain days last year". A
+  thirty-year average answers the question better and is the honest number: one
+  year is a sample of one, and a dry September in 2025 says nothing about
+  September 2027. The card says "typically" and states that it is neither a
+  forecast nor last year.
+- *A table, not a request path.* Same call as ticket prices. Normals move once
+  a decade, so a per-render provider call would spend money on stale-proof
+  data. `npm run climate-normals` writes `src/climateData.ts`; nothing in the
+  request path fetches weather.
+- *Generated numbers and hand-written notes live in SEPARATE FILES.*
+  `climateData.ts` holds only rows and is overwritten wholesale. The season
+  notes ("Atlantic hurricane season", "spring break is the busiest week") stay
+  in `config.ts` because they are editorial judgement no API produces. That
+  split is the whole reason the generator is safe to re-run.
+- *Open-Meteo, not NOAA — and the reasoning is the six-resort comparison.*
+  NOAA's NCEI publishes the authoritative US normals and would be better for
+  Orlando and Anaheim, but covers no other resort; `api.weather.gov` is neither
+  (forecasts and current observations only, also US-only — checked, not
+  assumed). Four parks are outside the US, and one consistent method across all
+  six beats two better-but-different methods for two of them. Same argument as
+  re-baselining all six hotels together. Validate against NCEI for the two US
+  parks if the method is ever in doubt.
+
+**The generator is unrun from here and that is the point of the workflow.**
+Every weather source — NCEI, api.weather.gov, Open-Meteo, every climate site —
+is refused by this sandbox's egress proxy, tested rather than assumed. GitHub
+Actions is not restricted that way (it reaches SerpApi and Resend nightly), so
+`.github/workflows/climate-normals.yml` is where the fetch actually happens; it
+typechecks and re-runs the climate tests against the regenerated file before
+committing it. Manual dispatch, not scheduled — a nightly run would rewrite
+identical numbers. Until it is run, the committed rows are Claude's hand-seeded
+figures and `CLIMATE_SOURCE` says so.
+
+The response to "written to a documented shape, never run" was to make the part
+that CAN be checked airtight: the aggregation is pure and heavily tested (rain
+days per year not per window, nulls skipped rather than read as zero, garbage
+dates dropped), the whole job runs end to end against a stubbed fetch across all
+six resorts, and **a partial fetch aborts rather than overwriting a good
+table** — the refresh job's upsert-on-success-only rule, applied to a file.
+
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
 calendar endpoint at 300 req/min, so live per-search fetching doesn't just cost money,
@@ -1270,6 +1315,15 @@ the warning that there is nowhere to send warnings.
   documented request shape, never run against a live key — same caveat as
   Travelpayouts/Resend. Leave `EIA_API_KEY` unset and the mock national gas price is
   used instead, so driving-mode pricing and the refresh job both still run end to end.
+- **`src/climateData.ts` is generated and still hand-seeded.** The numbers in it
+  are Claude's, not observations, until somebody runs the "Parkfare climate
+  normals" workflow — `CLIMATE_SOURCE` in that file says which it currently is.
+  Never hand-edit rows there; they are overwritten wholesale. Season notes are
+  in `config.ts` and survive regeneration.
+- **`fetchDaily()` in `climateNormals.ts` was written to Open-Meteo's documented
+  shape and has never run against the live API** — same caveat as Travelpayouts,
+  Resend and EIA. The difference is that this one has somewhere to run: the
+  workflow. If the first run fails, the error names the status and body.
 - **`NEWS_FEEDS` (`config.ts`) are best-guess RSS URLs, not confirmed reachable from
   this environment** (this sandbox's network is proxied/restricted, so a real fetch
   attempt here returns a blocked-looking error regardless of whether the URL is
