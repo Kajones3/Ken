@@ -18,11 +18,13 @@ say when something is a guess.
 house in order.** Four pieces, all on `claude/brave-carson-eg7ng8` and none
 of them live yet:
 
-- *Owner settings.* `src/settings.ts` is a registry of 111 numbers the owner
-  can change without touching code — every hotel base, every resort's
-  parking and transfers, the hopper differentials, the rental-car rate. The
-  database OVERRIDES the shipped defaults and never replaces them; see the
-  decision note.
+- *Owner settings, end to end.* `src/settings.ts` is a registry of 73 numbers
+  the owner can change without touching code — every hotel base, every
+  resort's parking and transfers, the hopper differentials, the rental-car
+  rate — and `/admin` is the screen for it. The database OVERRIDES the
+  shipped defaults and never replaces them; see the decision note.
+- *Typing a date works again.* Hand-entered travel dates were impossible to
+  complete — two bugs, both ours, both invisible to the calendar picker.
 - *Sign-in has a brake, and a way back in.* Five wrong passwords lock an
   address for fifteen minutes (`src/signinThrottle.ts`), and "Forgot your
   password?" is a real emailed link (`src/passwordReset.ts`) which also
@@ -33,12 +35,13 @@ of them live yet:
   aligned footers. The owner's report was that the weather box read well and
   nothing around it did.
 
-**What is NOT built yet, and is the obvious next piece:** the admin page
-itself. The 111 settings have a registry, validation and a wired-in effect
-on real prices, but no screen — so today they can only be changed by a
-script. Phone-friendly single-value forms plus a bulk spreadsheet was the
-agreed shape, and fare corrections (Low/Medium/High bands, deletable,
-expiring) are designed but unbuilt.
+**The admin page is now built** — `/admin`, owner-only, reached from a
+"Numbers" button in the masthead that only the owner sees. One form per
+number with the shipped figure and the allowed range beside it, a search box,
+and a spreadsheet download/upload for bulk edits. See the decision note.
+
+**Still designed but unbuilt:** fare corrections as weighted evidence
+(Low/Medium/High bands, deletable, expiring).
 
 **Previous session: a round of owner UX fixes.** Five trip-form bugs, the
 hotel links, an all-six hotel re-baseline, free-text override boxes, and
@@ -113,7 +116,7 @@ filter, and Stripe.
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
-| Owner-editable numbers | **Stored, wired, no screen yet.** `src/settings.ts` declares 111 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. The database overrides the shipped defaults and never replaces them. **The admin page itself is not built** — today these can only be changed by a script, which is not "out of the code" yet. |
+| Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Weather per month | **Wired, free.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has never been run** — the committed rows are Claude's hand-seeded figures until somebody runs the "Parkfare climate normals" workflow. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
@@ -486,7 +489,7 @@ table** — the refresh job's upsert-on-success-only rule, applied to a file.
 
 **The owner's numbers live in the database, and the code holds the
 defaults** (2026-09-20). The owner's ask was plain: "I don't want to depend
-on AI to update this site." So `src/settings.ts` declares 111 editable
+on AI to update this site." So `src/settings.ts` declares 73 editable
 numbers — every hotel base, every resort's parking-and-transfers rate, the
 hopper differentials, the rental-car rate — and `owner_settings` stores the
 ones actually changed.
@@ -519,14 +522,99 @@ The rules, each a decision rather than a default, and each with a test:
   stays pure and synchronous. The I/O happens once when the book is loaded,
   exactly as it does for fares and rooms.
 
-**The screen is still missing, and that is the gap that matters.** A
-registry nobody can reach from a phone has not got the owner out of the
-code. Agreed shape: single-value forms on the site for one-off corrections
-(the owner's own point — uploading a CSV from a phone is not realistic),
-with bulk spreadsheet download/upload going through the same validation
-path. **Hotel rates need one extra step**: they reach the page through the
-nightly `hotel_rates` cache, so saving one has to re-seed that resort's
-on-property rows or the new number won't show up until the next refresh.
+**The screen is `/admin`** (2026-09-20), and the decisions in it:
+
+- *Owner-only means ONE account, named by `OWNER_EMAIL`, resolved from the
+  session cookie on every route* — never a role column, because a role is a
+  thing that can be set, and the only person who should be able to change
+  every price in the app is whoever holds the environment variable. With
+  `OWNER_EMAIL` unset nobody is the owner and the page is simply closed:
+  "no owner configured, so let anyone in" would open every rate in the app to
+  the internet the moment a deploy forgot a variable. It also requires a
+  verified address, since this is the account that decides what travellers
+  are quoted.
+- *The page is behind the same check as the data.* Serving the form to
+  anyone and refusing the saves is just a confusing way to say no, so a
+  non-owner gets a 404 that tells them to sign in if they're the owner.
+- *A link in the masthead, shown only to the owner.* Same lesson as the
+  buried sign-out: a page you have to know the URL of is one nobody uses.
+  `/api/auth/me` carries an `owner` flag purely so the button can appear; a
+  client that lied about it would reach a page it still cannot save from.
+- *Saving is a deliberate act.* The Save button is dead until something
+  changes, and typing is not saving — a number that moves every price in the
+  app should not be committed by a blur.
+- *A refused value says what to do.* The server's message names the bound
+  and says that if the real value is genuinely outside it, the range needs
+  changing rather than the value forcing through. The page prints it as
+  written rather than replacing it with "invalid".
+- *Inputs are 16px, which is not a style choice* — anything smaller makes
+  iOS Safari zoom the page on focus, and on a form of 73 boxes that is
+  unusable. The owner said a phone is where they'd be doing this.
+
+**A hotel rate needed two things, not one.** The number reaches a traveller
+through the nightly `hotel_rates` cache, so:
+
+- *Saving re-seeds that resort's on-property rows immediately*
+  (`src/reseed.ts`), across the whole 13-month window rather than the months
+  due tonight — the owner changed what a room costs, and that is as true in
+  March as in the month the refresh happens to be looking at. It calls no
+  provider (on-property rates are generated locally), touches only
+  `on_property = true` rows for the one resort, and upserts, so a vendor's
+  real off-property rates are never rewritten from a guess and a failure
+  leaves yesterday's rows standing. The page reports the row count, because
+  "we stored your number" and "travellers are being quoted it" are different
+  claims.
+- *And the generator itself reads the owner's value* (`src/onProperty.ts`,
+  `effectiveBase()`). Without this the nightly refresh would rebuild every
+  rate from `config.ts` and silently undo the correction by morning, with the
+  admin page still showing the number the owner typed. That is the `www` trap
+  in another costume: a setting nothing reads back, so nothing can notice it
+  stopped applying. There is a test named for exactly that failure.
+
+The one awkward part, stated rather than hidden: providers generate rows
+synchronously, deep in a loop over every night of a month, so the effective
+base comes from a small process-wide cache (`primeSettingsCache`) rather than
+being threaded through the provider interface. Every read names its own
+fallback — the shipped default — so forgetting to prime degrades to what the
+app ships with rather than to zero, and only short-lived jobs prime it.
+
+**Typing a date and picking one are different acts, and only one of them
+was working** (2026-09-20, owner's report: "the calendar is fine but hand
+entering dates doesn't work"). Two bugs, both ours, both invisible to a
+picker because a picker commits one whole in-range date at once.
+
+- *Assigning `input.min` or `input.max` as a PROPERTY discards a value that
+  currently falls outside the new bound.* `syncExactDatesUi()` ran on every
+  keystroke and reassigned both every time, and a date being typed is out of
+  bounds for most of its life — a year arrives one digit at a time, so "2027"
+  is 0002, then 0020, then 0202. The box blanked itself on the second digit,
+  forever. Re-assigning the SAME string still triggers it, so `setBound()`
+  compares before it writes; that comparison is the fix, not an optimisation
+  around one.
+- *Our own "a return on or before departure is impossible" rule ran per
+  keystroke too*, and a return on its way to 15 March passes through 1 March.
+  Corrections now happen on `focusout`: **nothing may judge a date that is
+  still being typed.**
+- *The return box deliberately has NO `max`.* When a date input's min and max
+  fall in the same calendar year, Chrome decides the year is known, fills it
+  in, and sends the rest of what you type back into the day segment —
+  "03152027" typed into a box bounded to 2027 lands as 27 March, silently.
+  The departure box is safe by construction (a 13-month window always
+  straddles two years), but the return's floor is the departure date, so the
+  pair shares a year for any trip departing in `CAL_TO`'s year. A wrong date
+  presented as a real one is worse than an unbounded box, so the far end is
+  checked in `dateUsable()` instead, where it can say what happened.
+- *Every automatic clear now says why* — past date, beyond the 13-month
+  window, or return before departure. A box that empties itself silently is
+  how somebody concludes the feature is broken, which is exactly what
+  happened here.
+
+**Verify a form control by driving it key by key, not with `fill()`.**
+Playwright's `fill()` sets a complete value in one step, which is the picker's
+behaviour, not a person's — it would have passed against every version of
+this bug. Also worth knowing for the next test: `click()` lands the caret on
+whichever date segment sits under the pointer, so type from a known segment
+or the keystrokes go somewhere you didn't mean.
 
 **A wrong fare becomes evidence, not an edict** (2026-09-20, designed, not
 built). The owner's example was the site estimating $7,000 from Oregon to

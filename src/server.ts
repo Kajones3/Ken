@@ -6,12 +6,15 @@
  */
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
+import { SETTINGS, loadSettings, setSetting, applySettings } from "./settings.js";
+import { reseedForKeys } from "./reseed.js";
+import { csvCell, entriesFromCsv } from "./csv.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
-import { getDb } from "./db.js";
+import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
@@ -347,6 +350,34 @@ function withSuggestedMode(origins: typeof ORIGINS) {
   return origins.map((o) => ({ ...o, suggestedGettingThere: defaultGettingThere(o.iata) }));
 }
 
+
+/**
+ * Is this request the owner?
+ *
+ * One account, named by OWNER_EMAIL, resolved from the session cookie against
+ * the database — never from anything the client sends, the same rule Plus
+ * follows. There is no owner ROLE and deliberately so: a role column is a
+ * thing that can be set, and the only person who should be able to change
+ * every price in the app is the person who holds the environment variable.
+ *
+ * With OWNER_EMAIL unset, nobody is the owner and the admin page is simply
+ * closed. That is the safe direction to fail — the alternative, "no owner
+ * configured so let anyone in", would open every rate in the app to the
+ * internet the moment a deploy forgot one variable.
+ *
+ * It also requires a verified email, because an unverified address is one
+ * nobody has proved they hold, and this is the account that can change what
+ * every traveller is quoted.
+ */
+async function ownerOf(db: Db, req: IncomingMessage) {
+  const owner = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  if (!owner) return null;
+  const user = await currentUser(db, req);
+  if (!user || user.email.trim().toLowerCase() !== owner) return null;
+  if (!user.emailVerified) return null;
+  return user;
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
   const send = (code: number, body: unknown, opts: { cache?: string; headers?: Record<string, string> } = {}) => {
@@ -566,6 +597,10 @@ const server = createServer(async (req, res) => {
       return send(200, {
         authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
+        // Only so the masthead can offer the link. Every admin route resolves
+        // this again for itself — a client that lied about it would get a page
+        // it still cannot save anything from.
+        owner: !!await ownerOf(db, req),
       }, { cache: "no-store" });
     }
     // --- profile: free, signed in, always the caller's own row. ---------
@@ -821,6 +856,99 @@ const server = createServer(async (req, res) => {
       if (!owns.rows[0]) return send(404, { error: "not found" });
       await db.query(`delete from custom_expenses where id = $1 and trip_id = $2`, [expenseMatch[2], expenseMatch[1]]);
       return send(200, { ok: true });
+    }
+
+
+    /* ----------------------------- the admin page ------------------------
+     * Owner-only, resolved server-side on every one of these routes. The page
+     * itself is behind the same check as the data: serving the form to anyone
+     * and refusing the saves would just be a confusing way to say no.
+     * -------------------------------------------------------------------- */
+    if (url.pathname === "/admin") {
+      if (!await ownerOf(db, req)) {
+        return sendHtml(404, `<!doctype html><meta charset="utf-8"><title>Not found</title>
+          <body style="font:16px/1.6 system-ui; max-width:32rem; margin:15vh auto; padding:0 1rem">
+          <h1 style="font-size:1.2rem">Not found</h1>
+          <p>Nothing to see here. If you're the owner, <a href="/">sign in on the main page</a> first,
+          then come back.</p>`);
+      }
+      const file = await readFile(new URL("admin.html", PUBLIC_DIR));
+      res.writeHead(200, { "content-type": MIME[".html"]!, "cache-control": "no-store" });
+      return res.end(file);
+    }
+
+    if (url.pathname === "/api/admin/settings" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const values = await loadSettings(db);
+      const byKey = new Map(values.map((v) => [v.key, v]));
+      // The registry travels with the values, so the page renders itself from
+      // one response: label, group, bounds and help all come from the same
+      // place the validation does, and can't drift from it.
+      return send(200, {
+        settings: SETTINGS.map((def) => ({ ...def, ...byKey.get(def.key)! })),
+        groups: [...new Set(SETTINGS.map((s) => s.group))],
+      }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/settings" && req.method === "PUT") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const key = String(body.key ?? "");
+      // An explicit null is "put it back to the shipped default" — a different
+      // act from typing the default in, and the only way to say it.
+      const raw = body.value === null || body.value === "" ? null : body.value;
+      try {
+        const saved = await setSetting(db, key, raw, {
+          note: String(body.note ?? "").slice(0, 300), by: owner.email,
+        });
+        // A hotel rate is not live until the cache it is served from agrees.
+        const reseed = await reseedForKeys(db, [key]);
+        return send(200, { ...saved, reseededRows: reseed.rows }, { cache: "no-store" });
+      } catch (e) {
+        // The message is the whole point here — it names the bound and says
+        // what to do about it, so a refused save is actionable.
+        return send(400, { error: "rejected", message: (e as Error).message });
+      }
+    }
+
+    /* The spreadsheet, out and back. Same validation as the single-value
+     * form, by construction: both call applySettings/setSetting. */
+    if (url.pathname === "/api/admin/settings.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const values = new Map((await loadSettings(db)).map((v) => [v.key, v]));
+      const lines = [["key", "value", "label", "group", "shipped_default", "min", "max", "note", "help"].join(",")];
+      for (const def of SETTINGS) {
+        const v = values.get(def.key)!;
+        lines.push([
+          def.key,
+          // Only the owner's own overrides are filled in. A file that arrived
+          // with every box already holding the current number would turn a
+          // round trip into an override of all 111 — including the ones they
+          // never touched, frozen at today's defaults forever.
+          v.overridden ? v.value : "",
+          def.label, def.group, def.default, def.min, def.max, v.note, def.help,
+        ].map(csvCell).join(","));
+      }
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-settings-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
+    if (url.pathname === "/api/admin/settings.csv" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const parsed = entriesFromCsv(String(body.csv ?? ""));
+      if (!parsed.ok) return send(400, { error: "unreadable", message: parsed.message });
+      const entries = parsed.entries;
+      const result = await applySettings(db, entries, { note: "spreadsheet", by: owner.email });
+      if (!result.ok) return send(400, { error: "rejected", errors: result.errors });
+      const reseed = await reseedForKeys(db, entries.map((e) => e.key));
+      return send(200, { ...result, reseeded: reseed.resorts, reseededRows: reseed.rows }, { cache: "no-store" });
     }
 
     send(404, { error: "not found" });

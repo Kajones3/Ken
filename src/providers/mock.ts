@@ -3,10 +3,11 @@
  * deterministic, so two runs produce identical data and tests are stable.
  * Swap for the Travelpayouts adapter when you have a token — nothing else changes.
  */
-import { ORIGIN_BY_IATA, RESORT_BY_ID, onPropertyHotelUrl } from "../config.js";
+import { ORIGIN_BY_IATA, RESORT_BY_ID } from "../config.js";
 import { monthBounds, range } from "../dates.js";
 import { haversineMiles } from "../geo.js";
-import { hotelSeasonFactor, jitter, seasonOf } from "../seasonality.js";
+import { jitter, seasonOf } from "../seasonality.js";
+import { onPropertyQuotesFor } from "../onProperty.js";
 import type { FlightQuote, HotelQuote, Provider } from "./types.js";
 
 const CARRIERS: Record<string, string[]> = {
@@ -59,21 +60,9 @@ export class MockProvider implements Provider {
   }
 
   async hotelMonth(resortId: string, month: string): Promise<HotelQuote[]> {
-    const resort = RESORT_BY_ID.get(resortId);
-    if (!resort) return [];
-    const [from, to] = monthBounds(month);
-    const out: HotelQuote[] = [];
-    for (const date of range(from, to)) {
-      const f = hotelSeasonFactor(resortId, date);
-      for (const h of resort.hotels) {
-        out.push({
-          hotelId: h.id, resortId, hotelName: h.name, descriptor: h.descriptor,
-          stayDate: date, nightlyUsd: Math.round(h.base * f * 100) / 100,
-          tier: h.tier, onProperty: h.onProperty,
-          deepLink: onPropertyHotelUrl(resort, h.tier),
-        });
-      }
-    }
-    return out;
+    // Standing in for a vendor, so this one generates the off-property rooms
+    // too — hence "all". The rates themselves come from the same generator the
+    // real provider uses, so the owner's corrections apply in both.
+    return onPropertyQuotesFor(resortId, month, "all");
   }
 }

@@ -150,6 +150,43 @@ export async function loadSettings(db: Db): Promise<SettingValue[]> {
   });
 }
 
+/* ---------------------------------------------------------------------------
+ * A process-wide cache, for the code that generates prices synchronously.
+ *
+ * Wanted reluctantly and kept deliberately small. `pricing.ts` gets the
+ * owner's values the clean way — loaded into the PriceBook with everything
+ * else the request needs — but the on-property rate generator runs inside a
+ * provider, deep in a synchronous loop over every night of a month, and
+ * threading a Map through that would mean changing the provider interface for
+ * one field.
+ *
+ * The rules that keep it honest:
+ *   - An unprimed cache is not an error. Every read names its own fallback,
+ *     which is the shipped default, so forgetting to prime degrades to exactly
+ *     what the app ships with rather than to zero or undefined.
+ *   - Only short-lived jobs prime it. The refresh and the re-seed each load it
+ *     once at the top and exit; nothing long-running reads it, so there is no
+ *     way for a stale value to serve a traveller for hours.
+ * ------------------------------------------------------------------------ */
+let cache: Map<string, number> | null = null;
+
+/** Load the owner's values for the life of this process. */
+export async function primeSettingsCache(db: Db): Promise<number> {
+  cache = await settingsMap(db);
+  return cache.size;
+}
+
+/** The owner's value if one is loaded, the caller's own default otherwise. */
+export function cachedSetting(key: string, fallback: number): number {
+  const v = cache?.get(key);
+  return typeof v === "number" && Number.isFinite(v) ? v : fallback;
+}
+
+/** Tests only: forget what was primed, so one test can't leak into the next. */
+export function clearSettingsCache(): void {
+  cache = null;
+}
+
 /** A plain key → number map for code that just wants the value. */
 export async function settingsMap(db: Db): Promise<Map<string, number>> {
   return new Map((await loadSettings(db)).map((s) => [s.key, s.value]));

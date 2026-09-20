@@ -533,6 +533,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
       </div>
       <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
+      <a class="btn btn-sm" id="adminTop" href="/admin" hidden
+         title="Change the rates and other numbers this site prices with">Numbers</a>
       <button class="btn btn-sm" id="signoutTop" hidden>Sign out</button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
@@ -1053,7 +1055,7 @@ const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, exc
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.excludeHotel || o.excludeFlights); };
 
-let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
+let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
@@ -2661,6 +2663,10 @@ function syncAccountUi(){
   // same reasoning as the buried override controls: a control you have to
   // hunt for is one people conclude isn't there.
   $("#signoutTop").hidden = !on;
+  // The admin page is no use if the only way to reach it is knowing the URL —
+  // the same lesson as the buried sign-out. Shown only to the owner, and only
+  // because the server said so; the page and its routes check again anyway.
+  $("#adminTop").hidden = !session.owner;
   if(on){
     $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
     $("#acctEmail").textContent = session.email || "";
@@ -2986,8 +2992,9 @@ $("#planYearly").addEventListener("click", ()=>{
 async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
-    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null, emailVerified:!!me.emailVerified }
-    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
+    ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null,
+        emailVerified:!!me.emailVerified, owner:!!me.owner }
+    : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going
   // through a render, and a stale "Sign in" button after signing in is the
