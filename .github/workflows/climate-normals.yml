@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       years:
-        description: "Years of history to average (20 is a good default)"
+        description: "Years of history to average (20 is a good default; 10 costs half as much if the API budget is tight)"
         required: false
         default: "20"
       dry_run:
@@ -34,6 +34,11 @@ permissions:
 jobs:
   climate-normals:
     runs-on: ubuntu-latest
+    # Open-Meteo's free allowance is per minute, so the job paces itself and
+    # waits out any ceiling it meets. Expect minutes, not seconds. The timeout
+    # is here so a genuinely stuck run ends by itself rather than sitting on a
+    # runner — it is not a target.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

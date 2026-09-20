@@ -470,6 +470,34 @@ season note. Four decisions, so nobody re-derives them:
   re-baselining all six hotels together. Validate against NCEI for the two US
   parks if the method is ever in doubt.
 
+**The first real run failed on Open-Meteo's rate limit, and the fix was to
+learn that the other end has a budget** (2026-09-20). The run got through
+Orlando, Anaheim and Paris and then died on Tokyo with `429 — "Minutely API
+request limit exceeded"`. Six resorts x twenty years is 120 requests fired as
+fast as the network allows, and Open-Meteo bills by how much data a request
+asks for rather than per request, so a burst of year-long, three-variable
+calls empties the per-minute budget in seconds. Nothing was wrong with the
+fetching; what was missing was any notion of pacing.
+
+Three rules now, each with a test:
+
+- *There is always a pause between requests, and hitting the ceiling doubles
+  it for the rest of the run.* One 429 means the pace was wrong, not that one
+  call was unlucky — retrying at the same speed walks into the same wall.
+- *One pace is shared by all six resorts.* Per-resort pacing would reset to
+  full speed at each resort and hit the ceiling again; the budget belongs to
+  the account, not to the request.
+- *A limit that waiting cannot clear fails immediately.* Open-Meteo answers
+  429 for the minutely, hourly and daily budgets alike. A minute is worth
+  sitting out; a day is not, and spending eight minute-long retries
+  discovering that produces the same failure half an hour later with nothing
+  learned. The hourly/daily case says so and says to run with fewer years.
+
+A 400 is never retried either — a wrong argument does not become right. The
+job takes minutes now rather than seconds, which is free for a manual dispatch
+that runs once every few years, and `timeout-minutes: 45` is there so a stuck
+run ends by itself.
+
 **The generator is unrun from here and that is the point of the workflow.**
 Every weather source — NCEI, api.weather.gov, Open-Meteo, every climate site —
 is refused by this sandbox's egress proxy, tested rather than assumed. GitHub
