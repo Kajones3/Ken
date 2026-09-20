@@ -117,7 +117,7 @@ filter, and Stripe.
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
-| Weather per month | **Wired, free.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has never been run** — the committed rows are Claude's hand-seeded figures until somebody runs the "Parkfare climate normals" workflow. |
+| Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -498,7 +498,40 @@ job takes minutes now rather than seconds, which is free for a manual dispatch
 that runs once every few years, and `timeout-minutes: 45` is there so a stuck
 run ends by itself.
 
-**The generator is unrun from here and that is the point of the workflow.**
+**The generator HAS now been run** (2026-09-20, from Actions, commit
+`369d5fa`): Open-Meteo ERA5 daily observations, 2006-2025, all six resorts,
+20 years each. `CLIMATE_SOURCE` says so. The paragraph below describes why it
+could never be run from here, which is still true and still why the workflow
+exists.
+
+**Open question the first real run raised: ERA5 counts more rain days than a
+rain gauge does.** Orlando's July came back at **27** wet days; the
+hand-seeded figure it replaced was 17, which had been sanity-checked against
+summaries of NOAA's 1991-2020 normals. Hong Kong's July is 27 and Paris runs
+12-17 every month of the year. The temperatures look right (Orlando July
+89/75°F against NOAA's ~92/74); it is specifically the rain-day count that
+is high, and the reason is structural rather than a bug: ERA5 is a
+**reanalysis on a grid**, so a convective shower that a single gauge would
+miss is smeared across the whole cell and the day is counted as wet. A
+station record and a grid cell are answering slightly different questions.
+
+Three options, none of them taken yet — **the owner decides**:
+
+1. *Leave it.* The card already says "typically" and the bias leans the same
+   way everywhere, so the six-resort comparison is less distorted than the
+   absolute number. But it is not uniform: Anaheim's drizzle-free summers
+   barely move while Orlando's afternoon storms inflate a lot.
+2. *Raise `RAIN_DAY_INCHES` from 0.01in to about 0.04in (1mm)*, which is the
+   usual "wet day" threshold for gridded data and would pull the counts back
+   toward station figures. One constant, one re-run.
+3. *Validate the two US parks against NCEI* — the check this file has always
+   recommended — and pick the threshold that makes Orlando and Anaheim match,
+   then apply it to all six.
+
+**Do not quietly hand-edit `climateData.ts` to "fix" a number.** It is
+overwritten wholesale on the next run; the threshold is the lever.
+
+
 Every weather source — NCEI, api.weather.gov, Open-Meteo, every climate site —
 is refused by this sandbox's egress proxy, tested rather than assumed. GitHub
 Actions is not restricted that way (it reaches SerpApi and Resend nightly), so
