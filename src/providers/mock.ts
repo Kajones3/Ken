@@ -3,7 +3,7 @@
  * deterministic, so two runs produce identical data and tests are stable.
  * Swap for the Travelpayouts adapter when you have a token — nothing else changes.
  */
-import { ORIGIN_BY_IATA, RESORT_BY_ID } from "../config.js";
+import { ORIGIN_BY_IATA, RESORT_BY_ID, onPropertyHotelUrl } from "../config.js";
 import { monthBounds, range } from "../dates.js";
 import { haversineMiles } from "../geo.js";
 import { hotelSeasonFactor, jitter, seasonOf } from "../seasonality.js";
@@ -70,7 +70,7 @@ export class MockProvider implements Provider {
           hotelId: h.id, resortId, hotelName: h.name, descriptor: h.descriptor,
           stayDate: date, nightlyUsd: Math.round(h.base * f * 100) / 100,
           tier: h.tier, onProperty: h.onProperty,
-          deepLink: `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(h.name)}&checkin=${date}`,
+          deepLink: onPropertyHotelUrl(resort, h.tier),
         });
       }
     }

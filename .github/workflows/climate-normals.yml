@@ -1,0 +1,80 @@
+name: Parkfare climate normals
+
+# Regenerates src/climateData.ts — the weather box's numbers — from real daily
+# observations, and commits the result.
+#
+# This exists because the sandbox Claude works in cannot reach any weather
+# source: NOAA's NCEI, api.weather.gov, every climate site and Open-Meteo are
+# all refused by its egress proxy. GitHub Actions is not restricted that way —
+# it already reaches SerpApi and Resend nightly — so this is the one place the
+# fetch can actually happen.
+#
+# Deliberately manual, not scheduled. Climate normals move once a decade;
+# a nightly run would spend requests to rewrite identical numbers. Run it once
+# now, and again in a few years.
+#
+# No secrets. Open-Meteo is free and needs no key.
+on:
+  workflow_dispatch:
+    inputs:
+      years:
+        description: "Years of history to average (20 is a good default)"
+        required: false
+        default: "20"
+      dry_run:
+        description: "Print the file without committing it"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  # To commit the regenerated table back. Nothing else.
+  contents: write
+
+jobs:
+  climate-normals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+
+      - name: Fetch observations and regenerate the table
+        run: npm run climate-normals
+        env:
+          CLIMATE_YEARS: ${{ inputs.years }}
+          CLIMATE_DRY_RUN: ${{ inputs.dry_run }}
+
+      # The generated file must still compile and still satisfy the climate
+      # tests (twelve months, high above low, wet seasons in the right months).
+      # A run that produces a table the app rejects has not succeeded, and
+      # committing it would break the board for everyone.
+      - name: Check the regenerated table
+        if: ${{ !inputs.dry_run }}
+        run: |
+          npm run typecheck
+          npx tsx --test src/config.test.ts src/jobs/climateNormals.test.ts
+
+      - name: Commit if anything changed
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if git diff --quiet -- src/climateData.ts; then
+            echo "No change — the observations still agree with the committed table."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/climateData.ts
+          git commit -m "Regenerate climate normals from observations
+
+          Ran the Parkfare climate normals workflow. src/climateData.ts is
+          generated; the season notes in config.ts are hand-written and are
+          untouched by this.
+          "
+          git push
+          echo "### Climate table updated" >> "$GITHUB_STEP_SUMMARY"
+          echo '```diff' >> "$GITHUB_STEP_SUMMARY"
+          git show --stat --format= HEAD >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -14,6 +14,30 @@ say when something is a guess.
 
 ## Where things stand — 2026-09-19 (read this first in a new session)
 
+**Latest session: a round of owner UX fixes.** Five trip-form bugs, the
+hotel links, an all-six hotel re-baseline, free-text override boxes, and
+saved trips you can get back to. Read the decision notes below before
+re-litigating any of them; the short version:
+
+- *Dates.* Typed travel dates no longer vanish, a half-filled pair is
+  refused instead of silently falling back to the month, the return date
+  is guarded on a phone as well as a laptop, and both inputs cap at the
+  13-month booking horizon.
+- *Hotels.* On-property rooms link to Disney's own site (Walt Disney World
+  by category), and every resort's category medians were re-based
+  together. **The four international sets are Claude drafts the owner is
+  correcting**, and the four international hotel URLs have never been
+  fetched — the egress proxy blocks every Disney domain.
+- *Your numbers.* The airfare slider is gone and its floor is now advisory
+  — a reversal, on the owner's instruction. Food can be typed as a
+  whole-party daily total.
+- *Saved trips.* Named on save, reopened from a "My trips" masthead
+  dropdown. "Save as PDF" prints the board.
+
+**Open with the owner:** corrections to the four international hotel
+baselines. (The Disney URL question is closed — dates can't be carried,
+party size can; see the decision note.)
+
 **Live at https://pricingthemagic.com**, serving the current `master`
 (`18f12f4`). Version check in the browser: the paywall reads "Plan your
 specific trip" and there is a **Sign out** button in the masthead. If you see
@@ -285,6 +309,149 @@ It lives on `users` because there is one field. **If the profile grows past a
 handful — a souvenir budget, attraction preferences — move it to a
 `user_profile` table**: identity and entitlement sharing a row with free-form
 taste data gets muddy fast.
+
+**The airfare override's floor is advisory, not enforced** (2026-09-19,
+owner's reversal of an earlier decision — recorded so the old rule isn't
+restored by someone reading only the older note above). Typing a fare
+below the cheapest known one used to be silently raised to that floor, so
+the box overruled what you typed and showed a total nobody asked for. Your
+number now stands; `fareBelowFloor` is reported and the card says the cache
+has nothing that cheap. **Warn, don't overrule** — the same rule the `est.`
+chip and the `dataConfidence` badges already follow. Still floored at zero:
+a trip can be cheap, never negative.
+
+**The food override is a whole-party daily total, not per person**
+(2026-09-19, owner's call). "We spend about $250 a day" is a number people
+know about themselves; a per-head figure is one they have to work out. The
+cost, said in the UI rather than hidden: per-age scaling stops applying, so
+changing the party size afterwards no longer moves it. Part-days still do.
+A dining plan still wins — there is nothing to estimate about food already
+bought.
+
+**On-property rooms link to Disney, never a reseller.** Every hotel row
+used to link to a Booking.com search for its name, Disney's own included.
+Walt Disney World publishes a page per category and the owner asked for
+the category page, so somebody pricing Moderate lands on the Moderate
+list. `onPropertyHotelUrl()` in `config.ts` is the one home for the rule;
+`config.test.ts` pins that no resort sends an on-property guest to a
+reseller. The four international URLs are **unverified from this
+environment**, same standing as the `goodToKnow` visa notes.
+
+**Disney's pages take a party size in the URL and cannot take dates —
+settled by the owner clicking, not deferred** (2026-09-19). None of this is
+documented anywhere and the page is a JavaScript app that can't be fetched
+from this sandbox, so it was established the only way available:
+
+- *The query must sit BEFORE the fragment.*
+  `.../resorts/?numAdults=4#/moderate/` opens on 4 adults.
+  `.../resorts/#/moderate/?numAdults=4` is ignored — it's a fragment, not a
+  query string. Appending naively produces the second, silently-dead form,
+  which is exactly the first mistake made here.
+- *Dates are not addressable, and there is no parameter left to find.*
+  Entering dates by hand on Disney's own page **leaves the URL unchanged**,
+  so they live in page state, not the address. That is a stronger finding
+  than "the name I guessed didn't work" and closes the question — don't
+  re-open it by guessing more names.
+- *Children cannot be carried either — `numChildren` was tested and does
+  nothing* (owner clicked `?numAdults=3&numChildren=2`: three adults came
+  through, no children). So a party with children gets the plain link, which
+  is deliberate: sending `numAdults` alone for a family would open a page
+  quietly priced for fewer people than are travelling — a wrong number
+  presented as a real one, which is worse than sending nothing. Closed; do
+  not guess further names.
+- *Beware the default when testing a parameter.* The first test used
+  `numAdults=2`, which is Disney's own default, so "it came in with the
+  adults" could not be told apart from the page doing what it always does.
+  Test with a non-default value.
+
+**Hotel bases are a category median with the per-hotel spread kept around
+it** (2026-09-19). The owner supplies a researched range per category, each
+category's median lands on it, and `config.test.ts` pins every median so
+nudging a base is a test failure rather than a silent change to which
+resort wins the board. Walt Disney World moved a long way (Deluxe roughly
+doubled) because it was built on older rack rates.
+
+**All six were re-baselined together, and that mattered more than the
+numbers.** Fixing Orlando alone would have made it lose to resorts still
+carrying older, lower guesses — not because they are cheaper, but because
+their numbers are staler. That is precisely the six-resort comparison this
+app exists to get right, so a better number for one resort can make the
+product worse. Disneyland didn't move (already on midpoints of researched
+per-hotel ranges). **Paris, Tokyo, Shanghai and Hong Kong are Claude
+drafts from web search for the owner to correct**, same standing as the
+starter attraction rows; Hong Kong is the weakest, since the only figures
+found were "starts at" rates during an active 40%-off promotion, which is
+neither a median nor a rack rate.
+
+**"Compare both" now says what it found.** It always widened the hotel pool
+to on- and off-property and picked the cheaper — correctly and completely
+silently, so the owner's read that the control did nothing was fair. Each
+board row carries the gap per night and over the trip, **parking and
+transfers included**, that last part being exactly the cost people leave
+out when they conclude off-property is cheaper. Computed in `priceTrip`
+from the book slice already loaded: no extra request, no provider call.
+
+**No Airbnb/VRBO rates, decided rather than deferred** (2026-09-19). Airbnb
+killed its affiliate program in 2021 and has no public API; Vrbo has an
+affiliate program but no rate-data API (MarketMaker is host-side). So the
+only options were a hand-maintained guess or a paid scraper, and the owner
+declined both — "I don't want to maintain that". A made-up per-resort
+Airbnb number could flip which resort wins with nothing to defend it,
+which is the souvenir-basket trap in another costume. **Deluxe Villas is
+also deliberately out**: it's a Walt Disney World-only category and the
+model has three tiers.
+
+**Other resellers worth knowing about, if a second hotel source is ever
+wanted:** Expedia's Travel Creator Program covers Expedia, Hotels.com AND
+Vrbo from one account (Rapid, the real API, still wants a corporate
+entity); Priceline pays ~3% on hotels and is joined through Sovrn Commerce,
+not directly; and the Travelpayouts account this project already has
+brokers Booking.com and Agoda, which is the cheapest path of the three.
+
+**Weather is a generated table, and the generator runs in Actions because it
+cannot run here** (2026-09-20). Each resort's detail view carries a weather box
+— average high, average low, rainy days for the month being priced, plus a
+season note. Four decisions, so nobody re-derives them:
+
+- *Normals, not last year.* The owner asked for "rain days last year". A
+  thirty-year average answers the question better and is the honest number: one
+  year is a sample of one, and a dry September in 2025 says nothing about
+  September 2027. The card says "typically" and states that it is neither a
+  forecast nor last year.
+- *A table, not a request path.* Same call as ticket prices. Normals move once
+  a decade, so a per-render provider call would spend money on stale-proof
+  data. `npm run climate-normals` writes `src/climateData.ts`; nothing in the
+  request path fetches weather.
+- *Generated numbers and hand-written notes live in SEPARATE FILES.*
+  `climateData.ts` holds only rows and is overwritten wholesale. The season
+  notes ("Atlantic hurricane season", "spring break is the busiest week") stay
+  in `config.ts` because they are editorial judgement no API produces. That
+  split is the whole reason the generator is safe to re-run.
+- *Open-Meteo, not NOAA — and the reasoning is the six-resort comparison.*
+  NOAA's NCEI publishes the authoritative US normals and would be better for
+  Orlando and Anaheim, but covers no other resort; `api.weather.gov` is neither
+  (forecasts and current observations only, also US-only — checked, not
+  assumed). Four parks are outside the US, and one consistent method across all
+  six beats two better-but-different methods for two of them. Same argument as
+  re-baselining all six hotels together. Validate against NCEI for the two US
+  parks if the method is ever in doubt.
+
+**The generator is unrun from here and that is the point of the workflow.**
+Every weather source — NCEI, api.weather.gov, Open-Meteo, every climate site —
+is refused by this sandbox's egress proxy, tested rather than assumed. GitHub
+Actions is not restricted that way (it reaches SerpApi and Resend nightly), so
+`.github/workflows/climate-normals.yml` is where the fetch actually happens; it
+typechecks and re-runs the climate tests against the regenerated file before
+committing it. Manual dispatch, not scheduled — a nightly run would rewrite
+identical numbers. Until it is run, the committed rows are Claude's hand-seeded
+figures and `CLIMATE_SOURCE` says so.
+
+The response to "written to a documented shape, never run" was to make the part
+that CAN be checked airtight: the aggregation is pure and heavily tested (rain
+days per year not per window, nulls skipped rather than read as zero, garbage
+dates dropped), the whole job runs end to end against a stubbed fetch across all
+six resorts, and **a partial fetch aborts rather than overwriting a good
+table** — the refresh job's upsert-on-success-only rule, applied to a file.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -1018,7 +1185,7 @@ Established against real logs and real DNS, not assumed:
 
 | Unknown | How to settle it |
 |---|---|
-| Is `OWNER_EMAIL` set in **Actions**? | The next "Parkfare news digest" run (cron `40 4 * * *`). Its log says `OWNER_EMAIL is not set` if not. Nothing else in the repo reads it. |
+| ~~Is `OWNER_EMAIL` set in **Actions**?~~ | **Settled 2026-09-19: yes.** The real-pulls digest run would have logged "OWNER_EMAIL is not set, not sent" and instead reported a send. `RESEND_API_KEY` and `ALERT_FROM_EMAIL` are confirmed there too. |
 | Is `REQUIRE_VERIFIED_EMAIL=true` on Render? | The nightly job list drops the `verify-gate` row once it is on. Or sign out and back in — it still works either way for a confirmed account. |
 | Is `PUBLIC_BASE_URL` now the apex? | Sign up a throwaway address and look at the link in the mail. |
 
@@ -1037,6 +1204,47 @@ can tell you the host is wrong — only a human clicking a link in a real
 inbox can. Treat `PUBLIC_BASE_URL` as the one setting that must be confirmed
 end to end by an actual click, and prefer the **apex** over `www`: the apex
 is what Render verifies first and what resolved throughout.
+
+### "Sent" means accepted, not delivered — and now says so (2026-09-19)
+
+The owner didn't receive a nightly real-pulls digest. The trail: the workflow
+ran, exited 0, and logged `pulls digest: 160 routes, 101 hotels, sent`. That
+was every piece of evidence in existence, and it was not enough to tell a run
+Resend accepted from a run that reached an inbox.
+
+What was established, in this order, and worth not re-deriving:
+
+- **The job is scheduled and did run.** `pulls-digest.yml` exists, cron
+  `10 11 * * *`, `conclusion: success`. GitHub starts scheduled runs late
+  under load — the run fired at 14:19 UTC, not 11:10. Not a fault.
+- **`OWNER_EMAIL` IS set in Actions.** The note would have read
+  "OWNER_EMAIL is not set, not sent" otherwise. That settles one of the three
+  loose ends above.
+- **Resend really ran, not the console fallback.** The digest text in the log
+  is the CLI's own `console.log(r.text)`; the console SENDER prefixes
+  `[email:console]`, which appears nowhere. So `RESEND_API_KEY` is set too.
+- **Resend accepted it.** `ResendEmailSender` checks `res.ok` and throws, so a
+  resolved send means a 2xx. The message left the building.
+
+So the fault is between Resend and the inbox — spam placement, a bounce, or
+filtering — **none of which this program can observe**. That is the real
+defect the episode exposed: `sent` was set by "the sender didn't throw", and
+the response body was thrown away, so nothing survived that a human could
+trace. It is the `PUBLIC_BASE_URL` trap in another costume: the program only
+ever sees its own half of the exchange.
+
+Fixed by recording the handle that reaches the other half. `ResendEmailSender`
+now logs Resend's message id with every accepted send and says in the same
+line that acceptance is not delivery — **look the id up in the Resend
+dashboard** to see delivered vs bounced vs spam. All four email paths gain it
+from one change. `fetch_runs` notes say "handed to resend" rather than "sent".
+`resend.test.ts` pins that a rejected send throws (callers treat a resolved
+promise as sent and stamp it into `price_alerts`), that the id is surfaced,
+and that a missing `ALERT_FROM_EMAIL` names the setting instead of failing at
+the provider.
+
+**Do not read "sent" anywhere in this project as "arrived."** Nothing here can
+know that.
 
 **`npm run test-email -- you@example.com`** (or the workflow, which runs with
 the Actions secrets) remains the loud check. It reports Resend's own words
@@ -1091,9 +1299,15 @@ the warning that there is nowhere to send warnings.
   `distanceMiles`/`lat`/`lon` field, only a free-text `descriptor` — building this needs
   new structured data across ~30-40 hotels, deliberately deferred (the owner picked the
   cheaper "Need a hotel?" toggle for this round instead).
-- **The trip form's "Arriving" field is still a month picker, not a real date.** Reordered
-  in this round per the owner's spec, but "Arriving Date" was interpreted as a relabel of
-  the existing control, not a scope change — flag if a real single-date picker is wanted.
+- **The trip form's "Arriving" field is a month picker**, with real travel dates as a
+  separate Plus control beside it. Filling both dates now stands the month down visibly
+  and the search refuses a half-filled pair rather than falling back to the month —
+  which is how a February trip came back priced for March, and how the Booking.com link
+  then carried March's dates.
+- **Disney's own hotel pages cannot accept dates in a URL** — established, not assumed;
+  see the decision note above. The card carries the party size instead and tells the
+  traveller to enter their dates. Whether Disney has a children parameter is the one
+  part still unknown, and a party with children gets the plain link until it's checked.
 - `ResendEmailSender` needs a domain verified in Resend, and its request shape hasn't
   been run against a live account. Until then, leave `RESEND_API_KEY` unset — the
   console sender prints every alert instead, so the job still runs end to end.
@@ -1101,6 +1315,15 @@ the warning that there is nowhere to send warnings.
   documented request shape, never run against a live key — same caveat as
   Travelpayouts/Resend. Leave `EIA_API_KEY` unset and the mock national gas price is
   used instead, so driving-mode pricing and the refresh job both still run end to end.
+- **`src/climateData.ts` is generated and still hand-seeded.** The numbers in it
+  are Claude's, not observations, until somebody runs the "Parkfare climate
+  normals" workflow — `CLIMATE_SOURCE` in that file says which it currently is.
+  Never hand-edit rows there; they are overwritten wholesale. Season notes are
+  in `config.ts` and survive regeneration.
+- **`fetchDaily()` in `climateNormals.ts` was written to Open-Meteo's documented
+  shape and has never run against the live API** — same caveat as Travelpayouts,
+  Resend and EIA. The difference is that this one has somewhere to run: the
+  workflow. If the first run fails, the error names the status and body.
 - **`NEWS_FEEDS` (`config.ts`) are best-guess RSS URLs, not confirmed reachable from
   this environment** (this sandbox's network is proxied/restricted, so a real fetch
   attempt here returns a blocked-looking error regardless of whether the URL is

@@ -23,7 +23,7 @@
   --s2:#eb6834;            /* tickets  */
   --s3:#1baf7a;            /* hotel    */
   --s4:#4a3aa7;            /* food     */
-  --s5:#0f8f7c;            /* airport transport */
+  --s5:#0f8f7c;            /* weather (was airport transport, since removed) */
   --dv-lo-4:#0d366b; --dv-lo-3:#256abf; --dv-lo-2:#6da7ec; --dv-lo-1:#b7d3f6;
   --dv-mid:#E6E6E2;
   --dv-hi-1:#f7c9c5; --dv-hi-2:#eb8b85; --dv-hi-3:#cf3f3f; --dv-hi-4:#8c2323;
@@ -230,6 +230,43 @@ a{color:var(--ink)}
 .viewtog button{background:var(--surface); border:0; padding:6px 11px; font-size:12px; font-weight:600; color:var(--ink-2)}
 .viewtog button[aria-pressed="true"]{background:var(--ink); color:var(--plane)}
 
+.f.stooddown{opacity:.42}
+.f.stooddown label{text-decoration:line-through}
+#exactDatesHint.needsend{color:var(--accent); font-weight:600}
+.estnote.staynote{color:var(--ink-2)}
+/* Weather: a KPI row of stat tiles, not a chart — three headline numbers is
+   the case where a chart is the wrong form. Values wear ink tokens and the
+   app's own surfaces; nothing here carries meaning by colour alone, so the
+   emoji is decoration beside a written label rather than the label itself.
+   Deliberately no tabular-nums: these are standalone values, and forcing every
+   digit to a zero's width makes "71" read loose at this size. */
+.wx{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:2px 0 12px}
+.wxtile{background:var(--surface-2); border:1px solid var(--rule); border-radius:10px; padding:10px 11px}
+.wxtile .wxlab{display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); white-space:nowrap}
+.wxtile .wxval{margin-top:5px; font-size:21px; font-weight:650; color:var(--ink); line-height:1.1}
+.wxtile .wxsub{margin-top:2px; font-size:11px; color:var(--muted)}
+.wxnote{display:flex; gap:9px; align-items:flex-start; background:var(--surface-2);
+  border:1px solid var(--rule); border-left:3px solid var(--accent-line); border-radius:10px;
+  padding:10px 12px; font-size:12.5px; line-height:1.5; color:var(--ink-2)}
+.wxnote .wxemoji{font-size:17px; line-height:1.2; flex:0 0 auto}
+@media (max-width:520px){ .wx{grid-template-columns:1fr 1fr} }
+.tripsmenu{position:relative}
+.tripsdrop{position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:270px; max-height:60vh; overflow-y:auto;
+  background:var(--surface); border:1px solid var(--rule-strong); border-radius:12px; box-shadow:0 18px 44px -14px rgba(0,0,0,.5); padding:6px}
+.tripsdrop .tripitem{display:flex; align-items:center; gap:8px; width:100%; padding:8px 10px; border-radius:8px}
+.tripsdrop .tripitem:hover{background:var(--surface-2)}
+.tripsdrop .tripopen{flex:1; text-align:left; background:none; border:0; color:var(--ink); font:inherit; cursor:pointer; padding:0}
+.tripsdrop .tripopen small{display:block; color:var(--muted); font-size:11.5px; margin-top:2px}
+.tripsdrop .empty{padding:10px; color:var(--muted); font-size:12.5px}
+.namefield{display:grid; gap:6px; padding:18px 22px}
+.namefield input{background:var(--surface-2); border:1px solid var(--rule-strong); border-radius:9px; padding:10px 12px; color:var(--ink); font:inherit}
+@media print{
+  header .acct, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn, #printTop{display:none!important}
+  body{background:#fff; color:#000}
+  .row, .card, .panel{break-inside:avoid; box-shadow:none}
+  a[href]:after{content:" (" attr(href) ")"; font-size:9px; color:#555; word-break:break-all}
+}
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
 
@@ -456,6 +493,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <span class="acctplan" id="acctPlan"></span>
         </span>
       </button>
+      <div class="tripsmenu" id="tripsMenu" hidden>
+        <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My trips</button>
+        <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
+      </div>
+      <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
       <button class="btn btn-sm" id="signoutTop" hidden>Sign out</button>
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
@@ -484,7 +526,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
 
     <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
-      <div class="f">
+      <div class="f" id="monthField">
         <label for="month">Arriving</label>
         <select id="month"></select>
       </div>
@@ -713,6 +755,24 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
      out, a real account panel when signed in. The account panel exists
      mostly to answer "am I actually signed in?" with something bigger than
      a chip — who you are, which plan, and when it runs out. -->
+<div class="back" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
+  <div class="modal" style="max-width:420px">
+    <div class="mhead">
+      <h3 id="nameTitle">Save this trip</h3>
+      <p id="nameIntro">Give it a name you'll recognise later.</p>
+    </div>
+    <div class="namefield">
+      <label for="tripName">Name</label>
+      <input type="text" id="tripName" maxlength="80" placeholder="Spring break with the kids">
+      <small id="nameError" class="downgrade" hidden></small>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-sm" id="nameCancel">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="nameSave">Save &amp; watch it</button>
+    </div>
+  </div>
+</div>
+
 <div class="back" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="modal" style="max-width:460px">
     <div class="mhead">
@@ -853,6 +913,7 @@ let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus onl
 let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
+let CLIMATE = {};        // resortId -> twelve [high, low, rainDays] rows, January first
 let RESORT_BY_ID = new Map();
 
 const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
@@ -876,6 +937,11 @@ const esc = v => String(v ?? "")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/** Days in the month a Date falls in — day 0 of the NEXT month is the last of
+ *  this one. UTC throughout, like every other date in this file. */
+function daysInMonth(d){
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+}
 const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 /** "Mar 4" — the same short form the board rows use. */
 const fmtDate = iso => {
@@ -946,7 +1012,7 @@ const store = {
 
 const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, excludeHotel?, excludeFlights?} } — your numbers, not the model's
 const ovOf = id => OV[id] || {};
-const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.excludeHotel || o.excludeFlights); };
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.excludeHotel || o.excludeFlights); };
 
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false };
 let params = null;
@@ -1234,6 +1300,15 @@ function exactDatesActive(){
   const a = $("#exactDate").value, b = $("#exactReturn").value;
   return !!(a && b && nightsBetween(a, b) > 0);
 }
+/** One exact-date box filled and not the other. A trip needs both ends, so
+ *  this is a state the search REFUSES rather than quietly ignores — the quiet
+ *  version priced somebody's February trip in March and then handed them a
+ *  Booking.com link carrying the March dates. */
+function halfExactDates(){
+  if(!session.plus) return false;
+  const a = $("#exactDate").value, b = $("#exactReturn").value;
+  return (!!a) !== (!!b);
+}
 function calendarQuery(resortId, from, to, tierOverride, stripNightly){
   // A "your rate" nightly override is a claim about ONE specific tier (the
   // room you priced), not every tier at that resort — so a query asking
@@ -1376,6 +1451,15 @@ function setSearchBusy(busy){
 }
 
 async function runSearch(keepId){
+  // Refused, not ignored. Never end this with a bare return — the hint text
+  // and the focus below are what tell somebody why nothing happened.
+  if(halfExactDates()){
+    syncExactDatesUi();
+    const need = $("#exactDate").value ? $("#exactReturn") : $("#exactDate");
+    $("#exactDatesField").scrollIntoView({behavior:"smooth", block:"center"});
+    need.focus();
+    return;
+  }
   params = readParams();
   const token = ++searchToken;
   setSearchBusy(true);
@@ -1537,6 +1621,9 @@ function renderBoard(){
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}${est.seasonMatched===false?" · based on a different season, treat as rough":""}</div>`:""}
+        ${x.stayCompare ? `<div class="estnote staynote">${x.stayCompare.savesPerNight < 1
+          ? "On and off property come out about the same here, once parking and transfers are counted."
+          : `Staying ${x.stayCompare.cheaper === "off" ? "off" : "on"} property saves ${usd(x.stayCompare.savesPerNight)} a night here — ${usd(x.stayCompare.savesTotal)} over ${params.nights} nights, parking and transfers included.`}</div>` : ""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -1910,7 +1997,11 @@ async function renderDetail(){
 
   // ---- your numbers: free to set and use, Plus to save and watch ----
   const ovR = ovOf(r.id);
-  const fareNow = ovR.farePerSeat ? Math.max(ovR.farePerSeat, floor) : x.perSeatFare;
+  // No longer raised to the floor. The owner's call: a box that silently
+  // overrules what you typed is worse than one that takes your number and
+  // tells you the cache disagrees.
+  const fareNow = ovR.farePerSeat || x.perSeatFare;
+  const belowFloor = x.fareBelowFloor;
   const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
   const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
   const fareCtl = `<div class="ovcell">
@@ -1918,17 +2009,40 @@ async function renderDetail(){
       <span>I've already got flights sorted — don't count it in the total</span></label>
     ${ovR.excludeFlights ? `<div class="ovexcluded">Flights excluded from ${r.name}'s total. Uncheck to price a fare again.</div>` : `
     <div class="lab"><span>Airfare you expect, per person</span><b id="fareVal">${usd(fareNow)}</b></div>
-    <input type="range" id="fareSlider" min="${Math.round(floor)}" max="${Math.round(floor*2.6)}" step="5"
-           value="${Math.round(fareNow)}" aria-label="Airfare you expect per person">
-    <div class="ovends"><span>${usd(floor)} cheapest found</span><span>${usd(floor*2.6)}</span></div>
-    <div class="ovhint">The slider stops at ${usd(floor)} — the cheapest fare the cache has for this route near ${monthName}.
-      You can assume more than that, never less. ${overPct > 0 ? `Right now you're ${overPct}% above it.` : ""}</div>
+    <input type="number" id="fareOv" step="5" min="0" value="${ovR.farePerSeat || ""}"
+           placeholder="${Math.round(x.perSeatFare)}" aria-label="Airfare you expect per person">
+    <div class="ovhint">${belowFloor
+      ? `Heads up: the cheapest fare we've found for this route near ${monthName} is ${usd(floor)}, so ${usd(belowFloor.yours)} is below anything we can see. Your number is what's in the total — we're just saying we can't back it up.`
+      : ovR.farePerSeat
+      ? `Your number is in the total. The cheapest fare the cache has for this route near ${monthName} is ${usd(floor)}${overPct > 0 ? `, so you're ${overPct}% above it` : ""}.`
+      : `Type what you expect to pay per person. Blank uses ${usd(x.perSeatFare)}, the cheapest the cache has for this route near ${monthName}.`}</div>
     ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
   </div>`;
 
   const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
+  /* Food, typed as what the WHOLE PARTY spends in a day — the owner's call,
+   * because "we spend about $250 a day" is a number people know about
+   * themselves and a per-head figure is one they have to work out. The cost
+   * of that, said out loud rather than hidden: the model's own per-age
+   * scaling stops applying, so changing the party size afterwards does not
+   * move this number.
+   *
+   * A dining plan is a real purchased product, so it wins — there is nothing
+   * to estimate when you have already bought the food. */
+  const foodModelPerDay = fi ? 0 : x.food / (p.nights + 0.4);
+  const foodCtl = fi ? "" : `<div class="ovcell">
+    <div class="lab"><span>Food per day, everyone together</span><b>${usd(ovR.foodPerDayUsd || foodModelPerDay)}</b></div>
+    <input type="number" id="foodOv" step="10" min="0" value="${ovR.foodPerDayUsd || ""}"
+           placeholder="${Math.round(foodModelPerDay)}" aria-label="What your whole party spends on food per day">
+    <div class="ovhint">${ovR.foodPerDayUsd
+      ? `Your number, for everyone in the party together. Because it's a party total it no longer changes when you change the party size. Arrival and departure still count as part-days, so the trip works out at ${usd(ovR.foodPerDayUsd)} × ${p.nights + 0.4} days.`
+      : `Type what all ${pax} of you spend in a day, together. Blank uses ${usd(foodModelPerDay)} a day from the food style above.`}</div>
+    ${ovR.foodPerDayUsd ? `<div class="ovacts"><button class="btn btn-sm" data-reset="foodPerDayUsd">Back to the model</button>
+      <span class="yourchip">Your number</span></div>` : ""}
+  </div>`;
+
   const hotelCtl = `<div class="ovcell">
     <label class="ovexclude"><input type="checkbox" id="excludeHotelCk" ${ovR.excludeHotel ? "checked" : ""}>
       <span>I've already got a room sorted — don't count it in the total</span></label>
@@ -1938,7 +2052,7 @@ async function renderDetail(){
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
     <div class="ovhint">${ovR.nightly
       ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The cache says " + usd(modelNightly) + "."
-      : "Type what you know you can get. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
+      : "Type what you know you can get, for one night. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
@@ -1957,6 +2071,48 @@ async function renderDetail(){
   const bkSearchTerm = (!noHotel && hp.name) ? hp.name : r.city;
   const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(bkSearchTerm)}`
     + `&checkin=${x.start}&checkout=${checkout}&group_adults=${p.adults}&group_children=${p.ages.length}${childAgeParams}&no_rooms=1`;
+  /* Carry the party size to Disney, and nothing else.
+   *
+   * Owner-verified by clicking both forms, because none of this is
+   * documented anywhere and the page is a JavaScript app that can't be
+   * fetched from this environment:
+   *
+   *   .../resorts/?numAdults=4#/moderate/   — works, the page opens on 4
+   *   .../resorts/#/moderate/?numAdults=4   — does not, it's a fragment
+   *
+   * So the query has to go BEFORE the fragment. Appending it naively is the
+   * obvious mistake and produces the second, silently-ignored form.
+   *
+   * DATES ARE NOT ADDRESSABLE and there is no parameter left to find:
+   * entering them by hand on Disney's own page leaves the URL unchanged, so
+   * they live in page state, not the address. Settled, not deferred.
+   *
+   * Children are left off deliberately rather than guessed. Sending
+   * numAdults alone for a family would open a page quietly priced for fewer
+   * people than are travelling — a wrong number presented as a real one,
+   * which is worse than sending nothing at all. So a party with children
+   * gets the plain link until someone verifies what Disney calls them. */
+  const withDisneyParty = (url, tp) => {
+    if(tp.ages.length) return url;
+    const [base, frag] = url.split("#");
+    return `${base}${base.includes("?") ? "&" : "?"}numAdults=${tp.adults}${frag ? "#" + frag : ""}`;
+  };
+
+  /* An on-property room is Disney's own product, so it goes to Disney's own
+   * site — a Booking.com search for "Disney's Pop Century" is a worse answer
+   * whatever it does for commission. Walt Disney World publishes a page per
+   * category, so a Moderate search lands on the Moderate list rather than an
+   * index of fifty hotels; every other resort has one page.
+   *
+   * Dates are deliberately NOT appended. Disney's category pages are
+   * hash-routed and no date parameter has been confirmed to work on them, and
+   * a link that lands on an error page is worse than one that lands on the
+   * right page with dates to re-enter. */
+  const onTierName = ON_TIERS[x.hotelTier.actual];
+  const stayLink = stayNow && r.onPropertyHotels
+    ? { href: withDisneyParty((r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url, p),
+        label: `Book ${TIER_LABEL[onTierName].toLowerCase()} rooms on Disney's site` }
+    : { href: bkUrl, label: "Check live rates on Booking.com" };
   const sd = new Date(x.start+"T00:00:00Z");
 
   box.innerHTML = `
@@ -2037,11 +2193,49 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
-          <a class="book" href="${bkUrl}" target="_blank" rel="noopener">Check live rates →</a>
+          ${x.stayCompare ? `<p class="sub" style="margin:12px 0 0">Comparing both: ${x.stayCompare.on.name}
+            works out at ${usd(x.stayCompare.on.total)} and ${x.stayCompare.off.name} at ${usd(x.stayCompare.off.total)}
+            for these ${p.nights} nights, parking and transfers included — so
+            ${x.stayCompare.savesPerNight < 1 ? "there's almost nothing in it" :
+              `${x.stayCompare.cheaper === "on" ? "on" : "off"} property is ${usd(x.stayCompare.savesTotal)} cheaper`}.
+            The total above uses whichever came out lower.</p>` : ""}
+          <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
+          ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
+            Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
+        ${(()=>{
+          /* Typical weather for the month actually being priced — x.start, not
+           * the month picker, so a Plus trip pinned to real dates gets the
+           * month it is travelling in rather than the one in a control it is
+           * ignoring. Silently absent for a resort with no rows: a missing
+           * weather box must never take a board down with it. */
+          const wx = (CLIMATE[item.resortId] || [])[sd.getUTCMonth()];
+          if(!wx) return "";
+          const c = f => Math.round((f - 32) * 5 / 9);
+          const monthName = MONTHSFULL[sd.getUTCMonth()];
+          return `<div class="card">
+            <h5><i style="background:var(--s5)"></i>Weather in ${monthName}</h5>
+            <p class="sub">What ${r.city.split(",")[0]} is typically like — averages, not a forecast</p>
+            <div class="wx">
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">☀️</span>Average high</div>
+                <div class="wxval">${wx.highF}°F</div><div class="wxsub">${c(wx.highF)}°C</div></div>
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌙</span>Average low</div>
+                <div class="wxval">${wx.lowF}°F</div><div class="wxsub">${c(wx.lowF)}°C</div></div>
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌧️</span>Rainy days</div>
+                <div class="wxval">${wx.rainDays}</div>
+                <div class="wxsub">of ${daysInMonth(sd)} days</div></div>
+            </div>
+            ${wx.note ? `<div class="wxnote"><span class="wxemoji" aria-hidden="true">${wx.note.emoji}</span>
+              <div>${esc(wx.note.text)}</div></div>` : ""}
+            <p class="sub" style="margin-top:10px">Long-run averages for a typical ${monthName}, not a
+              forecast and not last year — one year is a sample of one. Any single trip can be
+              wetter or hotter than this.</p>
+          </div>`;
+        })()}
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
           <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          ${foodCtl}
           ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
         </div>
       </div>
@@ -2103,8 +2297,11 @@ function render(){
   $("#searchChip").hidden = true;
   const dn = $("#originNote");
   if(dn){
-    dn.hidden = !originDowngrade;
-    if(originDowngrade){
+    // Belt and braces: the server only sets originDowngrade for a non-Plus
+    // request, but a note left over from a search run before signing in has
+    // no business telling a paying member to "get Plus".
+    dn.hidden = !originDowngrade || !!session.plus;
+    if(originDowngrade && !session.plus){
       dn.innerHTML = `Priced from <b>${esc(originDowngrade.priced)}</b>, the nearest airport on the free plan.
         <button class="btn btn-sm openpw" style="margin-left:8px">Get Plus to price ${esc(originDowngrade.requested)}</button>`;
     }
@@ -2127,30 +2324,53 @@ function syncExactDatesUi(){
   if(!d || !r) return;
   d.disabled = !on; r.disabled = !on;
   $("#exactDatesPill").hidden = on;
-  const today = new Date().toISOString().slice(0,10);
-  d.min = today; r.min = d.value || today;
-  if(!on){ d.value = ""; r.value = ""; }
+  const todayISO = new Date().toISOString().slice(0,10);
+  // Disney sells about 13 months ahead, and CAL_TO is exactly the window this
+  // app prices. Offering 2031 offers a date nobody can book and we could
+  // never have a price for.
+  d.min = todayISO; d.max = CAL_TO;
+  // The browser's own min is the only return-date guard that works on a phone,
+  // where the date wheel doesn't fire `change` until the picker is dismissed.
+  r.min = d.value || todayISO; r.max = CAL_TO;
+  // Deliberately NOT blanking the boxes here any more. This used to clear both
+  // whenever the session read as not-Plus — and it runs on every render and
+  // every session refresh, so one slow /api/session call ate dates somebody
+  // had just typed, with nothing on screen saying why. exactDatesActive()
+  // already ignores a signed-out user's dates; erasing them too was the bug.
   const active = exactDatesActive();
-  $("#clearExactDates").hidden = !active;
-  $("#month").disabled = active;
+  const half = halfExactDates();
+  $("#clearExactDates").hidden = !(d.value || r.value);
+  // Exact dates REPLACE the month scan rather than sitting beside it. Half-
+  // filled counts: leaving one box empty used to fall back to the month
+  // silently, which is how a February trip came back priced for March.
+  $("#month").disabled = active || half;
+  $("#monthField").classList.toggle("stooddown", active || half);
+  $("#exactDatesHint").classList.toggle("needsend", half);
   $("#exactDatesHint").textContent = !on
     ? "Free searches scan a whole month for the cheapest arrival. Plus prices the exact days you're actually travelling."
+    : half
+    ? (d.value
+        ? "Now pick the day you come home. A start date on its own can't price a trip, so the search won't run until both are set."
+        : "Now pick the day you leave. A return date on its own can't price a trip, so the search won't run until both are set.")
     : active
-    ? `Pricing ${nightsBetween(d.value, r.value)} nights, ${fmtDate(d.value)} to ${fmtDate(r.value)}. The month picker is ignored while these are set.`
+    ? `Pricing ${nightsBetween(d.value, r.value)} nights, ${fmtDate(d.value)} to ${fmtDate(r.value)}. The Arriving month above is ignored while these are set.`
     : "Set both dates to price your real trip instead of scanning a month.";
 }
 
-document.addEventListener("change", (e) => {
+/* Both events, deliberately. Desktop typing fires `input` per keystroke and
+ * `change` on blur; an iOS date wheel fires `change` only when the picker is
+ * dismissed. Listening to one of them alone is why the return date could be
+ * set earlier than the departure on a phone but not on a laptop. */
+["change","input"].forEach(evt => document.addEventListener(evt, (e) => {
   if(!e.target.closest("#exactDate, #exactReturn")) return;
   if(!session.plus){ openPw(); syncExactDatesUi(); return; }
   const d = $("#exactDate"), r = $("#exactReturn");
-  // A return before departure is a typo, not an instruction — nudge it to a
-  // week out rather than searching nothing.
-  if(d.value && r.value && nightsBetween(d.value, r.value) <= 0){
-    r.value = new Date(new Date(d.value+"T00:00:00Z").getTime() + 7*86400000).toISOString().slice(0,10);
-  }
+  // A return on or before departure isn't a shorter trip, it's an impossible
+  // one. Clear it and ask again rather than inventing a week-long stay the
+  // traveller never typed.
+  if(d.value && r.value && nightsBetween(d.value, r.value) <= 0) r.value = "";
   syncExactDatesUi();
-});
+}));
 document.addEventListener("click", (e) => {
   if(!e.target.closest("#clearExactDates")) return;
   $("#exactDate").value = ""; $("#exactReturn").value = "";
@@ -2215,8 +2435,15 @@ function fillJumpRow(){
 document.addEventListener("click", async e=>{
   const j = e.target.closest("[data-jump]");
   if(!j) return;
+  // This used to call runSearch() and then scrollIntoView() on #detail — an
+  // element that only exists once a row is already expanded. On a collapsed
+  // board it was null, the handler threw, and the button did visibly nothing
+  // while re-running the identical six-resort search. Open the row first.
+  view = "board";
+  detailOpen = true;
   await runSearch(j.dataset.jump);
-  $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+  const box = $("#detail");
+  if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
 });
 
 /* ================================ account ================================
@@ -2632,10 +2859,15 @@ let savedTripCount = 0;
 
 async function loadSavedTrips(){
   const box = $("#savedTripsPanel"), list = $("#savedTripsList");
-  if(!session.plus){ box.hidden = true; savedTripCount = 0; return; }
+  if(!session.plus){
+    box.hidden = true; savedTripCount = 0; savedTrips = []; renderTripsMenu();
+    return;
+  }
   box.hidden = false;
   const trips = await apiGet("/api/trips", {});
   savedTripCount = Array.isArray(trips) ? trips.length : 0;
+  savedTrips = Array.isArray(trips) ? trips : [];
+  renderTripsMenu();
   if(!Array.isArray(trips) || !trips.length){
     list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
     return;
@@ -2699,21 +2931,143 @@ document.addEventListener("click", async e=>{
   const resortId = s.dataset.resort;
   const item = results.find(r=>r.resortId===resortId);
   if(!item || !item.ok) return;
+  // Ask what to call it. A list of six identically-named "Walt Disney World
+  // — 2027-03" rows is not something anybody can navigate a month later, and
+  // naming it is the one moment the traveller knows what this trip is for.
+  openNameDialog(item, s);
+});
+
+/* ------------------------- naming and reopening -------------------------
+ * A saved trip used to be write-only: the list showed a name and a baseline
+ * and there was no way back into it, so re-visiting a trip meant keying the
+ * whole form in again. The masthead dropdown is the way back.
+ */
+let pendingSave = null;
+function defaultTripName(item){
+  const when = exactDatesActive()
+    ? `${fmtDate($("#exactDate").value)}–${fmtDate($("#exactReturn").value)}`
+    : MONTHSFULL[+params.month.split("-")[1]-1] + " " + params.month.split("-")[0];
+  return `${item.resort.name} — ${when}`;
+}
+function openNameDialog(item, btn){
+  pendingSave = { item, btn };
+  $("#nameError").hidden = true;
+  $("#tripName").value = defaultTripName(item);
+  $("#nameIntro").textContent = `${item.resort.name}, ${usd(item.price.total)} for ${item.price.partySize}. Give it a name you'll recognise later.`;
+  $("#nameModal").classList.add("on");
+  $("#tripName").focus();
+  $("#tripName").select();
+}
+function closeNameDialog(){ $("#nameModal").classList.remove("on"); pendingSave = null; }
+$("#nameCancel").addEventListener("click", closeNameDialog);
+$("#nameModal").addEventListener("click", e=>{ if(e.target.id === "nameModal") closeNameDialog(); });
+$("#tripName").addEventListener("keydown", e=>{ if(e.key === "Enter") $("#nameSave").click(); });
+
+$("#nameSave").addEventListener("click", async ()=>{
+  if(!pendingSave) return;
+  const { item, btn } = pendingSave;
+  const label = $("#tripName").value.trim() || defaultTripName(item);
+  const resortId = item.resortId;
   const res = await fetch("/api/trips", {
     method:"POST", headers:{"content-type":"application/json"},
     body: JSON.stringify({
-      label: `${item.resort.name} — ${params.month}`,
-      params: { ...tripQuery(), month: params.month, resortId },
+      label,
+      // exactDate/exactReturn ride along so reopening a Plus trip comes back
+      // on the real travel dates it was priced for, not just its month.
+      params: { ...tripQuery(), month: params.month, resortId,
+                exactDate: params.exactDate || "", exactReturn: params.exactReturn || "" },
       overrides: { [resortId]: ovOf(resortId) },
       baselineTotal: item.price.total,
     }),
   });
   if(res.ok){
-    s.textContent = "Saved & watching";
-    setTimeout(()=>{ if(s.isConnected) s.textContent = "Save this trip & watch it"; }, 1800);
+    closeNameDialog();
+    if(btn && btn.isConnected){
+      btn.textContent = "Saved & watching";
+      setTimeout(()=>{ if(btn.isConnected) btn.textContent = "Save this trip & watch it"; }, 1800);
+    }
     await loadSavedTrips();
-  } else if(res.status === 402){ openPw(); }
+  } else if(res.status === 402){ closeNameDialog(); openPw(); }
+  else {
+    // Never a silent return: the owner's report about the old paywall box was
+    // that a dead click is indistinguishable from a broken build.
+    const body = await res.json().catch(()=>({}));
+    $("#nameError").textContent = body.message || "Couldn't save that trip — try again in a moment.";
+    $("#nameError").hidden = false;
+  }
 });
+
+/** Reopen a saved trip: put its own parameters back in the form, restore the
+ *  numbers that were typed for that resort, and re-run the search on it. */
+async function openSavedTrip(trip){
+  const q = trip.params || {};
+  const setIf = (sel, v) => { if(v !== undefined && v !== null && v !== "") $(sel).value = String(v); };
+  setIf("#origin", q.origin); setIf("#adults", q.adults); setIf("#nights", q.nights);
+  setIf("#parkdays", q.parkDays); setIf("#tier", q.tier); setIf("#food", q.food);
+  setIf("#month", q.month); setIf("#gettingThere", q.gettingThere);
+  // "Need a hotel?" and "Where you stay" are two controls over one saved
+  // value: stay === "none" is the no-hotel case, anything else is a pick.
+  if(q.stay){
+    $("#needHotel").value = q.stay === "none" ? "no" : "yes";
+    if(q.stay !== "none") $("#stay").value = q.stay;
+  }
+  $("#hopper").value = q.hopper ? "1" : "0";
+  const ages = String(q.childAges || "").split(",").filter(Boolean);
+  $("#kids").value = String(ages.length);
+  buildAges();
+  ages.forEach((a,i)=>{ const el = document.getElementById("age"+i); if(el) el.value = a; });
+  $("#exactDate").value = q.exactDate || "";
+  $("#exactReturn").value = q.exactReturn || "";
+  // The trip's own numbers, restored under the same resort they were typed
+  // for — merged, not swapped in, so reopening one trip doesn't wipe what
+  // you've typed for the other five resorts on the board.
+  for(const [rid, ov] of Object.entries(trip.overrides || {})){
+    if(ov && Object.keys(ov).length) OV[rid] = { ...ov };
+  }
+  store.set("ov", OV);
+  syncNeedHotel(); syncGettingThere(); syncExactDatesUi();
+  closeTripsDrop();
+  view = "board"; detailOpen = true;
+  await runSearch(trip.resortId);
+  const box = $("#detail");
+  if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+let savedTrips = [];
+function closeTripsDrop(){
+  $("#tripsDrop").hidden = true;
+  $("#tripsTop").setAttribute("aria-expanded", "false");
+}
+function renderTripsMenu(){
+  $("#tripsMenu").hidden = !session.plus;
+  $("#tripsTop").textContent = savedTrips.length ? `My trips (${savedTrips.length})` : "My trips";
+  $("#tripsDrop").innerHTML = savedTrips.length
+    ? savedTrips.map((t,i)=>{
+        const r = RESORT_BY_ID.get(t.resortId);
+        return `<div class="tripitem"><button class="tripopen" data-opentrip="${i}">
+          ${esc(t.label || (r ? r.name : t.resortId))}
+          <small>${r ? esc(r.name) : ""} · baseline ${usd(t.baselineTotal)}${t.active ? "" : " · paused"}</small>
+        </button><button class="btn btn-sm" data-deltrip="${t.id}" title="Remove">×</button></div>`;
+      }).join("")
+    : `<p class="empty">Nothing saved yet. Open a resort's details and use "Save this trip &amp; watch it".</p>`;
+}
+$("#tripsTop").addEventListener("click", ()=>{
+  const d = $("#tripsDrop");
+  d.hidden = !d.hidden;
+  $("#tripsTop").setAttribute("aria-expanded", String(!d.hidden));
+});
+document.addEventListener("click", async e=>{
+  const o = e.target.closest("[data-opentrip]");
+  if(o){ await openSavedTrip(savedTrips[+o.dataset.opentrip]); return; }
+  if(!e.target.closest("#tripsMenu")) closeTripsDrop();
+});
+
+/* Print to PDF. Deliberately the browser's own print dialog rather than a
+ * generated file: it works on a phone and a laptop, costs nothing to run,
+ * and spends none of the email allowance. The @media print rules drop the
+ * controls nobody can use on paper and spell out every link's destination,
+ * since a printed "Book this fare →" is useless without its URL. */
+$("#printTop").addEventListener("click", ()=>window.print());
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */
@@ -2766,7 +3120,7 @@ document.addEventListener("click", async (e) => {
 
 /* your-numbers controls */
 function ovEmpty(o){
-  return !o.nightly && !o.farePerSeat && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
+  return !o.nightly && !o.farePerSeat && !o.foodPerDayUsd && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
 }
 
 function setOv(id, key, val){
@@ -2808,9 +3162,11 @@ function setPersonalPromo(id, kind, value, label){
 }
 
 document.addEventListener("input", e=>{
-  if(e.target.id === "fareSlider"){
+  // Live label while typing, without re-pricing on every keystroke — the
+  // `change` handler below does the actual work on blur.
+  if(e.target.id === "fareOv"){
     const el = document.getElementById("fareVal");
-    if(el) el.textContent = usd(+e.target.value);          // live label, no re-fetch mid-drag
+    if(el) el.textContent = usd(+e.target.value || 0);
   }
 });
 document.addEventListener("change", e=>{
@@ -2818,15 +3174,18 @@ document.addEventListener("change", e=>{
   if(rid){
     // Typing a specific rate/fare is a different claim than "don't count
     // this" — mutual exclusivity the other direction from setExclude().
-    if(e.target.id === "fareSlider"){
+    if(e.target.id === "fareOv"){
       const o = OV[rid] || (OV[rid] = {});
       delete o.excludeFlights;
-      setOv(rid, "farePerSeat", +e.target.value);
+      setOv(rid, "farePerSeat", Math.max(0, +e.target.value) || 0);
     }
     if(e.target.id === "hotelOv"){
       const o = OV[rid] || (OV[rid] = {});
       delete o.excludeHotel;
       setOv(rid, "nightly", Math.max(0, +e.target.value) || 0);
+    }
+    if(e.target.id === "foodOv"){
+      setOv(rid, "foodPerDayUsd", Math.max(0, +e.target.value) || 0);
     }
     if(e.target.id === "excludeHotelCk")   setExclude(rid, "excludeHotel", e.target.checked);
     if(e.target.id === "excludeFlightsCk") setExclude(rid, "excludeFlights", e.target.checked);
@@ -2901,6 +3260,7 @@ async function boot(){
   PLUS_ORIGINS = meta.plusOrigins || [];
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
+  CLIMATE = meta.climate || {};
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
   // After the form's defaults are in place, so a returning visitor whose

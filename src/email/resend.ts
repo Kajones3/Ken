@@ -44,5 +44,26 @@ export class ResendEmailSender implements EmailSender {
     if (!res.ok) {
       throw new Error(`resend ${res.status}: ${await res.text()}`);
     }
+    /* Log the id Resend hands back, and say plainly what a success here does
+     * and does not mean.
+     *
+     * This exists because of a real dead end: the owner didn't receive a
+     * nightly digest, the job's log said "sent", and there was nothing else
+     * to go on — the response body was read for errors and thrown away on
+     * success, so a run that Resend accepted and a run that reached an inbox
+     * left identical evidence. They are not the same thing. A 2xx here means
+     * Resend took the message, not that it was delivered; bounces, blocks and
+     * spam placement all happen afterwards and are only visible in Resend's
+     * own dashboard, which is searchable BY THIS ID.
+     *
+     * Same shape as the PUBLIC_BASE_URL trap: the program can only ever
+     * observe its own half of the exchange, so the honest move is to record
+     * the handle that lets a human check the other half. */
+    const id = await res.json().then((b) => (b as { id?: string }).id).catch(() => undefined);
+    console.log(
+      `[email:resend] accepted to=${msg.to} id=${id ?? "(none returned)"} subject="${msg.subject}"`
+      + ` — accepted by Resend, which is not proof of delivery; look this id up in the Resend dashboard`
+      + ` to see whether it was delivered, bounced or marked spam.`,
+    );
   }
 }

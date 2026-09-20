@@ -4,6 +4,7 @@ import {
   RESORTS, RESORT_BY_ID, IRS_MILEAGE_RATES, MILEAGE_RATE_CARRY_FORWARD_YEARS,
   irsMileageRate, newestMileageRateYear, mileageRateStatus,
   isLocalRoute, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ALL_ORIGINS, compareOriginsByCity,
+  CLIMATE, climateFor,
   type Origin,
 } from "./config.js";
 
@@ -271,4 +272,152 @@ test("the picker order interleaves free and Plus airports", () => {
   assert.ok(at("AUS") > at("ATL") && at("AUS") < at("BWI"),
     "Austin sits between Atlanta and Baltimore, not in a Plus block at the end");
   assert.ok(at("TPA") < at("IAD"), "Tampa (Plus) still comes before Washington (free)");
+});
+
+/**
+ * On-property nightly rates are a baseline the seasonal multiplier moves
+ * around, so what matters is where each CATEGORY sits, not any one hotel.
+ * The owner's instruction was to pick a median per category and keep the
+ * per-hotel spread around it, then replace the median with real data later.
+ *
+ * Pinning the medians here is the drift alarm that pattern needs: the bases
+ * are ordinary numbers in a long list, and nudging one is exactly the kind of
+ * edit that silently moves which resort wins the board — the app's one job.
+ * If you are deliberately re-baselining, change the number here too and say
+ * in the commit where it came from.
+ */
+const CATEGORY_MEDIANS: Record<string, Partial<Record<string, number>>> = {
+  // Researched by the owner against 2026 published ranges: Value $150-390,
+  // Moderate $300-600+, Deluxe $680-1500+.
+  wdw:  { value: 270, moderate: 450, deluxe: 1090 },
+  // Midpoints of per-hotel ranges researched earlier (Pixar Place $355-466,
+  // Disneyland Hotel $464-631, Grand Californian $584-767).
+  dlr:  { moderate: 410, deluxe: 611.5 },
+  // The four below are CLAUDE DRAFTS from web search, corrected by the owner
+  // as they get checked — same standing as the starter attraction rows. Hong
+  // Kong is the weakest: the only figures found were "starts at" rates during
+  // an active 40%-off promotion, which is neither a median nor a rack rate.
+  dlp:  { value: 264, moderate: 326.5, deluxe: 826 },
+  tdr:  { value: 215, deluxe: 620 },
+  shdr: { value: 210, deluxe: 450 },
+  hkdl: { value: 200, moderate: 260, deluxe: 320 },
+};
+
+function median(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
+test("every on-property category sits on its pinned median", () => {
+  for (const resort of RESORTS) {
+    const expected = CATEGORY_MEDIANS[resort.id];
+    assert.ok(expected, `${resort.id} has no pinned medians — add them`);
+    const byTier = new Map<string, number[]>();
+    for (const h of resort.hotels.filter((h) => h.onProperty)) {
+      byTier.set(h.tier, [...(byTier.get(h.tier) ?? []), h.base]);
+    }
+    assert.deepEqual([...byTier.keys()].sort(), Object.keys(expected).sort(),
+      `${resort.id} offers different on-property categories than are pinned`);
+    for (const [tier, bases] of byTier) {
+      assert.equal(median(bases), expected[tier],
+        `${resort.id} ${tier} median moved`);
+    }
+  }
+});
+
+test("no on-property hotel is priced below a cheaper category's median", () => {
+  // The spread around each median is allowed to be wide, but a Deluxe room
+  // costing less than the typical Moderate one means the categories have
+  // crossed over and the "Resort Category" picker is lying to somebody.
+  const order = ["value", "moderate", "deluxe"];
+  for (const resort of RESORTS) {
+    const meds = CATEGORY_MEDIANS[resort.id]!;
+    for (const h of resort.hotels.filter((h) => h.onProperty)) {
+      for (const lower of order.slice(0, order.indexOf(h.tier))) {
+        const m = meds[lower];
+        if (m === undefined) continue;
+        assert.ok(h.base > m,
+          `${resort.id}: ${h.name} (${h.tier}, $${h.base}) is under the ${lower} median $${m}`);
+      }
+    }
+  }
+});
+
+test("every resort sends on-property bookings to Disney, not a reseller", () => {
+  for (const r of RESORTS) {
+    assert.match(r.onPropertyHotels.url, /^https:\/\//, `${r.id} hotel url`);
+    assert.ok(!/booking\.com|agoda|expedia/i.test(r.onPropertyHotels.url),
+      `${r.id} points on-property guests at a reseller`);
+    for (const url of Object.values(r.onPropertyHotels.byTier ?? {})) {
+      assert.match(url!, /^https:\/\//);
+    }
+  }
+  // Walt Disney World is the only resort that publishes a page per category,
+  // and the owner asked for the category page rather than the index.
+  assert.deepEqual(Object.keys(RESORT_BY_ID.get("wdw")!.onPropertyHotels.byTier ?? {}).sort(),
+    ["deluxe", "moderate", "value"]);
+});
+
+/**
+ * The climate table is hand-maintained reference data with no live source, so
+ * the only thing standing between a typo and a resort claiming an average low
+ * above its average high is a test. Same reasoning as the category-median pins
+ * above: these are ordinary numbers in a long list.
+ */
+test("every resort has a full, internally consistent year of climate rows", () => {
+  for (const resort of RESORTS) {
+    const rows = CLIMATE[resort.id];
+    assert.ok(rows, `${resort.id} has no climate rows`);
+    assert.equal(rows!.length, 12, `${resort.id} needs twelve months`);
+    rows!.forEach((m, i) => {
+      const where = `${resort.id} month ${i + 1}`;
+      assert.ok(m.highF > m.lowF, `${where}: high ${m.highF} is not above low ${m.lowF}`);
+      assert.ok(m.rainDays >= 0 && m.rainDays <= 31, `${where}: ${m.rainDays} rain days`);
+      // Nothing on Earth plausibly sits outside this at a Disney resort; a row
+      // that does is a transposed or mistyped number, not a climate.
+      assert.ok(m.lowF > -20 && m.highF < 125, `${where}: ${m.lowF}-${m.highF}F is not a real climate`);
+      if (m.note) {
+        assert.ok(m.note.emoji.length > 0 && m.note.text.length > 20, `${where}: thin season note`);
+      }
+    });
+  }
+});
+
+test("climateFor answers by month and refuses nonsense instead of throwing", () => {
+  const july = climateFor("wdw", 7);
+  assert.ok(july && july.highF > 85, "Orlando in July is hot");
+  const january = climateFor("wdw", 1);
+  assert.ok(january && january.highF < 80, "and milder in January");
+  // A missing weather box must never break a board.
+  assert.equal(climateFor("nope", 7), null);
+  assert.equal(climateFor("wdw", 0), null);
+  assert.equal(climateFor("wdw", 13), null);
+});
+
+test("the wet and dry seasons land in the right hemisphere and month", () => {
+  // Cheap sanity checks against facts nobody needs a source to confirm, aimed
+  // at the failure that matters: a table pasted against the wrong resort.
+  const wettest = (id: string) => CLIMATE[id]!
+    .reduce((best, m, i) => (m.rainDays > CLIMATE[id]![best]!.rainDays ? i : best), 0) + 1;
+  assert.ok([6, 7, 8].includes(wettest("wdw")), "Orlando is wettest in high summer");
+  assert.ok([6, 7, 8].includes(wettest("hkdl")), "so is Hong Kong");
+  assert.ok(wettest("dlr") <= 3 || wettest("dlr") >= 11, "Anaheim's rain is a winter thing");
+  assert.ok(CLIMATE["dlr"]!.reduce((n, m) => n + m.rainDays, 0) < 60,
+    "and Southern California is dry overall");
+  assert.ok(CLIMATE["wdw"]![8]!.note?.text.includes("hurricane"),
+    "September at Walt Disney World says hurricane season");
+});
+
+test("a season that wraps the year end covers December AND January", () => {
+  // The bug this pins: a naive a..b range computes a negative length for a
+  // wrapping range and yields NO months, so every winter note in the climate
+  // table attached to nothing while the table looked complete.
+  for (const id of ["dlr", "dlp", "tdr", "shdr"]) {
+    const rows = CLIMATE[id]!;
+    assert.ok(rows[11]!.note, `${id} has no December note`);
+    assert.ok(rows[0]!.note, `${id} has no January note`);
+    assert.equal(rows[11]!.note!.text, rows[0]!.note!.text,
+      `${id}: December and January should share one winter note, not two that can drift`);
+  }
 });

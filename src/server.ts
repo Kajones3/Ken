@@ -8,7 +8,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
@@ -372,6 +372,10 @@ const server = createServer(async (req, res) => {
       // itself stays in config.ts and the browser only obeys it.
       originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
       resorts: RESORTS,
+      // Typical weather per resort per month. Its own key rather than folded
+      // onto each Resort: 72 rows would bury the resort definitions, and
+      // nothing that prices a trip reads it.
+      climate: CLIMATE,
     }, { cache: "public, max-age=300" });
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
@@ -652,10 +656,15 @@ const server = createServer(async (req, res) => {
       if (!user) return send(401, { error: "sign_in_required" });
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const { rows } = await db.query(
-        `select id, label, params, baseline_total, active, created_at from saved_trips
+        `select id, label, params, overrides, baseline_total, active, created_at from saved_trips
           where user_id = $1 order by created_at desc`, [user.id]);
+      // params/overrides are returned so a saved trip can be REOPENED, not
+      // just listed — without them the list was a read-only receipt and the
+      // only way back to a trip you had saved was to key it in again.
+      // They are the user's own row, already Plus-gated above.
       return send(200, rows.map((r) => ({
         id: r.id, label: r.label, resortId: r.params?.resortId ?? null,
+        params: r.params ?? {}, overrides: r.overrides ?? {},
         baselineTotal: Number(r.baseline_total), active: r.active, createdAt: r.created_at,
       })));
     }
