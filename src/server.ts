@@ -23,9 +23,14 @@ import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, signUp, signIn, AuthError,
-  setHomeAirport, HomeAirportError, type SessionUser,
+  setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, type SessionUser,
 } from "./auth.js";
 import { pickEmailSender } from "./email/pick.js";
+import {
+  scopesFor, clientIp as callerIp, checkSigninAllowed, recordSigninFailure, clearSigninFailures,
+  lockoutMessage,
+} from "./signinThrottle.js";
+import { requestReset, lookupReset, consumeReset, RESET_TOKEN_HOURS } from "./passwordReset.js";
 import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS } from "./verifyEmail.js";
 
 const db = await getDb();
@@ -177,11 +182,12 @@ function destinationsFrom(q: URLSearchParams): Record<string, string> {
 }
 
 /** x-forwarded-for first, since Render (and any reverse proxy) puts the real
- *  client IP there — req.socket.remoteAddress alone would just be the proxy. */
+ *  client IP there — req.socket.remoteAddress alone would just be the proxy.
+ *  Delegates to signinThrottle's version so the "take the FIRST entry" rule
+ *  has one home and one set of tests; the sign-in lockout depends on it not
+ *  being something a client can rotate at will. */
 function clientIp(req: IncomingMessage): string {
-  const fwd = req.headers["x-forwarded-for"];
-  if (typeof fwd === "string" && fwd.length) return fwd.split(",")[0]!.trim();
-  return req.socket.remoteAddress ?? "";
+  return callerIp(req.headers, req.socket.remoteAddress) ?? "";
 }
 
 async function readBody(req: IncomingMessage): Promise<any> {
@@ -191,6 +197,22 @@ async function readBody(req: IncomingMessage): Promise<any> {
     req.on("end", () => resolve(s));
   });
   try { return JSON.parse(raw || "{}"); } catch { return {}; }
+}
+
+/**
+ * A urlencoded form body, for the one page in this app that is a real HTML
+ * form rather than a fetch(): the password-reset page, which has to work in a
+ * browser opened straight from an email client with no JavaScript assumed.
+ */
+async function readForm(req: IncomingMessage): Promise<Record<string, string>> {
+  const raw = await new Promise<string>((resolve) => {
+    let s = "";
+    req.on("data", (c) => (s += c));
+    req.on("end", () => resolve(s));
+  });
+  const out: Record<string, string> = {};
+  for (const [k, v] of new URLSearchParams(raw)) out[k] = v;
+  return out;
 }
 
 async function compare(q: URLSearchParams, user: SessionUser | null) {
@@ -390,10 +412,24 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       const password = typeof body.password === "string" ? body.password : "";
       const isSignup = url.pathname === "/api/auth/signup";
+      // Throttle sign-in only. Sign-up is not a guessing game — there is no
+      // secret to find — and locking it would just stop people joining.
+      const scopes = scopesFor(String(body.email ?? ""), clientIp(req));
+      if (!isSignup) {
+        const gate = await checkSigninAllowed(db, scopes);
+        if (!gate.allowed) {
+          // 429 with Retry-After, and the SAME message whether or not this
+          // address has an account — a lockout that only happens for real
+          // accounts would tell an attacker which addresses are registered.
+          return send(429, { error: "too_many_attempts", message: lockoutMessage(gate.retryAfterSeconds) },
+            { headers: { "retry-after": String(gate.retryAfterSeconds) } });
+        }
+      }
       try {
         const user = isSignup
           ? await signUp(db, body.email, password)
           : await signIn(db, body.email, password);
+        if (!isSignup) await clearSigninFailures(db, scopes);
         // Fire the confirmation link on sign-up. Never blocks the sign-up
         // itself: the account exists either way and another link is one
         // button away.
@@ -405,6 +441,10 @@ const server = createServer(async (req, res) => {
         }, withCookie(sessionCookieHeader(token)));
       } catch (e) {
         if (e instanceof AuthError) {
+          // Only a wrong password counts towards a lockout. A malformed
+          // address or a weak password is a form mistake, and counting those
+          // would lock people out for typing badly rather than for guessing.
+          if (!isSignup && e.reason === "bad_credentials") await recordSigninFailure(db, scopes);
           // 401 for a credential mismatch, 400 for something the form can
           // fix (bad address, weak password, wrong form entirely).
           return send(e.reason === "bad_credentials" ? 401 : 400,
@@ -412,6 +452,70 @@ const server = createServer(async (req, res) => {
         }
         throw e;
       }
+    }
+
+    // --- forgot password -------------------------------------------------
+    // Always answers the same, whether or not that address has an account.
+    // Sign-in refuses to leak which addresses are registered; a forgot form
+    // that said "no such account" would hand it straight back.
+    if (url.pathname === "/api/auth/forgot" && req.method === "POST") {
+      const body = await readBody(req);
+      void requestReset(db, body.email, pickEmailSender());
+      return send(200, {
+        message: "If that address has an account, a reset link is on its way. "
+          + "The link works for 2 hours.",
+      });
+    }
+
+    // Clicked from an inbox, so it answers with a page rather than JSON.
+    if (url.pathname === "/api/auth/reset" && (req.method === "GET" || req.method === "POST")) {
+      const page = (title: string, body: string, status = 200) => sendHtml(status,
+        `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+        + `<title>${title} · Parkfare</title>`
+        + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
+        + `<h1 style="font-size:1.4rem">${title}</h1>${body}`
+        + `<p><a href="/">Back to Parkfare</a></p></div>`);
+      const dead = (reason: "unknown" | "expired") => page(
+        reason === "expired" ? "That link has expired" : "That link isn't valid",
+        reason === "expired"
+          ? `<p>Reset links last ${RESET_TOKEN_HOURS} hours. Ask for a new one from the sign-in box and we'll send another.</p>`
+          : `<p>It may already have been used, or a newer link replaced it. Ask for a new one from the sign-in box.</p>`,
+        reason === "expired" ? 410 : 404);
+
+      if (req.method === "GET") {
+        const token = url.searchParams.get("token") ?? "";
+        const found = await lookupReset(db, token);
+        // Checked BEFORE rendering the form, so nobody types a new password
+        // into a page that was never going to work.
+        if (!found.ok) return dead(found.reason);
+        return page("Set a new password",
+          `<p>For ${escapeHtml(found.email)}. At least ${MIN_PASSWORD_LENGTH} characters.</p>`
+          + `<form method="post" action="/api/auth/reset">`
+          + `<input type="hidden" name="token" value="${escapeHtml(token)}">`
+          + `<p><input type="password" name="password" minlength="${MIN_PASSWORD_LENGTH}" required`
+          + ` autocomplete="new-password" placeholder="New password"`
+          + ` style="font:inherit;padding:.6rem;width:100%;box-sizing:border-box"></p>`
+          + `<p><button type="submit" style="font:inherit;padding:.6rem 1rem">Set password</button></p>`
+          + `</form>`
+          + `<p style="color:#666;font-size:.9rem">This signs out every device currently signed in to this account.</p>`);
+      }
+
+      const form = await readForm(req);
+      const result = await consumeReset(db, form.token ?? "", form.password ?? "");
+      if (!result.ok) {
+        if (result.reason === "weak_password") {
+          // The link survives a weak password, so one short try doesn't force
+          // the whole flow to start over.
+          return page("That password is too short",
+            `<p>Passwords need at least ${MIN_PASSWORD_LENGTH} characters. `
+            + `<a href="/api/auth/reset?token=${encodeURIComponent(form.token ?? "")}">Try again</a>.</p>`, 400);
+        }
+        return dead(result.reason);
+      }
+      return page("Password changed",
+        `<p>${escapeHtml(result.email)} is set. `
+        + `${result.sessionsEnded > 0 ? `Every device that was signed in has been signed out. ` : ""}`
+        + `Sign in with the new password.</p>`);
     }
     // Clicked from an inbox, so it answers with a page rather than JSON.
     if (url.pathname === "/api/auth/verify" && req.method === "GET") {

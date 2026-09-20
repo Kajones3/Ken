@@ -343,3 +343,57 @@ create table if not exists email_verifications (
   sent_at     timestamptz not null default now()
 );
 create index if not exists email_verifications_token on email_verifications (token);
+
+-- Owner-editable settings. The DEFAULT for every one of these still lives in
+-- config.ts; a row here overrides it. That direction matters: an empty table
+-- must behave exactly like the app did before this existed, so a fresh
+-- database, a failed migration or a wiped table degrades to the shipped
+-- values rather than to nothing.
+--
+-- Why a key/value table rather than a column per setting: the whole point is
+-- that the owner can change a number without anyone editing code, and a new
+-- editable value should not require a migration. The registry in config.ts
+-- (SETTINGS) supplies the label, type and validation for each key, so this
+-- table stays dumb and the meaning stays in one place.
+--
+-- note/updated_by exist because a hand-set number with no explanation is
+-- indistinguishable from a typo six months later.
+create table if not exists owner_settings (
+  key        text primary key,
+  value      jsonb not null,
+  note       text not null default '',
+  updated_by text not null default '',
+  updated_at timestamptz not null default now()
+);
+
+-- Failed sign-in attempts, so guessing a password costs time.
+--
+-- Keyed by SCOPE rather than by user, and counted for addresses that have no
+-- account at all, because the sign-in route must behave identically whether or
+-- not an email is registered — a lockout that only happens for real accounts
+-- is an account-enumeration oracle wearing a security feature's clothes.
+--
+-- Two scopes are counted independently: "email|someone@example.com" protects
+-- one account, and "ip|1.2.3.4" stops somebody cycling through addresses from
+-- one machine.
+create table if not exists signin_attempts (
+  scope         text primary key,
+  fails         int not null default 0,
+  first_fail_at timestamptz not null default now(),
+  locked_until  timestamptz
+);
+
+-- One outstanding password-reset link per account, upserted on user_id exactly
+-- like email_verifications: asking for a new link takes the old one out of
+-- play, so a link that reached the wrong inbox stops working the moment the
+-- right person asks again.
+--
+-- Shorter-lived than a confirmation link. A confirmation link only proves an
+-- address; a reset link hands over an account.
+create table if not exists password_resets (
+  user_id    uuid primary key references users(id) on delete cascade,
+  token      text unique not null,
+  expires_at timestamptz not null,
+  sent_at    timestamptz not null default now()
+);
+create index if not exists password_resets_token on password_resets (token);
