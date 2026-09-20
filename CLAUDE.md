@@ -504,8 +504,12 @@ run ends by itself.
 could never be run from here, which is still true and still why the workflow
 exists.
 
-**Open question the first real run raised: ERA5 counts more rain days than a
-rain gauge does.** Orlando's July came back at **27** wet days; the
+**Settled: the rain-day threshold is 1mm, not a rain gauge's 0.01in**
+(2026-09-20, owner picked option 2 below). `RAIN_DAY_INCHES = 0.04`. The
+reasoning, and why the mismatch with the US "measurable" convention is
+deliberate:
+
+ERA5 counts more rain days than a rain gauge does. Orlando's July came back at **27** wet days; the
 hand-seeded figure it replaced was 17, which had been sanity-checked against
 summaries of NOAA's 1991-2020 normals. Hong Kong's July is 27 and Paris runs
 12-17 every month of the year. The temperatures look right (Orlando July
@@ -515,18 +519,20 @@ is high, and the reason is structural rather than a bug: ERA5 is a
 miss is smeared across the whole cell and the day is counted as wet. A
 station record and a grid cell are answering slightly different questions.
 
-Three options, none of them taken yet — **the owner decides**:
+0.01in is the convention for "measurable" at a **station**, which is a single
+point. A grid cell is an average across tens of kilometres, so a shower that
+soaks one side of Orlando and misses the other leaves the whole cell showing
+a trace and the day counts as wet. 1mm is the standard wet-day cut-off for
+gridded precipitation for exactly that reason — chosen so the number means
+what a person reading "10 rainy days" thinks it means. `climateNormals.test.ts`
+pins the constant, so lowering it back to a gauge's threshold fails loudly.
 
-1. *Leave it.* The card already says "typically" and the bias leans the same
-   way everywhere, so the six-resort comparison is less distorted than the
-   absolute number. But it is not uniform: Anaheim's drizzle-free summers
-   barely move while Orlando's afternoon storms inflate a lot.
-2. *Raise `RAIN_DAY_INCHES` from 0.01in to about 0.04in (1mm)*, which is the
-   usual "wet day" threshold for gridded data and would pull the counts back
-   toward station figures. One constant, one re-run.
-3. *Validate the two US parks against NCEI* — the check this file has always
-   recommended — and pick the threshold that makes Orlando and Anaheim match,
-   then apply it to all six.
+The two options NOT taken, recorded so they are not re-proposed as new:
+*leave it* (rejected — the bias is not uniform, since Anaheim's dry summers
+barely move while Orlando's storms inflate a lot, so it distorts the
+comparison and not just the absolute number), and *validate against NCEI
+first* (still the right check if this is ever revisited, and still only
+possible for Orlando and Anaheim).
 
 **Do not quietly hand-edit `climateData.ts` to "fix" a number.** It is
 overwritten wholesale on the next run; the threshold is the lever.

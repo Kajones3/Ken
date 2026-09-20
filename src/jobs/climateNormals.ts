@@ -23,7 +23,7 @@
  * WHAT IT COMPUTES, per resort per calendar month:
  *   - average daily high  (mean of every day's max over the whole window)
  *   - average daily low   (mean of every day's min)
- *   - rain days           (days with >= 0.01in precipitation, per year)
+ *   - rain days           (days with >= RAIN_DAY_INCHES precipitation, per year)
  *
  * IT REFUSES TO WRITE GARBAGE. Every resort must come back with twelve
  * complete, physically plausible months or nothing is written at all. A
@@ -33,9 +33,28 @@
 import { writeFileSync } from "node:fs";
 import { RESORTS } from "../config.js";
 
-/** Days with at least this much precipitation count as a rain day. 0.01in is
- *  the US convention for "measurable", and what NOAA's own normals use. */
-export const RAIN_DAY_INCHES = 0.01;
+/**
+ * Days with at least this much precipitation count as a rain day.
+ *
+ * 0.04in (1mm), NOT the 0.01in a rain gauge uses — and the difference is the
+ * whole point. 0.01in is the US convention for "measurable" at a WEATHER
+ * STATION, which is a single point. ERA5 is a reanalysis on a GRID, so the
+ * figure for a cell is an average across tens of kilometres: an afternoon
+ * shower that soaks one side of Orlando and misses the other still leaves the
+ * whole cell showing a trace, and the day counts as wet.
+ *
+ * Measured, not assumed. The first run at 0.01in gave Orlando 27 wet days in
+ * July against roughly 17 in NOAA's 1991-2020 normals, and Paris 12-17 every
+ * month of the year. The temperatures agreed well over the same run, so it
+ * was specifically this threshold and not the data source.
+ *
+ * 1mm is the standard "wet day" cut-off for gridded precipitation for exactly
+ * this reason. It is a deliberate mismatch with the gauge convention, chosen
+ * so the NUMBER means what a person reading "10 rainy days" thinks it means.
+ * If this is ever revisited, check Orlando and Anaheim against NCEI first —
+ * they are the two resorts with an authoritative source to check against.
+ */
+export const RAIN_DAY_INCHES = 0.04;
 
 /** How many years of history to average. Twenty is long enough to wash out a
  *  freak year and short enough to still describe today's climate. */

@@ -53,7 +53,16 @@ test("a trace of rain is not a rain day, and the threshold is inclusive", () => 
     { date: "2020-03-02", precip: RAIN_DAY_INCHES },
     { date: "2020-03-03", precip: 2 },
   ]));
-  assert.equal(rows[2]?.[2], 2, "0.009in doesn't count; exactly 0.01in does");
+  assert.equal(rows[2]?.[2], 2,
+    `just under ${RAIN_DAY_INCHES}in doesn't count; exactly ${RAIN_DAY_INCHES}in does`);
+});
+
+test("the threshold is the gridded-data one, not the rain-gauge one", () => {
+  // Pinned because it is a decision, not a default. ERA5 averages precipitation
+  // across a grid cell, so a gauge's 0.01in "measurable" cut-off counts far more
+  // wet days than a person would recognise — Orlando's July came back at 27 the
+  // first time this ran. Lowering it back to 0.01 should fail here, loudly.
+  assert.equal(RAIN_DAY_INCHES, 0.04, "1mm, the standard wet-day cut-off for gridded data");
 });
 
 test("missing readings are skipped, never treated as zero", () => {
