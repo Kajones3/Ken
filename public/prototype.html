@@ -1334,10 +1334,47 @@ function nightsBetween(a, b){
   return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z")) / 86400000);
 }
 /** Both dates set, in order, and the user is entitled to use them. */
+/**
+ * Set min/max ONLY when they actually change.
+ *
+ * This looks like a pointless micro-optimisation and is nothing of the kind.
+ * Assigning `input.min` in Chrome while somebody is typing DISCARDS a value
+ * that currently falls outside the new bound — and a date being typed by hand
+ * is out of bounds for most of its life, because a year arrives one digit at a
+ * time: "2027" is 0002, then 0020, then 0202 before it is ever 2027. Since
+ * syncExactDatesUi() ran on every keystroke and reassigned min and max every
+ * time, the box blanked itself on the second digit of the year and hand entry
+ * could never finish. The calendar picker was unaffected — it commits one
+ * whole in-range date — which is exactly why this read as "the calendar is
+ * fine but typing doesn't work".
+ *
+ * Re-assigning the SAME string still triggers it, so comparing first is the
+ * fix, not a shortcut around one.
+ */
+/** Set when a date was cleared for a reason the traveller can't see, so the
+ *  hint can say so. A box that empties itself silently is how somebody decides
+ *  the feature is broken — which is exactly what happened here. */
+let exactDatesMsg = "";
+
+function setBound(el, which, value){
+  if(el.getAttribute(which) !== value) el.setAttribute(which, value);
+}
+
+/** A date the app can actually price: a real date inside the booking window.
+ *  A half-typed year ("0002-03-09") is a syntactically valid date and a
+ *  completely useless one, so it counts as "still typing", never as a date
+ *  somebody chose. */
+function dateUsable(v){
+  if(!v) return false;
+  const today = new Date().toISOString().slice(0,10);
+  return v >= today && v <= CAL_TO;
+}
+
 function exactDatesActive(){
   if(!session.plus) return false;
   const a = $("#exactDate").value, b = $("#exactReturn").value;
-  return !!(a && b && nightsBetween(a, b) > 0);
+  if(!dateUsable(a) || !dateUsable(b)) return false;
+  return nightsBetween(a, b) > 0;
 }
 /** One exact-date box filled and not the other. A trip needs both ends, so
  *  this is a state the search REFUSES rather than quietly ignores — the quiet
@@ -1345,8 +1382,8 @@ function exactDatesActive(){
  *  Booking.com link carrying the March dates. */
 function halfExactDates(){
   if(!session.plus) return false;
-  const a = $("#exactDate").value, b = $("#exactReturn").value;
-  return (!!a) !== (!!b);
+  const a = dateUsable($("#exactDate").value), b = dateUsable($("#exactReturn").value);
+  return a !== b;
 }
 function calendarQuery(resortId, from, to, tierOverride, stripNightly){
   // A "your rate" nightly override is a claim about ONE specific tier (the
@@ -2438,10 +2475,23 @@ function syncExactDatesUi(){
   // Disney sells about 13 months ahead, and CAL_TO is exactly the window this
   // app prices. Offering 2031 offers a date nobody can book and we could
   // never have a price for.
-  d.min = todayISO; d.max = CAL_TO;
+  setBound(d, "min", todayISO); setBound(d, "max", CAL_TO);
   // The browser's own min is the only return-date guard that works on a phone,
   // where the date wheel doesn't fire `change` until the picker is dismissed.
-  r.min = d.value || todayISO; r.max = CAL_TO;
+  // Only a departure date that is really a date may raise it — otherwise the
+  // half-typed year in the box next door would push the return's floor up.
+  setBound(r, "min", dateUsable(d.value) ? d.value : todayISO);
+  // ...and deliberately NO max here, which is the second half of the typing
+  // bug. When a date input's min and max fall in the SAME calendar year,
+  // Chrome decides the year is already known, fills it in, and sends the rest
+  // of what you type back into the day segment: "03152027" typed at a box
+  // bounded to 2027 lands as 27 March, silently. The departure box is safe
+  // from this by construction — a 13-month window always straddles two years —
+  // but the return's floor is the departure date, so the pair shares a year
+  // for any trip departing in CAL_TO's year. A wrong date presented as a real
+  // one is worse than an unbounded box, so the far end is checked below, on
+  // our side, where it can say what happened.
+  if(r.hasAttribute("max")) r.removeAttribute("max");
   // Deliberately NOT blanking the boxes here any more. This used to clear both
   // whenever the session read as not-Plus — and it runs on every render and
   // every session refresh, so one slow /api/session call ate dates somebody
@@ -2455,8 +2505,9 @@ function syncExactDatesUi(){
   // silently, which is how a February trip came back priced for March.
   $("#month").disabled = active || half;
   $("#monthField").classList.toggle("stooddown", active || half);
-  $("#exactDatesHint").classList.toggle("needsend", half);
-  $("#exactDatesHint").textContent = !on
+  $("#exactDatesHint").classList.toggle("needsend", half || !!exactDatesMsg);
+  $("#exactDatesHint").textContent = exactDatesMsg ? exactDatesMsg
+    : !on
     ? "Free searches scan a whole month for the cheapest arrival. Plus prices the exact days you're actually travelling."
     : half
     ? (d.value
@@ -2474,13 +2525,47 @@ function syncExactDatesUi(){
 ["change","input"].forEach(evt => document.addEventListener(evt, (e) => {
   if(!e.target.closest("#exactDate, #exactReturn")) return;
   if(!session.plus){ openPw(); syncExactDatesUi(); return; }
-  const d = $("#exactDate"), r = $("#exactReturn");
-  // A return on or before departure isn't a shorter trip, it's an impossible
-  // one. Clear it and ask again rather than inventing a week-long stay the
-  // traveller never typed.
-  if(d.value && r.value && nightsBetween(d.value, r.value) <= 0) r.value = "";
+  exactDatesMsg = "";
   syncExactDatesUi();
 }));
+
+/**
+ * Corrections happen when you LEAVE a box, never while you are in it.
+ *
+ * This used to run on every keystroke, and that is the whole reason hand-typed
+ * dates never worked. A date arrives one segment at a time, so a return date
+ * on its way to 15 March passes through 1 March — which is "before departure"
+ * and got wiped, over and over, so the box could only ever be filled from the
+ * picker. Nothing may judge a date that is still being typed.
+ *
+ * focusout also covers a phone: dismissing the date wheel and tapping anything
+ * else fires it, and runSearch refuses an unusable pair regardless, so there is
+ * no path where a bad date reaches a price.
+ */
+document.addEventListener("focusout", (e) => {
+  if(!e.target.closest("#exactDate, #exactReturn")) return;
+  if(!session.plus) return;
+  const d = $("#exactDate"), r = $("#exactReturn");
+  const todayISO = new Date().toISOString().slice(0,10);
+  exactDatesMsg = "";
+  for(const [el, what] of [[d, "departure"], [r, "return"]]){
+    if(!el.value || dateUsable(el.value)) continue;
+    // Out of the window we can price, or a year that never finished being
+    // typed. Say which, rather than leaving a box that looks filled in.
+    exactDatesMsg = el.value < todayISO
+      ? `That ${what} date has already passed, so it's been cleared — pick a date from today onwards.`
+      : `We only have prices about 13 months out, so that ${what} date has been cleared.`;
+    el.value = "";
+  }
+  // A return on or before departure isn't a shorter trip, it's an impossible
+  // one. Clear it and ask again rather than inventing a stay nobody typed.
+  if(!exactDatesMsg && dateUsable(d.value) && dateUsable(r.value)
+     && nightsBetween(d.value, r.value) <= 0){
+    r.value = "";
+    exactDatesMsg = "Your return was on or before the day you leave, so it's been cleared. Pick a later day to come home.";
+  }
+  syncExactDatesUi();
+});
 document.addEventListener("click", (e) => {
   if(!e.target.closest("#clearExactDates")) return;
   $("#exactDate").value = ""; $("#exactReturn").value = "";
