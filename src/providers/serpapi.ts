@@ -21,9 +21,10 @@
  * against one real key during development (not load-tested) — same caveat
  * as every other real provider in this project.
  */
-import { RESORT_BY_ID, onPropertyHotelUrl } from "../config.js";
+import { RESORT_BY_ID } from "../config.js";
 import { monthBounds, range, addDaysISO, todayISO, type ISODate } from "../dates.js";
 import { hotelSeasonFactor } from "../seasonality.js";
+import { onPropertyQuotesFor } from "../onProperty.js";
 import type { HotelQuote } from "./types.js";
 
 const BASE = "https://serpapi.com/search.json";
@@ -145,22 +146,7 @@ export class SerpApiHotelProvider {
   }
 
   private onPropertyMonth(resortId: string, month: string): HotelQuote[] {
-    const resort = RESORT_BY_ID.get(resortId);
-    if (!resort) return [];
-    const [from, to] = monthBounds(month);
-    const out: HotelQuote[] = [];
-    for (const date of range(from, to)) {
-      const f = hotelSeasonFactor(resortId, date);
-      for (const h of resort.hotels.filter((h) => h.onProperty)) {
-        out.push({
-          hotelId: h.id, resortId, hotelName: h.name, descriptor: h.descriptor,
-          stayDate: date, nightlyUsd: Math.round(h.base * f * 100) / 100,
-          tier: h.tier, onProperty: true,
-          deepLink: onPropertyHotelUrl(resort, h.tier),
-        });
-      }
-    }
-    return out;
+    return onPropertyQuotesFor(resortId, month, "on");
   }
 
   /**

@@ -21,6 +21,7 @@ import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
 import { computeFareTrend } from "./fareTrend.js";
 import { rotateHotelSlots, slotKeys, type HotelSlot } from "./hotelRotation.js";
+import { primeSettingsCache } from "../settings.js";
 
 /**
  * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
@@ -123,7 +124,7 @@ async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promi
   return rows.length;
 }
 
-async function upsertHotels(db: Db, rows: HotelQuote[], source: string): Promise<number> {
+export async function upsertHotels(db: Db, rows: HotelQuote[], source: string): Promise<number> {
   if (!rows.length) return 0;
   let written = 0;
   for (let i = 0; i < rows.length; i += 500) {
@@ -193,6 +194,10 @@ export interface RefreshOptions {
 }
 
 export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
+  // Load the owner's corrections before anything generates a rate. Without
+  // this the on-property generator would rebuild every night from the shipped
+  // defaults and quietly undo whatever the owner had fixed on the admin page.
+  await primeSettingsCache(db);
   const months = opts.months ?? dueMonths();
   const origins = opts.origins ?? ORIGINS.map((o) => o.iata);
   const resorts = (opts.resorts ?? RESORTS.map((r) => r.id))
