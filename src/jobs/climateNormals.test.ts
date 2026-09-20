@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  monthlyNormals, validateYear, rowIsPlausible, fetchDaily, renderFile,
+  monthlyNormals, validateYear, rowIsPlausible, fetchDaily, renderFile, retryAfterMs,
   RAIN_DAY_INCHES, type DailyObservation, type NormalRow,
 } from "./climateNormals.js";
 
@@ -134,12 +134,103 @@ test("fetchDaily asks for fahrenheit and inches, one year at a time", async () =
   assert.deepEqual(out[1], { date: "2021-01-02", highF: 72, lowF: 52, precipIn: 0.5 });
 });
 
-test("fetchDaily throws on a bad response instead of returning a short year", async () => {
+test("fetchDaily gives up rather than returning a short year", async () => {
   const bad = (async () => new Response("rate limited", { status: 429 })) as unknown as typeof fetch;
-  await assert.rejects(() => fetchDaily(1, 2, 2021, 2021, bad), /open-meteo 429/);
+  await assert.rejects(
+    () => fetchDaily(1, 2, 2021, 2021, bad, { sleep: async () => {} }),
+    /open-meteo 429 after \d+ retries/);
 
   const empty = (async () => Response.json({ daily: { time: [] } })) as unknown as typeof fetch;
-  await assert.rejects(() => fetchDaily(1, 2, 2021, 2021, empty), /no daily rows/);
+  await assert.rejects(() => fetchDaily(1, 2, 2021, 2021, empty, { sleep: async () => {} }), /no daily rows/);
+});
+
+/* ---------------------------------------------------------------------------
+ * Living inside the free allowance. These cover the exact failure that killed
+ * the first real run: 120 requests fired flat out, four resorts in, 429.
+ * ------------------------------------------------------------------------ */
+
+test("a minutely limit is waited out, and the whole run slows down afterwards", async () => {
+  // The point is not merely that the request is retried — it is that the pace
+  // changes. Retrying at the same speed walks into the same wall.
+  let calls = 0;
+  const waits: number[] = [];
+  const flaky = (async () => {
+    calls++;
+    return calls === 1
+      ? new Response('{"error":true,"reason":"Minutely API request limit exceeded. Please try again in one minute."}', { status: 429 })
+      : Response.json({ daily: { time: ["2021-01-01"], temperature_2m_max: [70],
+          temperature_2m_min: [50], precipitation_sum: [0] } });
+  }) as unknown as typeof fetch;
+
+  const pace = { pauseMs: 250 };
+  const out = await fetchDaily(1, 2, 2021, 2021, flaky,
+    { sleep: async (ms) => { waits.push(ms); } }, pace);
+
+  assert.equal(out.length, 1, "the year came back after the wait");
+  assert.ok(waits.includes(60_000), "it waited the minute the response asked for");
+  assert.ok(pace.pauseMs > 250, `the pace slowed for everything after it (was ${pace.pauseMs}ms)`);
+});
+
+test("a daily limit fails immediately, because waiting a minute cannot clear it", async () => {
+  // Spending eight minute-long retries to discover this produces the same
+  // failure half an hour later and tells the owner nothing new.
+  let calls = 0;
+  const capped = (async () => {
+    calls++;
+    return new Response('{"error":true,"reason":"Daily API request limit exceeded. Please try again tomorrow."}', { status: 429 });
+  }) as unknown as typeof fetch;
+
+  await assert.rejects(
+    () => fetchDaily(1, 2, 2021, 2021, capped, { sleep: async () => {} }),
+    /waiting will not help today/);
+  assert.equal(calls, 1, "it did not burn retries on a limit that a wait cannot clear");
+});
+
+test("a 400 is not retried — a wrong argument does not become right", async () => {
+  let calls = 0;
+  const wrong = (async () => { calls++; return new Response("bad latitude", { status: 400 }); }) as unknown as typeof fetch;
+  await assert.rejects(() => fetchDaily(1, 2, 2021, 2021, wrong, { sleep: async () => {} }), /open-meteo 400/);
+  assert.equal(calls, 1);
+});
+
+test("Retry-After is obeyed in both the forms servers send it", async () => {
+  assert.equal(retryAfterMs("30"), 30_000, "seconds");
+  const soon = new Date(Date.now() + 45_000).toUTCString();
+  const fromDate = retryAfterMs(soon)!;
+  assert.ok(fromDate > 40_000 && fromDate <= 45_000, `an HTTP date (got ${fromDate})`);
+  assert.equal(retryAfterMs(null), null);
+  assert.equal(retryAfterMs("nonsense"), null, "and junk is ignored rather than becoming NaN");
+});
+
+test("the run shares one pace across all six resorts", async () => {
+  // Per-resort pacing would reset to full speed at every resort and hit the
+  // same ceiling again — the budget belongs to the account, not the request.
+  let calls = 0;
+  const gaps: number[] = [];
+  const oneSlowStart = (async () => {
+    calls++;
+    return calls === 1
+      ? new Response('{"reason":"Minutely API request limit exceeded."}', { status: 429 })
+      : Response.json({ daily: {
+          time: Array.from({ length: 365 }, (_, i) =>
+            new Date(Date.UTC(2021, 0, 1 + i)).toISOString().slice(0, 10)),
+          temperature_2m_max: Array(365).fill(70),
+          temperature_2m_min: Array(365).fill(50),
+          precipitation_sum: Array(365).fill(0.5),
+        } });
+  }) as unknown as typeof fetch;
+
+  const { runClimateNormals } = await import("./climateNormals.js");
+  await runClimateNormals({
+    years: 1, dryRun: true, fetchImpl: oneSlowStart,
+    tuning: { sleep: async (ms) => { gaps.push(ms); }, onWait: () => {} },
+  });
+  // Six resorts, one 429 at the very start: every later request pays the
+  // raised pause, so the slow-down outlived the resort that caused it.
+  const pauses = gaps.filter((g) => g > 0 && g < 60_000);
+  assert.ok(pauses.length >= 6, "every request paused");
+  assert.ok(pauses[pauses.length - 1]! > pauses[0]!,
+    "the pace raised by one resort's 429 still applied to the last resort");
 });
 
 test("the rendered file parses back to the same numbers", async () => {
