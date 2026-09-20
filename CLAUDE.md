@@ -12,9 +12,35 @@ say when something is a guess.
 
 ---
 
-## Where things stand — 2026-09-19 (read this first in a new session)
+## Where things stand — 2026-09-20 (read this first in a new session)
 
-**Latest session: a round of owner UX fixes.** Five trip-form bugs, the
+**Latest session: getting the owner out of the code, and the front of the
+house in order.** Four pieces, all on `claude/brave-carson-eg7ng8` and none
+of them live yet:
+
+- *Owner settings.* `src/settings.ts` is a registry of 111 numbers the owner
+  can change without touching code — every hotel base, every resort's
+  parking and transfers, the hopper differentials, the rental-car rate. The
+  database OVERRIDES the shipped defaults and never replaces them; see the
+  decision note.
+- *Sign-in has a brake, and a way back in.* Five wrong passwords lock an
+  address for fifteen minutes (`src/signinThrottle.ts`), and "Forgot your
+  password?" is a real emailed link (`src/passwordReset.ts`) which also
+  signs out every device — the revoke button the app never had.
+- *Weather.* A per-month box on each resort, from a generated table. The
+  generator has still never been run; see the note below.
+- *The detail cards all share one shape now.* KPI tiles, collapsed prose,
+  aligned footers. The owner's report was that the weather box read well and
+  nothing around it did.
+
+**What is NOT built yet, and is the obvious next piece:** the admin page
+itself. The 111 settings have a registry, validation and a wired-in effect
+on real prices, but no screen — so today they can only be changed by a
+script. Phone-friendly single-value forms plus a bulk spreadsheet was the
+agreed shape, and fare corrections (Low/Medium/High bands, deletable,
+expiring) are designed but unbuilt.
+
+**Previous session: a round of owner UX fixes.** Five trip-form bugs, the
 hotel links, an all-six hotel re-baseline, free-text override boxes, and
 saved trips you can get back to. Read the decision notes below before
 re-litigating any of them; the short version:
@@ -38,11 +64,14 @@ re-litigating any of them; the short version:
 baselines. (The Disney URL question is closed — dates can't be carried,
 party size can; see the decision note.)
 
-**Live at https://pricingthemagic.com**, serving the current `master`
-(`18f12f4`). Version check in the browser: the paywall reads "Plan your
-specific trip" and there is a **Sign out** button in the masthead. If you see
-"Want to make it cheaper?" instead, Render is serving a stale build —
-Manual Deploy → Deploy latest commit.
+**Live at https://pricingthemagic.com.** `master` is at `619b454` (PR #48,
+which brought the weather feature and the last UX round); **Render has not
+been redeployed since, so nothing from this session is on the live site.**
+Version check in the browser: a resort's detail view shows a "Weather in
+<month>" box. If it doesn't, Render is serving a stale build — Manual Deploy
+→ Deploy latest commit. The weather numbers there are still Claude's
+hand-seeded figures until the "Parkfare climate normals" workflow is run by
+hand.
 
 Shipped in the last two sessions: mandatory passwords, email verification
 that actually delivers, honest paywall copy, a masthead sign-out, airports
@@ -83,7 +112,9 @@ filter, and Stripe.
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
-| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. Reset a password with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Owner-editable numbers | **Stored, wired, no screen yet.** `src/settings.ts` declares 111 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. The database overrides the shipped defaults and never replaces them. **The admin page itself is not built** — today these can only be changed by a script, which is not "out of the code" yet. |
+| Weather per month | **Wired, free.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has never been run** — the committed rows are Claude's hand-seeded figures until somebody runs the "Parkfare climate normals" workflow. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -452,6 +483,121 @@ days per year not per window, nulls skipped rather than read as zero, garbage
 dates dropped), the whole job runs end to end against a stubbed fetch across all
 six resorts, and **a partial fetch aborts rather than overwriting a good
 table** — the refresh job's upsert-on-success-only rule, applied to a file.
+
+**The owner's numbers live in the database, and the code holds the
+defaults** (2026-09-20). The owner's ask was plain: "I don't want to depend
+on AI to update this site." So `src/settings.ts` declares 111 editable
+numbers — every hotel base, every resort's parking-and-transfers rate, the
+hopper differentials, the rental-car rate — and `owner_settings` stores the
+ones actually changed.
+
+The rules, each a decision rather than a default, and each with a test:
+
+- *The database OVERRIDES the shipped defaults, never replaces them.* An
+  empty table, a wiped row or a value the registry no longer considers valid
+  must leave the app pricing exactly as it did before any of this existed.
+  That is the whole safety property; `settings.test.ts` pins it directly by
+  pricing a trip with the hook removed.
+- *A stored value outside its bounds falls back to the default rather than
+  poisoning a price.* Bounds get tightened later, and a row written under
+  the old ones is the shape of thing that would otherwise quietly reach a
+  traveller. The admin view shows it as not applied.
+- *A spreadsheet applies completely or not at all.* A half-applied import
+  leaves pricing in a state nobody intended and nobody can identify, so
+  every bad row is named at once, by its spreadsheet row number, and
+  nothing is written.
+- *A duplicated key is refused, not last-one-wins*, because silently taking
+  the last one hides a real editing mistake.
+- *A blank cell means back to the default, not zero.* "I never set this"
+  and "I set it to nothing" are different facts — the same reasoning as the
+  nullable home airport.
+- *`null`, not "type the default back in", is how you clear one.* Same
+  reason.
+- *A typed dollar sign or comma is accepted.* People paste currency;
+  stripping it is kinder than refusing it.
+- *The values reach pricing through `PriceBook.setting`*, so `pricing.ts`
+  stays pure and synchronous. The I/O happens once when the book is loaded,
+  exactly as it does for fares and rooms.
+
+**The screen is still missing, and that is the gap that matters.** A
+registry nobody can reach from a phone has not got the owner out of the
+code. Agreed shape: single-value forms on the site for one-off corrections
+(the owner's own point — uploading a CSV from a phone is not realistic),
+with bulk spreadsheet download/upload going through the same validation
+path. **Hotel rates need one extra step**: they reach the page through the
+nightly `hotel_rates` cache, so saving one has to re-seed that resort's
+on-property rows or the new number won't show up until the next refresh.
+
+**A wrong fare becomes evidence, not an edict** (2026-09-20, designed, not
+built). The owner's example was the site estimating $7,000 from Oregon to
+LAX. The instinct is to let them overwrite it; the decision was the opposite,
+in their own words: it "should become another data point, a weighted data
+point to help us update our estimated cache price". So a correction joins the
+same machinery `observedSince()` already uses to let a bought fare move a
+route's estimate, and the result stays labelled an estimate. Low/Medium/High
+bands map to p25/median/p75 so someone can say "that's the cheap end" rather
+than having to claim a single true number; corrections are deletable by id,
+because a typo must be removable; and they expire, because a 2026 fare should
+not still be steering a 2029 estimate.
+
+**Five wrong passwords shut the door, and a reset is the way back in**
+(2026-09-20, the owner's ask). Two scopes counted separately: the email
+address, and the IP. Both are needed — without the IP scope an attacker just
+moves to the next address and trips nothing; without the email scope they
+use a fresh IP per attempt and trip nothing.
+
+Three parts worth not re-deriving:
+
+- *An address with no account locks exactly like one that has an account.*
+  Otherwise "too many attempts" would mean "this address is registered", and
+  the lockout becomes the enumeration oracle that sign-in's single error
+  message exists to prevent.
+- *The IP limit is much higher than the email one (25, not 5), and testing
+  against a live server is what showed why.* A home, an office and a coffee
+  shop share one address, so five typos from one person would have locked
+  out everyone else behind that connection. The IP scope exists to stop a
+  script working through a list, which takes far more than five tries.
+- *The lock is a brake, not a trap.* It lasts minutes rather than forever,
+  and a password reset works while locked — so the account holder always has
+  a way in that doesn't involve waiting. The accepted cost, stated rather
+  than hidden: somebody can deliberately lock a person out by guessing wrong
+  five times.
+
+A reset also **signs out every device** (that is what makes it an answer to
+"someone shared their password", not just to "I forgot mine"), **confirms the
+email** (clicking a link proves control of the inbox, which is the entire
+thing `email_verified_at` records), and **clears the lockout**. A weak new
+password is refused *without* consuming the link, or one typo would force the
+whole flow to start again. `PUBLIC_BASE_URL` carries the same warning it
+always did, with more force: a reset link addressed to a hostname that
+doesn't resolve locks people out rather than merely failing to confirm them,
+and nothing in the program can detect that — only a human clicking.
+
+**Every detail card is "unit x quantity = total"** (2026-09-20, the owner's
+report: the weather box read well and nothing around it did). The weather
+tiles stopped being a one-off and became `.kpi`/`.kpitile`, used by tickets,
+flights, driving, hotel, food and weather alike. Long prose — the estimate
+derivation, the ticket disclaimer, the driving assumptions — moved into a
+native `<details>` disclosure: this project's honesty was being set at the
+same weight as the prices it explains, so the prose won and the numbers lost.
+Every word still ships.
+
+Three things that are decisions:
+
+- *Cards in a row share a height and pin their footer*, so the booking links
+  land on one line. The cost, said rather than hidden: a thin card carries
+  visible empty space above its footer. That is the price of the alignment.
+- *A number is printed once.* "Party of N", "Hotel total" and the
+  dining-plan summary row each repeated the figure now in the total tile.
+  What those rows uniquely said is kept — the lap-infant rule has a row of
+  its own, and only when there is a lap infant.
+- *Labels wrap rather than clip*, found in a browser and not by reading the
+  CSS. `white-space:nowrap` with `overflow:hidden` on a flex container
+  rendered "Average high" and "Average low" as two tiles both reading
+  "AVERAGE", with no ellipsis, because `text-overflow` does not apply to an
+  anonymous flex item. **A cut-off label is worse than a two-line one
+  precisely because nothing says it was cut** — the same rule as the `est.`
+  chip: never present a partial thing as a whole one.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -1363,8 +1509,8 @@ the warning that there is nowhere to send warnings.
 - **A password is only as good as the transport.** The session cookie now carries
   `Secure` whenever `DATABASE_URL` is set (i.e. on Render, over https), off locally
   where the dev loop is plain http, and forceable either way with `SECURE_COOKIES`.
-  There's no rate limiting on `/api/auth/signin`, so nothing slows down someone
-  guessing; scrypt makes each guess cost real work, which is the only brake there is.
+  Guessing is now rate-limited as well — five wrong answers per address, more per
+  IP; see the throttle decision below.
 - **No admin UI for `promos`, `goodToKnow`, or `closuresUrl`.** All are hand-maintained
   directly in code/database (`goodToKnow`/`closuresUrl`/`closuresLabel` live in
   `config.ts`, right on each `Resort`) — same pattern as `ticket_prices`, and just
