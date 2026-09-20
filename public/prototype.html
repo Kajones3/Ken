@@ -799,6 +799,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <span id="authSwapText">Already have an account?</span>
           <button type="button" id="authSwap" class="linkbtn">Sign in</button>
         </p>
+        <p style="margin:6px 0 0; font-size:13px; color:var(--ink-2)">
+          <button type="button" id="forgotBtn" class="linkbtn">Forgot your password?</button>
+          <span id="forgotMsg" style="margin-left:6px"></span>
+        </p>
       </div>
 
       <div id="authAccount" hidden>
@@ -2839,6 +2843,31 @@ $("#signinBtn").addEventListener("click", async ()=>{
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
+/* Forgot password. The reply is deliberately the same whether or not that
+ * address has an account — sign-in refuses to leak which addresses are
+ * registered, and this form would hand it straight back otherwise. So the
+ * message is written to be true in both cases. */
+$("#forgotBtn").addEventListener("click", async ()=>{
+  const email = $("#signinEmail").value.trim();
+  const msg = $("#forgotMsg");
+  if(!email){
+    // Never a silent return: a dead click is indistinguishable from a broken
+    // build, which is the lesson the paywall's dead email box taught us.
+    msg.textContent = "Type your email address above first.";
+    return;
+  }
+  msg.textContent = "Sending…";
+  try {
+    const res = await fetch("/api/auth/forgot", {
+      method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ email }),
+    });
+    const body = await res.json().catch(()=>({}));
+    msg.textContent = body.message || "If that address has an account, a reset link is on its way.";
+  } catch {
+    msg.textContent = "Couldn't send that right now — try again in a moment.";
+  }
+});
+
 async function doSignOut(){
   await fetch("/api/auth/signout", { method:"POST" });
   await refreshSession();
