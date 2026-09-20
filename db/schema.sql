@@ -343,3 +343,25 @@ create table if not exists email_verifications (
   sent_at     timestamptz not null default now()
 );
 create index if not exists email_verifications_token on email_verifications (token);
+
+-- Owner-editable settings. The DEFAULT for every one of these still lives in
+-- config.ts; a row here overrides it. That direction matters: an empty table
+-- must behave exactly like the app did before this existed, so a fresh
+-- database, a failed migration or a wiped table degrades to the shipped
+-- values rather than to nothing.
+--
+-- Why a key/value table rather than a column per setting: the whole point is
+-- that the owner can change a number without anyone editing code, and a new
+-- editable value should not require a migration. The registry in config.ts
+-- (SETTINGS) supplies the label, type and validation for each key, so this
+-- table stays dumb and the meaning stays in one place.
+--
+-- note/updated_by exist because a hand-set number with no explanation is
+-- indistinguishable from a typo six months later.
+create table if not exists owner_settings (
+  key        text primary key,
+  value      jsonb not null,
+  note       text not null default '',
+  updated_by text not null default '',
+  updated_at timestamptz not null default now()
+);

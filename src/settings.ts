@@ -1,0 +1,216 @@
+/**
+ * Owner-editable settings: the numbers this app runs on, changeable without
+ * anyone touching code.
+ *
+ * THE PROBLEM THIS SOLVES. Almost every maintained figure in Parkfare — hotel
+ * rates, the IRS mileage rate, park-hopper differentials, parking and
+ * transfers — lived in config.ts, so changing one meant editing TypeScript and
+ * pushing a commit. That makes the owner dependent on a developer for routine
+ * upkeep, which is not a business. These now live in the database and are
+ * editable from the site.
+ *
+ * DEFAULTS STAY IN CODE, AND THAT IS THE LOAD-BEARING PART. Every key below
+ * has a default taken from config.ts, and the database only ever *overrides*
+ * it. So an empty table, a failed migration or a wiped row degrades to exactly
+ * what the app shipped with rather than to zero or undefined. It also means
+ * the tests that pin hotel category medians keep testing the shipped values,
+ * which is what they are for.
+ *
+ * ONE REGISTRY, NOT ONE COLUMN PER SETTING. The registry is what lets the
+ * admin page render itself — label, group, kind and bounds come from here, so
+ * adding an editable number is one entry, not a migration plus a form plus a
+ * validator in three files.
+ *
+ * VALIDATION LIVES HERE TOO, once, so the single-value form and the bulk CSV
+ * import cannot disagree about what a legal value is.
+ *
+ * WHAT THIS STILL DOES NOT SOLVE, stated plainly: the registry is built FROM
+ * config.ts, so the owner can change the value of anything that already
+ * exists, but adding a new thing — a new resort, a new hotel, a year of IRS
+ * rates that isn't on file yet — is still a code change. Editing is solved;
+ * creating is not. The IRS year is the one that will bite first, every
+ * December, and the owner's nightly job list already warns about it.
+ */
+import type { Db } from "./db.js";
+import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
+
+export type SettingKind = "money" | "number" | "percent";
+
+export interface SettingDef {
+  key: string;
+  /** What the owner sees. Sentence case, no trailing colon. */
+  label: string;
+  /** Groups the admin page renders as sections. */
+  group: string;
+  kind: SettingKind;
+  /** The shipped value. The database overrides this; it never replaces it. */
+  default: number;
+  min: number;
+  max: number;
+  /** One line of plain language: what this number does, and what it does not. */
+  help: string;
+}
+
+const money = (key: string, label: string, group: string, def: number, min: number, max: number, help: string): SettingDef =>
+  ({ key, label, group, kind: "money", default: def, min, max, help });
+
+/**
+ * Every value the owner can change. Bounds are deliberately wide enough for a
+ * real correction and narrow enough to catch a typo — $6,000 a night is not a
+ * Disney hotel, it is a misplaced digit, and the point of a bound is to catch
+ * the second kind of mistake without arguing about the first.
+ */
+export const SETTINGS: SettingDef[] = [
+  ...RESORTS.flatMap((r) => [
+    ...r.hotels.map((h) =>
+      money(`hotel.${h.id}.base`, h.name, `Hotel rates — ${r.name}`, h.base, 20, 3000,
+        `Typical nightly rate before the seasonal adjustment. ${h.onProperty ? "On property" : "Off property"} · ${h.descriptor}.`)),
+    money(`transport.${r.id}.off`, `${r.name} — parking and transfers, off property`,
+      "Parking and transfers", r.transport.off, 0, 200,
+      "Per day, added to every off-property stay. This is the cost people forget when they assume off property is cheaper."),
+    money(`transport.${r.id}.on`, `${r.name} — parking and transfers, on property`,
+      "Parking and transfers", r.transport.on, 0, 200,
+      "Per day, added to every on-property stay. Usually zero, because Disney transport is included."),
+    ...(r.ticket.hopperAdultUsd === undefined ? [] : [
+      money(`hopper.${r.id}.adult`, `${r.name} — Park Hopper, adult`, "Park Hopper", r.ticket.hopperAdultUsd, 0, 400,
+        "A flat per-ticket add-on, not scaled by day count or season."),
+      money(`hopper.${r.id}.child`, `${r.name} — Park Hopper, child`, "Park Hopper", r.ticket.hopperChildUsd ?? 0, 0, 400,
+        "A flat per-ticket add-on for a child ticket."),
+    ]),
+  ]),
+  money("carRental.dailyRateUsd", "Rental car, per day", "Rental car", CAR_RENTAL.dailyRateUsd, 10, 400,
+    "One flat national average, not a per-city rate. Real rates vary a lot by city."),
+  // Two per year, because the IRS sets a January-June rate and a July-December
+  // one and has changed it mid-year before. Adding a new year is still a code
+  // change (the registry has to know the key exists) — see the note below.
+  ...IRS_MILEAGE_RATES.flatMap((r) => ([
+    {
+      key: `mileage.${r.year}.h1`, label: `IRS mileage rate, ${r.year} — January to June`, group: "Driving",
+      kind: "number" as const, default: r.janToJunPerMile, min: 0.1, max: 2,
+      help: "Dollars per mile, covering fuel, maintenance, insurance and depreciation. Look up \"IRS standard mileage rates\" at irs.gov.",
+    },
+    {
+      key: `mileage.${r.year}.h2`, label: `IRS mileage rate, ${r.year} — July to December`, group: "Driving",
+      kind: "number" as const, default: r.julToDecPerMile, min: 0.1, max: 2,
+      help: "Dollars per mile. Often the same as the January figure; the IRS has changed it mid-year when fuel prices moved sharply.",
+    },
+  ])),
+];
+
+export const SETTING_BY_KEY = new Map(SETTINGS.map((s) => [s.key, s]));
+
+export interface SettingValue {
+  key: string;
+  value: number;
+  /** True when a database row is overriding the shipped default. */
+  overridden: boolean;
+  note: string;
+  updatedAt: string | null;
+}
+
+/** Why a value was refused, in words the owner can act on. */
+export function validateSetting(key: string, raw: unknown): { ok: true; value: number } | { ok: false; reason: string } {
+  const def = SETTING_BY_KEY.get(key);
+  if (!def) return { ok: false, reason: `"${key}" is not a setting this app has` };
+  const n = typeof raw === "number" ? raw : Number(String(raw).replace(/[$,\s]/g, ""));
+  if (!Number.isFinite(n)) return { ok: false, reason: `"${raw}" is not a number` };
+  if (n < def.min || n > def.max) {
+    return { ok: false, reason: `${def.label}: ${n} is outside ${def.min}–${def.max}. That range is there to catch a mistyped digit — if the real value is genuinely outside it, the range needs changing, not the value forcing through.` };
+  }
+  return { ok: true, value: n };
+}
+
+/**
+ * Every setting with its current value, overrides applied.
+ *
+ * Always returns a row for every registered key, override or not, because the
+ * admin page has to show what a number IS as well as what it was changed to —
+ * a page listing only the overridden ones would hide everything the owner has
+ * not yet touched, which is most of them.
+ */
+export async function loadSettings(db: Db): Promise<SettingValue[]> {
+  const { rows } = await db.query<{ key: string; value: unknown; note: string; updated_at: Date }>(
+    `select key, value, note, updated_at from owner_settings`,
+  );
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  return SETTINGS.map((def) => {
+    const row = byKey.get(def.key);
+    const raw = row ? Number(row.value) : NaN;
+    // A stored value that no longer validates (the registry's bounds changed,
+    // or the row predates a rename) falls back to the default rather than
+    // poisoning a price. Loud in the admin page, silent to travellers.
+    const usable = row && Number.isFinite(raw) && raw >= def.min && raw <= def.max;
+    return {
+      key: def.key,
+      value: usable ? raw : def.default,
+      overridden: !!usable,
+      note: row?.note ?? "",
+      updatedAt: row ? new Date(row.updated_at).toISOString() : null,
+    };
+  });
+}
+
+/** A plain key → number map for code that just wants the value. */
+export async function settingsMap(db: Db): Promise<Map<string, number>> {
+  return new Map((await loadSettings(db)).map((s) => [s.key, s.value]));
+}
+
+/**
+ * Write one setting. Returns what changed so the caller can report it.
+ *
+ * Deleting the row is how you go back to the shipped default — passing null,
+ * rather than typing the default in by hand, so "I have not changed this" and
+ * "I changed this to the same number" stay different facts.
+ */
+export async function setSetting(
+  db: Db, key: string, raw: unknown | null, opts: { note?: string; by?: string } = {},
+): Promise<{ key: string; value: number; overridden: boolean }> {
+  const def = SETTING_BY_KEY.get(key);
+  if (!def) throw new Error(`"${key}" is not a setting this app has`);
+  if (raw === null || raw === "") {
+    await db.query(`delete from owner_settings where key = $1`, [key]);
+    return { key, value: def.default, overridden: false };
+  }
+  const check = validateSetting(key, raw);
+  if (!check.ok) throw new Error(check.reason);
+  await db.query(
+    `insert into owner_settings (key, value, note, updated_by, updated_at)
+     values ($1, $2::jsonb, $3, $4, now())
+     on conflict (key) do update set value = excluded.value, note = excluded.note,
+       updated_by = excluded.updated_by, updated_at = now()`,
+    [key, JSON.stringify(check.value), opts.note ?? "", opts.by ?? ""],
+  );
+  return { key, value: check.value, overridden: true };
+}
+
+/**
+ * Apply a whole spreadsheet at once — all of it or none of it.
+ *
+ * All-or-nothing on purpose: a half-applied import leaves the owner with no
+ * idea which rows landed, and pricing that is a mix of two intended states.
+ * Better to reject the file, name every bad row at once so one pass through
+ * the spreadsheet fixes them all, and change nothing.
+ */
+export async function applySettings(
+  db: Db, entries: { key: string; value: unknown }[], opts: { note?: string; by?: string } = {},
+): Promise<{ ok: true; applied: number; cleared: number } | { ok: false; errors: string[] }> {
+  const errors: string[] = [];
+  const seen = new Set<string>();
+  for (const [i, e] of entries.entries()) {
+    const where = `row ${i + 2}`;   // +2: a header line, and humans count from 1
+    if (!SETTING_BY_KEY.has(e.key)) { errors.push(`${where}: "${e.key}" is not a setting this app has`); continue; }
+    if (seen.has(e.key)) { errors.push(`${where}: "${e.key}" appears more than once`); continue; }
+    seen.add(e.key);
+    if (e.value === null || e.value === "") continue;   // a blank means "back to the default"
+    const check = validateSetting(e.key, e.value);
+    if (!check.ok) errors.push(`${where}: ${check.reason}`);
+  }
+  if (errors.length) return { ok: false, errors };
+
+  let applied = 0, cleared = 0;
+  for (const e of entries) {
+    const r = await setSetting(db, e.key, e.value === "" ? null : e.value, opts);
+    if (r.overridden) applied++; else cleared++;
+  }
+  return { ok: true, applied, cleared };
+}
