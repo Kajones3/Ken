@@ -240,17 +240,11 @@ a{color:var(--ink)}
    emoji is decoration beside a written label rather than the label itself.
    Deliberately no tabular-nums: these are standalone values, and forcing every
    digit to a zero's width makes "71" read loose at this size. */
-.wx{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:2px 0 12px}
-.wxtile{background:var(--surface-2); border:1px solid var(--rule); border-radius:10px; padding:10px 11px}
-.wxtile .wxlab{display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
-  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); white-space:nowrap}
-.wxtile .wxval{margin-top:5px; font-size:21px; font-weight:650; color:var(--ink); line-height:1.1}
-.wxtile .wxsub{margin-top:2px; font-size:11px; color:var(--muted)}
 .wxnote{display:flex; gap:9px; align-items:flex-start; background:var(--surface-2);
   border:1px solid var(--rule); border-left:3px solid var(--accent-line); border-radius:10px;
   padding:10px 12px; font-size:12.5px; line-height:1.5; color:var(--ink-2)}
 .wxnote .wxemoji{font-size:17px; line-height:1.2; flex:0 0 auto}
-@media (max-width:520px){ .wx{grid-template-columns:1fr 1fr} }
+@media (max-width:520px){ .kpi{grid-template-columns:1fr 1fr} }
 .tripsmenu{position:relative}
 .tripsdrop{position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:270px; max-height:60vh; overflow-y:auto;
   background:var(--surface); border:1px solid var(--rule-strong); border-radius:12px; box-shadow:0 18px 44px -14px rgba(0,0,0,.5); padding:6px}
@@ -385,10 +379,51 @@ tbody tr[data-open].sel{background:var(--surface-2)}
   border:1px solid var(--accent-line); background:var(--accent-bg); border-radius:12px; padding:13px 16px; margin-top:22px}
 .upsell b{display:block; font-family:"Archivo"; font-weight:700; font-size:13.5px; letter-spacing:-.01em}
 .upsell span{font-size:12.5px; color:var(--ink-2)}
-.cols{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:26px; align-items:start}
+/* Cards in a row share a height and pin their footer, so the "why" links and
+   official-page links line up across the grid instead of floating wherever
+   each card's content happens to end. That alignment is most of what "uniform"
+   means here — the eye follows a horizontal rule, not six ragged ones. */
+.cols{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:26px; align-items:stretch}
 @media (max-width:1040px){ .cols{grid-template-columns:repeat(2,1fr)} }
 @media (max-width:620px){ .cols{grid-template-columns:1fr} }
-.card{border:1px solid var(--rule); border-radius:11px; padding:14px; background:var(--surface-2)}
+.card{border:1px solid var(--rule); border-radius:11px; padding:14px; background:var(--surface-2);
+  display:flex; flex-direction:column}
+/* Everything after this marker sits at the bottom of the card. */
+.card .foot{margin-top:auto; padding-top:10px}
+
+/* The headline numbers, in the same three-tile shape in every card — the one
+   piece of this layout the owner said already read well, generalised. Nearly
+   every card is secretly "unit x quantity = total", so the tiles say that and
+   the totals line up down the third column. */
+.kpi{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:2px 0 12px}
+.kpi.two{grid-template-columns:repeat(2,1fr)}
+.kpitile{background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:10px 11px;
+  min-width:0; display:flex; flex-direction:column}
+/* Labels WRAP rather than clip. Clipping them silently turned "Average high"
+   and "Average low" into two tiles both reading "AVERAGE" — a label that is
+   cut off is worse than one that takes two lines, because nothing says it was
+   cut. The values are bottom-aligned (margin-top:auto) so a two-line label in
+   one tile doesn't push its number out of line with its neighbours'. */
+.kpitile .k{display:flex; align-items:baseline; gap:5px; font-size:10.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); line-height:1.35}
+.kpitile .v{margin-top:auto; padding-top:5px; font-size:19px; font-weight:650; color:var(--ink);
+  line-height:1.15; font-family:"JetBrains Mono",monospace; letter-spacing:-.02em}
+.kpitile .s{margin-top:2px; font-size:11px; color:var(--muted)}
+/* The total is the answer, so it is the one tile that reads as emphasis. */
+.kpitile.total{background:var(--accent-bg); border-color:var(--accent-line)}
+
+/* Long explanations, collapsed. The honesty this project insists on was being
+   printed at the same visual weight as the prices it explains, so the prose
+   won and the numbers lost. Native <details>: no JavaScript, keyboard
+   accessible, and it still ships every word to anyone who wants it. */
+.why{margin-top:10px; font-size:11.5px; color:var(--muted)}
+.why > summary{cursor:pointer; color:var(--ink-2); font-weight:600; list-style:none;
+  display:inline-flex; align-items:center; gap:5px; padding:2px 0}
+.why > summary::-webkit-details-marker{display:none}
+.why > summary::after{content:"▸"; font-size:10px; transition:transform .12s}
+.why[open] > summary::after{transform:rotate(90deg)}
+.why > summary:hover{color:var(--ink)}
+.why .whybody{margin-top:6px; line-height:1.55}
 .card h5{margin:0 0 2px; font-family:"Archivo"; font-size:13.5px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:7px}
 .card h5 i{width:9px;height:9px;border-radius:2px;display:block;flex:none}
 .card .sub{font-size:11.5px; color:var(--muted); margin:0 0 10px}
@@ -1849,6 +1884,32 @@ async function renderDetail(){
   const pricedDays = calDays.filter(d=>d.v!==null);
   const bestDay = pricedDays.length ? pricedDays.reduce((a,b)=> b.v<a.v?b:a) : null;
 
+  /* How the fare was arrived at, in full — moved OUT of the row it used to sit
+   * in. It was six lines of body text inside a price row, which made the prose
+   * heavier than the price and left the card several times taller than its
+   * neighbours. Every word is still here, one click away; nothing about the
+   * app's honesty is traded for the tidier card. */
+  const fareWhy = (() => {
+    const e = x.flightPick && x.flightPick.estimate;
+    if (!e) return "";
+    const basis = e.sampledLive
+      ? `the median of real round-trip fares we checked on this route for
+         ${e.basisQuarter.replace(/^(\d{4})Q(\d)$/, "Q$2 $1")}. International routes aren't covered by the
+         free US government fare data, so we price them by sampling real fares directly — no market
+         adjustment is applied, because those are already current prices.`
+      : `what people actually paid on it in ${e.basisQuarter} (the median of real US DOT itinerary
+         data)${typeof e.trendPct === "number"
+           ? `, moved ${e.trendPct >= 0 ? "up" : "down"} ${Math.abs(e.trendPct)}% to match how fares we price
+              for real have shifted since`
+           : ""}.`;
+    return `<details class="why"><summary>How this estimate is worked out</summary>
+      <div class="whybody">Not a quote. This route has no real fare for this exact date, so it is estimated from
+        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${
+        e.seasonMatched === false
+          ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
+          : ""}</div></details>`;
+  })();
+
   // flights — the one cached fare this trip actually priced against
   const fp = x.flightPick;
   const floor = fp ? fp.price : x.perSeatFare;
@@ -1856,28 +1917,15 @@ async function renderDetail(){
   // number" today) — check the override directly, before touching fp, so
   // "excluded" never gets mislabelled as "priced entirely from your number".
   const excludeFlights = !!ovOf(item.resortId).excludeFlights;
+  const lapInfants = list.filter(a=>a<2).length;
   const flightRows = excludeFlights
     ? `<div class="li"><div class="l"><b>Flights excluded</b>
         <small>Not counted in this trip's total — you said you've already got this sorted</small></div>
         <div class="p">$0</div></div>`
     : (fp && fp.estimate
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
-        <small>Not a quote. This route has no real fare for this exact date, so it is estimated from
-        ${fp.estimate.sampledLive
-          ? `the median of real round-trip fares we checked on this route for
-             ${fp.estimate.basisQuarter.replace(/^(\d{4})Q(\d)$/, "Q$2 $1")}. International routes
-             aren't covered by the free US government fare data, so we price them by sampling
-             real fares directly — no market adjustment is applied, because these are already
-             current prices`
-          : `what people actually paid on it in ${fp.estimate.basisQuarter} (median of real US DOT
-             itinerary data)${typeof fp.estimate.trendPct==="number"
-               ? `, moved ${fp.estimate.trendPct>=0?"up":"down"} ${Math.abs(fp.estimate.trendPct)}% to match how fares we
-                  price for real have shifted since`
-               : ""}`}.
-        Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person.${
-          fp.estimate.seasonMatched===false
-            ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
-            : ""}</small></div>
+        <small>Not a quote · typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person${
+          fp.estimate.seasonMatched===false ? " · based on a different season, treat as rough" : ""}</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
     : fp
     ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>
@@ -1885,9 +1933,12 @@ async function renderDetail(){
         <div class="p">${usd(x.perSeatFare)}</div></div>`
     : `<div class="li"><div class="l"><b>Your fare</b><small>No cached fare for this route — priced entirely from your number</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`)
-    + `<div class="li"><div class="l"><b>Party of ${pax}</b>
-        <small>${list.filter(a=>a>=2).length} seat${list.filter(a=>a>=2).length===1?"":"s"}${list.some(a=>a<2)?` · ${list.filter(a=>a<2).length} lap infant under 2 at 10%`:""}</small></div>
-        <div class="p">${usd(x.flights)}</div></div>`
+    // No "Party of N" row: the total tile above already carries that number.
+    // A lap infant is the one thing that row said which the tiles don't, so it
+    // keeps a row of its own — and only when there is one.
+    + (lapInfants ? `<div class="li"><div class="l"><b>Lap infant${lapInfants>1?"s":""} × ${lapInfants}</b>
+        <small>Under 2, travelling on a lap — priced at 10% of an adult fare</small></div>
+        <div class="p">included</div></div>` : "")
     // Exact live fare. Only offered where it would actually tell you
     // something new — if this date already has a real fare, there is nothing
     // to buy. Free users see what it is and what it costs to unlock, rather
@@ -1924,9 +1975,9 @@ async function renderDetail(){
   }).join("")
     + (x.hopperUsd > 0 ? `<div class="li"><div class="l"><b>Park Hopper</b><small>Flat add-on, already included in the ticket total below</small></div>
       <div class="p">${usd(x.hopperUsd)}</div></div>` : "")
-    + `<div class="li"><div class="l"><b>Party of ${pax}</b>
-      <small>${p.parkDays}-day ticket${p.parkDays>1?"s":""}</small></div>
-      <div class="p">${usd(x.tickets)}</div></div>`;
+    // No "Party of N" row: the total tile above already carries that number,
+    // and printing it twice was the clearest case of the card repeating itself.
+    ;
 
   // hotel — the real pick, plus what the other categories would cost at the same date
   const stayNow = noHotel ? true : x.hotelPick.onProperty;
@@ -1942,9 +1993,8 @@ async function renderDetail(){
     + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
         <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":" off property"}</small></div>
         <div class="p">${usd(x.transport)}</div></div>` : "")
-    + `<div class="li"><div class="l"><b>Hotel total</b>
-       <small>${hp.name}${x.transport?" + parking and transfers":""}</small></div>
-       <div class="p">${usd(x.hotel)}</div></div>`;
+    ; // No "Hotel total" row: the total tile above is that number, and the
+      // parking row already names the part of it that isn't the room.
 
   const tierCompare = noHotel ? "" : [0,1,2].map(t=>{
     const cost = tierRows[t];
@@ -1967,8 +2017,7 @@ async function renderDetail(){
           <div class="p">${usd(rate*p.nights*n)}</div></div>`;
       }).join("") + (groups.infant ? `<div class="li"><div class="l"><b>Under ${r.bands.freeUnder} × ${groups.infant.length}</b>
           <small>Eats from an adult's plate — no plan needed</small></div><div class="p">Free</div></div>` : "")
-      + `<div class="li"><div class="l"><b>${fi.label}</b><small>Requires an on-property stay</small></div>
-         <div class="p">${usd(x.food)}</div></div>`
+      // No summary row: the per-person rows above add up to the total tile.
     : (()=>{
         const style = p.food === "plan" ? "qs" : p.food;
         const rate = r.food[style];
@@ -1979,9 +2028,7 @@ async function renderDetail(){
           return `<div class="li"><div class="l"><b>${b==="infant"?"Under "+r.bands.freeUnder:b[0].toUpperCase()+b.slice(1)} × ${n}</b>
             <small>${b==="infant" ? "Eats from an adult's plate" : usd(rate*m)+" per day"}</small></div>
             <div class="p">${b==="infant" ? "Free" : usd(rate*m*days*n)}</div></div>`;
-        }).join("") + `<div class="li"><div class="l"><b>Party of ${pax}</b>
-          <small>${days} eating days · ${local(r, x.food/days/pax)} per person per day</small></div>
-          <div class="p">${usd(x.food)}</div></div>`;
+        }).join("");
       })();
   const planNote = p.food === "plan" && !fi
     ? (r.plans && r.plans.length ? "No dining plan on an off-property stay — priced as counter service."
@@ -2144,19 +2191,45 @@ async function renderDetail(){
         <div class="card">
           <h5><i style="background:var(--s2)"></i>Park tickets</h5>
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
-          ${ticketRowsHtml}<a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
-          <p class="sub" style="margin-top:10px">Estimate from a general pricing curve, not Disney's own real per-date
-            tiers — actual prices vary by exact date and can differ from this by a meaningful amount. Check the official
-            page above before booking.</p>
+          <div class="kpi">
+            <div class="kpitile"><div class="k">Per person</div>
+              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">average</div></div>
+            <div class="kpitile"><div class="k">Party</div>
+              <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
+            <div class="kpitile total"><div class="k">Tickets</div>
+              <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
+          </div>
+          ${ticketRowsHtml}
+          <div class="foot">
+            <details class="why"><summary>How this number is worked out</summary>
+              <div class="whybody">An estimate from a general pricing curve, not Disney's own real per-date tiers.
+                Actual prices vary by exact date and can differ from this by a meaningful amount, so check the
+                official page before booking.</div></details>
+            <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+          </div>
         </div>
-        <div class="card">
-          <h5>Age bands here</h5>
+        ${bandRows ? `<div class="card">
+          <h5><i style="background:var(--s2)"></i>Age bands at ${r.name}</h5>
           <p class="sub">${bandLine(r)}</p>
-          ${bandRows || `<div class="li"><div class="l"><b>No children in this party</b><small>Add ages above to see how each resort bands them</small></div><div class="p">—</div></div>`}
-        </div>
+          ${bandRows}
+          <div class="foot"><details class="why"><summary>Why this differs by resort</summary>
+            <div class="whybody">Every resort draws the lines in a different place. An 11-year-old is an adult in
+              Orlando and a child in Paris; a 15-year-old is a Junior at Tokyo alone. The ages above are priced by
+              each resort's own bands, not one shared rule.</div></details></div>
+        </div>` : ""}
         ${x.transportMode==="drive" ? `<div class="card">
           <h5><i style="background:var(--s1)"></i>Driving</h5>
           <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.from : p.origin}</p>
+          <div class="kpi">
+            <div class="kpitile"><div class="k">Round trip</div>
+              <div class="v">${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles).toLocaleString() : "—"}</div>
+              <div class="s">miles</div></div>
+            <div class="kpitile"><div class="k">Gas</div>
+              <div class="v">${usd(x.drivingPick ? x.drivingPick.gasPricePerGallonUsd : 0)}</div>
+              <div class="s">per gallon</div></div>
+            <div class="kpitile total"><div class="k">Getting there</div>
+              <div class="v">${usd(x.driving + x.rentalCarUsd)}</div><div class="s">all in</div></div>
+          </div>
           <div class="li"><div class="l"><b>Gas</b>
             <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
             <div class="p">${usd(x.drivingPick ? x.drivingPick.gasCostUsd : 0)}</div></div>
@@ -2167,11 +2240,22 @@ async function renderDetail(){
           ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car</b>
             <small>Instead of your own car · ${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
             <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
-          <div class="li"><div class="l"><b>Total getting there</b></div><div class="p">${usd(x.driving + x.rentalCarUsd)}</div></div>
-          <p class="sub" style="margin-top:10px">Gas, wear-and-tear and road-distance figures are estimates, US routes only — see CLAUDE.md for the assumptions.</p>
+          <div class="foot"><details class="why"><summary>How this number is worked out</summary>
+            <div class="whybody">Gas, wear-and-tear and road-distance figures are estimates, and driving is priced
+              for US routes only. Wear and tear uses the IRS standard mileage rate, which bundles depreciation,
+              maintenance and insurance rather than fuel alone.</div></details></div>
         </div>` : `<div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
           <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
+          ${excludeFlights ? "" : `<div class="kpi">
+            <div class="kpitile"><div class="k">Per person</div>
+              <div class="v">${usd(x.perSeatFare)}</div>
+              <div class="s">${fp && fp.estimate ? "estimate" : "cached fare"}</div></div>
+            <div class="kpitile"><div class="k">Seats</div>
+              <div class="v">${pax}</div><div class="s">round trip</div></div>
+            <div class="kpitile total"><div class="k">Flights</div>
+              <div class="v">${usd(x.flights)}</div><div class="s">all in</div></div>
+          </div>`}
           ${fareCtl}
           ${r.altArrivalAirports.length ? (()=>{
             const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
@@ -2188,11 +2272,23 @@ async function renderDetail(){
           ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car at your destination</b>
             <small>${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
             <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
-          ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>` : ""}
+          <div class="foot">
+            ${fareWhy}
+            ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>` : ""}
+          </div>
         </div>`}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
+          ${noHotel ? "" : `<div class="kpi">
+            <div class="kpitile"><div class="k">Per night</div>
+              <div class="v">${usd(x.rooms / Math.max(1, p.nights))}</div>
+              <div class="s">${x.hotelTier.custom ? "your rate" : "room only"}</div></div>
+            <div class="kpitile"><div class="k">Nights</div>
+              <div class="v">${p.nights}</div><div class="s">${x.transport ? "+ parking" : "no parking"}</div></div>
+            <div class="kpitile total"><div class="k">Hotel</div>
+              <div class="v">${usd(x.hotel)}</div><div class="s">all in</div></div>
+          </div>`}
           ${hotelWantedGlobally ? hotelCtl : ""}
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
@@ -2220,27 +2316,37 @@ async function renderDetail(){
           return `<div class="card">
             <h5><i style="background:var(--s5)"></i>Weather in ${monthName}</h5>
             <p class="sub">What ${r.city.split(",")[0]} is typically like — averages, not a forecast</p>
-            <div class="wx">
-              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">☀️</span>Average high</div>
-                <div class="wxval">${wx.highF}°F</div><div class="wxsub">${c(wx.highF)}°C</div></div>
-              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌙</span>Average low</div>
-                <div class="wxval">${wx.lowF}°F</div><div class="wxsub">${c(wx.lowF)}°C</div></div>
-              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌧️</span>Rainy days</div>
-                <div class="wxval">${wx.rainDays}</div>
-                <div class="wxsub">of ${daysInMonth(sd)} days</div></div>
+            <div class="kpi">
+              <div class="kpitile"><div class="k"><span aria-hidden="true">☀️</span>Average high</div>
+                <div class="v">${wx.highF}°F</div><div class="s">${c(wx.highF)}°C</div></div>
+              <div class="kpitile"><div class="k"><span aria-hidden="true">🌙</span>Average low</div>
+                <div class="v">${wx.lowF}°F</div><div class="s">${c(wx.lowF)}°C</div></div>
+              <div class="kpitile"><div class="k"><span aria-hidden="true">🌧️</span>Rainy days</div>
+                <div class="v">${wx.rainDays}</div>
+                <div class="s">of ${daysInMonth(sd)} days</div></div>
             </div>
             ${wx.note ? `<div class="wxnote"><span class="wxemoji" aria-hidden="true">${wx.note.emoji}</span>
               <div>${esc(wx.note.text)}</div></div>` : ""}
-            <p class="sub" style="margin-top:10px">Long-run averages for a typical ${monthName}, not a
-              forecast and not last year — one year is a sample of one. Any single trip can be
-              wetter or hotter than this.</p>
+            <div class="foot"><details class="why"><summary>What these numbers are</summary>
+              <div class="whybody">Long-run averages for a typical ${monthName} — not a forecast, and not last
+                year, because one year is a sample of one. Any single trip can be wetter or hotter than
+                this.</div></details></div>
           </div>`;
         })()}
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
-          <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          <div class="kpi">
+            <div class="kpitile"><div class="k">Per day</div>
+              <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">everyone</div></div>
+            <div class="kpitile"><div class="k">Days</div>
+              <div class="v">${p.nights + 0.4}</div><div class="s">part arrival</div></div>
+            <div class="kpitile total"><div class="k">Food</div>
+              <div class="v">${usd(x.food)}</div><div class="s">all in</div></div>
+          </div>
           ${foodCtl}
-          ${foodRows}${planNote?`<p class="sub" style="margin:10px 0 0">${planNote}</p>`:""}
+          ${foodRows}
+          <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
         </div>
       </div>
 
