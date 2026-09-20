@@ -2,6 +2,7 @@
  * Loads one slice of the cache into memory so pricing can run synchronously.
  * A whole 12-month fare calendar is three indexed queries, not 365 round trips.
  */
+import { settingsMap } from "./settings.js";
 import type { Db } from "./db.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
@@ -275,7 +276,14 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       }
     : undefined;
 
+  // Owner overrides for the numbers this app runs on. Loaded once per book,
+  // beside the prices, so pricing.ts can stay pure and synchronous — see
+  // PriceBook.setting. An empty table leaves every lookup undefined and every
+  // caller on the value in config.ts, which is the shipped behaviour.
+  const settings = await settingsMap(db);
+
   return {
+    setting: (key) => settings.get(key),
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     flightEstimate: (origin, dest) => {
       const primary = ALT_TO_PRIMARY_IATA.get(dest);

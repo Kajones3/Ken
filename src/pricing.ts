@@ -12,6 +12,7 @@
 import {
   ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, CAR_RENTAL, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
+  type MileageRateLookup,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
@@ -173,6 +174,21 @@ export interface PriceBook {
   /** The most recent cached national average — undefined falls back to
    *  DRIVING.fallbackGasPriceUsd rather than a hard failure. */
   gasPrice(): { pricePerGallonUsd: number; asOf: string } | undefined;
+  /**
+   * An owner-set override for one of the numbers this app runs on — a hotel
+   * rate, parking, a hopper differential, the mileage rate. Undefined means
+   * "not overridden", and every caller falls back to the value in config.ts.
+   *
+   * It rides on the book because pricing.ts is pure and synchronous and must
+   * stay that way: the book is already the one thing loaded from the database
+   * and handed in, so overrides arrive by the same door as prices rather than
+   * pricing.ts learning to do I/O.
+   *
+   * Optional on the interface so bookFrom() — every pricing test — needs no
+   * changes and keeps exercising the shipped defaults, which is exactly what
+   * those tests are for.
+   */
+  setting?(key: string): number | undefined;
   /** Oldest row backing this book, so the UI can say "prices as of ...". */
   oldestFetchedAt: Date | null;
 }
@@ -360,6 +376,33 @@ export function cheapestStay(
   return best ? { rooms: bestCost, hotel: best, actual: pick.actual, swapped: pick.swapped } : null;
 }
 
+/**
+ * The IRS rate the lookup chose, with the owner's override for THAT year and
+ * half-year if one is set.
+ *
+ * Deliberately substitutes only the rate. Which year was used, and whether it
+ * was carried forward from an older one, are findings about the lookup — and
+ * the owner-facing stale-rate warning depends on them, so an override must not
+ * be able to silence a warning that a year is missing.
+ */
+function withMileageOverride(book: PriceBook, r: MileageRateLookup, dateISO: string): MileageRateLookup {
+  if (!r.ok) return r;
+  const half = Number(dateISO.slice(5, 7)) <= 6 ? "h1" : "h2";
+  const override = book.setting?.(`mileage.${r.rateYear}.${half}`);
+  return override === undefined ? r : { ...r, ratePerMile: override };
+}
+
+/** Parking and transfers per day, owner override first. */
+function transportPerDay(book: PriceBook, resort: Resort, onProperty: boolean): number {
+  return book.setting?.(`transport.${resort.id}.${onProperty ? "on" : "off"}`)
+    ?? (onProperty ? resort.transport.on : resort.transport.off);
+}
+
+/** The flat national rental-car rate, owner override first. */
+function carRentalRate(book: PriceBook): number {
+  return book.setting?.("carRental.dailyRateUsd") ?? CAR_RENTAL.dailyRateUsd;
+}
+
 // ---------------------------------------------------------------- food
 
 export function planFor(resort: Resort, p: TripParams, stay: Stay) {
@@ -430,7 +473,7 @@ export function priceTrip(
       // a trip page is noise to a traveller, and the number barely moves). Once
       // the newest rate is too old to stand behind, this refuses instead, rather
       // than quietly pricing on it.
-      const rate = irsMileageRate(start);
+      const rate = withMileageOverride(book, irsMileageRate(start), start);
       if (!rate.ok) return { ok: false, reason: rate.reason };
       wearAndTearUsd = roundTripMiles * rate.ratePerMile;
       mileageRate = {
@@ -525,13 +568,17 @@ export function priceTrip(
   // --- park hopper (flat per-ticket add-on, not scaled by parkDays or ------
   // --- season) — silently a no-op at a resort with no hopper price. --------
   let hopperUsd = 0;
-  if (params.hopper && resort.ticket.hopperAdultUsd) {
+  // Owner override first, shipped value second — the same two-line shape
+  // everywhere below, so there is no doubt which wins.
+  const hopperAdult = book.setting?.(`hopper.${resort.id}.adult`) ?? resort.ticket.hopperAdultUsd;
+  const hopperChild = book.setting?.(`hopper.${resort.id}.child`) ?? resort.ticket.hopperChildUsd;
+  if (params.hopper && hopperAdult) {
     for (const age of ages) {
       const band = bandOf(resort, age);
       hopperUsd += band === "infant" ? 0
-        : band === "child" ? (resort.ticket.hopperChildUsd ?? resort.ticket.hopperAdultUsd)
-        : band === "junior" ? resort.ticket.hopperAdultUsd * (resort.ticket.junior ?? 0.9)
-        : resort.ticket.hopperAdultUsd;
+        : band === "child" ? (hopperChild ?? hopperAdult)
+        : band === "junior" ? hopperAdult * (resort.ticket.junior ?? 0.9)
+        : hopperAdult;
     }
     tickets += hopperUsd;
   }
@@ -605,8 +652,8 @@ export function priceTrip(
     const on = cheapestStay(book, resort.id, start, params.nights, "on", params.tier);
     const off = cheapestStay(book, resort.id, start, params.nights, "off", params.tier);
     if (on && off) {
-      const onTotal = on.rooms + resort.transport.on * params.nights;
-      const offTotal = off.rooms + resort.transport.off * params.nights;
+      const onTotal = on.rooms + transportPerDay(book, resort, true) * params.nights;
+      const offTotal = off.rooms + transportPerDay(book, resort, false) * params.nights;
       stayCompare = {
         on: { name: on.hotel.name, nightly: on.rooms / params.nights, total: onTotal },
         off: { name: off.hotel.name, nightly: off.rooms / params.nights, total: offTotal },
@@ -670,17 +717,17 @@ export function priceTrip(
 
   // Off-property looks cheaper than it is until you pay to park at the parks —
   // unless there's no hotel at all, in which case there's nothing to model.
-  const perDay = stay === "none" ? 0 : hotelPick.onProperty ? resort.transport.on : resort.transport.off;
+  const perDay = stay === "none" ? 0 : transportPerDay(book, resort, hotelPick.onProperty);
   const transport = perDay * (params.nights + 1);
   const hotel = rooms + transport;
 
   // --- rental car — always its own line, whether renting for the drive -----
   // --- (instead of your own car) or renting once you've flown in. ----------
   const rentalCarUsd = params.rentalCar
-    ? Math.round(CAR_RENTAL.dailyRateUsd * (params.nights + 1) * 100) / 100
+    ? Math.round(carRentalRate(book) * (params.nights + 1) * 100) / 100
     : 0;
   const rentalCarPick: TripPrice["rentalCarPick"] = params.rentalCar
-    ? { dailyRateUsd: CAR_RENTAL.dailyRateUsd, nights: params.nights }
+    ? { dailyRateUsd: carRentalRate(book), nights: params.nights }
     : null;
 
   const total = Math.max(0, flights + tickets + hotel + food + driving + rentalCarUsd - flatOffTotal);

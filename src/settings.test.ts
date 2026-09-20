@@ -134,3 +134,81 @@ test("a blank cell in a spreadsheet means back to the default, not zero", async 
   assert.equal(r.ok, true);
   assert.equal((await settingsMap(db)).get(key), SETTING_BY_KEY.get(key)!.default);
 });
+
+/* ---------------------------------------------------------------------------
+ * Wiring: an override has to reach a real price, and an absent one has to
+ * change nothing at all. The second half matters as much as the first — the
+ * whole design rests on "the database overrides code, never replaces it".
+ * ------------------------------------------------------------------------ */
+
+import { priceTrip, type PriceBook, type TripParams } from "./pricing.js";
+import { bookFrom } from "./book.js";
+
+const START = "2027-03-01";
+const baseParams: TripParams = {
+  origin: "ATL", adults: 2, childAges: [], nights: 4, parkDays: 3,
+  stay: "off", tier: 1, food: "mix",
+};
+
+/** A book with cached prices, plus whichever overrides a test wants. */
+function bookWith(overrides: Record<string, number>): PriceBook {
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const dates = Array.from({ length: 8 }, (_, i) =>
+    new Date(Date.UTC(2027, 2, 1 + i)).toISOString().slice(0, 10));
+  const book = bookFrom({
+    flights: dates.map((date) => ({ dest: "MCO", date, row: { price: 400 } })),
+    hotels: dates.flatMap((date) => wdw.hotels.map((h) => ({
+      resortId: "wdw", date, night: { hotelId: h.id, name: h.name, descriptor: h.descriptor,
+        nightly: h.base, tier: h.tier, onProperty: h.onProperty },
+    }))),
+    tickets: dates.map((date) => ({ resortId: "wdw", date, row: { adult: 150, child: 140 } })),
+  });
+  return { ...book, setting: (k) => overrides[k] };
+}
+
+test("an override for parking and transfers moves a real total", async () => {
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const shipped = priceTrip(bookWith({}), wdw, baseParams, {}, START);
+  const raised = priceTrip(bookWith({ "transport.wdw.off": wdw.transport.off + 10 }), wdw, baseParams, {}, START);
+  assert.ok(shipped.ok && raised.ok);
+  if (!shipped.ok || !raised.ok) return;
+  // $10 a day more, over nights + 1 — you park on the day you arrive and the
+  // day you leave, so a four-night stay is five parking days.
+  assert.equal(Math.round(raised.price.transport - shipped.price.transport), 10 * (baseParams.nights + 1));
+  assert.ok(raised.price.total > shipped.price.total, "and it reaches the headline number");
+});
+
+test("an override for the rental car rate moves the rental line", async () => {
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const p = { ...baseParams, rentalCar: true };
+  const shipped = priceTrip(bookWith({}), wdw, p, {}, START);
+  const cheap = priceTrip(bookWith({ "carRental.dailyRateUsd": 30 }), wdw, p, {}, START);
+  assert.ok(shipped.ok && cheap.ok);
+  if (!shipped.ok || !cheap.ok) return;
+  assert.equal(shipped.price.rentalCarPick?.dailyRateUsd, CAR_RENTAL.dailyRateUsd, "shipped value by default");
+  assert.equal(cheap.price.rentalCarPick?.dailyRateUsd, 30, "owner's value when set");
+  assert.ok(cheap.price.rentalCarUsd < shipped.price.rentalCarUsd);
+});
+
+test("an override for Park Hopper moves the ticket line", async () => {
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const p = { ...baseParams, hopper: true };
+  const shipped = priceTrip(bookWith({}), wdw, p, {}, START);
+  const raised = priceTrip(bookWith({ "hopper.wdw.adult": (wdw.ticket.hopperAdultUsd ?? 0) + 25 }), wdw, p, {}, START);
+  assert.ok(shipped.ok && raised.ok);
+  if (!shipped.ok || !raised.ok) return;
+  assert.equal(Math.round(raised.price.tickets - shipped.price.tickets), 25 * 2, "two adults");
+});
+
+test("no overrides at all prices identically to the shipped defaults", async () => {
+  // The safety property the whole design rests on: an empty owner_settings
+  // table must be indistinguishable from this feature not existing.
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const withHook = priceTrip(bookWith({}), wdw, { ...baseParams, hopper: true, rentalCar: true }, {}, START);
+  const noHook = priceTrip(
+    { ...bookWith({}), setting: undefined } as PriceBook,
+    wdw, { ...baseParams, hopper: true, rentalCar: true }, {}, START);
+  assert.ok(withHook.ok && noHook.ok);
+  if (!withHook.ok || !noHook.ok) return;
+  assert.equal(withHook.price.total, noHook.price.total);
+});
