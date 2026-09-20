@@ -4,6 +4,7 @@ import {
   RESORTS, RESORT_BY_ID, IRS_MILEAGE_RATES, MILEAGE_RATE_CARRY_FORWARD_YEARS,
   irsMileageRate, newestMileageRateYear, mileageRateStatus,
   isLocalRoute, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ALL_ORIGINS, compareOriginsByCity,
+  CLIMATE, climateFor,
   type Origin,
 } from "./config.js";
 
@@ -356,4 +357,67 @@ test("every resort sends on-property bookings to Disney, not a reseller", () => 
   // and the owner asked for the category page rather than the index.
   assert.deepEqual(Object.keys(RESORT_BY_ID.get("wdw")!.onPropertyHotels.byTier ?? {}).sort(),
     ["deluxe", "moderate", "value"]);
+});
+
+/**
+ * The climate table is hand-maintained reference data with no live source, so
+ * the only thing standing between a typo and a resort claiming an average low
+ * above its average high is a test. Same reasoning as the category-median pins
+ * above: these are ordinary numbers in a long list.
+ */
+test("every resort has a full, internally consistent year of climate rows", () => {
+  for (const resort of RESORTS) {
+    const rows = CLIMATE[resort.id];
+    assert.ok(rows, `${resort.id} has no climate rows`);
+    assert.equal(rows!.length, 12, `${resort.id} needs twelve months`);
+    rows!.forEach((m, i) => {
+      const where = `${resort.id} month ${i + 1}`;
+      assert.ok(m.highF > m.lowF, `${where}: high ${m.highF} is not above low ${m.lowF}`);
+      assert.ok(m.rainDays >= 0 && m.rainDays <= 31, `${where}: ${m.rainDays} rain days`);
+      // Nothing on Earth plausibly sits outside this at a Disney resort; a row
+      // that does is a transposed or mistyped number, not a climate.
+      assert.ok(m.lowF > -20 && m.highF < 125, `${where}: ${m.lowF}-${m.highF}F is not a real climate`);
+      if (m.note) {
+        assert.ok(m.note.emoji.length > 0 && m.note.text.length > 20, `${where}: thin season note`);
+      }
+    });
+  }
+});
+
+test("climateFor answers by month and refuses nonsense instead of throwing", () => {
+  const july = climateFor("wdw", 7);
+  assert.ok(july && july.highF > 85, "Orlando in July is hot");
+  const january = climateFor("wdw", 1);
+  assert.ok(january && january.highF < 80, "and milder in January");
+  // A missing weather box must never break a board.
+  assert.equal(climateFor("nope", 7), null);
+  assert.equal(climateFor("wdw", 0), null);
+  assert.equal(climateFor("wdw", 13), null);
+});
+
+test("the wet and dry seasons land in the right hemisphere and month", () => {
+  // Cheap sanity checks against facts nobody needs a source to confirm, aimed
+  // at the failure that matters: a table pasted against the wrong resort.
+  const wettest = (id: string) => CLIMATE[id]!
+    .reduce((best, m, i) => (m.rainDays > CLIMATE[id]![best]!.rainDays ? i : best), 0) + 1;
+  assert.ok([6, 7, 8].includes(wettest("wdw")), "Orlando is wettest in high summer");
+  assert.ok([6, 7, 8].includes(wettest("hkdl")), "so is Hong Kong");
+  assert.ok(wettest("dlr") <= 3 || wettest("dlr") >= 11, "Anaheim's rain is a winter thing");
+  assert.ok(CLIMATE["dlr"]!.reduce((n, m) => n + m.rainDays, 0) < 60,
+    "and Southern California is dry overall");
+  assert.ok(CLIMATE["wdw"]![8]!.note?.text.includes("hurricane"),
+    "September at Walt Disney World says hurricane season");
+});
+
+test("a season that wraps the year end covers December AND January", () => {
+  // The bug this pins: a naive a..b range computes a negative length for a
+  // wrapping range and yields NO months, so every winter note in the climate
+  // table attached to nothing while the table looked complete.
+  for (const id of ["dlr", "dlp", "tdr", "shdr"]) {
+    const rows = CLIMATE[id]!;
+    assert.ok(rows[11]!.note, `${id} has no December note`);
+    assert.ok(rows[0]!.note, `${id} has no January note`);
+    assert.equal(rows[11]!.note!.text, rows[0]!.note!.text,
+      `${id}: December and January should share one winter note, not two that can drift`);
+  }
 });

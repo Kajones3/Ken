@@ -8,7 +8,7 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb } from "./db.js";
@@ -372,6 +372,10 @@ const server = createServer(async (req, res) => {
       // itself stays in config.ts and the browser only obeys it.
       originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
       resorts: RESORTS,
+      // Typical weather per resort per month. Its own key rather than folded
+      // onto each Resort: 72 rows would bury the resort definitions, and
+      // nothing that prices a trip reads it.
+      climate: CLIMATE,
     }, { cache: "public, max-age=300" });
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---

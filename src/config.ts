@@ -846,3 +846,180 @@ export const NEWS_FEEDS: { url: string; label: string }[] = [
 ];
 
 export type { ISODate };
+
+// ---------------------------------------------------------------- climate
+
+/**
+ * What the weather is typically doing at each resort, by month.
+ *
+ * WHY THIS IS A TABLE AND NOT AN API. It is the same call as ticket prices:
+ * climate normals move once a decade, a traveller planning six months out
+ * cannot use a forecast, and a live lookup would be a per-user provider call
+ * this project's whole architecture exists to avoid.
+ *
+ * WHY NORMALS AND NOT LAST YEAR. The owner asked for "there were X days with
+ * rain last year". Thirty-year averages answer the question better and are
+ * the honest thing to show: one specific year is a sample of one, and a dry
+ * September in 2025 says nothing about September 2027. The UI says
+ * "typically", never "last year", because that is what the numbers are.
+ *
+ * CONFIDENCE. These are Claude's figures, sanity-checked against web-search
+ * summaries of NOAA 1991-2020 normals where one was available (Orlando's
+ * January 71/52, August 92/76 and ~51in annual rainfall all match). They were
+ * NOT fetched from a primary source — every climate site, Wikipedia, and even
+ * Open-Meteo's free keyless archive API are blocked by this sandbox's egress
+ * proxy, which was tested rather than assumed. Treat them like the starter
+ * attraction rows: right in shape, worth correcting in detail.
+ *
+ * THE UPGRADE PATH, so nobody re-derives it: Open-Meteo's archive API is free,
+ * keyless and returns daily history anywhere in the world. Run from an
+ * unblocked machine it could compute all 72 rows from real observations as a
+ * BUILD-TIME script writing this table — not a request path, so the
+ * cache-first invariant stays intact.
+ *
+ * Rain days = days with measurable precipitation (>=0.01in / 0.2mm).
+ */
+export interface ClimateMonth {
+  highF: number;
+  lowF: number;
+  rainDays: number;
+  /** What the season is doing — hurricanes, a rainy season, short dark days.
+   *  Absent for a month with nothing a traveller needs warning about. */
+  note?: { emoji: string; text: string };
+}
+
+/**
+ * Month numbers a..b inclusive, 1-based, WRAPPING at the year end so a winter
+ * season can be written as mo(12, 2) and mean December, January, February.
+ *
+ * The naive version (`length: b - a + 1`) computes a negative length for a
+ * wrapping range, and Array.from turns that into an empty array — so every
+ * winter note in this file silently attached to no months at all, and the
+ * table looked complete while four resorts had no December, January or
+ * February note. Caught in a browser, not by a test; the test below now pins
+ * it.
+ */
+const mo = (a: number, b: number): number[] => {
+  const out: number[] = [];
+  for (let m = a; ; m = (m % 12) + 1) {
+    out.push(m);
+    if (m === b) break;
+  }
+  return out;
+};
+
+/**
+ * Twelve [high, low, rainDays] rows, January first, with season notes painted
+ * over month ranges afterwards — so a six-month hurricane season is written
+ * once rather than copied into six rows that could drift apart.
+ */
+function climate(
+  rows: [number, number, number][],
+  seasons: { months: number[]; emoji: string; text: string }[] = [],
+): ClimateMonth[] {
+  const out: ClimateMonth[] = rows.map(([highF, lowF, rainDays]) => ({ highF, lowF, rainDays }));
+  for (const s of seasons) {
+    for (const m of s.months) {
+      const row = out[m - 1];
+      if (row) row.note = { emoji: s.emoji, text: s.text };
+    }
+  }
+  return out;
+}
+
+export const CLIMATE: Record<string, ClimateMonth[]> = {
+  wdw: climate(
+    [[71, 50, 6], [74, 53, 6], [78, 57, 7], [83, 61, 5], [88, 67, 8], [91, 72, 15],
+     [92, 74, 17], [92, 74, 17], [90, 73, 13], [85, 67, 9], [79, 59, 6], [73, 53, 6]],
+    [
+      { months: mo(6, 11), emoji: "🌀",
+        text: "Atlantic hurricane season runs June through November. Direct hits are rare, but September is the peak and travel insurance is worth pricing." },
+      { months: mo(7, 8), emoji: "🥵",
+        text: "The hottest, wettest stretch of the year — expect a heavy thunderstorm most afternoons, then sunshine again by evening." },
+      { months: mo(12, 12), emoji: "🎄",
+        text: "Mild and dry, and the busiest, most expensive fortnight of the year falls over Christmas and New Year." },
+      { months: mo(1, 2), emoji: "🧥",
+        text: "The coolest, driest months — pleasant for walking the parks, but a morning can genuinely need a jacket." },
+      { months: mo(3, 5), emoji: "🌤️",
+        text: "Warm, sunny and not yet humid — arguably the best weather of the year, which is why spring break and Easter are among the busiest weeks." },
+    ],
+  ),
+  dlr: climate(
+    [[68, 48, 6], [68, 49, 6], [71, 51, 5], [74, 54, 3], [76, 58, 2], [80, 61, 1],
+     [85, 65, 0], [86, 66, 1], [84, 64, 1], [79, 59, 2], [73, 52, 3], [68, 47, 5]],
+    [
+      { months: mo(5, 6), emoji: "🌫️",
+        text: "\"May Gray\" and \"June Gloom\" — mornings often start overcast and burn off by midday. It rarely actually rains." },
+      { months: mo(7, 9), emoji: "☀️",
+        text: "Effectively rainless and reliably warm, with low humidity by Florida standards. Evenings cool off quickly." },
+      { months: mo(12, 2), emoji: "🌧️",
+        text: "Southern California's wet season, such as it is — a handful of rainy days, and the coolest evenings of the year." },
+      { months: mo(3, 4), emoji: "🌤️",
+        text: "Mild, dry and comfortable, with none of the summer crowds until spring break lands." },
+      { months: mo(10, 11), emoji: "🍂",
+        text: "Warm days, cool evenings and almost no rain — the quietest good-weather stretch of the year." },
+    ],
+  ),
+  dlp: climate(
+    [[45, 36, 10], [47, 36, 9], [54, 39, 10], [60, 43, 9], [68, 50, 10], [73, 55, 9],
+     [77, 58, 8], [77, 58, 8], [71, 53, 8], [61, 47, 11], [51, 40, 11], [46, 37, 11]],
+    [
+      { months: mo(11, 2), emoji: "🌂",
+        text: "Cold, grey and dark — the sun sets before 5pm around the solstice. Rain is frequent but usually light rather than heavy." },
+      { months: mo(6, 8), emoji: "🌤️",
+        text: "The warmest, driest stretch and the longest days, with light until well past 9pm. Also the busiest, as most of Europe is on holiday." },
+      { months: mo(3, 5), emoji: "🌦️",
+        text: "Mild and changeable. Rain is spread evenly through the year here rather than concentrated in a season, so pack for showers whenever you go." },
+    ],
+  ),
+  tdr: climate(
+    [[49, 36, 5], [51, 37, 6], [57, 43, 10], [65, 51, 10], [73, 60, 10], [78, 67, 12],
+     [85, 74, 10], [88, 76, 9], [82, 70, 12], [72, 60, 10], [63, 50, 8], [53, 41, 5]],
+    [
+      { months: mo(6, 7), emoji: "🌧️",
+        text: "Tsuyu, the rainy season — roughly mid-June to mid-July. Not constant downpours, but grey, humid and wet more often than not." },
+      { months: mo(8, 9), emoji: "🌀",
+        text: "Typhoon season, and August is genuinely hot and humid. A typhoon can close the parks outright for a day." },
+      { months: mo(3, 4), emoji: "🌸",
+        text: "Cherry blossom and the most comfortable weather of the year — which is also why it is one of the most crowded and expensive times to go." },
+      { months: mo(12, 2), emoji: "🧥",
+        text: "Cold, dry and often clear. Crisp rather than harsh, but the parks are exposed to wind off Tokyo Bay." },
+    ],
+  ),
+  shdr: climate(
+    [[47, 34, 9], [50, 36, 9], [57, 42, 12], [67, 51, 11], [76, 60, 11], [81, 68, 13],
+     [89, 76, 11], [88, 76, 10], [81, 69, 9], [73, 60, 7], [63, 49, 7], [52, 38, 7]],
+    [
+      { months: mo(6, 7), emoji: "🌧️",
+        text: "Meiyu, the \"plum rain\" season — mid-June into July is the wettest, most humid stretch of the year." },
+      { months: mo(7, 9), emoji: "🌀",
+        text: "Typhoon season, overlapping the summer heat. July and August are hot and sticky, and the park has little shade." },
+      { months: mo(10, 11), emoji: "🍂",
+        text: "The driest, most comfortable window of the year — mild, clear and far less humid than summer." },
+      { months: mo(12, 2), emoji: "🧥",
+        text: "Cold and damp. Shanghai sits below freezing overnight only occasionally, but buildings are often unheated by US standards." },
+    ],
+  ),
+  hkdl: climate(
+    [[65, 56, 6], [66, 57, 9], [70, 61, 11], [76, 68, 12], [82, 75, 15], [86, 79, 19],
+     [88, 80, 18], [88, 79, 17], [86, 78, 15], [82, 73, 8], [75, 66, 6], [68, 59, 5]],
+    [
+      { months: mo(5, 11), emoji: "🌀",
+        text: "Typhoon season, peaking July to September. Hong Kong's warning system can close the parks at a few hours' notice." },
+      { months: mo(6, 8), emoji: "🥵",
+        text: "Hot, humid and the wettest months of the year — rain falls on roughly two days in three." },
+      { months: mo(10, 12), emoji: "🌤️",
+        text: "The best weather of the year: warm, dry and comparatively low humidity. Also the most pleasant time to queue outdoors." },
+      { months: mo(3, 4), emoji: "🌫️",
+        text: "Warm and notoriously humid, with fog and drizzle common as the sea is still cooler than the air." },
+    ],
+  ),
+};
+
+/** The climate row for a resort and a 1-based month. Null rather than a throw
+ *  for an unknown resort — a missing weather box must never break a board. */
+export function climateFor(resortId: string, month1: number): ClimateMonth | null {
+  const rows = CLIMATE[resortId];
+  if (!rows || month1 < 1 || month1 > 12) return null;
+  return rows[month1 - 1] ?? null;
+}

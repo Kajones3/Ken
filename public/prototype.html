@@ -23,7 +23,7 @@
   --s2:#eb6834;            /* tickets  */
   --s3:#1baf7a;            /* hotel    */
   --s4:#4a3aa7;            /* food     */
-  --s5:#0f8f7c;            /* airport transport */
+  --s5:#0f8f7c;            /* weather (was airport transport, since removed) */
   --dv-lo-4:#0d366b; --dv-lo-3:#256abf; --dv-lo-2:#6da7ec; --dv-lo-1:#b7d3f6;
   --dv-mid:#E6E6E2;
   --dv-hi-1:#f7c9c5; --dv-hi-2:#eb8b85; --dv-hi-3:#cf3f3f; --dv-hi-4:#8c2323;
@@ -234,6 +234,23 @@ a{color:var(--ink)}
 .f.stooddown label{text-decoration:line-through}
 #exactDatesHint.needsend{color:var(--accent); font-weight:600}
 .estnote.staynote{color:var(--ink-2)}
+/* Weather: a KPI row of stat tiles, not a chart — three headline numbers is
+   the case where a chart is the wrong form. Values wear ink tokens and the
+   app's own surfaces; nothing here carries meaning by colour alone, so the
+   emoji is decoration beside a written label rather than the label itself.
+   Deliberately no tabular-nums: these are standalone values, and forcing every
+   digit to a zero's width makes "71" read loose at this size. */
+.wx{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:2px 0 12px}
+.wxtile{background:var(--surface-2); border:1px solid var(--rule); border-radius:10px; padding:10px 11px}
+.wxtile .wxlab{display:flex; align-items:center; gap:5px; font-size:10.5px; font-weight:700;
+  letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); white-space:nowrap}
+.wxtile .wxval{margin-top:5px; font-size:21px; font-weight:650; color:var(--ink); line-height:1.1}
+.wxtile .wxsub{margin-top:2px; font-size:11px; color:var(--muted)}
+.wxnote{display:flex; gap:9px; align-items:flex-start; background:var(--surface-2);
+  border:1px solid var(--rule); border-left:3px solid var(--accent-line); border-radius:10px;
+  padding:10px 12px; font-size:12.5px; line-height:1.5; color:var(--ink-2)}
+.wxnote .wxemoji{font-size:17px; line-height:1.2; flex:0 0 auto}
+@media (max-width:520px){ .wx{grid-template-columns:1fr 1fr} }
 .tripsmenu{position:relative}
 .tripsdrop{position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:270px; max-height:60vh; overflow-y:auto;
   background:var(--surface); border:1px solid var(--rule-strong); border-radius:12px; box-shadow:0 18px 44px -14px rgba(0,0,0,.5); padding:6px}
@@ -896,6 +913,7 @@ let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus onl
 let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
+let CLIMATE = {};        // resortId -> twelve [high, low, rainDays] rows, January first
 let RESORT_BY_ID = new Map();
 
 const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
@@ -919,6 +937,11 @@ const esc = v => String(v ?? "")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const usdK = n => n>=10000 ? "$"+(n/1000).toFixed(1)+"k" : "$"+Math.round(n/10)*10;
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+/** Days in the month a Date falls in — day 0 of the NEXT month is the last of
+ *  this one. UTC throughout, like every other date in this file. */
+function daysInMonth(d){
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+}
 const MONTHSFULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 /** "Mar 4" — the same short form the board rows use. */
 const fmtDate = iso => {
@@ -2180,6 +2203,35 @@ async function renderDetail(){
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
+        ${(()=>{
+          /* Typical weather for the month actually being priced — x.start, not
+           * the month picker, so a Plus trip pinned to real dates gets the
+           * month it is travelling in rather than the one in a control it is
+           * ignoring. Silently absent for a resort with no rows: a missing
+           * weather box must never take a board down with it. */
+          const wx = (CLIMATE[item.resortId] || [])[sd.getUTCMonth()];
+          if(!wx) return "";
+          const c = f => Math.round((f - 32) * 5 / 9);
+          const monthName = MONTHSFULL[sd.getUTCMonth()];
+          return `<div class="card">
+            <h5><i style="background:var(--s5)"></i>Weather in ${monthName}</h5>
+            <p class="sub">What ${r.city.split(",")[0]} is typically like — averages, not a forecast</p>
+            <div class="wx">
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">☀️</span>Average high</div>
+                <div class="wxval">${wx.highF}°F</div><div class="wxsub">${c(wx.highF)}°C</div></div>
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌙</span>Average low</div>
+                <div class="wxval">${wx.lowF}°F</div><div class="wxsub">${c(wx.lowF)}°C</div></div>
+              <div class="wxtile"><div class="wxlab"><span aria-hidden="true">🌧️</span>Rainy days</div>
+                <div class="wxval">${wx.rainDays}</div>
+                <div class="wxsub">of ${daysInMonth(sd)} days</div></div>
+            </div>
+            ${wx.note ? `<div class="wxnote"><span class="wxemoji" aria-hidden="true">${wx.note.emoji}</span>
+              <div>${esc(wx.note.text)}</div></div>` : ""}
+            <p class="sub" style="margin-top:10px">Long-run averages for a typical ${monthName}, not a
+              forecast and not last year — one year is a sample of one. Any single trip can be
+              wetter or hotter than this.</p>
+          </div>`;
+        })()}
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
           <p class="sub">${fi ? fi.label : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
@@ -3208,6 +3260,7 @@ async function boot(){
   PLUS_ORIGINS = meta.plusOrigins || [];
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
+  CLIMATE = meta.climate || {};
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
   // After the form's defaults are in place, so a returning visitor whose
