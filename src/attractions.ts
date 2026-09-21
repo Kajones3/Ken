@@ -15,7 +15,7 @@
  * explainer). Cost still decides the ordering of the board. This just says
  * what you would be giving up by picking the cheaper one.
  */
-import { ATTRACTION_BY_ID, isOnlyAt, type AttractionDef } from "./config.js";
+import { ATTRACTIONS, ATTRACTION_BY_ID, isOnlyAt, type AttractionDef } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface AttractionMatch {
@@ -46,12 +46,24 @@ export interface ResortAttractionMatches {
  * would otherwise break every board of every user who had picked it, which
  * is a far worse failure than quietly ignoring one row.
  */
-export function resolvePicks(pickedIds: readonly string[]): AttractionDef[] {
+export function resolvePicks(
+  pickedIds: readonly string[],
+  /** The list to resolve against. Defaults to the one the app ships with, so
+   *  every existing caller and every test keeps exercising the shipped rows.
+   *  The server passes the owner's effective list instead — an overlay, not a
+   *  replacement; see ownerAttractions.ts. Passed in rather than read from a
+   *  module-level cache so this stays pure and synchronous, the same rule
+   *  pricing.ts follows. */
+  catalogue: readonly AttractionDef[] = ATTRACTIONS,
+): AttractionDef[] {
+  const byId = catalogue === ATTRACTIONS
+    ? ATTRACTION_BY_ID
+    : new Map(catalogue.map((a) => [a.id, a]));
   const seen = new Set<string>();
   const out: AttractionDef[] = [];
   for (const id of pickedIds) {
     if (seen.has(id)) continue;
-    const a = ATTRACTION_BY_ID.get(id);
+    const a = byId.get(id);
     if (!a) continue;
     seen.add(id);
     out.push(a);
@@ -66,8 +78,9 @@ function toMatch(a: AttractionDef): AttractionMatch {
 /** What one resort offers against one traveller's picks. */
 export function matchesForResort(
   resortId: string, pickedIds: readonly string[],
+  catalogue: readonly AttractionDef[] = ATTRACTIONS,
 ): ResortAttractionMatches {
-  const picks = resolvePicks(pickedIds);
+  const picks = resolvePicks(pickedIds, catalogue);
   const matched: AttractionMatch[] = [];
   const missing: AttractionMatch[] = [];
   for (const a of picks) {

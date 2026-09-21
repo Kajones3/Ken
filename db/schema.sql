@@ -441,3 +441,33 @@ create table if not exists fare_corrections (
 );
 create index if not exists fare_corrections_route
   on fare_corrections (origin, destination, depart_date);
+
+-- The owner's own attraction list, as an OVERLAY on the one in config.ts —
+-- never a replacement for it. Same safety property as owner_settings, and for
+-- the same reason: an empty table, a wiped row or a row the code no longer
+-- considers valid must leave the app behaving exactly as it did before any of
+-- this existed. A list is the one place where "the database is the truth"
+-- would be genuinely dangerous — a failed migration or a bad import would
+-- empty the attractions picker for everybody, silently.
+--
+-- Three things a row can do, decided by which fields it carries:
+--   * an id that matches a shipped attraction REPLACES its name, resorts and
+--     note;
+--   * an id that matches nothing ADDS an attraction;
+--   * hidden = true takes one out of the list, which is how a shipped row is
+--     removed without editing code.
+--
+-- resort_ids is stored as a comma-separated text field rather than an array
+-- so PGlite and Postgres behave identically — every other list in this schema
+-- does the same. It is parsed and re-validated on the way out, so a resort id
+-- that stops existing degrades to "this row is not applied" rather than to an
+-- attraction that belongs to nowhere.
+create table if not exists owner_attractions (
+  id          text primary key,
+  name        text not null default '',
+  resort_ids  text not null default '',
+  note        text not null default '',
+  hidden      boolean not null default false,
+  updated_by  text not null default '',
+  updated_at  timestamptz not null default now()
+);
