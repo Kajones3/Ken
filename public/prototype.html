@@ -216,6 +216,14 @@ a{color:var(--ink)}
 .agef label{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
 .agef select{width:92px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:7px 8px; font-family:"JetBrains Mono",monospace; font-size:12.5px}
 .bandnote{font-size:11px; color:var(--muted); margin-top:3px}
+/* Collapsed state: everything in the panel hides except its label and the
+   one-line summary. `!important` because `.fields`/`.f` set an explicit
+   display that beats a plain rule — the same trap the [hidden] fix hit. */
+.panel.collapsed > *:not(.panel-lab):not(#tripCollapsed){display:none!important}
+.collapsed-trip{display:flex; gap:12px; align-items:center; justify-content:space-between;
+  flex-wrap:wrap; padding:2px 0}
+.collapsed-trip b{font-family:"Archivo"; font-size:15px; font-weight:700; letter-spacing:-.01em}
+.collapsed-trip small{display:block; font-size:12px; color:var(--muted); margin-top:2px}
 .panel-foot{display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap}
 .hint{font-size:12px; color:var(--muted)}
 
@@ -318,9 +326,21 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 .estnote{margin-top:6px; font-size:11px; line-height:1.45; color:var(--warnfg,#f0c674); opacity:.92}
 .tilde{margin-left:2px; font-weight:600; opacity:.75}
 .seg.f1{background:var(--s1)} .seg.f2{background:var(--s2)} .seg.f3{background:var(--s3)} .seg.f4{background:var(--s4)} .seg.f5{background:var(--s5)}
-.barlabs{display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap}
-.barlabs span{display:flex; align-items:center; gap:5px; white-space:nowrap}
+/* align-items:center is load-bearing, not cosmetic. Without it these items
+   STRETCH to the tallest one in their wrapped line — and the flights item is
+   taller than the others whenever it carries the `est.`/`exact` chip. So each
+   colour square's vertical position depended on whether its NEIGHBOUR had a
+   chip, which is a thing browsers resolve slightly differently and a thing
+   that changes as the line re-wraps. Measured identical in Chromium; the
+   owner saw the tickets square sitting high, which is exactly what this
+   coupling produces elsewhere. Centring decouples them: an item's square now
+   depends only on that item. */
+.barlabs{display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap;
+  align-items:center; align-content:center}
+.barlabs span{display:flex; align-items:center; gap:5px; white-space:nowrap; line-height:1.45}
 .barlabs i{width:7px;height:7px;border-radius:2px; display:block; flex:none}
+/* And the chip no longer inflates the line it sits in. */
+.barlabs .estchip,.barlabs .exactchip{line-height:1.3}
 
 .total{text-align:right}
 .tnum{font-family:"Archivo"; font-weight:800; font-size:21px; letter-spacing:-.035em; font-variant-numeric:tabular-nums}
@@ -548,8 +568,19 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     until the live feeds described at the bottom of the page are connected.</div>
   </div>
 
-  <section class="panel">
+  <section class="panel" id="tripPanel">
     <p class="panel-lab">Trip parameters</p>
+    <!-- Shown INSTEAD of the form when you arrive from a saved trip. Opening
+         a trip you already built is a different act from building one: you
+         came to look at a number, not to fill in nine fields again, and
+         landing on the whole form buries the thing you clicked. -->
+    <div class="collapsed-trip" id="tripCollapsed" hidden>
+      <div>
+        <b id="tripCollapsedName">Your trip</b>
+        <small id="tripCollapsedWhen"></small>
+      </div>
+      <button class="btn btn-sm" id="adjustTrip">Adjust this trip</button>
+    </div>
     <div class="party">
       <div class="f">
         <label for="adults">Adults (10+)</label>
@@ -1173,14 +1204,31 @@ const DRIVE_PRESETS = ["driveWdw", "driveDlr", "driveDomestic"];
 function readParams(){
   const needHotel = $("#needHotel").value;
   const gettingThere = $("#gettingThere").value;
+  const exactDate = exactDatesActive() ? $("#exactDate").value : "";
+  const exactReturn = exactDatesActive() ? $("#exactReturn").value : "";
+  /**
+   * Pinned dates decide the trip length, HERE — not only in the query.
+   *
+   * They used to be derived inside compareQuery(), so the request priced the
+   * real gap while everything on the page went on using the nights dropdown.
+   * Pin 10–17 July against a dropdown still reading 6 and the board priced
+   * seven nights, then titled the card "Hotel · 6 nights", divided by six for
+   * the per-night figure, and built the hotel and flight links to come home a
+   * day early. One trip, two different lengths, and the only visible symptom
+   * was a click-through landing on the wrong week.
+   *
+   * There is one nights value now and everything reads it.
+   */
+  const gap = exactDate && exactReturn ? nightsBetween(exactDate, exactReturn) : 0;
+  const nights = gap > 0 ? gap : +$("#nights").value;
   return {
     origin: $("#origin").value,
     adults: +$("#adults").value,
     ages: Array.from({length:+$("#kids").value}, (_,i)=>{
       const el = document.getElementById("age"+i); return el ? +el.value : 7;
     }),
-    nights: +$("#nights").value,
-    parkDays: Math.min(+$("#parkdays").value, +$("#nights").value+1),
+    nights,
+    parkDays: Math.min(+$("#parkdays").value, nights + 1),
     needHotel,
     stay: needHotel === "no" ? "none" : $("#stay").value,
     tier: $("#tier").value,
@@ -1190,8 +1238,8 @@ function readParams(){
     // Plus only. When both are set, the search prices those exact days
     // instead of scanning the month — nights is derived from the gap, so the
     // trip length matches the dates rather than the separate nights picker.
-    exactDate: exactDatesActive() ? $("#exactDate").value : "",
-    exactReturn: exactDatesActive() ? $("#exactReturn").value : "",
+    exactDate,
+    exactReturn,
     gettingThere,
     flyRentalCar: $("#flyRentalCar").value === "1",
     driveRentalCar: $("#driveRentalCar").value === "1",
@@ -1326,8 +1374,8 @@ function compareQuery(){
   if(params.exactDate && params.exactReturn){
     q.date = params.exactDate;
     q.month = params.exactDate.slice(0,7);
-    const n = nightsBetween(params.exactDate, params.exactReturn);
-    if(n > 0) q.nights = n;
+    // params.nights is already the gap — readParams derives it, so the page
+    // and the request can never disagree about how long the trip is.
   }
   return q;
 }
@@ -1996,8 +2044,37 @@ async function renderDetail(){
             real round-trip price for a date you're serious about.</small></div>
             <div class="p"><button class="btn btn-sm openpw">Get Plus</button></div></div>`)
       : "");
-  const flightLink = (fp && fp.deepLink) ||
-    `https://www.google.com/travel/flights?q=${encodeURIComponent("Flights from "+p.origin+" to "+r.iata+" on "+x.start)}`;
+  /**
+   * Where "Check live fares" sends you when the cache has no real booking
+   * link of its own.
+   *
+   * The old version asked Google for `Flights from RDU to MCO on 2027-07-10`
+   * and nothing else — no return date, no passenger count, no round trip. So
+   * Google picked its own dates, and the owner landed on a different week at
+   * a different price and reasonably concluded the app was wrong. It wasn't
+   * quoting a different fare; it was sending people to a different trip.
+   *
+   * The `#flt=` fragment is Google Flights' own structured form: both legs,
+   * both dates, explicit passenger count. It cannot be verified from this
+   * sandbox (google.com is refused by the egress proxy, tested), so the
+   * board also prints the dates it is asking for — if the page ever lands
+   * somewhere else, the mismatch is visible rather than silent.
+   */
+  const backDate = (() => {
+    const d = new Date(x.start + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + (p.nights || 1));
+    return d.toISOString().slice(0, 10);
+  })();
+  // BUILT HERE, not taken from the cached row — the same call the hotel link
+  // already makes, and for the same reason. A stored deep link encodes
+  // whatever dates it was FETCHED for, which is not the trip on screen: the
+  // owner clicked through on a July 10-17 trip and landed on another week at
+  // another price. A link to the right trip beats a link to a specific
+  // itinerary for the wrong one.
+  const flightLink =
+    `https://www.google.com/travel/flights?hl=en&curr=USD#flt=`
+      + `${p.origin}.${x.destination}.${x.start}*${x.destination}.${p.origin}.${backDate}`
+      + `;c:USD;e:1;px:${pax};sd:1;t:f`;
 
   // tickets, grouped by this resort's own age bands — split from the real total
   const { groups, perGroup } = splitByBand(r, list, x.tickets);
@@ -2227,35 +2304,12 @@ async function renderDetail(){
       <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}
     <div class="dbody">
       <div class="cols">
-        <div class="card">
-          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
-          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
-          <div class="kpi">
-            <div class="kpitile"><div class="k">Per person</div>
-              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">average</div></div>
-            <div class="kpitile"><div class="k">Party</div>
-              <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
-            <div class="kpitile total"><div class="k">Tickets</div>
-              <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
-          </div>
-          ${ticketRowsHtml}
-          <div class="foot">
-            <details class="why"><summary>How this number is worked out</summary>
-              <div class="whybody">An estimate from a general pricing curve, not Disney's own real per-date tiers.
-                Actual prices vary by exact date and can differ from this by a meaningful amount, so check the
-                official page before booking.</div></details>
-            <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
-          </div>
-        </div>
-        ${bandRows ? `<div class="card">
-          <h5><i style="background:var(--s2)"></i>Age bands at ${r.name}</h5>
-          <p class="sub">${bandLine(r)}</p>
-          ${bandRows}
-          <div class="foot"><details class="why"><summary>Why this differs by resort</summary>
-            <div class="whybody">Every resort draws the lines in a different place. An 11-year-old is an adult in
-              Orlando and a child in Paris; a 15-year-old is a Junior at Tokyo alone. The ages above are priced by
-              each resort's own bands, not one shared rule.</div></details></div>
-        </div>` : ""}
+        <!-- Card order follows the cost lines in the summary bar above:
+             flights, tickets, hotel, food. They used to disagree — tickets
+             came first on the board while flights came first in the bar —
+             so the eye had to re-find each number instead of tracking it
+             straight down. Weather sits last because it is context, not a
+             cost, and age bands follow tickets because they explain them. -->
         ${x.transportMode==="drive" ? `<div class="card">
           <h5><i style="background:var(--s1)"></i>Driving</h5>
           <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.from : p.origin}</p>
@@ -2313,9 +2367,40 @@ async function renderDetail(){
             <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
           <div class="foot">
             ${fareWhy}
-            ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">${fp && fp.deepLink ? "Book this fare" : "Check live fares"} →</a>` : ""}
+            ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">Check live fares →</a>
+              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}, ${pax} ${pax===1?"traveller":"travellers"}.
+                If it lands on different dates, the price you see there is not this trip's.</p>` : ""}
           </div>
         </div>`}
+        <div class="card">
+          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
+          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
+          <div class="kpi">
+            <div class="kpitile"><div class="k">Per person</div>
+              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">average</div></div>
+            <div class="kpitile"><div class="k">Party</div>
+              <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
+            <div class="kpitile total"><div class="k">Tickets</div>
+              <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
+          </div>
+          ${ticketRowsHtml}
+          <div class="foot">
+            <details class="why"><summary>How this number is worked out</summary>
+              <div class="whybody">An estimate from a general pricing curve, not Disney's own real per-date tiers.
+                Actual prices vary by exact date and can differ from this by a meaningful amount, so check the
+                official page before booking.</div></details>
+            <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+          </div>
+        </div>
+        ${bandRows ? `<div class="card">
+          <h5><i style="background:var(--s2)"></i>Age bands at ${r.name}</h5>
+          <p class="sub">${bandLine(r)}</p>
+          ${bandRows}
+          <div class="foot"><details class="why"><summary>Why this differs by resort</summary>
+            <div class="whybody">Every resort draws the lines in a different place. An 11-year-old is an adult in
+              Orlando and a child in Paris; a 15-year-old is a Junior at Tokyo alone. The ages above are priced by
+              each resort's own bands, not one shared rule.</div></details></div>
+        </div>` : ""}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
@@ -2341,6 +2426,21 @@ async function renderDetail(){
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
+        </div>
+        <div class="card">
+          <h5><i style="background:var(--s4)"></i>Food</h5>
+          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          <div class="kpi">
+            <div class="kpitile"><div class="k">Per day</div>
+              <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">everyone</div></div>
+            <div class="kpitile"><div class="k">Days</div>
+              <div class="v">${p.nights + 0.4}</div><div class="s">part arrival</div></div>
+            <div class="kpitile total"><div class="k">Food</div>
+              <div class="v">${usd(x.food)}</div><div class="s">all in</div></div>
+          </div>
+          ${foodCtl}
+          ${foodRows}
+          <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
         </div>
         ${(()=>{
           /* Typical weather for the month actually being priced — x.start, not
@@ -2372,21 +2472,6 @@ async function renderDetail(){
                 this.</div></details></div>
           </div>`;
         })()}
-        <div class="card">
-          <h5><i style="background:var(--s4)"></i>Food</h5>
-          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
-          <div class="kpi">
-            <div class="kpitile"><div class="k">Per day</div>
-              <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">everyone</div></div>
-            <div class="kpitile"><div class="k">Days</div>
-              <div class="v">${p.nights + 0.4}</div><div class="s">part arrival</div></div>
-            <div class="kpitile total"><div class="k">Food</div>
-              <div class="v">${usd(x.food)}</div><div class="s">all in</div></div>
-          </div>
-          ${foodCtl}
-          ${foodRows}
-          <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
-        </div>
       </div>
 
       ${(()=>{
@@ -3254,11 +3339,45 @@ async function openSavedTrip(trip){
   store.set("ov", OV);
   syncNeedHotel(); syncGettingThere(); syncExactDatesUi();
   closeTripsDrop();
+  collapseTripPanel(trip);
   view = "board"; detailOpen = true;
   await runSearch(trip.resortId);
   const box = $("#detail");
   if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
 }
+
+/**
+ * Stand the search form down and say, in one line, which trip you are
+ * looking at. The form is still there — "Adjust this trip" brings it back
+ * with every field exactly as it was saved.
+ */
+function collapseTripPanel(trip){
+  const q = trip.params || {};
+  const r = RESORT_BY_ID.get(trip.resortId);
+  $("#tripCollapsedName").textContent = trip.label || (r ? r.name : "Your trip");
+  const when = q.exactDate && q.exactReturn
+    ? `${fmtDate(q.exactDate)} – ${fmtDate(q.exactReturn)}`
+    : q.month ? MONTHSFULL[Number(String(q.month).slice(5,7)) - 1] + " " + String(q.month).slice(0,4)
+    : "";
+  const who = `${q.adults || 2} adult${(q.adults||2) === 1 ? "" : "s"}`
+    + (String(q.childAges || "").split(",").filter(Boolean).length
+        ? ` + ${String(q.childAges).split(",").filter(Boolean).length} child` : "");
+  $("#tripCollapsedWhen").textContent =
+    [r ? r.name : "", when, who, `${q.nights || 0} nights`].filter(Boolean).join(" · ");
+  $("#tripCollapsed").hidden = false;
+  $("#tripPanel").classList.add("collapsed");
+}
+
+/** Any normal search puts the form back — you are building, not revisiting. */
+function expandTripPanel(){
+  $("#tripCollapsed").hidden = true;
+  $("#tripPanel").classList.remove("collapsed");
+}
+
+$("#adjustTrip").addEventListener("click", () => {
+  expandTripPanel();
+  $("#tripPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+});
 
 let savedTrips = [];
 function closeTripsDrop(){
