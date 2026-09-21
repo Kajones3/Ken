@@ -211,7 +211,7 @@ export const RESORTS: Resort[] = [
     // traveller actually arrives at.
     altArrivalAirports: [],
     goodToKnow: [
-      "Following on from the pricing note above: if you do want the room-only stay this breakdown assumes, it isn't bookable on Disney's own site — call Disney directly, or book the hotel through a third party such as Booking.com or Expedia and buy park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
+      "To be clear about which half is the awkward one: park tickets on their own ARE sold online, at tickets.disneylandparis.com, dated or undated, with no hotel attached. It is the ROOM WITHOUT TICKETS that Disney will not sell you online — call Disney directly for a room-only rate, or book the hotel through a third party such as Booking.com or Expedia and buy the park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
@@ -220,15 +220,18 @@ export const RESORTS: Resort[] = [
     // as goodToKnow's visa notes: plausible and conventional, not checked.
     // The owner click-tests these; fix here if one 404s.
     onPropertyHotels: { url: "https://www.disneylandparis.com/en-gb/hotels/" },
-    // Disney sells Paris as a hotel + ticket PACKAGE by default — a room-only
-    // stay exists but is not sold online. We price room and tickets as two
+    // Disney sells Paris ACCOMMODATION as a hotel + ticket PACKAGE by
+    // default — a room-only stay exists but is not sold online. Note the
+    // scope, re-checked 2026-09-21 after the owner asked: buying park
+    // tickets alone online is ordinary and always has been, so the bundling
+    // constraint runs one way only. We price room and tickets as two
     // separate lines, which matches the room-only booking most people will
     // not actually make. Deliberately not "fixed" in the pricing math:
     // package rates are not published, so inventing one would be less honest
     // than a clearly-labelled room-only basis. Labelled here instead.
     dataConfidence: {
       level: "Priced room-only",
-      note: "Disney's own site sells Disneyland Paris as a hotel + ticket package, with tickets included for every day of your stay — a room-only stay exists but isn't sold online. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
+      note: "Park tickets on their own are sold online normally — that part is fine. What Disney's own site will not sell you online is a ROOM WITHOUT TICKETS: book a Disney hotel there and it comes as a hotel + ticket package, with admission included for every day of your stay. A room-only stay does exist, but only by phone or through a third party. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
     },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
@@ -266,7 +269,13 @@ export const RESORTS: Resort[] = [
     ],
     closuresUrl: "https://touringplans.com/tokyo-disney/closures",
     closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
-    ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
+    // The owner's own click-tested link (2026-09-21): Tokyo's real purchase
+    // flow, not the informational ticket page the previous URL landed on.
+    // The `_gl=...` cross-domain analytics token they pasted with it is
+    // stripped deliberately — it is a short-lived per-session linker value,
+    // so shipping it would hard-code one expired browsing session into every
+    // traveller's link. `lang=en` is the part that actually matters.
+    ticketUrl: "https://plan.tokyodisneyresort.jp/2/4/?lang=en",
     // UNVERIFIED from this environment — every Disney domain is blocked by
     // the egress proxy here, so this path could not be fetched. Same caveat
     // as goodToKnow's visa notes: plausible and conventional, not checked.

@@ -171,8 +171,23 @@ a{color:var(--ink)}
   border:1px dashed var(--accent-line); background:var(--accent-bg);
   color:var(--ink); border-radius:10px; padding:10px 13px; margin-bottom:18px; font-size:13px;
 }
+.mhead .pwhonest{font-size:13px; opacity:.85; margin-top:8px}
 .demo b{font-weight:700}
 .demo .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-line);margin-top:7px;flex:none}
+/* ---------- intro ----------
+   This used to be a dashed "prototype build" banner explaining that the
+   plumbing was a stand-in. It isn't one any more, and a notice telling
+   visitors the thing is half-built is a poor first impression of a site
+   whose numbers are real. What belongs here instead is why the tool exists,
+   in the owner's own words — so it reads as a piece of writing, not as an
+   alert about the software. */
+.intro{
+  border-left:3px solid var(--accent-line); background:var(--accent-bg);
+  color:var(--ink); border-radius:0 10px 10px 0; padding:14px 18px;
+  margin-bottom:18px; font-size:14.5px; line-height:1.62; max-width:68em;
+}
+.intro p{margin:0}
+.intro .sig{display:block; margin-top:8px; font-size:13px; color:var(--ink-2)}
 .gtk{margin-bottom:16px}
 .gtk ul{margin:6px 0 0; padding-left:18px}
 .gtk li{margin-bottom:5px}
@@ -282,7 +297,7 @@ a{color:var(--ink)}
   /* Everything that is a CONTROL rather than an answer. The form panel is
      the big one: on paper it is a page of dropdowns before the reader
      reaches a single number. */
-  header, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn,
+  header, .jumprow, .upsell, .ovcell, .demo, .intro, .back, #tablewrap button, .rowbtn,
   #printTop, #tripPanel, .legend, footer, .notices, #saveSearchBtn{display:none!important}
   @page{margin:14mm}
   html, body{background:#fff!important; color:#000!important}
@@ -615,13 +630,12 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
   </header>
 
-  <div class="demo">
-    <span class="dot"></span>
-    <div><b>Prototype build — prices are real, pulled from the cache.</b> Every figure comes from <code>/api/compare</code> and
-    <code>/api/calendar</code>, backed by whatever the refresh job last cached — the mock provider until a Travelpayouts token is
-    configured. The pricing logic, the paywall and this fare data are real; only the flight and hotel <em>source</em> is a stand-in
-    until the live feeds described at the bottom of the page are connected.</div>
-  </div>
+  <section class="intro" id="intro">
+    <p>Could we really go to Shanghai if we didn't get Annual Passes this year? That was the question that led me down a
+    very long and deep rabbit hole of cost comparisons with flights, hotels, tickets, grocery bills, visas and more. From
+    that obsession, I developed this &mdash; a blue sky pricing tool for Disney adults. Because the magic isn't just
+    limited to the US anymore.</p>
+  </section>
 
   <section class="panel" id="tripPanel">
     <p class="panel-lab">Trip parameters</p>
@@ -1022,10 +1036,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <h3 id="pwTitle">Plan your specific trip</h3>
       <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
       you should never have to pay to see what a trip costs. Flight numbers on the free plan are real estimates, built
-      from what people actually paid on that route, and shown with the range they sit in. Plus swaps the estimate for
-      the exact live fare on the dates you're actually travelling, and then watches them. <b>It may well come back
-      higher than the estimate</b> — that is the point: a real number you can book against beats a cheerful one
-      you can't.</p>
+      from what people actually paid on that route, and shown with the range they sit in. Plus gives you more control
+      and accuracy. Swap the estimate for the exact live fare on the dates you're actually traveling and then we'll
+      email you when prices change. Disney is magical. Planning should be too.</p>
+      <p class="pwhonest"><b>The exact fare may well come back higher than the estimate</b> — that is the feature
+      working, not failing. A real number you can book against beats a cheerful one you can't.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
