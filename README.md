@@ -677,6 +677,86 @@ after a confirmed fresh deploy, capture the exact `display_name` values in
 the response and check them against the regex directly rather than assuming
 the code path is untouched.
 
+## Filling the cache on the SerpApi Developer plan
+
+The owner's ask, before letting friends test: "can you run a full API refresh
+on everything so we can get accurate data across flights, hotels, etc." Here
+is what that actually costs and what it does and does not fix. **Nothing below
+needs new code** — every budget in the project is already an environment
+variable, so this is a sequence of existing workflows run with bigger numbers.
+
+### What "everything" measures
+
+Counted from `config.ts` rather than estimated: 41 origins (19 free, 22 Plus)
+against 9 arrival airports gives **363 priceable routes** — 158 domestic, 205
+international, 6 local pairs correctly skipped. Restricted to the 19 free
+origins it is **169 routes**: 74 domestic, 95 international. The app prices
+**13 months**, and hotels are 6 resorts x 13 months = **78 slots**.
+
+### The distinction that decides the order
+
+Domestic routes already have a free baseline — the BTS DB1B survey — so they
+price without buying anything. International routes have **none**: grepping a
+real 2024 Q4 DB1B file for `CDG` returns zero rows, because it is a US
+domestic survey. So a dollar spent on an international route buys an estimate
+that does not otherwise exist, and a dollar spent on a domestic one improves
+an estimate that already does. International goes first.
+
+### A sequence that fits 5,000/month
+
+| Step | Workflow | Inputs | Lookups |
+|---|---|---|---|
+| 1. International, free origins, whole year | Parkfare international sweep | months 13, dates 1, budget 260 | ~1,235 |
+| 2. Hotels, every resort and month | Parkfare refresh | `REFRESH_BACKFILL=true`, `SERPAPI_HOTELS_BUDGET=80` | ~78 |
+| 3. Domestic, widened nightly | Parkfare popular routes | limit 30, budget 30 | ~900/month |
+| | | **Total** | **~2,200** |
+
+That leaves roughly 2,800 of the 5,000 for the exact-fare button, which is
+the part friends will actually press. Raise `EXACT_FARE_GLOBAL_PER_DAY` from
+its default of 6 and `EXACT_FARE_PER_USER_PER_DAY` from 3 before inviting
+anybody — at 6 a day site-wide, the first two people to try it spend the
+whole day's allowance between them and everyone else sees the cap message.
+2,800 a month is about 90 a day, which is exactly what these two were set to
+before the plan was downgraded to Starter: **90 site-wide and 25 per person**.
+Restoring those is the change, not inventing new ones.
+
+Run step 1 first and check the run's summary before starting step 3: the
+international sweep is sharded five ways and is the only step big enough to
+be worth watching.
+
+### What this does NOT fix, stated plainly
+
+**It cannot give every date a real fare.** 363 routes across a year is
+132,495 date-route pairs. Buying one date a month per route gives a real
+fare for that one date and a better-anchored estimate for the other thirty.
+Somebody who picks a specific Tuesday will still usually see an estimate.
+
+**The mechanism for "the price I clicked was double" is the exact-fare
+button, not the sweep.** That is the one thing that returns a real fare for
+a real date, it is Plus-only because it spends metered money per press, and
+its own bought fare is written back into the shared cache so the next person
+asking gets it free. A bigger plan mainly buys a bigger cap on that button.
+
+**Park ticket prices are untouched by any of this.** They come from a
+maintained table with a two-parameter curve, not from SerpApi, and no Disney
+park publishes a pricing API at any of the six resorts. If a friend reports
+that admission is nearly double what the board said, spending more on
+SerpApi will not move it by a cent — `ticket_prices` is the thing to fix.
+
+**On-property hotel rates are untouched too.** SerpApi buys off-property
+rates only; Disney-owned rooms are generated locally from the bases in
+`config.ts`, four of which are still Claude drafts the owner has not
+corrected. `/admin` is where those are changed.
+
+### One thing worth fixing before spending more
+
+On-property hotel rows are written with the provider's `serpapi_hotels`
+source tag even though no vendor returned them (`refresh.ts`, and the note
+is in the code). The rotation works around it by counting only
+`on_property = false` rows, but the real-pulls digest reads the same tag —
+so a bigger hotel budget makes a mislabelling that already exists report
+more pulls that never happened.
+
 ## Layout
 
 | Path | What it is |
@@ -897,9 +977,16 @@ Four things bound it, checked in this order:
    bought for that exact route/date/length and still fresh is returned free
    and does not touch the user's allowance — revisiting a trip is not
    punished. The second person to ask the same question pays nothing.
-2. **Per-user daily cap** (`EXACT_FARE_PER_USER_PER_DAY`, default 25).
-3. **Site-wide daily cap** (`EXACT_FARE_GLOBAL_PER_DAY`, default 90 — sized
-   so the month still fits the plan alongside the two nightly jobs).
+2. **Per-user daily cap** (`EXACT_FARE_PER_USER_PER_DAY`, **default 3**).
+3. **Site-wide daily cap** (`EXACT_FARE_GLOBAL_PER_DAY`, **default 6**).
+
+   Both were retuned downward when the plan bought was SerpApi Starter
+   (1,000/month) rather than Developer (5,000). The nightly flight rotation
+   takes ~300 a month and hotels ~240, which leaves about 180 to reserve for
+   on-demand lookups — roughly 6 a day. This paragraph documented the old
+   Developer-sized figures (25 and 90) for a while after the code had moved;
+   if you go back to Developer those are the numbers to restore, and they are
+   what the runbook above recommends.
 4. **Provider budget**, the same hard ceiling every paid job here has.
 
 A failed lookup still counts: the provider bills for a search that finds

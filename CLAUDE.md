@@ -12,7 +12,46 @@ say when something is a guess.
 
 ---
 
-## Where things stand — 2026-09-20 (read this first in a new session)
+## Where things stand — 2026-09-21 (read this first in a new session)
+
+**Latest session: the shared PDF became a document, and two more things
+left the code.** All on `claude/compassionate-hopper-0pot3d`, none live yet.
+
+- *The PDF is no longer a screenshot.* It is written prose per resort —
+  cost table, getting there, tickets, every on-property hotel, food,
+  weather, lands, attractions, then visa/currency/age notes — and
+  **"Save as PDF" asks which resorts to include** first. See the decision
+  note.
+- *The attraction list is the owner's to maintain.* `/admin` has a section
+  for it, backed by `owner_attractions` as an OVERLAY on `config.ts`, with
+  its own spreadsheet. Same safety property as `owner_settings`.
+- *Exchange rates are generated, not hardcoded.* `src/exchangeData.ts` +
+  a monthly Actions job on ECB reference rates. The five numbers that used
+  to sit in `prototype.html` are gone. **The committed rows are still the
+  hand-seeded placeholder** and the UI says so — run the workflow.
+- *Lands per park* (`parkList` on each resort) — a Claude draft to correct.
+- *Tokyo's ticket link* now points at the real purchase flow, and the
+  *Paris note* says which half of the bundling constraint is real.
+- *The intro* is the owner's own words, not a "prototype build" banner.
+
+**Open with the owner, and each has one action:**
+
+- *The wait-time card is half-decided.* The owner asked for "XX mins
+  average wait" beside the weather box, on the condition that all six
+  resorts can have it — and chose "probe first, then start collecting".
+  The probe (`.github/workflows/debug-wait-times.yml`) **cannot be
+  dispatched until this branch merges**, because GitHub only lists
+  `workflow_dispatch` workflows that exist on the default branch. Merge,
+  run it, then build the collector on what it reports.
+- *The four international hotel baselines* are still Claude drafts.
+- *`parkList`'s lands* are the same, and the probe prints Queue-Times'
+  own land names, which would be a real source to check them against.
+
+**Live at https://pricingthemagic.com.** `master` is at `1debf8f`;
+**Render has not been redeployed, so nothing from this or the previous
+session is on the live site.**
+
+## Where things stood — 2026-09-20
 
 **Latest session: getting the owner out of the code, and the front of the
 house in order.** Four pieces, all on `claude/brave-carson-eg7ng8` and none
@@ -118,6 +157,11 @@ filter, and Stripe.
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
+| Owner-maintained attractions | **Wired, owner-only.** `/admin` has a section for the attraction list, backed by `owner_attractions` as an OVERLAY on `config.ts` — replace, add or hide a row, with its own spreadsheet. An empty table ships exactly as the code does. See the decision note. |
+| Exchange rates | **Wired, free — and still a placeholder.** `src/exchangeData.ts` is generated from ECB reference rates by a monthly Actions job; the browser's five hardcoded numbers are gone. **The committed rows are Claude's seed and `EXCHANGE_IS_PLACEHOLDER` says so in the UI** — run the "Parkfare exchange rates" workflow. |
+| Lands per park | **Wired, free.** `parkList` names every park and its lands, pinned against the `parks` count by a test. **A Claude draft for the owner to correct**, same standing as the international hotels. |
+| The shared PDF | **Rebuilt.** Written prose per resort, not a print stylesheet over the live board, and "Save as PDF" asks which resorts to include. See the decision note for the three things deliberately left out. |
+| Average wait times | **Researched, not built.** All six resorts are covered by Queue-Times (free, credit required) but its documented API is live-only, and every wait-time host is blocked from this sandbox. A probe workflow exists and needs this branch merged before it can be dispatched. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
 | Saved searches | **Wired, Plus-only.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
@@ -912,6 +956,117 @@ Three things that are decisions:
   anonymous flex item. **A cut-off label is worse than a two-line one
   precisely because nothing says it was cut** — the same rule as the `est.`
   chip: never present a partial thing as a whole one.
+
+**A shared PDF is a document, and you choose who is in it** (2026-09-21,
+the owner: "The PDF download is still wrong. It shouldn't just be a
+screenshot"). It was one. The print stylesheet dropped the controls off the
+live page and reordered the board, which makes a tidier screenshot and still
+a screenshot — a reader got four coloured bars and a legend and had to
+already know how the app works to read it.
+
+- *It is built, not styled into existence.* `#printDoc` is a SIBLING of
+  `.wrap`, so print is one rule — hide the app, show the document — rather
+  than a list of selectors every future card has to remember to join.
+- *Every sentence comes from data we hold, and a section with nothing real
+  to say is DROPPED rather than softened.* A document somebody forwards is
+  the worst place to invent a number and the only artefact here that
+  outlives the session that made it.
+- *An estimate says so in words.* On paper there is no `est.` chip to hover.
+- *The resorts are chosen.* Six is the product and also a lot to send
+  somebody who has already agreed on Tokyo. The cover's sentence follows
+  that choice — it cannot promise "the other five" when two are in the file.
+  The choice clears on a new search.
+- *Ctrl+P builds it too.* Printing from the browser's own menu skips the
+  dialog, and without a `beforeprint` handler that produces a blank sheet —
+  the original complaint, one layer down.
+
+**Three things the owner asked for that are deliberately absent**, each
+because the honest version does not exist yet:
+
+- *A per-month nightly RANGE per hotel.* The seasonality curve is the mock
+  provider's and is explicitly not in the real pricing path, and the API
+  exposes only the hotel we picked, not the pool. The figure is the annual
+  average and the sentence says so.
+- *A route's carrier list* ("Air France and Shanghai Airlines fly nonstop").
+  We cache one carrier per fare. The document names the carrier on the
+  cheapest cached fare and says it is not the only one flying.
+- *"Your dollar goes further."* An exchange rate cannot say that. The
+  document converts a price instead, and separately compares food using our
+  own per-resort figures, labelled as being about food prices.
+
+**An exchange rate is a conversion, never a cost-of-living claim**
+(2026-09-21). `src/exchangeData.ts` is generated from ECB reference rates
+via Frankfurter — free, no key, a thin wrapper over the ECB's own daily
+publication rather than an aggregator with opinions. It is SCHEDULED monthly
+where the climate generator is manual, and the difference is the data:
+normals move once a decade, a rate moves every working day. A partial fetch
+writes nothing, and a response based on anything but USD is refused —
+reading EUR-based rates as USD-based would misprice every conversion by ten
+percent with nothing reporting a problem. The warning about what a rate is
+NOT lives in the generator's template so it survives regeneration.
+
+**The owner maintains the attraction list, and the database OVERLAYS the
+code** (2026-09-21). `owner_attractions` holds rows that replace, add or
+hide entries in `config.ts`'s `ATTRACTIONS`; an empty table leaves the app
+behaving exactly as it shipped.
+
+*A list needs that safety property MORE than a price does.* With
+`owner_settings` the worst a lost row does is restore a shipped price. Here,
+"the database is the truth" would mean a failed migration or a bad import
+silently emptying the picker for everybody — and nothing would report it,
+because an empty list is a legal list. So a database that throws returns the
+shipped list, and a row naming only resorts that no longer exist is marked
+not-applied rather than becoming an attraction belonging nowhere.
+
+Two things found by testing rather than reading, both worth not repeating:
+
+- *The spreadsheet wrote resort ids space-separated and the parser split on
+  commas alone*, so a downloaded sheet could not be read back — every row
+  refused for naming a resort called "wdw dlr". It shows nowhere but in a
+  round trip, and there is a test for it now.
+- *A row identical to the shipped one is stored as NOTHING.* Sending the
+  sheet back unchanged is what happens when you edit one row out of ten;
+  storing all ten marked every one "yours" and offered to revert them,
+  burying the single real edit among nine that only looked like edits. Same
+  instinct as a blank settings cell meaning "back to the default".
+
+On a shipped attraction the button says **Revert**, not Delete, because
+taking the owner's row away puts the shipped one back. "Only here" stays
+DERIVED throughout — adding Tokyo to Mystic Manor stops the exclusivity
+claim with no flag to remember.
+
+**Tokyo's ticket link is the purchase flow, and its tracking token was
+stripped** (2026-09-21). The owner supplied a click-tested URL carrying
+`_gl=1*...`, Google Analytics' cross-domain linker value — short-lived and
+tied to one browsing session, so shipping it would hard-code an expired
+session into every traveller's link. `lang=en` is the part that means
+something.
+
+**Paris: the bundling constraint runs ONE way** (2026-09-21, the owner
+asked). Park tickets on their own are sold online normally, dated or
+undated, no hotel attached. What Disney will not sell online is a **room
+WITHOUT tickets**. The old wording could be read as "you cannot buy Paris
+tickets separately", which is false and would send somebody to a phone they
+did not need to pick up.
+
+**Wait times: all six are covered, but not the way the card needs**
+(2026-09-21, researched, not built). Queue-Times has all six resorts, free,
+no key, requiring a "Powered by Queue-Times.com" credit; Thrill Data has the
+monthly averages. The catch is that Queue-Times' documented API is
+**live-only** — a monthly historical average is not in it — and every one of
+these hosts is refused by this sandbox's egress proxy, same wall as Disney
+and every weather source. The owner's condition is worth keeping: "only
+valuable if we can get it for all the parks", which is the same argument
+that put weather on Open-Meteo rather than NOAA.
+
+The owner chose **probe first, then collect**.
+`.github/workflows/debug-wait-times.yml` answers, from where the network
+works, which resorts have parks and their ids, whether any historical route
+returns JSON, and what a live payload literally contains — that last part
+because four providers here were written to a documented shape and never
+run, and the one finally exercised failed on first contact. **It cannot be
+dispatched until this branch merges**: GitHub only lists `workflow_dispatch`
+workflows present on the default branch.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
@@ -1775,6 +1930,16 @@ the warning that there is nowhere to send warnings.
   documented request shape, never run against a live key — same caveat as
   Travelpayouts/Resend. Leave `EIA_API_KEY` unset and the mock national gas price is
   used instead, so driving-mode pricing and the refresh job both still run end to end.
+- **`src/exchangeData.ts` is generated and still hand-seeded.** The rates in
+  it are Claude's approximations, not observed, until somebody runs the
+  "Parkfare exchange rates" workflow; `EXCHANGE_IS_PLACEHOLDER` is true until
+  then and the PDF says so in words. Never hand-edit rows there — they are
+  overwritten wholesale.
+- **`parkList`'s lands are a Claude draft.** Lands get renamed and rebuilt
+  often enough that an unchecked row is plausible, not confirmed — Shanghai
+  gained Zootopia, Hong Kong gained World of Frozen, Walt Disney World is
+  rebuilding DinoLand. The wait-time probe prints Queue-Times' own land
+  names, which would be a real source to check them against.
 - **`src/climateData.ts` is generated and still hand-seeded.** The numbers in it
   are Claude's, not observations, until somebody runs the "Parkfare climate
   normals" workflow — `CLIMATE_SOURCE` in that file says which it currently is.
