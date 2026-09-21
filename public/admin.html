@@ -178,7 +178,8 @@ function rowHtml(s){
       <button class="save" disabled>Save</button>
     </div>
     <div class="rmeta">
-      <span>Shipped with ${esc(show(s, s.default))} · anything from ${esc(show(s, s.min))} to ${esc(show(s, s.max))}</span>
+      <span>Shipped with ${esc(show(s, s.default))}</span>
+      <span title="Not a claim about real prices — it's the range the box accepts, so a misplaced digit gets caught before it reaches a traveller.">Refuses anything outside ${esc(show(s, s.min))}–${esc(show(s, s.max))} as a typo</span>
       ${s.overridden ? `<button class="linkish reset">Put back to ${esc(show(s, s.default))}</button>` : ""}
       ${s.updatedAt ? `<span>Changed ${new Date(s.updatedAt).toLocaleDateString()}</span>` : ""}
     </div>
