@@ -28,6 +28,18 @@ export interface HotelDef {
 export interface Resort {
   id: string; name: string; city: string; iata: string;
   lat: number; lon: number; currency: string; parks: number;
+  /** Each park and the lands inside it, for the "what does this resort
+   *  actually have" half of the shared PDF. `parks` above stays the count
+   *  the board shows; config.test.ts pins the two against each other so a
+   *  park added here and not there (or the reverse) fails a test rather
+   *  than producing a page that contradicts its own summary line.
+   *
+   *  HAND-MAINTAINED, and the shipped rows are a CLAUDE DRAFT the owner
+   *  corrects — same standing as the four international hotel baselines and
+   *  the visa notes. Lands are renamed and rebuilt (Shanghai gained Zootopia,
+   *  Hong Kong gained World of Frozen, Walt Disney World is rebuilding
+   *  DinoLand), so treat an unchecked row as plausible, not confirmed. */
+  parkList: { name: string; lands: string[] }[];
   region: "dom" | "atl" | "pac";
   note: string;
   /** Short, hand-maintained facts that don't fit the price breakdown but
@@ -117,6 +129,12 @@ export const RESORTS: Resort[] = [
     id: "wdw", name: "Walt Disney World", city: "Orlando, Florida", iata: "MCO",
     lat: 28.43, lon: -81.31, currency: "USD", parks: 4, region: "dom",
     note: "4 parks · park-hopper priced separately",
+    parkList: [
+      { name: "Magic Kingdom", lands: ["Main Street, U.S.A.", "Adventureland", "Frontierland", "Liberty Square", "Fantasyland", "Tomorrowland"] },
+      { name: "EPCOT", lands: ["World Celebration", "World Discovery", "World Nature", "World Showcase"] },
+      { name: "Disney's Hollywood Studios", lands: ["Hollywood Boulevard", "Echo Lake", "Grand Avenue", "Star Wars: Galaxy's Edge", "Toy Story Land", "Animation Courtyard", "Sunset Boulevard"] },
+      { name: "Disney's Animal Kingdom", lands: ["Discovery Island", "Pandora \u2013 The World of Avatar", "Africa", "Asia", "DinoLand U.S.A."] },
+    ],
     goodToKnow: [
       "Park Hopper (same-day access to more than one park) and Genie+/Lightning Lane (paid line-skipping) are both sold separately from base admission and aren't priced here.",
     ],
@@ -168,6 +186,10 @@ export const RESORTS: Resort[] = [
     id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "SNA",
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
+    parkList: [
+      { name: "Disneyland Park", lands: ["Main Street, U.S.A.", "Adventureland", "New Orleans Square", "Frontierland", "Critter Country", "Star Wars: Galaxy's Edge", "Fantasyland", "Mickey's Toontown", "Tomorrowland"] },
+      { name: "Disney California Adventure", lands: ["Buena Vista Street", "Hollywood Land", "Avengers Campus", "Cars Land", "San Fransokyo Square", "Pacific Wharf", "Paradise Gardens Park", "Pixar Pier", "Grizzly Peak"] },
+    ],
     goodToKnow: [
       "Park Hopper and paid Lightning Lane line-skipping are sold separately from base admission and aren't priced here.",
     ],
@@ -203,6 +225,10 @@ export const RESORTS: Resort[] = [
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
+    parkList: [
+      { name: "Disneyland Park", lands: ["Main Street, U.S.A.", "Frontierland", "Adventureland", "Fantasyland", "Discoveryland"] },
+      { name: "Walt Disney Studios Park", lands: ["Front Lot", "Production Courtyard", "Toon Studio", "Worlds of Pixar", "Avengers Campus"] },
+    ],
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
     // Beauvais dropped (2026-09-10): it is a budget-carrier base with no US
@@ -264,6 +290,10 @@ export const RESORTS: Resort[] = [
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under licence",
+    parkList: [
+      { name: "Tokyo Disneyland", lands: ["World Bazaar", "Adventureland", "Westernland", "Critter Country", "Fantasyland", "Toontown", "Tomorrowland"] },
+      { name: "Tokyo DisneySea", lands: ["Mediterranean Harbor", "American Waterfront", "Port Discovery", "Lost River Delta", "Arabian Coast", "Mermaid Lagoon", "Mysterious Island", "Fantasy Springs"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — checked at write time, always confirm current requirements before booking.",
     ],
@@ -314,6 +344,9 @@ export const RESORTS: Resort[] = [
     id: "shdr", name: "Shanghai Disney Resort", city: "Pudong, Shanghai", iata: "PVG",
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
+    parkList: [
+      { name: "Shanghai Disneyland", lands: ["Mickey Avenue", "Gardens of Imagination", "Fantasyland", "Treasure Cove", "Adventure Isle", "Tomorrowland", "Toy Story Land", "Zootopia"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
       "Shanghai Disney's real ticket pricing bands some rides by height, not just age — not modeled here; the age-based child/adult split below is a simplification.",
@@ -360,6 +393,9 @@ export const RESORTS: Resort[] = [
     id: "hkdl", name: "Hong Kong Disneyland", city: "Lantau Island, Hong Kong", iata: "HKG",
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
+    parkList: [
+      { name: "Hong Kong Disneyland", lands: ["Main Street, U.S.A.", "Adventureland", "Grizzly Gulch", "Mystic Point", "Toy Story Land", "Fantasyland", "Tomorrowland", "World of Frozen"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — Hong Kong has its own immigration, separate from mainland China, even though mainland China requires a visa for most U.S. visitors. Just need a passport valid 6+ months. If your trip also includes mainland China (e.g. Shanghai Disney), that's a separate, additional visa requirement — see that resort's notes. Source: U.S. Consulate General Hong Kong & Macau — checked at write time, always confirm current requirements before booking.",
     ],

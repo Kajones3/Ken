@@ -1,0 +1,80 @@
+name: Parkfare exchange rates
+
+# Regenerates src/exchangeData.ts from the European Central Bank's published
+# reference rates (via Frankfurter — free, no key, no account) and commits it.
+#
+# This runs here rather than in Claude's sandbox for the usual reason: every
+# exchange-rate host tested from there is refused by the egress proxy, the
+# same wall that blocks Disney, Open-Meteo and NOAA.
+#
+# SCHEDULED, unlike the climate generator. Climate normals move once a decade
+# and a nightly run would rewrite identical numbers; exchange rates move every
+# working day. Monthly is the compromise — frequent enough that the figure is
+# not embarrassing on a trip-planning page, rare enough to cost nothing worth
+# counting. The ECB's own date rides along in EXCHANGE_AS_OF and the UI prints
+# it, so a run that stops happening shows itself on the page instead of
+# quietly ageing.
+on:
+  schedule:
+    # 06:20 UTC on the 2nd of each month. The ECB publishes on working days
+    # around 16:00 CET, so the 2nd always has a fresh rate behind it whatever
+    # day of the week the 1st lands on.
+    - cron: "20 6 2 * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the file without committing it"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  # To commit the regenerated table back. Nothing else.
+  contents: write
+
+jobs:
+  exchange-rates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+
+      - name: Fetch rates and regenerate the table
+        run: npm run exchange-rates
+        env:
+          EXCHANGE_DRY_RUN: ${{ inputs.dry_run }}
+
+      # A generated file that does not compile, or that drops a resort's
+      # currency, must not reach the board. Same rule as the climate
+      # workflow: a run that produces a table the app rejects has not
+      # succeeded.
+      - name: Check the regenerated table
+        if: ${{ !inputs.dry_run }}
+        run: |
+          npm run typecheck
+          npx tsx --test src/jobs/exchangeRates.test.ts
+
+      - name: Commit if anything changed
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if git diff --quiet -- src/exchangeData.ts; then
+            echo "No change — the ECB's rates still agree with the committed table."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/exchangeData.ts
+          git commit -m "Regenerate exchange rates from ECB reference rates
+
+          Ran the Parkfare exchange rates workflow. src/exchangeData.ts is
+          generated; do not hand-edit it.
+          "
+          git push
+          echo "### Exchange rates updated" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          git show --format= HEAD -- src/exchangeData.ts | grep -E '^\+.*perUsd' >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

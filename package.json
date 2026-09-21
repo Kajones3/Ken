@@ -29,7 +29,8 @@
     "clear-geocode-cache": "tsx src/clearGeocodeCache.ts",
     "test-email": "tsx src/testEmail.ts",
     "climate-normals": "tsx src/jobs/climateNormals.ts",
-    "probe-wait-times": "tsx src/jobs/probeWaitTimes.ts"
+    "probe-wait-times": "tsx src/jobs/probeWaitTimes.ts",
+    "exchange-rates": "tsx src/jobs/exchangeRates.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

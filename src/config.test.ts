@@ -421,3 +421,28 @@ test("a season that wraps the year end covers December AND January", () => {
       `${id}: December and January should share one winter note, not two that can drift`);
   }
 });
+
+test("every resort's park list matches the park count the board shows", () => {
+  // The board says "4 parks" from `parks` and the shared PDF lists them from
+  // `parkList`. Two hand-maintained fields describing the same fact will
+  // drift; this is the cheap place to catch it, rather than on a page
+  // somebody has already emailed to their family.
+  for (const r of RESORTS) {
+    assert.equal(r.parkList.length, r.parks,
+      `${r.id}: parks says ${r.parks}, parkList has ${r.parkList.length}`);
+  }
+});
+
+test("every park has a name and at least one land, with no duplicates", () => {
+  for (const r of RESORTS) {
+    for (const park of r.parkList) {
+      assert.ok(park.name.trim().length > 0, `${r.id}: a park has no name`);
+      assert.ok(park.lands.length > 0, `${r.id}/${park.name}: no lands listed`);
+      const seen = new Set(park.lands.map(l => l.toLowerCase()));
+      assert.equal(seen.size, park.lands.length, `${r.id}/${park.name}: a land is listed twice`);
+      for (const land of park.lands) {
+        assert.ok(land.trim().length > 0, `${r.id}/${park.name}: an empty land name`);
+      }
+    }
+  }
+});
