@@ -763,6 +763,28 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </div>
     </div>
 
+    <!-- Passes and DVC. Behind a disclosure because most people have neither,
+         and in the form rather than in a detail card because it changes what
+         the board says, not just what one resort's card explains. -->
+    <details class="why" id="memberBlock">
+      <summary>Do you have an annual pass, or DVC points to rent out?</summary>
+      <div class="whybody">
+        <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
+        <div id="passFields"></div>
+        <div class="fields">
+          <div class="f">
+            <label for="dvcPoints">DVC points you'd rent out</label>
+            <input id="dvcPoints" type="number" min="0" step="1" placeholder="0" inputmode="numeric">
+          </div>
+          <div class="f">
+            <label for="dvcPerPoint">Your take-home per point</label>
+            <input id="dvcPerPoint" type="number" min="1" step="0.5" inputmode="decimal">
+          </div>
+        </div>
+        <p class="hint">What you <b>receive</b>, not what the renter pays — a broker keeps the difference. Renters were paying roughly $19&ndash;21 a point and members taking home roughly $18&ndash;20 when this was last checked, so type your own figure if you know it.</p>
+      </div>
+    </details>
+
     <div class="panel-foot">
       <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
       <button class="btn-primary" id="run"><span id="runLabel">Compare six resorts</span></button>
@@ -986,6 +1008,8 @@ let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interle
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
 let CLIMATE = {};        // resortId -> twelve [high, low, rainDays] rows, January first
+let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
+let DVC_DEFAULT_PER_POINT = 18;
 let RESORT_BY_ID = new Map();
 
 const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
@@ -1201,6 +1225,42 @@ $("#kids").addEventListener("change", buildAges);
 
 const DRIVE_PRESETS = ["driveWdw", "driveDlr", "driveDomestic"];
 
+/**
+ * One row per resort that sells a pass. Built from /api/meta rather than
+ * hard-coded here, so a tier Disney renames is a server change and the
+ * browser never carries its own copy of a price.
+ */
+function fillPassFields(){
+  const host = $("#passFields");
+  if(!host) return;
+  host.innerHTML = PASS_PROGRAMS.map(p => `
+    <div class="fields">
+      <div class="f">
+        <label for="passTier-${p.resortId}">${p.resortName} — ${p.label}</label>
+        <select id="passTier-${p.resortId}">
+          <option value="">No pass</option>
+          ${p.tiers.map(t=>`<option value="${t.id}">${t.label} — ${usd(t.priceUsd)}/yr · ${t.eligibility}</option>`).join("")}
+        </select>
+      </div>
+      <div class="f">
+        <label for="passCount-${p.resortId}">How many</label>
+        <input id="passCount-${p.resortId}" type="number" min="1" max="12" step="1" value="1" inputmode="numeric">
+      </div>
+    </div>`).join("");
+  const per = $("#dvcPerPoint");
+  if(per && !per.value) per.value = DVC_DEFAULT_PER_POINT;
+}
+
+function readPasses(){
+  const out = [];
+  for(const p of PASS_PROGRAMS){
+    const tier = document.getElementById("passTier-"+p.resortId);
+    const count = document.getElementById("passCount-"+p.resortId);
+    if(tier && tier.value) out.push({ resortId: p.resortId, tierId: tier.value, count: Math.max(1, +(count && count.value) || 1) });
+  }
+  return out;
+}
+
 function readParams(){
   const needHotel = $("#needHotel").value;
   const gettingThere = $("#gettingThere").value;
@@ -1234,6 +1294,9 @@ function readParams(){
     tier: $("#tier").value,
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
+    passes: readPasses(),
+    dvcPoints: +$("#dvcPoints").value || 0,
+    dvcPerPoint: +$("#dvcPerPoint").value || 0,
     month: $("#month").value,
     // Plus only. When both are set, the search prices those exact days
     // instead of scanning the month — nights is derived from the gap, so the
@@ -1346,6 +1409,15 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(params.hopper) q.hopper = "1";
+  // resort:tier:count triples — one param carries the whole party's holdings
+  // across a six-resort board.
+  if(params.passes && params.passes.length){
+    q.passes = params.passes.map(h=>h.resortId+":"+h.tierId+":"+h.count).join(",");
+  }
+  if(params.dvcPoints > 0){
+    q.dvcPoints = params.dvcPoints;
+    if(params.dvcPerPoint > 0) q.dvcPerPoint = params.dvcPerPoint;
+  }
   q.gettingThere = params.gettingThere;
   if(params.gettingThere === "flyMiles") q.milesPct = params.milesPct;
   if(params.flyRentalCar) q.flyRentalCar = "1";
@@ -1828,6 +1900,58 @@ const PERSONAL_PROMO_OPTIONS = [
  * the biggest share of the gap. All-client-side: every cost line is already
  * on the TripPrice the compare API returned, nothing new to fetch.
  */
+/**
+ * Passes and rented points — what the traveller's own memberships do to this
+ * trip.
+ *
+ * Deliberately shows BOTH numbers for a pass. The trip total already has the
+ * gate cost taken out, because that is what the holder really pays; the
+ * pass's yearly price sits beside it, unadded, because it was not bought for
+ * this trip. Putting them next to each other is the whole feature: "four
+ * passes cost this much a year, and these particular days would have cost
+ * that much without them" is the comparison somebody deciding whether to
+ * renew is actually making.
+ */
+function membershipCard(x, p){
+  const m = x.membership;
+  if(!m || (!m.pass && !m.dvc)) return "";
+  const pass = m.pass, dvc = m.dvc;
+  const passHtml = !pass ? "" : `
+    <div class="kpi">
+      <div class="kpitile"><div class="k">Passes used</div>
+        <div class="v">${pass.used}</div><div class="s">of ${pass.count} ${pass.label}</div></div>
+      <div class="kpitile"><div class="k">Costs you a year</div>
+        <div class="v">${usd(pass.annualCostUsd)}</div><div class="s">not in this trip's total</div></div>
+      <div class="kpitile total"><div class="k">Saved here</div>
+        <div class="v">${usd(pass.savedUsd)}</div><div class="s">already taken off</div></div>
+    </div>
+    <div class="li"><div class="l"><b>Without your ${pass.label}${pass.used>1?"es":""}</b>
+      <small>What ${p.parkDays} park day${p.parkDays>1?"s":""} at the gate would have cost these ${pass.used} ${pass.used===1?"person":"people"}</small></div>
+      <div class="p">${usd(pass.ticketsWithoutPassUsd)}</div></div>
+    ${pass.count > pass.used ? `<div class="li"><div class="l"><b>${pass.count - pass.used} pass${pass.count-pass.used>1?"es":""} unused</b>
+      <small>Your party is ${x.partySize} ${x.partySize===1?"person":"people"} on this trip</small></div>
+      <div class="p">—</div></div>` : ""}`;
+  const dvcHtml = !dvc ? "" : `
+    <div class="li"><div class="l"><b>${dvc.points.toLocaleString("en-US")} DVC points rented out</b>
+      <small>${usd(dvc.takeHomePerPointUsd)} take-home per point — what you receive, not what the renter pays</small></div>
+      <div class="p">−${usd(dvc.creditUsd)}</div></div>`;
+  return `<div class="card">
+    <h5><i style="background:var(--s2)"></i>Your passes &amp; points</h5>
+    <p class="sub">${[pass ? pass.label : "", dvc ? "DVC points rented" : ""].filter(Boolean).join(" · ")}</p>
+    ${passHtml}
+    ${dvcHtml}
+    <div class="foot">
+      <details class="why"><summary>How these are counted</summary>
+        <div class="whybody">
+          ${pass ? `<p>A pass you already hold takes its holder off the ticket line, so the total above is what this trip costs <b>you</b>. The pass's own yearly price is shown but never added here — it was not bought for one trip, and spreading it over a guessed number of visits a year would mean inventing the number that decides the answer. Compare the two yourself.</p>
+          <p>Passes are assumed to cover your most expensive tickets first. Nothing here knows which member of your party holds which pass, so this is the optimistic reading.</p>
+          <p>Prices were checked by web search, not taken from Disney directly, and Disney raises them roughly once a year.</p>` : ""}
+          ${dvc ? `<p>Renting points is money in your pocket, so it comes off the trip total rather than off the room — what you can rent your points for has nothing to do with what a room at this resort costs, and folding it into the hotel line would break the comparison between the six resorts.</p>` : ""}
+        </div></details>
+    </div>
+  </div>`;
+}
+
 function whyCheaperCard(item, allResults){
   const others = allResults.filter(y=>y.ok && y.resortId!==item.resortId);
   if(!others.length) return "";
@@ -2392,6 +2516,7 @@ async function renderDetail(){
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
           </div>
         </div>
+        ${membershipCard(x, p)}
         ${bandRows ? `<div class="card">
           <h5><i style="background:var(--s2)"></i>Age bands at ${r.name}</h5>
           <p class="sub">${bandLine(r)}</p>
@@ -3324,6 +3449,29 @@ async function openSavedTrip(trip){
     if(q.stay !== "none") $("#stay").value = q.stay;
   }
   $("#hopper").value = q.hopper ? "1" : "0";
+  // Passes and points come back too — reopening a saved trip that priced
+  // itself against four Incredi-Passes and then quietly dropping them would
+  // show a different, much larger total under the same trip's name.
+  for(const prog of PASS_PROGRAMS){
+    const tier = document.getElementById("passTier-"+prog.resortId);
+    const count = document.getElementById("passCount-"+prog.resortId);
+    if(tier) tier.value = "";
+    if(count) count.value = "1";
+  }
+  let anyMember = false;
+  for(const chunk of String(q.passes || "").split(",").filter(Boolean)){
+    const [rid, tid, n] = chunk.split(":");
+    const tier = document.getElementById("passTier-"+rid);
+    const count = document.getElementById("passCount-"+rid);
+    if(tier){ tier.value = tid; anyMember = true; }
+    if(count && n) count.value = n;
+  }
+  $("#dvcPoints").value = q.dvcPoints || "";
+  $("#dvcPerPoint").value = q.dvcPerPoint || DVC_DEFAULT_PER_POINT;
+  if(q.dvcPoints) anyMember = true;
+  // Opened, not just filled in — a restored number sitting inside a closed
+  // disclosure is a number nobody knows is there.
+  if(anyMember) $("#memberBlock").open = true;
   const ages = String(q.childAges || "").split(",").filter(Boolean);
   $("#kids").value = String(ages.length);
   buildAges();
@@ -3607,8 +3755,11 @@ async function boot(){
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
   CLIMATE = meta.climate || {};
+  PASS_PROGRAMS = meta.passPrograms || [];
+  DVC_DEFAULT_PER_POINT = meta.dvcTakeHomePerPoint || 18;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
+  fillPassFields();
   // After the form's defaults are in place, so a returning visitor whose
   // saved origin is Los Angeles or Orlando lands on the drive preset rather
   // than on a blank cell for the resort they live next to.

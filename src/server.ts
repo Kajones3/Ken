@@ -22,6 +22,7 @@ import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { parsePassHoldings, parseDvcRental, PASS_RESORTS, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
@@ -114,6 +115,18 @@ function paramsFrom(q: URLSearchParams): TripParams {
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
     transportMode: "fly",
+    // Free, like the overrides they most resemble: a traveller correcting the
+    // app's picture of what THEY actually pay. Both are unverified claims
+    // about the traveller's own finances that never leave their own board,
+    // so there is nothing here to gate. `passes` is sent as
+    // resort:tier:count triples so one query param carries a whole party's
+    // holdings across the six-resort board.
+    annualPasses: parsePassHoldings(
+      (q.get("passes") ?? "").split(",").filter(Boolean).map((chunk) => {
+        const [resortId, tierId, count] = chunk.split(":");
+        return { resortId, tierId, count };
+      })),
+    dvcRental: parseDvcRental(q.get("dvcPoints"), q.get("dvcPerPoint")),
   };
 }
 function clamp(n: number, lo: number, hi: number): number {
@@ -419,7 +432,13 @@ const server = createServer(async (req, res) => {
     // of it in prototype.html would be free to drift from the one the
     // pricing and the paid rotation use — the same reason trip cost lives in
     // exactly one module. The client just reads the field.
-    if (url.pathname === "/api/meta") return send(200, {
+    if (url.pathname === "/api/meta") {
+      // Read live rather than from the module default: the owner can change
+      // the take-home figure, and the box travellers type into should start
+      // on their number, not the one this app shipped with.
+      const dvcDefault = (await loadSettings(db)).find((v) => v.key === DVC_TAKE_HOME_KEY)?.value
+        ?? DVC_TAKE_HOME_PER_POINT;
+      return send(200, {
       origins: withSuggestedMode(ORIGINS),
       plusOrigins: withSuggestedMode(PLUS_ORIGINS),
       // The order to OFFER them in — by city, free and Plus interleaved.
@@ -431,7 +450,13 @@ const server = createServer(async (req, res) => {
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
       climate: CLIMATE,
-    }, { cache: "public, max-age=300" });
+      // Annual pass programmes, and the default DVC take-home figure the
+      // points box starts on. Sent from here so the catalogue has one home
+      // and the browser never carries its own copy of a price.
+      passPrograms: PASS_RESORTS,
+      dvcTakeHomePerPoint: dvcDefault,
+      }, { cache: "public, max-age=300" });
+    }
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
     // --- explicitly not enough for a public launch (see src/auth.ts).    ---
@@ -776,6 +801,15 @@ const server = createServer(async (req, res) => {
         const mode = resortTransportMode(gettingThere, savedResort);
         Object.assign(params, mode === "drive" ? driveBase : flyBase);
       }
+      // Passes and DVC points are normalised HERE, not trusted as saved. The
+      // alert job re-prices straight from this row months later, and a tier
+      // Disney has since retired (or a number somebody hand-edited) must not
+      // reach pricing — parsePassHoldings drops what it does not recognise,
+      // the same rule saved attraction picks follow.
+      params.annualPasses = parsePassHoldings(params.annualPasses);
+      params.dvcRental = parseDvcRental(
+        (params.dvcRental as { points?: unknown } | null)?.points,
+        (params.dvcRental as { takeHomePerPointUsd?: unknown } | null)?.takeHomePerPointUsd);
       // Stamps today's gas price into the saved trip so the alert job has a
       // "then" to compare "now" against — same idea as baseline_total, just
       // for the one input that changes on its own without the user doing

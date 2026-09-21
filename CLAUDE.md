@@ -116,6 +116,7 @@ filter, and Stripe.
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
@@ -727,6 +728,73 @@ As built, with the parts that are decisions:
   corrected this route rather than quietly bending the number. It stays an
   estimate: typing $500 here does not make the board show $500, and the page
   says so in those words.
+
+**An annual pass is a counterfactual, not a cost line; DVC points are
+take-home, not the rental price** (2026-09-21, the owner's ask: for a pass
+holder "we need them to be able to see what happens if they don't buy their
+AP", and for DVC a box for "how many points they would rent and what the TAKE
+HOME would be (not the rental actual)"). `src/memberships.ts` holds the
+catalogue and the arithmetic; nothing about it is a new kind of cost.
+
+The decisions, each with a test:
+
+- *A pass you hold zeroes what you pay at the gate, and its own yearly price
+  is reported beside the trip rather than added to it.* An annual pass is not
+  bought for one trip. Charging its full price to whichever trip is on screen
+  makes a four-night visit look absurd; spreading it over a guessed number of
+  trips a year means inventing the single number that decides the answer. So
+  it does neither, and the traveller compares the two figures themselves —
+  which is exactly the comparison the owner described (four passes at Walt
+  Disney World against the same money spent on tickets somewhere else).
+- *A holding names its resort.* A Magic Key does not get you into Magic
+  Kingdom, and this board prices six resorts at once, so "I have a pass" as
+  one flat flag would have been wrong on five of them.
+- *Tickets are computed PER TRAVELLER now, not as one running total.* Zeroing
+  a share of a lump sum happens to land near the right answer for a party of
+  all adults and is wrong for every other party.
+- *Passes cover the dearest tickets first, and the card says so.* Nothing here
+  knows which member of a family holds which pass. That is the optimistic
+  reading, so it is stated rather than allowed to pass as a fact.
+- *The parking perk lands on parking.* It comes off the parking-and-transfers
+  line, where the cost actually is — on property that line is usually zero
+  already and the perk correctly does nothing.
+- *A pass holder does not buy park hopping twice.* Every current tier at both
+  resorts includes it; `hopperIncluded` exists so a future tier that doesn't
+  can say so.
+- *A retired tier is DROPPED, not thrown.* Disneyland replaced the Enchant Key
+  with the Explore Key in January; anybody holding a saved trip that named it
+  must still get a board. Same rule as an unknown attraction id. Saved trips
+  are re-normalised through `parsePassHoldings` at SAVE time, because the
+  alert job re-prices straight from that row months later.
+- *DVC is a credit on the TOTAL, never a discount on the room.* What you can
+  rent points for has nothing to do with what a room at this resort costs, and
+  folding it into the hotel line would break the six-resort comparison. Floored
+  at zero — a trip can be free, never negative.
+- *Take-home, not the rental price.* Asking what a renter pays and quietly
+  assuming a commission would be the app inventing the part that matters.
+- *Free, not Plus.* These are unverified claims a traveller makes about their
+  own finances that never leave their own board — the same class of thing as
+  the per-resort overrides, which are free for the same reason.
+- *Every price is in the settings registry*, because Disney raises them roughly
+  once a year and that must never need a deploy.
+
+**The figures were checked by web search on 2026-09-21, not fetched** — same
+standing as the hotel baselines and the visa notes; Disney and the DVC broker
+sites are refused by this sandbox's egress proxy. Walt Disney World:
+Incredi-Pass $1,629, Sorcerer $1,099, Pirate $869, Pixie Dust $489.
+Disneyland: Inspire Key $1,899, Believe $1,474, Explore $999, Imagine $599.
+**The owner's own DVC research was checked and is conservative**: they had
+$20 rented / $16 take-home, and the current market reads as renters paying
+roughly $19-21 and members taking home roughly $18-20 through a broker
+(David's publishes $18/$20/$23 by home resort; DVC Rental Store advertises
+"up to $24"). The shipped default is $18 and the traveller can type their own,
+because a member renting privately keeps more than one going through a broker
+and only they know which they are doing.
+
+**The four international resorts have no pass programme here, deliberately.**
+They sell annual passes, but the tiers and prices are published in other
+languages and other currencies, and a guessed pass price would flow straight
+into the comparison the app exists to get right.
 
 **Five wrong passwords shut the door, and a reset is the way back in**
 (2026-09-20, the owner's ask). Two scopes counted separately: the email

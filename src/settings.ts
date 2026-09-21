@@ -33,6 +33,7 @@
  */
 import type { Db } from "./db.js";
 import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
+import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 
 export type SettingKind = "money" | "number" | "percent";
 
@@ -78,6 +79,19 @@ export const SETTINGS: SettingDef[] = [
         "A flat per-ticket add-on for a child ticket."),
     ]),
   ]),
+  // Annual passes. Every tier is here because Disney raises them roughly once
+  // a year and the owner should never have to wait for a code change to be
+  // right about a number a traveller can look up in thirty seconds.
+  ...PASS_PROGRAMS.flatMap((prog) => {
+    const resort = RESORTS.find((r) => r.id === prog.resortId);
+    return prog.tiers.map((t) =>
+      money(passPriceKey(prog.resortId, t.id), `${t.label} — per pass, per year`,
+        `Annual passes — ${resort?.name ?? prog.resortId}`, t.priceUsd, 100, 5000,
+        `${prog.label} price for one person for a year. ${t.eligibility}. Checked by web search, not fetched from Disney.`));
+  }),
+  money(DVC_TAKE_HOME_KEY, "DVC points rented — take-home per point", "DVC",
+    DVC_TAKE_HOME_PER_POINT, 1, 60,
+    "What a member RECEIVES per point, not what a renter pays. Brokers paid roughly $18-20 a point when this was last checked. Travellers can type their own figure over it."),
   money("carRental.dailyRateUsd", "Rental car, per day", "Rental car", CAR_RENTAL.dailyRateUsd, 10, 400,
     "One flat national average, not a per-city rate. Real rates vary a lot by city."),
   // Two per year, because the IRS sets a January-June rate and a July-December
