@@ -397,3 +397,47 @@ create table if not exists password_resets (
   sent_at    timestamptz not null default now()
 );
 create index if not exists password_resets_token on password_resets (token);
+
+-- Fares the owner has seen with their own eyes.
+--
+-- NOT a price the app then quotes. A correction is EVIDENCE: it joins the
+-- same route/quarter machinery a bought SerpApi fare already feeds, moves
+-- that route's estimate, and the result stays labelled an estimate. The
+-- owner's words for it: "another data point, a weighted data point to help
+-- us update our estimated cache price".
+--
+-- Deliberately its OWN table rather than a row in flight_prices, for three
+-- reasons that are each a rule elsewhere in this project:
+--   * flight_prices is what a vendor actually returned. Writing a person's
+--     figure in beside them would make the real-pulls digest report a pull
+--     that never happened, and would feed the fare trend a number no
+--     provider quoted. Mock and unlabelled rows are excluded there and
+--     footnoted, never folded in; a hand-typed fare is the same kind of
+--     thing.
+--   * a correction has a BAND — was that the cheap end, the usual, or the
+--     expensive end — which a cached quote does not.
+--   * a correction has to be removable. A typo must be deletable by id
+--     without touching anything a provider paid for.
+--
+-- `expires_on` is the answer to "a 2026 fare should not still be steering a
+-- 2029 estimate": a row stops counting after it, and separately stops
+-- counting once its own travel date has passed.
+create table if not exists fare_corrections (
+  id           uuid primary key,
+  origin       text not null,
+  destination  text not null,
+  depart_date  date not null,
+  nights       int,
+  price_usd    numeric(9,2) not null,
+  -- low = "that was the cheap end", typical = "that is what it usually goes
+  -- for", high = "that was the expensive end". They inform p25 / median / p75
+  -- respectively rather than all pretending to be the midpoint.
+  band         text not null default 'typical'
+                 check (band in ('low','typical','high')),
+  note         text not null default '',
+  expires_on   date not null,
+  created_by   text not null default '',
+  created_at   timestamptz not null default now()
+);
+create index if not exists fare_corrections_route
+  on fare_corrections (origin, destination, depart_date);

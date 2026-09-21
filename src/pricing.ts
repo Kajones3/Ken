@@ -144,6 +144,11 @@ export interface FlightRow {
      *  could be a peak date, so the UI discloses the count rather than
      *  presenting a one-fare correction as settled. */
     routeSamples?: number;
+    /** True when the owner has entered a real fare they saw on this route and
+     *  quarter, and it moved this estimate. Surfaced rather than hidden: a
+     *  number a human has corrected deserves to say so, and it is still an
+     *  estimate, not a quote. */
+    ownerCorrected?: boolean;
   };
 }
 export interface HotelNight {

@@ -683,8 +683,8 @@ this bug. Also worth knowing for the next test: `click()` lands the caret on
 whichever date segment sits under the pointer, so type from a known segment
 or the keystrokes go somewhere you didn't mean.
 
-**A wrong fare becomes evidence, not an edict** (2026-09-20, designed, not
-built). The owner's example was the site estimating $7,000 from Oregon to
+**A wrong fare becomes evidence, not an edict** (2026-09-20 designed,
+2026-09-21 BUILT — `src/fareCorrections.ts`, the Fares section of `/admin`). The owner's example was the site estimating $7,000 from Oregon to
 LAX. The instinct is to let them overwrite it; the decision was the opposite,
 in their own words: it "should become another data point, a weighted data
 point to help us update our estimated cache price". So a correction joins the
@@ -694,6 +694,39 @@ bands map to p25/median/p75 so someone can say "that's the cheap end" rather
 than having to claim a single true number; corrections are deletable by id,
 because a typo must be removable; and they expire, because a 2026 fare should
 not still be steering a 2029 estimate.
+
+As built, with the parts that are decisions:
+
+- *Its own table, not a row in `flight_prices`.* That table is what a VENDOR
+  returned. A hand-typed figure sitting in it would make the real-pulls
+  digest report a pull that never happened and would feed the fare trend a
+  number nobody quoted — the trend's whole job is measuring what providers
+  charge. Mock and unlabelled rows are already excluded there and footnoted;
+  a person's figure is the same kind of thing. A test pins that adding a
+  correction writes nothing to `flight_prices`.
+- *Each band moves its own statistic.* "Typical" speaks for the median,
+  "low" for p25, "high" for p75, and a band nobody spoke for keeps the
+  median's movement so the spread keeps its shape. The three are sorted
+  afterwards, because a low above a high is nonsense however the arithmetic
+  got there — and mixing a typed number with a scaled one can get there.
+- *The owner's own middle outranks a measured correction, which outranks the
+  global trend.* Each is better evidence about THIS route than the next.
+- *Two staleness guards, both in the SQL* (`countingCorrections`), so no
+  caller can read the table and forget one: a row stops counting past its
+  `expires_on`, and separately once its own travel date has passed. A fare
+  for a trip that already happened is history, not evidence — and is refused
+  at entry rather than stored inert.
+- *An expired row is still LISTED, marked as not counting.* "Where did my
+  correction go?" is a worse question than seeing it greyed out.
+- *Its own spreadsheet, separate from the settings one* — the owner's call:
+  "I think it would be too much to have ALL of it on one sheet." A fare is
+  per route and per date, so 171 domestic routes plus 95 international across
+  thirteen months would bury the 73 settings. Same all-or-nothing import rule
+  and the same row-numbered errors.
+- *`ownerCorrected` rides on the estimate* so the board can say a human has
+  corrected this route rather than quietly bending the number. It stays an
+  estimate: typing $500 here does not make the board show $500, and the page
+  says so in those words.
 
 **Five wrong passwords shut the door, and a reset is the way back in**
 (2026-09-20, the owner's ask). Two scopes counted separately: the email

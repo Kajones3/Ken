@@ -46,7 +46,7 @@ button,.btn{font:inherit; font-size:13.5px; font-weight:600; color:var(--ink); c
   padding:9px 13px; min-height:40px; text-decoration:none; display:inline-flex; align-items:center; gap:6px}
 button:disabled{opacity:.45; cursor:default}
 button.primary{background:var(--accent-bg); border-color:var(--accent-line)}
-input[type=text],input[type=search],input[type=number],input[type=file]{font:inherit; font-size:16px; color:var(--ink);
+input[type=text],input[type=search],input[type=number],input[type=file],input[type=date]{font:inherit; font-size:16px; color:var(--ink);
   background:var(--surface); border:1px solid var(--rule-strong); border-radius:9px;
   padding:9px 11px; min-height:42px; width:100%}
 /* 16px on inputs is not a style choice: anything smaller makes iOS Safari zoom
@@ -87,6 +87,29 @@ details.group[open]>summary::after{transform:rotate(90deg)}
 .errs{margin:12px 0 0; padding:10px 12px; border-radius:9px; background:var(--bad-bg); color:var(--bad); font-size:13px}
 .errs ul{margin:6px 0 0; padding-left:18px}
 .hidden{display:none!important}
+
+/* One fare, one line — on a laptop. On a phone it stacks, because six boxes
+   across a 390px screen is six unusable boxes. */
+.farerow{display:grid; gap:8px; margin-bottom:8px;
+  grid-template-columns:80px 80px minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr) auto; align-items:center}
+.farerow-2{grid-template-columns:minmax(0,3fr) minmax(0,1fr)}
+.farehead{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:2px}
+.farehead span{padding-left:2px}
+@media (max-width:720px){
+  .farerow,.farerow-2{grid-template-columns:1fr}
+  .farehead{display:none}
+}
+select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--rule-strong); border-radius:9px; padding:9px 11px; min-height:42px; width:100%}
+.fare{display:flex; gap:10px; align-items:baseline; justify-content:space-between;
+  padding:10px 0; border-top:1px solid var(--rule); font-size:13.5px}
+.fare:first-child{border-top:none}
+.fare .who{font-weight:650}
+.fare .meta{font-size:12px; color:var(--muted); margin-top:2px}
+.fare.spent{opacity:.55}
+.fare .bandpill{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
+  border:1px solid var(--rule-strong); border-radius:99px; padding:1px 7px; margin-left:6px; white-space:nowrap}
 </style>
 </head>
 <body>
@@ -104,6 +127,49 @@ details.group[open]>summary::after{transform:rotate(90deg)}
   <p class="count" id="count">Loading…</p>
 
   <div id="groups"></div>
+
+  <section class="sheet" id="fares">
+    <h2>Fares you've seen yourself</h2>
+    <p>A fare you type here does <b>not</b> become the price on the board. It joins the evidence the
+      estimate is built from — the same thing a paid live lookup does — and pulls that route's estimate
+      toward it. The result is still labelled an estimate, because that is still what it is.
+      Say whether what you saw was the cheap end, the usual, or the expensive end, and it informs that
+      end of the range rather than all three.</p>
+
+    <div class="farerow farehead">
+      <span>From</span><span>To</span><span>Departing</span><span>Price</span><span>What was it</span><span></span>
+    </div>
+    <div class="farerow">
+      <input type="text" id="fFrom" list="originList" placeholder="RDU" maxlength="3" aria-label="From airport">
+      <input type="text" id="fTo" list="destList" placeholder="MCO" maxlength="3" aria-label="To airport">
+      <input type="date" id="fDate" aria-label="Departure date">
+      <input type="text" id="fPrice" inputmode="decimal" placeholder="$197" aria-label="Price you saw">
+      <select id="fBand" aria-label="Band">
+        <option value="typical">About usual</option>
+        <option value="low">The cheap end</option>
+        <option value="high">The expensive end</option>
+      </select>
+      <button class="btn primary" id="fAdd">Add</button>
+    </div>
+    <datalist id="originList"></datalist>
+    <datalist id="destList"></datalist>
+    <div class="farerow farerow-2">
+      <input type="text" id="fNote" placeholder="Where you saw it (optional) — e.g. Google Flights, nonstop Delta" maxlength="300" aria-label="Note">
+      <input type="text" id="fNights" inputmode="numeric" placeholder="Nights (optional)" aria-label="Nights">
+    </div>
+    <div class="said" id="fSaid"></div>
+
+    <p class="count" id="fCount" style="margin-top:14px">Loading…</p>
+    <div id="fareList"></div>
+
+    <div class="tools">
+      <a class="btn" href="/api/admin/fares.csv" download>Download fares spreadsheet</a>
+      <button class="btn" id="fPick">Upload a filled-in one</button>
+      <input type="file" id="fFile" accept=".csv,text/csv" class="hidden">
+    </div>
+    <div class="said" id="fCsvSaid"></div>
+    <div class="errs hidden" id="fCsvErrs"></div>
+  </section>
 
   <section class="sheet">
     <h2>Change a lot of them at once</h2>
@@ -284,7 +350,95 @@ $("#file").addEventListener("change", async e => {
   load();
 });
 
+/* --------------------------------- fares ---------------------------------
+ * A correction is evidence, not an override, and the copy on the page says
+ * so in those words. The one thing this screen must never imply is that
+ * typing a number here makes the board show that number.
+ * ------------------------------------------------------------------------ */
+const BAND_LABEL = { low: "cheap end", typical: "about usual", high: "expensive end" };
+
+async function loadFares(){
+  const r = await fetch("/api/admin/fares");
+  if(!r.ok){ $("#fCount").textContent = "Couldn't load the fares you've entered."; return; }
+  const d = await r.json();
+  $("#originList").innerHTML = d.origins.map(o => `<option value="${esc(o)}">`).join("");
+  $("#destList").innerHTML = d.destinations.map(o => `<option value="${esc(o)}">`).join("");
+  const counting = d.corrections.filter(c => c.counting).length;
+  $("#fCount").textContent = d.corrections.length
+    ? `${d.corrections.length} entered · ${counting} still counting toward estimates.`
+    : "Nothing entered yet. Add one above, or upload a spreadsheet.";
+  $("#fareList").innerHTML = d.corrections.map(c => `
+    <div class="fare${c.counting ? "" : " spent"}">
+      <div>
+        <span class="who">${esc(c.origin)} → ${esc(c.destination)} · ${money(c.priceUsd)}</span>
+        <span class="bandpill">${esc(BAND_LABEL[c.band] || c.band)}</span>
+        <div class="meta">Departing ${esc(c.departDate)}${c.nights ? ` · ${c.nights} nights` : ""}
+          · ${c.counting ? `counts until ${esc(c.expiresOn)}` : "no longer counting"}
+          ${c.note ? ` · ${esc(c.note)}` : ""}</div>
+      </div>
+      <button class="linkish" data-delfare="${esc(c.id)}">Remove</button>
+    </div>`).join("");
+}
+
+$("#fAdd").addEventListener("click", async () => {
+  const said = $("#fSaid");
+  said.className = "said"; said.textContent = "";
+  const body = {
+    origin: $("#fFrom").value, destination: $("#fTo").value,
+    departDate: $("#fDate").value, priceUsd: $("#fPrice").value,
+    band: $("#fBand").value, nights: $("#fNights").value, note: $("#fNote").value,
+  };
+  const r = await fetch("/api/admin/fares", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  if(!r.ok){
+    said.className = "said bad";
+    said.textContent = d.message || "That wasn't added.";
+    return;
+  }
+  said.className = "said ok";
+  said.textContent = "Added. It now counts toward this route's estimate — the board still calls it an estimate.";
+  ["#fFrom","#fTo","#fDate","#fPrice","#fNights","#fNote"].forEach(sel => { $(sel).value = ""; });
+  loadFares();
+});
+
+document.addEventListener("click", async e => {
+  const del = e.target.closest("[data-delfare]");
+  if(!del) return;
+  del.disabled = true;
+  const r = await fetch("/api/admin/fares/" + encodeURIComponent(del.dataset.delfare), { method: "DELETE" });
+  if(r.ok) loadFares(); else del.disabled = false;
+});
+
+$("#fPick").addEventListener("click", () => $("#fFile").click());
+$("#fFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  const said = $("#fCsvSaid"), errs = $("#fCsvErrs");
+  said.className = "said"; said.textContent = ""; errs.classList.add("hidden");
+  const csv = await f.text();
+  const r = await fetch("/api/admin/fares.csv", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ csv }),
+  });
+  const d = await r.json();
+  e.target.value = "";
+  if(!r.ok){
+    said.className = "said bad";
+    said.textContent = d.message || "Nothing was added — the file needs fixing first.";
+    if(d.errors && d.errors.length){
+      errs.classList.remove("hidden");
+      errs.innerHTML = `<b>Nothing was added.</b> ${d.errors.length} row${d.errors.length===1?"":"s"} to fix:
+        <ul>${d.errors.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    }
+    return;
+  }
+  said.className = "said ok";
+  said.textContent = `Added ${d.added} fare${d.added === 1 ? "" : "s"}.`;
+  loadFares();
+});
+
 load();
+loadFares();
 </script>
 </body>
 </html>

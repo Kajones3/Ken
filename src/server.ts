@@ -8,7 +8,9 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { SETTINGS, loadSettings, setSetting, applySettings } from "./settings.js";
 import { reseedForKeys } from "./reseed.js";
-import { csvCell, entriesFromCsv } from "./csv.js";
+import { csvCell, entriesFromCsv, parseCsv } from "./csv.js";
+import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
+         KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
@@ -949,6 +951,92 @@ const server = createServer(async (req, res) => {
       if (!result.ok) return send(400, { error: "rejected", errors: result.errors });
       const reseed = await reseedForKeys(db, entries.map((e) => e.key));
       return send(200, { ...result, reseeded: reseed.resorts, reseededRows: reseed.rows }, { cache: "no-store" });
+    }
+
+
+    /* ------------------------- fare corrections -------------------------
+     * Its own page and its own spreadsheet, deliberately. A fare is per
+     * route AND per date — 171 domestic routes plus 95 international across
+     * thirteen months — so folding them into the 73-row settings sheet would
+     * bury everything else in it. The owner's call: "I think it would be too
+     * much to have ALL of it on one sheet."
+     * -------------------------------------------------------------------- */
+    if (url.pathname === "/api/admin/fares" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, {
+        corrections: await listCorrections(db),
+        origins: [...KNOWN_ORIGINS].sort(),
+        destinations: [...KNOWN_DESTINATIONS].sort(),
+        defaultDays: DEFAULT_CORRECTION_DAYS,
+      }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/fares" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await addCorrection(db, body, owner.email);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(201, { ok: true, id: r.id, corrections: await listCorrections(db) }, { cache: "no-store" });
+    }
+
+    const fareMatch = url.pathname.match(/^\/api\/admin\/fares\/([^/]+)$/);
+    if (fareMatch && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const gone = await deleteCorrection(db, fareMatch[1]!);
+      return send(gone ? 200 : 404, gone ? { ok: true } : { error: "not found" }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/fares.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const rows = await listCorrections(db);
+      const head = ["from", "to", "depart_date", "price", "band", "nights", "expires_on", "note", "counting", "id"];
+      const lines = [head.join(",")];
+      for (const c of rows) {
+        lines.push([c.origin, c.destination, c.departDate, c.priceUsd, c.band,
+          c.nights ?? "", c.expiresOn, c.note, c.counting ? "yes" : "expired", c.id].map(csvCell).join(","));
+      }
+      // An empty file still carries its header, so the owner always has a
+      // template to type into rather than a blank page to guess at.
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-fares-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
+    if (url.pathname === "/api/admin/fares.csv" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const parsed = parseCsv(String(body.csv ?? ""));
+      if (!parsed.length) return send(400, { error: "unreadable", message: "That file had no rows in it." });
+      const header = parsed[0]!.map((h) => h.trim().toLowerCase());
+      const at = (name: string) => header.indexOf(name);
+      const need = ["from", "to", "depart_date", "price"];
+      const missing = need.filter((n) => at(n) < 0);
+      if (missing.length) {
+        return send(400, { error: "no_header", message:
+          `That file needs a header row with ${need.join(", ")} columns — missing: ${missing.join(", ")}. Download the fares spreadsheet again and type into it.` });
+      }
+      const cell = (r: string[], name: string) => (at(name) >= 0 ? (r[at(name)] ?? "").trim() : "");
+      const inputs = parsed.slice(1).map((r) => ({
+        origin: cell(r, "from"), destination: cell(r, "to"), departDate: cell(r, "depart_date"),
+        priceUsd: cell(r, "price"), band: cell(r, "band") || "typical",
+        nights: cell(r, "nights"), expiresOn: cell(r, "expires_on"), note: cell(r, "note"),
+      }));
+      // All or nothing, the same rule the settings sheet follows and for the
+      // same reason: a half-applied file leaves evidence in a state nobody
+      // intended and nobody can identify.
+      const errors: string[] = [];
+      inputs.forEach((row, i) => {
+        const v = validateCorrection(row);
+        if (!v.ok) errors.push(`row ${i + 2}: ${v.reason}`);
+      });
+      if (errors.length) return send(400, { error: "rejected", errors });
+      for (const row of inputs) await addCorrection(db, row, owner.email);
+      return send(200, { ok: true, added: inputs.length, corrections: await listCorrections(db) }, { cache: "no-store" });
     }
 
     send(404, { error: "not found" });
