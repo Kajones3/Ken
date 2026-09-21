@@ -219,11 +219,23 @@ a{color:var(--ink)}
 /* Collapsed state: everything in the panel hides except its label and the
    one-line summary. `!important` because `.fields`/`.f` set an explicit
    display that beats a plain rule — the same trap the [hidden] fix hit. */
-.panel.collapsed > *:not(.panel-lab):not(#tripCollapsed){display:none!important}
+.panel.collapsed > *:not(.panel-lab):not(#tripCollapsed):not(#tripExtras){display:none!important}
 .collapsed-trip{display:flex; gap:12px; align-items:center; justify-content:space-between;
   flex-wrap:wrap; padding:2px 0}
 .collapsed-trip b{font-family:"Archivo"; font-size:15px; font-weight:700; letter-spacing:-.01em}
 .collapsed-trip small{display:block; font-size:12px; color:var(--muted); margin-top:2px}
+/* Extra costs live WITH the saved search they belong to, not in a panel
+   floating above every search. The old standalone box read as having
+   nothing to do, and its Remove button sat one careless click from the
+   thing you actually came to open. */
+#tripExtras{margin-top:12px; padding-top:12px; border-top:1px solid var(--rule)}
+#tripExtras .cap{font-size:11px; font-weight:700; letter-spacing:.05em;
+  text-transform:uppercase; color:var(--ink-2)}
+.exprow{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px}
+.exprow input[type=text]{flex:1; min-width:140px}
+.exprow input{background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong);
+  border-radius:8px; padding:7px 10px; font:inherit; font-size:13px}
+.exprow input[type=number]{width:96px}
 .panel-foot{display:flex; justify-content:space-between; align-items:center; gap:14px; margin-top:14px; flex-wrap:wrap}
 .hint{font-size:12px; color:var(--muted)}
 
@@ -262,12 +274,42 @@ a{color:var(--ink)}
 .tripsdrop .tripopen small{display:block; color:var(--muted); font-size:11.5px; margin-top:2px}
 .tripsdrop .empty{padding:10px; color:var(--muted); font-size:12.5px}
 .namefield{display:grid; gap:6px; padding:18px 22px}
+.namefield select{background:var(--surface-2); border:1px solid var(--rule-strong); border-radius:9px; padding:10px 12px; color:var(--ink); font:inherit}
+.namefield label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2)}
 .namefield input{background:var(--surface-2); border:1px solid var(--rule-strong); border-radius:9px; padding:10px 12px; color:var(--ink); font:inherit}
+#printCover{display:none}
 @media print{
-  header .acct, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn, #printTop{display:none!important}
-  body{background:#fff; color:#000}
-  .row, .card, .panel{break-inside:avoid; box-shadow:none}
-  a[href]:after{content:" (" attr(href) ")"; font-size:9px; color:#555; word-break:break-all}
+  /* Everything that is a CONTROL rather than an answer. The form panel is
+     the big one: on paper it is a page of dropdowns before the reader
+     reaches a single number. */
+  header, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn,
+  #printTop, #tripPanel, .legend, footer, .notices, #saveSearchBtn{display:none!important}
+  @page{margin:14mm}
+  html, body{background:#fff!important; color:#000!important}
+  body{font-size:11pt}
+  /* No leading blank page: nothing before the cover may force a break, and
+     the cover itself starts the flow rather than following an empty one. */
+  main{padding:0!important; margin:0!important}
+  #printCover{display:block; break-after:avoid; margin:0 0 14px}
+  #printCover h1{font-family:"Archivo",sans-serif; font-size:23pt; font-weight:800;
+    letter-spacing:-.02em; line-height:1.15; margin:0 0 10px}
+  #printCover p{font-size:11.5pt; line-height:1.55; margin:0 0 6px; max-width:52em}
+  #printCover .coversub{font-size:9.5pt; color:#555}
+  .res-head{border-bottom:1px solid #bbb; padding-bottom:6px; margin-bottom:10px}
+  .res-head h2{font-size:12pt}
+  /* The park they chose to lead with goes first, whatever it cost. Its rank
+     number travels with it, so the price order is still legible. */
+  .board{display:flex!important; flex-direction:column; border:0!important; border-radius:0!important}
+  .row.printlead{order:-1; border-top:0}
+  .row, .card, .panel{break-inside:avoid; box-shadow:none!important}
+  .row{border-color:#ccc!important; background:#fff!important}
+  .row.best{background:#fff!important}
+  .card{border-color:#ccc!important; background:#fff!important}
+  .why{display:none!important}
+  /* Controls inside a card are dead on paper — a dropdown you cannot open
+     and a button you cannot press read as a broken document. */
+  .card select, .card input, .card button, .exactrow, #exactOut{display:none!important}
+  a[href]:after{content:" (" attr(href) ")"; font-size:8pt; color:#555; word-break:break-all}
 }
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
@@ -304,6 +346,19 @@ a{color:var(--ink)}
 .demo.lowconfnote .dot{background:var(--warnfg,#f0c674)}
 .downgrade{display:block; margin-top:6px; font-size:11px; line-height:1.5;
   color:var(--warnfg,#f0c674)}
+/* Form notices. One row, full width, under the pair of dropdowns they are
+   about — never inside a grid cell, where they change that column's height
+   and knock the controls out of line with each other. */
+.notices{display:grid; gap:8px; margin-top:12px}
+.notices:empty{display:none}
+.notice{display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  margin:0; padding:9px 12px; border-radius:10px; font-size:12px; line-height:1.45;
+  background:var(--surface-2); border:1px solid var(--rule-strong); color:var(--ink-2)}
+.notice[hidden]{display:none}
+.notice .nbody{flex:1; min-width:180px}
+.notice b{color:var(--ink)}
+.notice.warn{border-color:var(--warnbd,#6b5518); color:var(--warnfg,#f0c674)}
+.notice.warn b{color:var(--warnfg,#f0c674)}
 .linkbtn{background:none; border:0; padding:0; font:inherit; font-weight:700;
   color:var(--accent, var(--ink)); text-decoration:underline; cursor:pointer}
 .linkbtn:hover{opacity:.75}
@@ -549,7 +604,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         </span>
       </button>
       <div class="tripsmenu" id="tripsMenu" hidden>
-        <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My trips</button>
+        <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My searches</button>
         <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
       </div>
       <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
@@ -580,6 +635,15 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <small id="tripCollapsedWhen"></small>
       </div>
       <button class="btn btn-sm" id="adjustTrip">Adjust this trip</button>
+    </div>
+    <div id="tripExtras" hidden>
+      <span class="cap">Extra costs you've added to this trip</span>
+      <div id="tripExpenseList"></div>
+      <div class="exprow">
+        <input type="text" id="expLabel" placeholder="VIP tour, PhotoPass, souvenirs…" maxlength="80">
+        <input type="number" id="expAmount" min="0" step="5" placeholder="$">
+        <button class="btn btn-sm" id="expAdd">Add</button>
+      </div>
     </div>
     <div class="party">
       <div class="f">
@@ -627,13 +691,22 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
             <option value="driveDlr">Driving to Disneyland Resort, flying everywhere else</option>
             <option value="driveDomestic">Driving domestically (WDW + Disneyland), flying internationally</option>
           </select>
-          <small id="gettingThereNote" class="downgrade" hidden></small>
         </div>
         <div class="f" id="originAirportField">
           <label for="origin">Departing from</label>
           <select id="origin"></select>
-          <small id="originNote" class="downgrade" hidden></small>
         </div>
+      </div>
+
+      <!-- Both notices sit BELOW the pair rather than inside a cell.
+           `.fields` bottom-aligns its columns, so a note (and worse, a
+           button) growing inside one cell shoved that cell's select down
+           and left the two dropdowns on different lines — the owner's
+           report that this "gets all wonky" when a free account picks a
+           Plus airport. A full-width strip cannot distort a column. -->
+      <div class="notices">
+        <p id="gettingThereNote" class="notice" hidden></p>
+        <p id="originNote" class="notice warn" hidden></p>
       </div>
 
       <div class="gt-sub" id="flyRentalField">
@@ -792,9 +865,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
 
-  <section class="panel" id="savedTripsPanel" hidden>
-    <p class="panel-lab">Your saved trips</p>
-    <div id="savedTripsList"></div>
+  <!-- Print only. The PDF used to open on a page of form controls nobody can
+       use on paper, which is what the owner saw as a blank first page. This
+       is what a person opening the file should read first: where we are
+       going, who planned it, and for when. -->
+  <section id="printCover" aria-hidden="true">
+    <h1 id="coverTitle">Let's go to Walt Disney World!</h1>
+    <p id="coverLine"></p>
+    <p id="coverNote" class="coversub"></p>
   </section>
 
   <div class="res-head">
@@ -816,6 +894,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <button id="vBoard" aria-pressed="true">Board</button>
         <button id="vTable" aria-pressed="false">Table</button>
       </span>
+      <!-- Saving is an act on the WHOLE comparison now, so the control
+           belongs beside the whole comparison rather than buried in one
+           resort's detail card. -->
+      <button class="btn btn-sm" id="saveSearchBtn" hidden>Save this search</button>
     </div>
   </div>
 
@@ -848,17 +930,21 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
   <div class="modal" style="max-width:420px">
     <div class="mhead">
-      <h3 id="nameTitle">Save this trip</h3>
+      <h3 id="nameTitle">Save this search</h3>
       <p id="nameIntro">Give it a name you'll recognise later.</p>
     </div>
     <div class="namefield">
       <label for="tripName">Name</label>
       <input type="text" id="tripName" maxlength="80" placeholder="Spring break with the kids">
+      <label for="tripHighlight" style="margin-top:6px">Which park should lead?</label>
+      <select id="tripHighlight"></select>
+      <small class="hint" style="margin:0">All six are saved either way. The one you pick goes first
+        in the PDF, and is the one price-drop alerts watch.</small>
       <small id="nameError" class="downgrade" hidden></small>
     </div>
     <div class="mfoot">
       <button class="btn btn-sm" id="nameCancel">Cancel</button>
-      <button class="btn btn-primary btn-sm" id="nameSave">Save &amp; watch it</button>
+      <button class="btn btn-primary btn-sm" id="nameSave">Save this search</button>
     </div>
   </div>
 </div>
@@ -1362,8 +1448,8 @@ function applySuggestedGettingThere(){
     const resortName = suggestion === "driveWdw" ? "Walt Disney World" : "Disneyland Resort";
     const originName = ($("#origin").selectedOptions[0] || {}).textContent || $("#origin").value;
     note.hidden = false;
-    note.innerHTML = `${esc(resortName)} is a drive from ${esc(originName)}, so we've set that up —
-      the other five resorts still price as flights. Change this if you'd rather fly.`;
+    note.innerHTML = `<span class="nbody">${esc(resortName)} is a drive from ${esc(originName)}, so we've set
+      that up — the other five resorts still price as flights. Change this if you'd rather fly.</span>`;
   }
 }
 
@@ -1753,6 +1839,10 @@ function renderBoard(){
     return;
   }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
+  // Tagged, not reordered: on screen the board stays in price order, which is
+  // the app's one job. Only the print stylesheet lifts this row to the top.
+  const lead = leadResort();
+  const leadResortId = lead ? lead.resortId : null;
   board.innerHTML = list.map(({item,i},pos)=>{
     const r = item.resort;
     if(!item.ok){
@@ -1789,7 +1879,7 @@ function renderBoard(){
     const dateStr = MONTHS[sd.getUTCMonth()]+" "+sd.getUTCDate();
     const open = unlocked(i);
     return `
-    <li class="row${pos===0?" best":""}${open?"":" locked"}" data-i="${i}">
+    <li class="row${pos===0?" best":""}${open?"":" locked"}${item.resortId===leadResortId?" printlead":""}" data-i="${i}">
       <div class="rank">${pos+1}</div>
       <div class="ident">
         <div class="rname">${r.name}</div>
@@ -2416,7 +2506,7 @@ async function renderDetail(){
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
-        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this trip & watch it" : "Get Plus to save & watch for price drops"}</button>
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Get Plus to save this search & watch for price drops"}</button>
       </div>
     </div>
     ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
@@ -2661,9 +2751,17 @@ function render(){
     // no business telling a paying member to "get Plus".
     dn.hidden = !originDowngrade || !!session.plus;
     if(originDowngrade && !session.plus){
-      dn.innerHTML = `Priced from <b>${esc(originDowngrade.priced)}</b>, the nearest airport on the free plan.
-        <button class="btn btn-sm openpw" style="margin-left:8px">Get Plus to price ${esc(originDowngrade.requested)}</button>`;
+      dn.innerHTML = `<span class="nbody"><b>${esc(originDowngrade.requested)}</b> is a Plus airport,
+        so this is priced from <b>${esc(originDowngrade.priced)}</b> — the nearest one on the free plan.</span>
+        <button class="btn btn-sm openpw">Get Plus to price ${esc(originDowngrade.requested)}</button>`;
     }
+  }
+  // Only once there is something to save. A button that refuses every click
+  // is the dead-handler problem in another costume.
+  const sv = $("#saveSearchBtn");
+  if(sv){
+    sv.hidden = !results.some(r=>r.ok);
+    sv.textContent = session.plus ? "Save this search" : "Get Plus to save this search";
   }
   $("#upgradeTop").hidden = session.plus;
   syncAccountUi();
@@ -3294,84 +3392,89 @@ $("#signoutTop").addEventListener("click", doSignOut);
  *  firing another request every time the dialog opens. */
 let savedTripCount = 0;
 
+/** The saved search currently open, so the extras strip knows what it is
+ *  attached to. Null whenever the form is being used to build a new one. */
+let openTrip = null;
+
 async function loadSavedTrips(){
-  const box = $("#savedTripsPanel"), list = $("#savedTripsList");
   if(!session.plus){
-    box.hidden = true; savedTripCount = 0; savedTrips = []; renderTripsMenu();
+    savedTripCount = 0; savedTrips = []; openTrip = null;
+    $("#tripExtras").hidden = true;
+    renderTripsMenu();
     return;
   }
-  box.hidden = false;
   const trips = await apiGet("/api/trips", {});
-  savedTripCount = Array.isArray(trips) ? trips.length : 0;
   savedTrips = Array.isArray(trips) ? trips : [];
+  savedTripCount = savedTrips.length;
+  // Keep the open one pointing at the freshly loaded row rather than a
+  // stale copy, or adding an expense twice would render against the state
+  // before the first one.
+  if(openTrip) openTrip = savedTrips.find(t => t.id === openTrip.id) || null;
   renderTripsMenu();
-  if(!Array.isArray(trips) || !trips.length){
-    list.innerHTML = `<p class="hint">Nothing saved yet — open a resort's detail view and use "Save this trip &amp; watch it."</p>`;
-    return;
-  }
-  const expensesByTrip = {};
-  await Promise.all(trips.map(async t=>{
-    expensesByTrip[t.id] = await apiGet(`/api/trips/${t.id}/expenses`, {}).catch(()=>[]);
-  }));
-  list.innerHTML = trips.map(t=>{
-    const r = RESORT_BY_ID.get(t.resortId);
-    const expenses = Array.isArray(expensesByTrip[t.id]) ? expensesByTrip[t.id] : [];
-    const extra = expenses.reduce((s,e)=>s+e.amountUsd, 0);
-    const expenseRows = expenses.map(e=>`<div class="li" style="padding:5px 0"><div class="l"><b>${e.label}</b></div>
-      <div class="p">${usd(e.amountUsd)} <button class="btn btn-sm" data-delexpense="${e.id}" data-trip="${t.id}" style="margin-left:6px">×</button></div></div>`).join("");
-    return `<div class="li" style="flex-direction:column; align-items:stretch; gap:8px">
-      <div style="display:flex; justify-content:space-between; gap:10px">
-        <div class="l"><b>${t.label || (r?r.name:t.resortId)}</b>
-          <small>Baseline ${usd(t.baselineTotal)}${extra?` + ${usd(extra)} in extras`:""}${t.active?"":" · paused"}</small></div>
-        <div class="p"><button class="btn btn-sm" data-deltrip="${t.id}">Remove</button></div>
-      </div>
-      ${expenseRows}
-      <div style="display:flex; gap:6px; flex-wrap:wrap">
-        <input type="text" placeholder="VIP tour, PhotoPass..." data-explabel="${t.id}" style="flex:1; min-width:120px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:6px 9px; font-size:12.5px">
-        <input type="number" placeholder="$" min="0" step="5" data-expamount="${t.id}" style="width:80px">
-        <button class="btn btn-sm" data-addexpense="${t.id}">Add expense</button>
-      </div>
-    </div>`;
-  }).join("");
+  await renderTripExtras();
 }
-document.addEventListener("click", async e=>{
-  const d = e.target.closest("[data-deltrip]");
-  if(!d) return;
-  await fetch("/api/trips/"+d.dataset.deltrip, { method:"DELETE" });
-  await loadSavedTrips();
-});
-document.addEventListener("click", async e=>{
-  const d = e.target.closest("[data-delexpense]");
-  if(!d) return;
-  await fetch(`/api/trips/${d.dataset.trip}/expenses/${d.dataset.delexpense}`, { method:"DELETE" });
-  await loadSavedTrips();
-});
-document.addEventListener("click", async e=>{
-  const a = e.target.closest("[data-addexpense]");
-  if(!a) return;
-  const tripId = a.dataset.addexpense;
-  const labelEl = document.querySelector(`[data-explabel="${tripId}"]`);
-  const amountEl = document.querySelector(`[data-expamount="${tripId}"]`);
-  const label = (labelEl.value || "").trim();
-  const amountUsd = Math.max(0, +amountEl.value) || 0;
+
+/** Extra costs on the saved search that is currently open. Hidden entirely
+ *  when you are building a new search — there is nothing to attach them to
+ *  yet, and a box you cannot use is what made the old panel read as dead. */
+async function renderTripExtras(){
+  const box = $("#tripExtras");
+  if(!openTrip || !session.plus){ box.hidden = true; return; }
+  box.hidden = false;
+  const expenses = await apiGet(`/api/trips/${openTrip.id}/expenses`, {}).catch(()=>[]);
+  const list = Array.isArray(expenses) ? expenses : [];
+  $("#tripExpenseList").innerHTML = list.length
+    ? list.map(e=>`<div class="li" style="padding:5px 0"><div class="l"><b>${esc(e.label)}</b></div>
+        <div class="p">${usd(e.amountUsd)}
+        <button class="btn btn-sm" data-delexpense="${e.id}" title="Remove this cost">×</button></div></div>`).join("")
+      + `<div class="li" style="padding:5px 0"><div class="l"><b>Added to this trip</b></div>
+         <div class="p">${usd(list.reduce((t,e)=>t+e.amountUsd,0))}</div></div>`
+    : `<p class="hint" style="margin:6px 0 0">Nothing added yet — tours, PhotoPass, anything the model can't guess at.</p>`;
+}
+
+$("#expAdd").addEventListener("click", async ()=>{
+  if(!openTrip) return;
+  const label = ($("#expLabel").value || "").trim();
+  const amountUsd = Math.max(0, +$("#expAmount").value) || 0;
   if(!label || amountUsd <= 0) return;
-  await fetch(`/api/trips/${tripId}/expenses`, {
+  await fetch(`/api/trips/${openTrip.id}/expenses`, {
     method: "POST", headers: {"content-type":"application/json"},
     body: JSON.stringify({ label, amountUsd }),
   });
+  $("#expLabel").value = ""; $("#expAmount").value = "";
+  await renderTripExtras();
+});
+
+document.addEventListener("click", async e=>{
+  const d = e.target.closest("[data-delexpense]");
+  if(!d || !openTrip) return;
+  await fetch(`/api/trips/${openTrip.id}/expenses/${d.dataset.delexpense}`, { method:"DELETE" });
+  await renderTripExtras();
+});
+
+/* Deleting a saved search ASKS FIRST. The owner lost a trip to a stray
+ * click on a Remove button that sat beside the one they meant to open, and
+ * there is no undo behind this — the row is gone and so is everything
+ * attached to it. */
+document.addEventListener("click", async e=>{
+  const d = e.target.closest("[data-deltrip]");
+  if(!d) return;
+  e.stopPropagation();
+  const name = d.dataset.tripname || "this saved search";
+  if(!confirm(`Delete "${name}"? This can't be undone, and any extra costs you added to it go with it.`)) return;
+  await fetch("/api/trips/"+d.dataset.deltrip, { method:"DELETE" });
+  if(openTrip && openTrip.id === d.dataset.deltrip){ openTrip = null; expandTripPanel(); }
   await loadSavedTrips();
 });
+
 document.addEventListener("click", async e=>{
-  const s = e.target.closest("#saveTripBtn");
-  if(!s) return;
+  const s2 = e.target.closest("#saveSearchBtn, #saveTripBtn");
+  if(!s2) return;
   if(!session.plus){ openPw(); return; }
-  const resortId = s.dataset.resort;
-  const item = results.find(r=>r.resortId===resortId);
-  if(!item || !item.ok) return;
-  // Ask what to call it. A list of six identically-named "Walt Disney World
-  // — 2027-03" rows is not something anybody can navigate a month later, and
-  // naming it is the one moment the traveller knows what this trip is for.
-  openNameDialog(item, s);
+  if(!results.some(r=>r.ok)) return;
+  // A detail card's button preselects the resort you were looking at; the
+  // board's button preselects whichever came out cheapest.
+  openNameDialog(s2.dataset.resort || "");
 });
 
 /* ------------------------- naming and reopening -------------------------
@@ -3379,18 +3482,42 @@ document.addEventListener("click", async e=>{
  * and there was no way back into it, so re-visiting a trip meant keying the
  * whole form in again. The masthead dropdown is the way back.
  */
+/**
+ * A saved search is the WHOLE comparison, not one resort.
+ *
+ * The owner's case for this: "I am the researcher in my family and I want to
+ * price out everything and send it to my wife." Saving one resort meant she
+ * opened it and saw Shanghai with no idea what Orlando or Tokyo cost, which
+ * is the six-resort comparison — the entire product — thrown away at the
+ * moment it was shared. So every resort's own typed numbers are saved, and
+ * the saver picks which park LEADS rather than which park survives.
+ *
+ * `resortId` still holds one resort, because the alert job re-prices one
+ * saved resort at a time and that shape is not this change's to break. It is
+ * now the highlighted one, which is also the one worth watching.
+ */
 let pendingSave = null;
-function defaultTripName(item){
-  const when = exactDatesActive()
+function tripWhenLabel(){
+  return exactDatesActive()
     ? `${fmtDate($("#exactDate").value)}–${fmtDate($("#exactReturn").value)}`
     : MONTHSFULL[+params.month.split("-")[1]-1] + " " + params.month.split("-")[0];
-  return `${item.resort.name} — ${when}`;
 }
-function openNameDialog(item, btn){
-  pendingSave = { item, btn };
+function defaultTripName(){
+  return `${params.adults + params.ages.length} travellers — ${tripWhenLabel()}`;
+}
+function openNameDialog(preferredResortId){
+  const priced = results.filter(r=>r.ok);
+  if(!priced.length) return;
+  const pick = priced.find(r=>r.resortId === preferredResortId) || priced[0];
+  pendingSave = true;
   $("#nameError").hidden = true;
-  $("#tripName").value = defaultTripName(item);
-  $("#nameIntro").textContent = `${item.resort.name}, ${usd(item.price.total)} for ${item.price.partySize}. Give it a name you'll recognise later.`;
+  $("#tripName").value = defaultTripName();
+  // Every priced resort is offered, cheapest first, with its total — so the
+  // choice is made against the numbers rather than from memory.
+  $("#tripHighlight").innerHTML = priced.map(r=>
+    `<option value="${r.resortId}"${r.resortId === pick.resortId ? " selected" : ""}>${esc(r.resort.name)} — ${usd(r.price.total)}</option>`).join("");
+  $("#nameIntro").textContent =
+    `All ${priced.length} priced resorts are saved together, with the numbers you typed for each one.`;
   $("#nameModal").classList.add("on");
   $("#tripName").focus();
   $("#tripName").select();
@@ -3402,9 +3529,18 @@ $("#tripName").addEventListener("keydown", e=>{ if(e.key === "Enter") $("#nameSa
 
 $("#nameSave").addEventListener("click", async ()=>{
   if(!pendingSave) return;
-  const { item, btn } = pendingSave;
-  const label = $("#tripName").value.trim() || defaultTripName(item);
-  const resortId = item.resortId;
+  const label = $("#tripName").value.trim() || defaultTripName();
+  const resortId = $("#tripHighlight").value;
+  const item = results.find(r=>r.resortId === resortId && r.ok);
+  if(!item) return;
+  // Every resort's overrides, not just the highlighted one's. OV is already
+  // keyed by resort, so this is the shape the server and the reopen path
+  // both already handle.
+  const overrides = {};
+  for(const r of results){
+    const ov = ovOf(r.resortId);
+    if(ov && !ovEmpty(ov)) overrides[r.resortId] = ov;
+  }
   const res = await fetch("/api/trips", {
     method:"POST", headers:{"content-type":"application/json"},
     body: JSON.stringify({
@@ -3412,24 +3548,26 @@ $("#nameSave").addEventListener("click", async ()=>{
       // exactDate/exactReturn ride along so reopening a Plus trip comes back
       // on the real travel dates it was priced for, not just its month.
       params: { ...tripQuery(), month: params.month, resortId,
+                highlightResortId: resortId,
                 exactDate: params.exactDate || "", exactReturn: params.exactReturn || "" },
-      overrides: { [resortId]: ovOf(resortId) },
+      overrides,
       baselineTotal: item.price.total,
     }),
   });
   if(res.ok){
+    const body = await res.json().catch(()=>({}));
     closeNameDialog();
-    if(btn && btn.isConnected){
-      btn.textContent = "Saved & watching";
-      setTimeout(()=>{ if(btn.isConnected) btn.textContent = "Save this trip & watch it"; }, 1800);
-    }
     await loadSavedTrips();
+    const saved = savedTrips.find(t=>t.id === body.id);
+    if(saved){ openTrip = saved; await renderTripExtras(); }
+    const b = $("#saveSearchBtn");
+    if(b){ b.textContent = "Saved"; setTimeout(()=>{ b.textContent = "Save this search"; }, 1800); }
   } else if(res.status === 402){ closeNameDialog(); openPw(); }
   else {
     // Never a silent return: the owner's report about the old paywall box was
     // that a dead click is indistinguishable from a broken build.
     const body = await res.json().catch(()=>({}));
-    $("#nameError").textContent = body.message || "Couldn't save that trip — try again in a moment.";
+    $("#nameError").textContent = body.message || "Couldn't save that search — try again in a moment.";
     $("#nameError").hidden = false;
   }
 });
@@ -3487,9 +3625,11 @@ async function openSavedTrip(trip){
   store.set("ov", OV);
   syncNeedHotel(); syncGettingThere(); syncExactDatesUi();
   closeTripsDrop();
+  openTrip = trip;
   collapseTripPanel(trip);
+  await renderTripExtras();
   view = "board"; detailOpen = true;
-  await runSearch(trip.resortId);
+  await runSearch(trip.params && trip.params.highlightResortId || trip.resortId);
   const box = $("#detail");
   if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -3511,13 +3651,16 @@ function collapseTripPanel(trip){
     + (String(q.childAges || "").split(",").filter(Boolean).length
         ? ` + ${String(q.childAges).split(",").filter(Boolean).length} child` : "");
   $("#tripCollapsedWhen").textContent =
-    [r ? r.name : "", when, who, `${q.nights || 0} nights`].filter(Boolean).join(" · ");
+    ["All six resorts", `leading with ${r ? r.name : "your pick"}`, when, who,
+     `${q.nights || 0} nights`].filter(Boolean).join(" · ");
   $("#tripCollapsed").hidden = false;
   $("#tripPanel").classList.add("collapsed");
 }
 
 /** Any normal search puts the form back — you are building, not revisiting. */
 function expandTripPanel(){
+  openTrip = null;
+  const ex = $("#tripExtras"); if(ex) ex.hidden = true;
   $("#tripCollapsed").hidden = true;
   $("#tripPanel").classList.remove("collapsed");
 }
@@ -3534,16 +3677,18 @@ function closeTripsDrop(){
 }
 function renderTripsMenu(){
   $("#tripsMenu").hidden = !session.plus;
-  $("#tripsTop").textContent = savedTrips.length ? `My trips (${savedTrips.length})` : "My trips";
+  $("#tripsTop").textContent = savedTrips.length ? `My searches (${savedTrips.length})` : "My searches";
   $("#tripsDrop").innerHTML = savedTrips.length
     ? savedTrips.map((t,i)=>{
         const r = RESORT_BY_ID.get(t.resortId);
+        const name = t.label || (r ? r.name : t.resortId);
         return `<div class="tripitem"><button class="tripopen" data-opentrip="${i}">
-          ${esc(t.label || (r ? r.name : t.resortId))}
-          <small>${r ? esc(r.name) : ""} · baseline ${usd(t.baselineTotal)}${t.active ? "" : " · paused"}</small>
-        </button><button class="btn btn-sm" data-deltrip="${t.id}" title="Remove">×</button></div>`;
+          ${esc(name)}
+          <small>All six · leading with ${r ? esc(r.name) : "?"} · ${usd(t.baselineTotal)}${t.active ? "" : " · paused"}</small>
+        </button><button class="btn btn-sm" data-deltrip="${t.id}" data-tripname="${esc(name)}"
+          title="Delete this saved search">×</button></div>`;
       }).join("")
-    : `<p class="empty">Nothing saved yet. Open a resort's details and use "Save this trip &amp; watch it".</p>`;
+    : `<p class="empty">Nothing saved yet. Run a comparison and use "Save this search".</p>`;
 }
 $("#tripsTop").addEventListener("click", ()=>{
   const d = $("#tripsDrop");
@@ -3561,7 +3706,70 @@ document.addEventListener("click", async e=>{
  * and spends none of the email allowance. The @media print rules drop the
  * controls nobody can use on paper and spell out every link's destination,
  * since a printed "Book this fare →" is useless without its URL. */
-$("#printTop").addEventListener("click", ()=>window.print());
+/**
+ * Which park the PDF leads with: the one the saver chose when a saved search
+ * is open, otherwise whichever resort's detail is on screen, otherwise the
+ * cheapest. `leadResortId` is read by renderBoard for the print-only reorder
+ * and by the cover.
+ */
+function leadResort(){
+  const priced = results.filter(r=>r.ok);
+  if(!priced.length) return null;
+  const wanted = (openTrip && openTrip.params && openTrip.params.highlightResortId)
+    || (openTrip && openTrip.resortId)
+    || (results[selected] && results[selected].resortId);
+  return priced.find(r=>r.resortId === wanted) || priced[0];
+}
+
+/**
+ * The cover sheet, written fresh at print time so it can never describe a
+ * comparison other than the one on screen.
+ */
+function buildPrintCover(){
+  const lead = leadResort();
+  const cover = $("#printCover");
+  if(!lead){ cover.hidden = true; return; }
+  cover.hidden = false;
+  const p = params;
+  const kids = p.ages.length;
+  const who = `${p.adults} adult${p.adults===1?"":"s"}`
+    + (kids ? ` and ${kids} child${kids===1?"":"ren"}` : "");
+  const when = (p.exactDate && p.exactReturn)
+    ? `${fmtDate(p.exactDate)} to ${fmtDate(p.exactReturn)}`
+    : `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
+  // The person, not the trip's name. An earlier version used the saved
+  // search's label here and produced "planned by Summer 2027 research",
+  // which reads as nonsense to whoever the file is sent to.
+  const planner = session.email ? session.email.split("@")[0] : "";
+  const travel = p.gettingThere && p.gettingThere.startsWith("drive")
+    ? `driving from ${esc(drivingFromLabel())}`
+    : `flying from ${esc(p.origin)}`;
+  $("#coverTitle").textContent = `Let's go to ${lead.resort.name}!`;
+  $("#coverLine").innerHTML =
+    `This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${when} — `
+    + `${who}, ${travel} to <b>${esc(lead.resort.name)}</b>, `
+    + `${p.nights} night${p.nights===1?"":"s"} with ${p.parkDays} park day${p.parkDays===1?"":"s"}. `
+    + `The estimated cost is <b>${usd(lead.price.total)}</b>. Here is how that breaks down, `
+    + `and what the same dates would have cost at the other five resorts.`;
+  $("#coverNote").textContent =
+    `Prepared with Parkfare on ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}. `
+    + `Flights and hotel rates are estimates from cached prices, not quotes — check them before booking.`;
+}
+
+/** Where a driving trip starts from, for the cover line. */
+function drivingFromLabel(){
+  const picked = $("#geoPicked");
+  const txt = picked && picked.textContent.trim();
+  return txt || params.origin;
+}
+
+$("#printTop").addEventListener("click", ()=>{
+  buildPrintCover();
+  window.print();
+});
+// Printing from the browser's own menu or Ctrl+P skips the button, so the
+// cover is built on the event the browser fires either way too.
+window.addEventListener("beforeprint", buildPrintCover);
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */

@@ -119,6 +119,7 @@ filter, and Stripe.
 | Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
+| Saved searches | **Wired, Plus-only.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -728,6 +729,63 @@ As built, with the parts that are decisions:
   corrected this route rather than quietly bending the number. It stays an
   estimate: typing $500 here does not make the board show $500, and the page
   says so in those words.
+
+**You save a SEARCH, not a trip, and you pick which park leads**
+(2026-09-21, the owner's case: "I am the researcher in my family and I want
+to price out everything and send it to my wife saying, 'Check this out, I
+priced all of this and I think Shanghai is doable.' I don't want her to just
+see Shanghai. I want her to be able to see all of it").
+
+Saving one resort threw away the six-resort comparison at the exact moment it
+was shared, which is the product. So a saved row now carries every resort's
+own typed numbers, and the saver chooses which park **leads** rather than
+which park survives.
+
+- *The table did not change and `resortId` still holds one resort.* The alert
+  job re-prices one saved resort at a time and that shape was not this
+  change's to break. It is now the highlighted one — which is also the one
+  worth watching.
+- *`overrides` was already a map keyed by resort*, so saving all six was a
+  change to what the client sends, not to the schema.
+- *The highlight picker lists every priced resort with its total*, cheapest
+  first, so the choice is made against the numbers rather than from memory.
+- *Deleting asks first, and the standalone panel is gone.* The owner deleted
+  a trip by accident: a Remove button sat one careless click from the thing
+  they meant to open, with no undo behind it. Deleting now confirms by name.
+- *Custom expenses moved to where the trip is.* They were the only live thing
+  in the panel the owner read as having "nothing to do" — a box floating
+  above every search, usable only for a trip you had not opened. They now sit
+  under the collapsed trip bar, visible only while a saved search is open,
+  which is the only time they mean anything.
+
+**The PDF opens on a cover, and the chosen park goes first** (2026-09-21,
+the owner: "the print to PDF starts with a blank page. That is useless").
+
+It was not blank — it was the search form, a page of dropdowns nobody can use
+on paper, before the reader reached a single number. Now:
+
+- *A print-only cover* names the destination ("Let's go to Disneyland
+  Paris!") and says in one sentence who planned it, for when, for how many,
+  flying or driving from where, and what it comes to. Built fresh on
+  `beforeprint` as well as on the button, so printing from the browser's own
+  menu cannot produce a cover describing a different comparison.
+- *The highlighted park leads, in the print stylesheet only* (`order:-1` on
+  one row of a flex board). On screen the board stays in price order, which
+  is the app's one job; the rank number travels with the row so the price
+  order is still legible on paper.
+- *Everything that is a control rather than an answer is dropped* — the form
+  panel, the masthead, the legend, the footer, and the selects and buttons
+  inside cards. A dropdown you cannot open reads as a broken document.
+- *The disclosures stay closed.* `<details>` prose is hidden in print; the
+  numbers and their sources are what a shared PDF is for.
+
+**The Plus-airport notice moved out of the form's grid** (2026-09-21, the
+owner: the "Getting There" and "Departing From" boxes "get all wonky" for a
+signed-out visitor). `.fields` bottom-aligns its columns, so a note — and
+worse, a "Get Plus" button — growing inside one cell pushed that cell's
+select down and left the two dropdowns on different lines. Both notices are
+now a full-width strip beneath the pair, where they cannot distort a column.
+Verified in a browser: both selects at the same y, to the pixel.
 
 **An annual pass is a counterfactual, not a cost line; DVC points are
 take-home, not the rental price** (2026-09-21, the owner's ask: for a pass
