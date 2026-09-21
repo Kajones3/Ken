@@ -116,8 +116,10 @@ filter, and Stripe.
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
 | Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
+| Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
+| Saved searches | **Wired, Plus-only.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
 | Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
@@ -683,8 +685,8 @@ this bug. Also worth knowing for the next test: `click()` lands the caret on
 whichever date segment sits under the pointer, so type from a known segment
 or the keystrokes go somewhere you didn't mean.
 
-**A wrong fare becomes evidence, not an edict** (2026-09-20, designed, not
-built). The owner's example was the site estimating $7,000 from Oregon to
+**A wrong fare becomes evidence, not an edict** (2026-09-20 designed,
+2026-09-21 BUILT — `src/fareCorrections.ts`, the Fares section of `/admin`). The owner's example was the site estimating $7,000 from Oregon to
 LAX. The instinct is to let them overwrite it; the decision was the opposite,
 in their own words: it "should become another data point, a weighted data
 point to help us update our estimated cache price". So a correction joins the
@@ -694,6 +696,163 @@ bands map to p25/median/p75 so someone can say "that's the cheap end" rather
 than having to claim a single true number; corrections are deletable by id,
 because a typo must be removable; and they expire, because a 2026 fare should
 not still be steering a 2029 estimate.
+
+As built, with the parts that are decisions:
+
+- *Its own table, not a row in `flight_prices`.* That table is what a VENDOR
+  returned. A hand-typed figure sitting in it would make the real-pulls
+  digest report a pull that never happened and would feed the fare trend a
+  number nobody quoted — the trend's whole job is measuring what providers
+  charge. Mock and unlabelled rows are already excluded there and footnoted;
+  a person's figure is the same kind of thing. A test pins that adding a
+  correction writes nothing to `flight_prices`.
+- *Each band moves its own statistic.* "Typical" speaks for the median,
+  "low" for p25, "high" for p75, and a band nobody spoke for keeps the
+  median's movement so the spread keeps its shape. The three are sorted
+  afterwards, because a low above a high is nonsense however the arithmetic
+  got there — and mixing a typed number with a scaled one can get there.
+- *The owner's own middle outranks a measured correction, which outranks the
+  global trend.* Each is better evidence about THIS route than the next.
+- *Two staleness guards, both in the SQL* (`countingCorrections`), so no
+  caller can read the table and forget one: a row stops counting past its
+  `expires_on`, and separately once its own travel date has passed. A fare
+  for a trip that already happened is history, not evidence — and is refused
+  at entry rather than stored inert.
+- *An expired row is still LISTED, marked as not counting.* "Where did my
+  correction go?" is a worse question than seeing it greyed out.
+- *Its own spreadsheet, separate from the settings one* — the owner's call:
+  "I think it would be too much to have ALL of it on one sheet." A fare is
+  per route and per date, so 171 domestic routes plus 95 international across
+  thirteen months would bury the 73 settings. Same all-or-nothing import rule
+  and the same row-numbered errors.
+- *`ownerCorrected` rides on the estimate* so the board can say a human has
+  corrected this route rather than quietly bending the number. It stays an
+  estimate: typing $500 here does not make the board show $500, and the page
+  says so in those words.
+
+**You save a SEARCH, not a trip, and you pick which park leads**
+(2026-09-21, the owner's case: "I am the researcher in my family and I want
+to price out everything and send it to my wife saying, 'Check this out, I
+priced all of this and I think Shanghai is doable.' I don't want her to just
+see Shanghai. I want her to be able to see all of it").
+
+Saving one resort threw away the six-resort comparison at the exact moment it
+was shared, which is the product. So a saved row now carries every resort's
+own typed numbers, and the saver chooses which park **leads** rather than
+which park survives.
+
+- *The table did not change and `resortId` still holds one resort.* The alert
+  job re-prices one saved resort at a time and that shape was not this
+  change's to break. It is now the highlighted one — which is also the one
+  worth watching.
+- *`overrides` was already a map keyed by resort*, so saving all six was a
+  change to what the client sends, not to the schema.
+- *The highlight picker lists every priced resort with its total*, cheapest
+  first, so the choice is made against the numbers rather than from memory.
+- *Deleting asks first, and the standalone panel is gone.* The owner deleted
+  a trip by accident: a Remove button sat one careless click from the thing
+  they meant to open, with no undo behind it. Deleting now confirms by name.
+- *Custom expenses moved to where the trip is.* They were the only live thing
+  in the panel the owner read as having "nothing to do" — a box floating
+  above every search, usable only for a trip you had not opened. They now sit
+  under the collapsed trip bar, visible only while a saved search is open,
+  which is the only time they mean anything.
+
+**The PDF opens on a cover, and the chosen park goes first** (2026-09-21,
+the owner: "the print to PDF starts with a blank page. That is useless").
+
+It was not blank — it was the search form, a page of dropdowns nobody can use
+on paper, before the reader reached a single number. Now:
+
+- *A print-only cover* names the destination ("Let's go to Disneyland
+  Paris!") and says in one sentence who planned it, for when, for how many,
+  flying or driving from where, and what it comes to. Built fresh on
+  `beforeprint` as well as on the button, so printing from the browser's own
+  menu cannot produce a cover describing a different comparison.
+- *The highlighted park leads, in the print stylesheet only* (`order:-1` on
+  one row of a flex board). On screen the board stays in price order, which
+  is the app's one job; the rank number travels with the row so the price
+  order is still legible on paper.
+- *Everything that is a control rather than an answer is dropped* — the form
+  panel, the masthead, the legend, the footer, and the selects and buttons
+  inside cards. A dropdown you cannot open reads as a broken document.
+- *The disclosures stay closed.* `<details>` prose is hidden in print; the
+  numbers and their sources are what a shared PDF is for.
+
+**The Plus-airport notice moved out of the form's grid** (2026-09-21, the
+owner: the "Getting There" and "Departing From" boxes "get all wonky" for a
+signed-out visitor). `.fields` bottom-aligns its columns, so a note — and
+worse, a "Get Plus" button — growing inside one cell pushed that cell's
+select down and left the two dropdowns on different lines. Both notices are
+now a full-width strip beneath the pair, where they cannot distort a column.
+Verified in a browser: both selects at the same y, to the pixel.
+
+**An annual pass is a counterfactual, not a cost line; DVC points are
+take-home, not the rental price** (2026-09-21, the owner's ask: for a pass
+holder "we need them to be able to see what happens if they don't buy their
+AP", and for DVC a box for "how many points they would rent and what the TAKE
+HOME would be (not the rental actual)"). `src/memberships.ts` holds the
+catalogue and the arithmetic; nothing about it is a new kind of cost.
+
+The decisions, each with a test:
+
+- *A pass you hold zeroes what you pay at the gate, and its own yearly price
+  is reported beside the trip rather than added to it.* An annual pass is not
+  bought for one trip. Charging its full price to whichever trip is on screen
+  makes a four-night visit look absurd; spreading it over a guessed number of
+  trips a year means inventing the single number that decides the answer. So
+  it does neither, and the traveller compares the two figures themselves —
+  which is exactly the comparison the owner described (four passes at Walt
+  Disney World against the same money spent on tickets somewhere else).
+- *A holding names its resort.* A Magic Key does not get you into Magic
+  Kingdom, and this board prices six resorts at once, so "I have a pass" as
+  one flat flag would have been wrong on five of them.
+- *Tickets are computed PER TRAVELLER now, not as one running total.* Zeroing
+  a share of a lump sum happens to land near the right answer for a party of
+  all adults and is wrong for every other party.
+- *Passes cover the dearest tickets first, and the card says so.* Nothing here
+  knows which member of a family holds which pass. That is the optimistic
+  reading, so it is stated rather than allowed to pass as a fact.
+- *The parking perk lands on parking.* It comes off the parking-and-transfers
+  line, where the cost actually is — on property that line is usually zero
+  already and the perk correctly does nothing.
+- *A pass holder does not buy park hopping twice.* Every current tier at both
+  resorts includes it; `hopperIncluded` exists so a future tier that doesn't
+  can say so.
+- *A retired tier is DROPPED, not thrown.* Disneyland replaced the Enchant Key
+  with the Explore Key in January; anybody holding a saved trip that named it
+  must still get a board. Same rule as an unknown attraction id. Saved trips
+  are re-normalised through `parsePassHoldings` at SAVE time, because the
+  alert job re-prices straight from that row months later.
+- *DVC is a credit on the TOTAL, never a discount on the room.* What you can
+  rent points for has nothing to do with what a room at this resort costs, and
+  folding it into the hotel line would break the six-resort comparison. Floored
+  at zero — a trip can be free, never negative.
+- *Take-home, not the rental price.* Asking what a renter pays and quietly
+  assuming a commission would be the app inventing the part that matters.
+- *Free, not Plus.* These are unverified claims a traveller makes about their
+  own finances that never leave their own board — the same class of thing as
+  the per-resort overrides, which are free for the same reason.
+- *Every price is in the settings registry*, because Disney raises them roughly
+  once a year and that must never need a deploy.
+
+**The figures were checked by web search on 2026-09-21, not fetched** — same
+standing as the hotel baselines and the visa notes; Disney and the DVC broker
+sites are refused by this sandbox's egress proxy. Walt Disney World:
+Incredi-Pass $1,629, Sorcerer $1,099, Pirate $869, Pixie Dust $489.
+Disneyland: Inspire Key $1,899, Believe $1,474, Explore $999, Imagine $599.
+**The owner's own DVC research was checked and is conservative**: they had
+$20 rented / $16 take-home, and the current market reads as renters paying
+roughly $19-21 and members taking home roughly $18-20 through a broker
+(David's publishes $18/$20/$23 by home resort; DVC Rental Store advertises
+"up to $24"). The shipped default is $18 and the traveller can type their own,
+because a member renting privately keeps more than one going through a broker
+and only they know which they are doing.
+
+**The four international resorts have no pass programme here, deliberately.**
+They sell annual passes, but the tiers and prices are published in other
+languages and other currencies, and a guessed pass price would flow straight
+into the comparison the app exists to get right.
 
 **Five wrong passwords shut the door, and a reset is the way back in**
 (2026-09-20, the owner's ask). Two scopes counted separately: the email

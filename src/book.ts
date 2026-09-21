@@ -3,6 +3,7 @@
  * A whole 12-month fare calendar is three indexed queries, not 365 round trips.
  */
 import { settingsMap } from "./settings.js";
+import { countingCorrections, median, type FareBand } from "./fareCorrections.js";
 import type { Db } from "./db.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
@@ -266,6 +267,29 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
     return { med, n: sorted.length };
   };
 
+  /**
+   * Fares the owner has seen with their own eyes, for these same routes.
+   *
+   * Evidence, not an override — the same role a bought SerpApi fare plays,
+   * which is why it lands in the same place rather than short-circuiting the
+   * estimate. Kept in its own table so a hand-typed figure never gets counted
+   * as a vendor pull by the real-pulls digest, and never feeds the fare
+   * trend: the trend's whole job is measuring what PROVIDERS quoted.
+   *
+   * Both staleness rules live in countingCorrections(), so a correction
+   * for a trip that has passed, or one past its own expiry, simply is not
+   * here.
+   */
+  const corrections = new Map<string, Partial<Record<FareBand, number[]>>>();
+  for (const c of await countingCorrections(db, hfDestinations)) {
+    const key = `${c.destination}|${c.quarter}`;
+    const byBand = corrections.get(key) ?? {};
+    byBand[c.band] = [...(byBand[c.band] ?? []), c.price];
+    corrections.set(key, byBand);
+  }
+  /** The owner's own median for one route/quarter/band, if they have said. */
+  const ownerSays = (key: string, band: FareBand) => median(corrections.get(key)?.[band] ?? []);
+
   const ft = await db.query(
     `select multiplier, low_multiplier, high_multiplier from fare_trend order by computed_at desc limit 1`,
   );
@@ -302,23 +326,52 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
         ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
       const routeM = obs && h.med > 0 ? obs.med / h.med : undefined;
 
+      /**
+       * The owner's corrections, per band.
+       *
+       * A "typical" correction speaks for the median, a "low" one for p25, a
+       * "high" one for p75 — so "that was the cheap end" and "that is what it
+       * usually costs" stay different claims instead of all three pretending
+       * to be the midpoint. Where the owner has not spoken for a band, that
+       * band keeps whatever the median's movement was, so the spread keeps
+       * its shape rather than collapsing.
+       */
+      const ckey = `${dest}|${quarterOf(req.from)}`;
+      const pkey = primary ? `${primary}|${quarterOf(req.from)}` : null;
+      const said = (band: FareBand) => ownerSays(ckey, band) ?? (pkey ? ownerSays(pkey, band) : undefined);
+      const ownerMed = said("typical");
+      const ownerLow = said("low");
+      const ownerHigh = said("high");
+      const anyCorrection = ownerMed ?? ownerLow ?? ownerHigh;
+
       // A historical baseline is useless without a trend to bring it to the
       // present, so it still requires one — unless this route has its own
       // observation, which is strictly better evidence than the global
       // average would have been. A live-sampled baseline needs no trend and
       // must not wait on one.
-      if (h.applyTrend && !trend && routeM === undefined) return undefined;
-      const m = routeM ?? (h.applyTrend ? trend!.m : 1);
+      if (h.applyTrend && !trend && routeM === undefined && anyCorrection === undefined) return undefined;
+      // The owner's own figure for the middle outranks a measured correction,
+      // which outranks the global trend: each is better evidence about THIS
+      // route than the one after it. A correction they typed is a fare they
+      // actually saw on the route in question.
+      const m = (ownerMed !== undefined && h.med > 0 ? ownerMed / h.med : undefined)
+        ?? routeM ?? (h.applyTrend ? trend!.m : 1);
       // The shown number is the MEDIAN, moved by the trend the real-fare
       // lookups measured (or left as-is when it is already current).
       // Low/High are that route's own p25/p75 spread moved the same way — a
       // real observed range for this route, not a percentage invented
       // around the midpoint.
       const r2 = (n: number) => Math.round(n * 100) / 100;
+      // Each band takes the owner's own figure where they gave one, and the
+      // median's movement where they didn't. Sorted afterwards because a low
+      // above a high is nonsense however the arithmetic arrived at it — and
+      // mixing a typed number with a scaled one can arrive at it.
+      const band = [ownerLow ?? h.p25 * m, ownerMed ?? h.med * m, ownerHigh ?? h.p75 * m]
+        .sort((a, b) => a - b);
       return {
-        low: r2(h.p25 * m),
-        med: r2(h.med * m),
-        high: r2(h.p75 * m),
+        low: r2(band[0]!),
+        med: r2(band[1]!),
+        high: r2(band[2]!),
         basisQuarter: h.quarter,
         seasonMatched: h.seasonMatched,
         trendPct: (routeM !== undefined || h.applyTrend) ? Math.round((m - 1) * 1000) / 10 : undefined,
@@ -329,6 +382,9 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
         // confidence than one built on ten — and one bought date could be a
         // peak date that doesn't represent its quarter.
         routeSamples: obs?.n,
+        // Said out loud so the card can tell a traveller that a human has
+        // corrected this route, rather than quietly bending the number.
+        ownerCorrected: anyCorrection !== undefined,
       };
     },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],

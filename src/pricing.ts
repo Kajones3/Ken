@@ -16,6 +16,10 @@ import {
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
+import {
+  findTier, passPriceKey, dvcCredit, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY,
+  type PassHolding, type DvcRental,
+} from "./memberships.js";
 
 // ---------------------------------------------------------------- inputs
 
@@ -81,6 +85,15 @@ export interface TripParams {
    *  price gas only. Moot (and hidden in the UI) whenever rentalCar is true,
    *  since a rental already has no wear-and-tear cost to the user. */
   includeWearAndTear?: boolean;
+  /** Annual passes the traveller already holds, one entry per resort. Only
+   *  the entry matching THIS resort does anything — a Magic Key does not get
+   *  you into Magic Kingdom, and the board prices six resorts at once, so a
+   *  holding has to name the resort it belongs to. */
+  annualPasses?: PassHolding[];
+  /** DVC points the traveller intends to rent out, and what they expect to
+   *  take home per point. A credit against the trip, not a discount on any
+   *  one line — the money has nothing to do with what a room here costs. */
+  dvcRental?: DvcRental | null;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -144,6 +157,11 @@ export interface FlightRow {
      *  could be a peak date, so the UI discloses the count rather than
      *  presenting a one-fare correction as settled. */
     routeSamples?: number;
+    /** True when the owner has entered a real fare they saw on this route and
+     *  quarter, and it moved this estimate. Surfaced rather than hidden: a
+     *  number a human has corrected deserves to say so, and it is still an
+     *  estimate, not a quote. */
+    ownerCorrected?: boolean;
   };
 }
 export interface HotelNight {
@@ -262,6 +280,42 @@ export interface TripPrice {
    *  isn't wear on a car you own). */
   rentalCarUsd: number;
   rentalCarPick: { dailyRateUsd: number; nights: number } | null;
+  /** Annual passes and DVC point rental — null when the traveller said
+   *  nothing about either. See src/memberships.ts for why a pass is reported
+   *  as a counterfactual rather than charged to this one trip. */
+  membership: {
+    pass: {
+      resortId: string;
+      tierId: string;
+      label: string;
+      /** How many passes they said they hold. */
+      count: number;
+      /** How many of them this party can actually use — you cannot put a
+       *  fifth pass on a party of four. */
+      used: number;
+      pricePerPassUsd: number;
+      /** What the passes cost for a year, all of them. NOT part of `total`. */
+      annualCostUsd: number;
+      /** Tickets, hopper and parking this trip did not have to pay for.
+       *  `total` already reflects these. */
+      savedUsd: number;
+      /** What this trip's gate costs would have been without the passes —
+       *  the "what happens if I don't buy it" number, and the one to weigh
+       *  against annualCostUsd. */
+      ticketsWithoutPassUsd: number;
+      /** True while passes are assumed to cover the priciest tickets first.
+       *  Always true today; here so the card can say so rather than implying
+       *  the app knows who holds what. */
+      coversDearestFirst: boolean;
+    } | null;
+    dvc: {
+      points: number;
+      takeHomePerPointUsd: number;
+      /** Subtracted from `total`. Money in the member's pocket, not a
+       *  discount on anything this trip buys. */
+      creditUsd: number;
+    } | null;
+  } | null;
 }
 /**
  * The IRS standard mileage rate a driving trip's wear-and-tear line was
@@ -550,20 +604,25 @@ export function priceTrip(
 
   // --- tickets -----------------------------------------------------------
   const multiDay = Math.max(resort.ticket.floor, 1 - resort.ticket.slope * (params.parkDays - 1));
-  let tickets = 0;
+  // Per traveller, not one running total, because an annual pass covers
+  // PEOPLE. Zeroing a share of one lump sum would be arithmetic that happens
+  // to land near the right answer for a party that is all adults and be
+  // wrong for every other party.
+  const ticketPerHead = ages.map(() => 0);
   for (let i = 0; i < params.parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
     const t = book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
-    for (const age of ages) {
+    ages.forEach((age, idx) => {
       const band = bandOf(resort, age);
       const gate = band === "infant" ? 0
         : band === "child" ? t.child
         : band === "junior" ? (t.junior ?? t.adult * (resort.ticket.junior ?? 0.9))
         : t.adult;
-      tickets += gate * multiDay;
-    }
+      ticketPerHead[idx] = (ticketPerHead[idx] ?? 0) + gate * multiDay;
+    });
   }
+  let tickets = ticketPerHead.reduce((a, b) => a + b, 0);
 
   // --- park hopper (flat per-ticket add-on, not scaled by parkDays or ------
   // --- season) — silently a no-op at a resort with no hopper price. --------
@@ -572,15 +631,60 @@ export function priceTrip(
   // everywhere below, so there is no doubt which wins.
   const hopperAdult = book.setting?.(`hopper.${resort.id}.adult`) ?? resort.ticket.hopperAdultUsd;
   const hopperChild = book.setting?.(`hopper.${resort.id}.child`) ?? resort.ticket.hopperChildUsd;
-  if (params.hopper && hopperAdult) {
-    for (const age of ages) {
-      const band = bandOf(resort, age);
-      hopperUsd += band === "infant" ? 0
-        : band === "child" ? (hopperChild ?? hopperAdult)
-        : band === "junior" ? hopperAdult * (resort.ticket.junior ?? 0.9)
-        : hopperAdult;
+  const hopperPerHead = ages.map((age) => {
+    if (!params.hopper || !hopperAdult) return 0;
+    const band = bandOf(resort, age);
+    return band === "infant" ? 0
+      : band === "child" ? (hopperChild ?? hopperAdult)
+      : band === "junior" ? hopperAdult * (resort.ticket.junior ?? 0.9)
+      : hopperAdult;
+  });
+  hopperUsd = hopperPerHead.reduce((a, b) => a + b, 0);
+  tickets += hopperUsd;
+
+  /* --- annual passes ----------------------------------------------------
+   * A pass you already hold does not make this trip cheaper to Disney; it
+   * makes it cheaper to YOU, which is the number the traveller is asking
+   * about. So the gate cost for whoever holds one drops to zero here, and the
+   * pass's own annual price is reported separately rather than charged to
+   * this trip — see src/memberships.ts for why that is the honest shape.
+   *
+   * Passes are applied to the DEAREST tickets first. Nothing here knows which
+   * member of a family holds which pass, and this is the optimistic reading,
+   * so `coversDearestFirst` rides along and the card says so. */
+  const holding = (params.annualPasses ?? []).find((h) => h.resortId === resort.id);
+  const tier = holding ? findTier(holding.resortId, holding.tierId) : undefined;
+  let passResult: NonNullable<TripPrice["membership"]>["pass"] = null;
+  let parkingPassPct = 0;
+  if (holding && tier) {
+    const used = Math.min(holding.count, ages.length);
+    const order = ticketPerHead
+      .map((v, idx) => ({ v, idx }))
+      .sort((a, b) => b.v - a.v)
+      .slice(0, used)
+      .map((x) => x.idx);
+    let ticketsSaved = 0;
+    for (const idx of order) {
+      ticketsSaved += ticketPerHead[idx]!;
+      if (tier.hopperIncluded) ticketsSaved += hopperPerHead[idx]!;
     }
-    tickets += hopperUsd;
+    tickets = Math.max(0, tickets - ticketsSaved);
+    hopperUsd = tier.hopperIncluded
+      ? hopperPerHead.filter((_, idx) => !order.includes(idx)).reduce((a, b) => a + b, 0)
+      : hopperUsd;
+    // The parking perk is a share of the resort's parking-and-transfers line,
+    // applied below once that line exists. A party with one pass among four
+    // still only parks one car, so this is not scaled by how many they hold.
+    parkingPassPct = Math.min(100, Math.max(0, tier.parkingPct));
+    const pricePerPassUsd = book.setting?.(passPriceKey(resort.id, tier.id)) ?? tier.priceUsd;
+    passResult = {
+      resortId: resort.id, tierId: tier.id, label: tier.label,
+      count: holding.count, used, pricePerPassUsd,
+      annualCostUsd: Math.round(pricePerPassUsd * holding.count * 100) / 100,
+      savedUsd: ticketsSaved,
+      ticketsWithoutPassUsd: ticketsSaved,
+      coversDearestFirst: true,
+    };
   }
 
   // --- food --------------------------------------------------------------
@@ -718,7 +822,14 @@ export function priceTrip(
   // Off-property looks cheaper than it is until you pay to park at the parks —
   // unless there's no hotel at all, in which case there's nothing to model.
   const perDay = stay === "none" ? 0 : transportPerDay(book, resort, hotelPick.onProperty);
-  const transport = perDay * (params.nights + 1);
+  const transportFull = perDay * (params.nights + 1);
+  // A pass's parking perk lands here rather than on the ticket line, because
+  // parking is what it actually pays for. On property this is usually zero
+  // already, so the perk quietly does nothing — which is correct, not a bug.
+  const transport = Math.round(transportFull * (1 - parkingPassPct / 100) * 100) / 100;
+  if (passResult) {
+    passResult.savedUsd = Math.round((passResult.savedUsd + (transportFull - transport)) * 100) / 100;
+  }
   const hotel = rooms + transport;
 
   // --- rental car — always its own line, whether renting for the drive -----
@@ -730,7 +841,26 @@ export function priceTrip(
     ? { dailyRateUsd: carRentalRate(book), nights: params.nights }
     : null;
 
-  const total = Math.max(0, flights + tickets + hotel + food + driving + rentalCarUsd - flatOffTotal);
+  /* --- DVC points rented out --------------------------------------------
+   * Money the member receives for points they are not using, set against
+   * what this trip costs them. Deliberately a credit on the TOTAL and not a
+   * discount on the hotel line: renting points has nothing to do with what a
+   * room here costs, and folding it into the room would make the hotel
+   * comparison between six resorts lie. */
+  const dvcPerPoint = book.setting?.(DVC_TAKE_HOME_KEY) ?? DVC_TAKE_HOME_PER_POINT;
+  const dvc = params.dvcRental && params.dvcRental.points > 0
+    ? {
+        points: params.dvcRental.points,
+        takeHomePerPointUsd: params.dvcRental.takeHomePerPointUsd || dvcPerPoint,
+        creditUsd: 0,
+      }
+    : null;
+  if (dvc) dvc.creditUsd = dvcCredit({ points: dvc.points, takeHomePerPointUsd: dvc.takeHomePerPointUsd });
+
+  const membership: TripPrice["membership"] = passResult || dvc ? { pass: passResult, dvc } : null;
+
+  const total = Math.max(0, flights + tickets + hotel + food + driving + rentalCarUsd
+    - flatOffTotal - (dvc?.creditUsd ?? 0));
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
   return {
@@ -741,7 +871,7 @@ export function priceTrip(
       hotelPick, hotelTier, stayCompare, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd,
-      rentalCarUsd, rentalCarPick,
+      rentalCarUsd, rentalCarPick, membership,
     },
   };
 }

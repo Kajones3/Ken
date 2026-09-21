@@ -8,7 +8,9 @@ import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { SETTINGS, loadSettings, setSetting, applySettings } from "./settings.js";
 import { reseedForKeys } from "./reseed.js";
-import { csvCell, entriesFromCsv } from "./csv.js";
+import { csvCell, entriesFromCsv, parseCsv } from "./csv.js";
+import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
+         KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
@@ -20,6 +22,7 @@ import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { parsePassHoldings, parseDvcRental, PASS_RESORTS, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
@@ -112,6 +115,18 @@ function paramsFrom(q: URLSearchParams): TripParams {
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
     transportMode: "fly",
+    // Free, like the overrides they most resemble: a traveller correcting the
+    // app's picture of what THEY actually pay. Both are unverified claims
+    // about the traveller's own finances that never leave their own board,
+    // so there is nothing here to gate. `passes` is sent as
+    // resort:tier:count triples so one query param carries a whole party's
+    // holdings across the six-resort board.
+    annualPasses: parsePassHoldings(
+      (q.get("passes") ?? "").split(",").filter(Boolean).map((chunk) => {
+        const [resortId, tierId, count] = chunk.split(":");
+        return { resortId, tierId, count };
+      })),
+    dvcRental: parseDvcRental(q.get("dvcPoints"), q.get("dvcPerPoint")),
   };
 }
 function clamp(n: number, lo: number, hi: number): number {
@@ -417,7 +432,13 @@ const server = createServer(async (req, res) => {
     // of it in prototype.html would be free to drift from the one the
     // pricing and the paid rotation use — the same reason trip cost lives in
     // exactly one module. The client just reads the field.
-    if (url.pathname === "/api/meta") return send(200, {
+    if (url.pathname === "/api/meta") {
+      // Read live rather than from the module default: the owner can change
+      // the take-home figure, and the box travellers type into should start
+      // on their number, not the one this app shipped with.
+      const dvcDefault = (await loadSettings(db)).find((v) => v.key === DVC_TAKE_HOME_KEY)?.value
+        ?? DVC_TAKE_HOME_PER_POINT;
+      return send(200, {
       origins: withSuggestedMode(ORIGINS),
       plusOrigins: withSuggestedMode(PLUS_ORIGINS),
       // The order to OFFER them in — by city, free and Plus interleaved.
@@ -429,7 +450,13 @@ const server = createServer(async (req, res) => {
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
       climate: CLIMATE,
-    }, { cache: "public, max-age=300" });
+      // Annual pass programmes, and the default DVC take-home figure the
+      // points box starts on. Sent from here so the catalogue has one home
+      // and the browser never carries its own copy of a price.
+      passPrograms: PASS_RESORTS,
+      dvcTakeHomePerPoint: dvcDefault,
+      }, { cache: "public, max-age=300" });
+    }
 
     // --- auth: an email and nothing else. Real enough to make Plus real; ---
     // --- explicitly not enough for a public launch (see src/auth.ts).    ---
@@ -774,6 +801,15 @@ const server = createServer(async (req, res) => {
         const mode = resortTransportMode(gettingThere, savedResort);
         Object.assign(params, mode === "drive" ? driveBase : flyBase);
       }
+      // Passes and DVC points are normalised HERE, not trusted as saved. The
+      // alert job re-prices straight from this row months later, and a tier
+      // Disney has since retired (or a number somebody hand-edited) must not
+      // reach pricing — parsePassHoldings drops what it does not recognise,
+      // the same rule saved attraction picks follow.
+      params.annualPasses = parsePassHoldings(params.annualPasses);
+      params.dvcRental = parseDvcRental(
+        (params.dvcRental as { points?: unknown } | null)?.points,
+        (params.dvcRental as { takeHomePerPointUsd?: unknown } | null)?.takeHomePerPointUsd);
       // Stamps today's gas price into the saved trip so the alert job has a
       // "then" to compare "now" against — same idea as baseline_total, just
       // for the one input that changes on its own without the user doing
@@ -949,6 +985,92 @@ const server = createServer(async (req, res) => {
       if (!result.ok) return send(400, { error: "rejected", errors: result.errors });
       const reseed = await reseedForKeys(db, entries.map((e) => e.key));
       return send(200, { ...result, reseeded: reseed.resorts, reseededRows: reseed.rows }, { cache: "no-store" });
+    }
+
+
+    /* ------------------------- fare corrections -------------------------
+     * Its own page and its own spreadsheet, deliberately. A fare is per
+     * route AND per date — 171 domestic routes plus 95 international across
+     * thirteen months — so folding them into the 73-row settings sheet would
+     * bury everything else in it. The owner's call: "I think it would be too
+     * much to have ALL of it on one sheet."
+     * -------------------------------------------------------------------- */
+    if (url.pathname === "/api/admin/fares" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, {
+        corrections: await listCorrections(db),
+        origins: [...KNOWN_ORIGINS].sort(),
+        destinations: [...KNOWN_DESTINATIONS].sort(),
+        defaultDays: DEFAULT_CORRECTION_DAYS,
+      }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/fares" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await addCorrection(db, body, owner.email);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(201, { ok: true, id: r.id, corrections: await listCorrections(db) }, { cache: "no-store" });
+    }
+
+    const fareMatch = url.pathname.match(/^\/api\/admin\/fares\/([^/]+)$/);
+    if (fareMatch && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const gone = await deleteCorrection(db, fareMatch[1]!);
+      return send(gone ? 200 : 404, gone ? { ok: true } : { error: "not found" }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/fares.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const rows = await listCorrections(db);
+      const head = ["from", "to", "depart_date", "price", "band", "nights", "expires_on", "note", "counting", "id"];
+      const lines = [head.join(",")];
+      for (const c of rows) {
+        lines.push([c.origin, c.destination, c.departDate, c.priceUsd, c.band,
+          c.nights ?? "", c.expiresOn, c.note, c.counting ? "yes" : "expired", c.id].map(csvCell).join(","));
+      }
+      // An empty file still carries its header, so the owner always has a
+      // template to type into rather than a blank page to guess at.
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-fares-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
+    if (url.pathname === "/api/admin/fares.csv" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const parsed = parseCsv(String(body.csv ?? ""));
+      if (!parsed.length) return send(400, { error: "unreadable", message: "That file had no rows in it." });
+      const header = parsed[0]!.map((h) => h.trim().toLowerCase());
+      const at = (name: string) => header.indexOf(name);
+      const need = ["from", "to", "depart_date", "price"];
+      const missing = need.filter((n) => at(n) < 0);
+      if (missing.length) {
+        return send(400, { error: "no_header", message:
+          `That file needs a header row with ${need.join(", ")} columns — missing: ${missing.join(", ")}. Download the fares spreadsheet again and type into it.` });
+      }
+      const cell = (r: string[], name: string) => (at(name) >= 0 ? (r[at(name)] ?? "").trim() : "");
+      const inputs = parsed.slice(1).map((r) => ({
+        origin: cell(r, "from"), destination: cell(r, "to"), departDate: cell(r, "depart_date"),
+        priceUsd: cell(r, "price"), band: cell(r, "band") || "typical",
+        nights: cell(r, "nights"), expiresOn: cell(r, "expires_on"), note: cell(r, "note"),
+      }));
+      // All or nothing, the same rule the settings sheet follows and for the
+      // same reason: a half-applied file leaves evidence in a state nobody
+      // intended and nobody can identify.
+      const errors: string[] = [];
+      inputs.forEach((row, i) => {
+        const v = validateCorrection(row);
+        if (!v.ok) errors.push(`row ${i + 2}: ${v.reason}`);
+      });
+      if (errors.length) return send(400, { error: "rejected", errors });
+      for (const row of inputs) await addCorrection(db, row, owner.email);
+      return send(200, { ok: true, added: inputs.length, corrections: await listCorrections(db) }, { cache: "no-store" });
     }
 
     send(404, { error: "not found" });
