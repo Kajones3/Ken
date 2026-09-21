@@ -1,0 +1,28 @@
+name: Parkfare debug wait times
+
+# Reconnaissance for the "average wait time this month" card, run from Actions
+# because the sandbox Claude works in cannot reach queue-times.com at all —
+# the egress proxy answers `CONNECT tunnel failed, 403`, exactly as it does for
+# every Disney domain and every weather API.
+#
+# It answers, with facts rather than guesses: does Queue-Times cover all six of
+# our resorts (the owner's own bar — "only valuable if we can get it for all
+# the parks"), is there a historical endpoint or only a live one, and what does
+# a real payload look like.
+#
+# Read-only. No secrets, no database, no commits. Manual only.
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - name: Probe Queue-Times
+        run: npm run probe-wait-times
