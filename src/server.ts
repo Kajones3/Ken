@@ -14,6 +14,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb, type Db } from "./db.js";
@@ -450,6 +451,13 @@ const server = createServer(async (req, res) => {
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
       climate: CLIMATE,
+      // USD -> local, for the "a $50 dinner is about ¥355" line on a shared
+      // PDF. Generated from ECB reference rates; `placeholder` is true while
+      // the committed table is still the hand-seeded guess, so the page can
+      // say so rather than presenting one as an observation. The browser used
+      // to carry its own hardcoded copy of these five numbers, which nothing
+      // could ever update.
+      exchange: { rates: EXCHANGE_RATES, asOf: EXCHANGE_AS_OF, placeholder: EXCHANGE_IS_PLACEHOLDER },
       // Annual pass programmes, and the default DVC take-home figure the
       // points box starts on. Sent from here so the catalogue has one home
       // and the browser never carries its own copy of a price.
