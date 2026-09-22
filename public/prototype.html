@@ -285,13 +285,8 @@ a{color:var(--ink)}
 .spreadnote{margin:6px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:70ch}
 .spreadnote b{color:var(--text)}
 .spreadlow{display:inline-block; margin-top:2px; font-weight:600; color:var(--text)}
-/* Sits with the flight numbers because that is where the question occurs to
-   people, even though it moves the whole board. The copy says so. */
-.basisbox{display:flex; gap:10px; align-items:flex-start; margin:0 0 10px; padding:9px 11px;
-  border:1px solid var(--rule); border-radius:10px; background:var(--surface); cursor:pointer}
-.basisbox input{margin-top:2px; flex:0 0 auto}
-.basisbox b{display:block; font-size:12.5px; font-weight:650}
-.basisbox small{display:block; margin-top:3px; font-size:11.5px; color:var(--muted); line-height:1.45}
+/* The second booking link reads as the alternative it is, not as a rival. */
+.booksecond{display:inline-block; margin-left:14px; font-weight:500; opacity:.75}
 .crowdnote{background:var(--surface-2); border:1px solid var(--line);
   border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
 .crowdnote b{font-weight:680}
@@ -910,6 +905,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="none">Not much</option>
           <option value="some" selected>Somewhat</option>
           <option value="high">A lot</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="priceBasis">Which day should we price?</label>
+        <select id="priceBasis">
+          <option value="typical" selected>A typical day that month</option>
+          <option value="cheapest">The cheapest day we can find</option>
         </select>
       </div>
     </div>
@@ -1536,9 +1538,7 @@ function readParams(){
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
     crowdCare: $("#crowdCare").value,
-    // Not a form control — it lives on the Flights card, so it is read from
-    // the last search rather than from the DOM, which is rebuilt on render.
-    priceBasis: (params && params.priceBasis) === "cheapest" ? "cheapest" : "typical",
+    priceBasis: $("#priceBasis").value === "cheapest" ? "cheapest" : "typical",
     passes: readPasses(),
     dvcPoints: +$("#dvcPoints").value || 0,
     dvcPerPoint: +$("#dvcPerPoint").value || 0,
@@ -2540,6 +2540,39 @@ async function renderDetail(){
   const flightLink =
     `https://www.google.com/travel/flights?hl=en&curr=USD&q=${encodeURIComponent(flightQuery)}`;
 
+  /**
+   * KAYAK, the second link — and the reason there are two.
+   *
+   * Google's `q=` search carries the route and both dates and NOT the party
+   * size: no wording was found that it parses into a passenger count, so the
+   * card has to tell people to set it themselves. Kayak puts all of it in the
+   * path, party size included, which is the one thing the Google link cannot
+   * do.
+   *
+   * There is no conflict with SerpApi. SerpApi is where the app's fare DATA
+   * comes from, server-side and overnight; this is where a traveller is sent
+   * to book. They are unrelated choices and always have been — the cached
+   * row's own affiliate deep link has always pointed wherever the provider
+   * said, not at Google.
+   *
+   * Both ship because kayak.com is refused by this sandbox's egress proxy
+   * (tested, `CONNECT tunnel failed, 403`) exactly as google.com is, so this
+   * format cannot be confirmed from here and the Google one now demonstrably
+   * works. Shipping the unverified link alone would repeat the `#flt=`
+   * mistake: a link nobody here could test, replacing one that worked.
+   * Whichever the owner confirms, the other goes.
+   *
+   * Children are counted, never dropped. A family sent to a page quietly
+   * priced for the adults alone is a wrong number presented as a real one —
+   * the same rule that stops Disney's hotel link carrying `numAdults` when
+   * there are children it cannot also carry.
+   */
+  const kayakKids = list.filter(a => a < 18).length;
+  const kayakAdults = Math.max(1, list.length - kayakKids);
+  const kayakLink =
+    `https://www.kayak.com/flights/${p.origin}-${x.destination}/${x.start}/${backDate}`
+    + `/${kayakAdults}adults${kayakKids ? `/${kayakKids}children` : ""}?sort=bestflight_a`;
+
   // tickets, grouped by this resort's own age bands — split from the real total
   const { groups, perGroup } = splitByBand(r, list, x.tickets);
   const ORDER = ["adult","junior","child","infant"];
@@ -2829,14 +2862,6 @@ async function renderDetail(){
             <div class="kpitile total"><div class="k">Flights</div>
               <div class="v">${usd(x.flights)}</div><div class="s">all in</div></div>
           </div>`}
-          ${excludeFlights ? "" : `<label class="basisbox">
-            <input type="checkbox" id="cheapBasis"${item.priceBasis === "cheapest" ? " checked" : ""}>
-            <span><b>Show the cheapest fares we found</b>
-              <small>${item.priceBasis === "cheapest"
-                ? "Showing the best day this month — a real fare, but often a day few people would pick."
-                : "Right now you're seeing a typical day. Tick this if your dates are flexible and you want the best this month can do."}
-                Applies to all six resorts, so the comparison stays fair.</small></span>
-          </label>`}
           ${fareCtl}
           ${r.altArrivalAirports.length ? (()=>{
             const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
@@ -2855,9 +2880,12 @@ async function renderDetail(){
             <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
           <div class="foot">
             ${fareWhy}
-            ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">Check live fares →</a>
-              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}.
-                ${pax > 1 ? `Set it to ${pax} travellers there — the link cannot carry that. ` : ""}If it lands on different dates, the price you see there is not this trip's.</p>` : ""}
+            ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
+              <a class="book booksecond" href="${flightLink}" target="_blank" rel="noopener">or on Google Flights →</a>
+              <p class="sub" style="margin:6px 0 0">Both open ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}.
+                Kayak also carries ${kayakAdults} adult${kayakAdults===1?"":"s"}${kayakKids ? ` and ${kayakKids} child${kayakKids===1?"":"ren"}` : ""};
+                Google cannot, so set the travellers there yourself.
+                If either lands on different dates, the price you see is not this trip's.</p>` : ""}
           </div>
         </div>`}
         <div class="card">
@@ -3904,7 +3932,7 @@ async function openSavedTrip(trip){
   }
   $("#hopper").value = q.hopper ? "1" : "0";
   $("#crowdCare").value = q.crowdCare || "some";
-  params.priceBasis = q.basis === "cheapest" ? "cheapest" : "typical";
+  $("#priceBasis").value = q.basis === "cheapest" ? "cheapest" : "typical";
   // Passes and points come back too — reopening a saved trip that priced
   // itself against four Incredi-Passes and then quietly dropping them would
   // show a different, much larger total under the same trip's name.
@@ -4571,21 +4599,6 @@ $("#pdfPickGo").addEventListener("click", ()=>{
 // this, Ctrl+P produces a blank sheet — which is exactly the bug that started
 // this work, one layer down.
 window.addEventListener("beforeprint", buildPrintDoc);
-
-/* "Show the cheapest fares we found" — switches which day of the month the
-   whole board quotes. Delegated, because the Flights card it lives on is
-   rebuilt on every render, so a handler bound to the element would be lost
-   the first time anything re-renders.
-
-   It re-runs the search rather than re-rendering: the basis is resolved
-   server-side (see compare() in server.ts), which is also what stops a
-   client deciding it for one resort and not the others. */
-document.addEventListener("change", (e) => {
-  if (!e.target.closest || !e.target.matches("#cheapBasis")) return;
-  params.priceBasis = e.target.checked ? "cheapest" : "typical";
-  // recompute() already keeps whichever resort is open; no second argument.
-  recompute();
-});
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */
