@@ -28,6 +28,18 @@ export interface HotelDef {
 export interface Resort {
   id: string; name: string; city: string; iata: string;
   lat: number; lon: number; currency: string; parks: number;
+  /** Each park and the lands inside it, for the "what does this resort
+   *  actually have" half of the shared PDF. `parks` above stays the count
+   *  the board shows; config.test.ts pins the two against each other so a
+   *  park added here and not there (or the reverse) fails a test rather
+   *  than producing a page that contradicts its own summary line.
+   *
+   *  HAND-MAINTAINED, and the shipped rows are a CLAUDE DRAFT the owner
+   *  corrects — same standing as the four international hotel baselines and
+   *  the visa notes. Lands are renamed and rebuilt (Shanghai gained Zootopia,
+   *  Hong Kong gained World of Frozen, Walt Disney World is rebuilding
+   *  DinoLand), so treat an unchecked row as plausible, not confirmed. */
+  parkList: { name: string; lands: string[] }[];
   region: "dom" | "atl" | "pac";
   note: string;
   /** Short, hand-maintained facts that don't fit the price breakdown but
@@ -117,6 +129,12 @@ export const RESORTS: Resort[] = [
     id: "wdw", name: "Walt Disney World", city: "Orlando, Florida", iata: "MCO",
     lat: 28.43, lon: -81.31, currency: "USD", parks: 4, region: "dom",
     note: "4 parks · park-hopper priced separately",
+    parkList: [
+      { name: "Magic Kingdom", lands: ["Main Street, U.S.A.", "Adventureland", "Frontierland", "Liberty Square", "Fantasyland", "Tomorrowland"] },
+      { name: "EPCOT", lands: ["World Celebration", "World Discovery", "World Nature", "World Showcase"] },
+      { name: "Disney's Hollywood Studios", lands: ["Hollywood Boulevard", "Echo Lake", "Grand Avenue", "Star Wars: Galaxy's Edge", "Toy Story Land", "Animation Courtyard", "Sunset Boulevard"] },
+      { name: "Disney's Animal Kingdom", lands: ["Discovery Island", "Pandora \u2013 The World of Avatar", "Africa", "Asia", "DinoLand U.S.A."] },
+    ],
     goodToKnow: [
       "Park Hopper (same-day access to more than one park) and Genie+/Lightning Lane (paid line-skipping) are both sold separately from base admission and aren't priced here.",
     ],
@@ -168,6 +186,10 @@ export const RESORTS: Resort[] = [
     id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "SNA",
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
+    parkList: [
+      { name: "Disneyland Park", lands: ["Main Street, U.S.A.", "Adventureland", "New Orleans Square", "Frontierland", "Critter Country", "Star Wars: Galaxy's Edge", "Fantasyland", "Mickey's Toontown", "Tomorrowland"] },
+      { name: "Disney California Adventure", lands: ["Buena Vista Street", "Hollywood Land", "Avengers Campus", "Cars Land", "San Fransokyo Square", "Pacific Wharf", "Paradise Gardens Park", "Pixar Pier", "Grizzly Peak"] },
+    ],
     goodToKnow: [
       "Park Hopper and paid Lightning Lane line-skipping are sold separately from base admission and aren't priced here.",
     ],
@@ -203,6 +225,10 @@ export const RESORTS: Resort[] = [
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
+    parkList: [
+      { name: "Disneyland Park", lands: ["Main Street, U.S.A.", "Frontierland", "Adventureland", "Fantasyland", "Discoveryland"] },
+      { name: "Walt Disney Studios Park", lands: ["Front Lot", "Production Courtyard", "Toon Studio", "Worlds of Pixar", "Avengers Campus"] },
+    ],
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
     // Beauvais dropped (2026-09-10): it is a budget-carrier base with no US
@@ -211,7 +237,7 @@ export const RESORTS: Resort[] = [
     // traveller actually arrives at.
     altArrivalAirports: [],
     goodToKnow: [
-      "Following on from the pricing note above: if you do want the room-only stay this breakdown assumes, it isn't bookable on Disney's own site — call Disney directly, or book the hotel through a third party such as Booking.com or Expedia and buy park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
+      "To be clear about which half is the awkward one: park tickets on their own ARE sold online, at tickets.disneylandparis.com, dated or undated, with no hotel attached. It is the ROOM WITHOUT TICKETS that Disney will not sell you online — call Disney directly for a room-only rate, or book the hotel through a third party such as Booking.com or Expedia and buy the park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
       "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
@@ -220,15 +246,18 @@ export const RESORTS: Resort[] = [
     // as goodToKnow's visa notes: plausible and conventional, not checked.
     // The owner click-tests these; fix here if one 404s.
     onPropertyHotels: { url: "https://www.disneylandparis.com/en-gb/hotels/" },
-    // Disney sells Paris as a hotel + ticket PACKAGE by default — a room-only
-    // stay exists but is not sold online. We price room and tickets as two
+    // Disney sells Paris ACCOMMODATION as a hotel + ticket PACKAGE by
+    // default — a room-only stay exists but is not sold online. Note the
+    // scope, re-checked 2026-09-21 after the owner asked: buying park
+    // tickets alone online is ordinary and always has been, so the bundling
+    // constraint runs one way only. We price room and tickets as two
     // separate lines, which matches the room-only booking most people will
     // not actually make. Deliberately not "fixed" in the pricing math:
     // package rates are not published, so inventing one would be less honest
     // than a clearly-labelled room-only basis. Labelled here instead.
     dataConfidence: {
       level: "Priced room-only",
-      note: "Disney's own site sells Disneyland Paris as a hotel + ticket package, with tickets included for every day of your stay — a room-only stay exists but isn't sold online. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
+      note: "Park tickets on their own are sold online normally — that part is fine. What Disney's own site will not sell you online is a ROOM WITHOUT TICKETS: book a Disney hotel there and it comes as a hotel + ticket package, with admission included for every day of your stay. A room-only stay does exist, but only by phone or through a third party. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
     },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
@@ -261,12 +290,22 @@ export const RESORTS: Resort[] = [
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under licence",
+    parkList: [
+      { name: "Tokyo Disneyland", lands: ["World Bazaar", "Adventureland", "Westernland", "Critter Country", "Fantasyland", "Toontown", "Tomorrowland"] },
+      { name: "Tokyo DisneySea", lands: ["Mediterranean Harbor", "American Waterfront", "Port Discovery", "Lost River Delta", "Arabian Coast", "Mermaid Lagoon", "Mysterious Island", "Fantasy Springs"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — checked at write time, always confirm current requirements before booking.",
     ],
     closuresUrl: "https://touringplans.com/tokyo-disney/closures",
     closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
-    ticketUrl: "https://www.tokyodisneyresort.jp/en/ticket/",
+    // The owner's own click-tested link (2026-09-21): Tokyo's real purchase
+    // flow, not the informational ticket page the previous URL landed on.
+    // The `_gl=...` cross-domain analytics token they pasted with it is
+    // stripped deliberately — it is a short-lived per-session linker value,
+    // so shipping it would hard-code one expired browsing session into every
+    // traveller's link. `lang=en` is the part that actually matters.
+    ticketUrl: "https://plan.tokyodisneyresort.jp/2/4/?lang=en",
     // UNVERIFIED from this environment — every Disney domain is blocked by
     // the egress proxy here, so this path could not be fetched. Same caveat
     // as goodToKnow's visa notes: plausible and conventional, not checked.
@@ -305,6 +344,9 @@ export const RESORTS: Resort[] = [
     id: "shdr", name: "Shanghai Disney Resort", city: "Pudong, Shanghai", iata: "PVG",
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
+    parkList: [
+      { name: "Shanghai Disneyland", lands: ["Mickey Avenue", "Gardens of Imagination", "Fantasyland", "Treasure Cove", "Adventure Isle", "Tomorrowland", "Toy Story Land", "Zootopia"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
       "Shanghai Disney's real ticket pricing bands some rides by height, not just age — not modeled here; the age-based child/adult split below is a simplification.",
@@ -351,6 +393,9 @@ export const RESORTS: Resort[] = [
     id: "hkdl", name: "Hong Kong Disneyland", city: "Lantau Island, Hong Kong", iata: "HKG",
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
+    parkList: [
+      { name: "Hong Kong Disneyland", lands: ["Main Street, U.S.A.", "Adventureland", "Grizzly Gulch", "Mystic Point", "Toy Story Land", "Fantasyland", "Tomorrowland", "World of Frozen"] },
+    ],
     goodToKnow: [
       "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — Hong Kong has its own immigration, separate from mainland China, even though mainland China requires a visa for most U.S. visitors. Just need a passport valid 6+ months. If your trip also includes mainland China (e.g. Shanghai Disney), that's a separate, additional visa requirement — see that resort's notes. Source: U.S. Consulate General Hong Kong & Macau — checked at write time, always confirm current requirements before booking.",
     ],
@@ -471,6 +516,49 @@ export function isOnlyAt(attraction: AttractionDef): boolean {
 }
 
 export interface Origin { iata: string; name: string; lat: number; lon: number }
+/* ===========================================================================
+ * Queue-Times park ids, for the wait-time recorder.
+ *
+ * DRAFT UNTIL THE PROBE HAS RUN. These ids are Claude's best recollection,
+ * not observations — the "Parkfare debug wait times" workflow prints the real
+ * list, and it cannot be dispatched until this branch reaches the default
+ * branch (GitHub only lists workflow_dispatch workflows that live there).
+ *
+ * The `name` is here to be CHECKED, never displayed. The collector refuses a
+ * park whose returned name does not match, so a wrong id fails loudly instead
+ * of quietly recording Alton Towers as Walt Disney World — which is exactly
+ * the failure a draft list invites.
+ *
+ * Attribution: Queue-Times asks for a "Powered by Queue-Times.com" credit in
+ * any app that shows their data. Nothing shows it yet, so nothing owes the
+ * credit yet — but anything that ever renders these numbers must carry it.
+ * ======================================================================== */
+export interface QueueTimesPark { id: number; name: string }
+
+export const QUEUE_TIMES_PARKS: Record<string, QueueTimesPark[]> = {
+  wdw:  [{ id: 6, name: "Magic Kingdom" }, { id: 5, name: "Epcot" },
+         { id: 7, name: "Disney's Hollywood Studios" }, { id: 8, name: "Disney's Animal Kingdom" }],
+  dlr:  [{ id: 16, name: "Disneyland" }, { id: 17, name: "Disney California Adventure" }],
+  dlp:  [{ id: 4, name: "Disneyland Paris" }, { id: 28, name: "Walt Disney Studios" }],
+  tdr:  [{ id: 274, name: "Tokyo Disneyland" }, { id: 275, name: "Tokyo DisneySea" }],
+  shdr: [{ id: 32, name: "Shanghai Disneyland" }],
+  hkdl: [{ id: 31, name: "Hong Kong Disneyland" }],
+};
+
+/**
+ * Only record a sample while a park is properly open for the day.
+ *
+ * The owner's call, and it is about what the number MEANS rather than about
+ * saving requests: "sometimes wait times are single digits ... 9am - 7:00pm
+ * will be enough data." Rope-drop and the last hour are genuinely quiet, so
+ * including them produces an average describing an experience nobody has.
+ *
+ * Local to the park, which is what makes one UTC schedule work for six
+ * timezones at once.
+ */
+export const WAIT_SAMPLE_FROM_HOUR = 9;
+export const WAIT_SAMPLE_TO_HOUR = 19;
+
 export const ORIGINS: Origin[] = [
   { iata: "ATL", name: "Atlanta", lat: 33.64, lon: -84.43 },
   { iata: "BWI", name: "Baltimore", lat: 39.18, lon: -76.67 },

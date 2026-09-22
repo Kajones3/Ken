@@ -41,4 +41,48 @@ jobs:
           grep -m 5 "${{ inputs.grep_for }}" "$csv"
           echo "--- total row count ---"
           wc -l "$csv"
+
+          # ------------------------------------------------------------------
+          # IS MktFare ONE DIRECTION OR THE WHOLE ROUND TRIP?
+          #
+          # This is the question that matters, and `grep -m 5` above cannot
+          # answer it: five arbitrary rows are five different itineraries.
+          # You need BOTH rows of ONE itinerary, side by side.
+          #
+          # BTS's own documentation describes DB1BMarket as holding a
+          # "prorated market fare" for a "directional" market, which reads
+          # like one leg. The parser says the opposite: the same MktFare
+          # appears on both rows and is the WHOLE round trip. On 2026-09-22
+          # that was nearly "fixed" on the strength of the documentation
+          # alone, which would have doubled every domestic price in the app.
+          # What stopped it was the fare trend: across 74 routes, real
+          # round-trip fares sat at 0.58x-1.24x the baseline, and a one-leg
+          # baseline would have put every one of them near 2x.
+          #
+          # This prints the proof from the file itself so nobody has to
+          # re-run that argument. Read it like this:
+          #   two rows carrying the SAME fare, and that fare is a plausible
+          #   whole round trip                 -> the parser is right, leave it.
+          #   two rows, each ~half that sum    -> MktFare is one leg, and
+          #                                       the baseline needs doubling.
+          # ------------------------------------------------------------------
+          echo ""
+          echo "=== MktFare basis: every row of one round-trip itinerary ==="
+          itin=$(awk -F',' -v code="\"${{ inputs.grep_for }}\"" '
+            NR>1 && ($9==code || $18==code) { c[$1]++ }
+            END { for (i in c) if (c[i]==2) { print i; exit } }
+          ' "$csv")
+          if [ -z "$itin" ]; then
+            echo "No two-market itinerary found touching ${{ inputs.grep_for }}."
+            echo "That is itself informative: it would mean round trips are NOT two rows."
+          else
+            echo "ItinID $itin — columns: ItinID, Origin, Dest, Passengers, MktFare"
+            awk -F',' -v id="$itin" 'NR==1 || $1==id { print $1", "$9", "$18", "$34", "$35 }' "$csv"
+            echo ""
+            echo "Sum of MktFare across that itinerary's markets:"
+            awk -F',' -v id="$itin" '$1==id { s+=$35 } END { printf "  $%.2f\n", s }' "$csv"
+            echo "Both rows the same, and that IS the round trip -> parser is right."
+            echo "Each row about half the sum -> MktFare is one leg, and the baseline is halved."
+          fi
+
           rm -rf db1b.zip db1b_out

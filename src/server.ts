@@ -14,7 +14,12 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
+import {
+  effectiveAttractions, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
+  validateAttraction,
+} from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
@@ -274,6 +279,11 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // A free request gets an empty list, so every resort's `attractions` comes
   // back absent and the board shows nothing rather than a teaser.
   const picks = plus && user ? await picksFor(db, user.id) : [];
+  // The owner's list overlaid on the shipped one, loaded once for the whole
+  // board rather than per resort. Skipped entirely when nobody has picked
+  // anything, since the matching never runs then and this would be a query
+  // spent to answer a question nothing asks.
+  const catalogue = picks.length ? await effectiveAttractions(db) : [];
 
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
@@ -287,7 +297,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
-    const m = picks.length ? matchesForResort(resort.id, picks) : null;
+    const m = picks.length ? matchesForResort(resort.id, picks, catalogue) : null;
     const attractions = m
       ? { ...m, summary: matchSummary(m, picks.length) }
       : undefined;
@@ -450,6 +460,13 @@ const server = createServer(async (req, res) => {
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
       climate: CLIMATE,
+      // USD -> local, for the "a $50 dinner is about ¥355" line on a shared
+      // PDF. Generated from ECB reference rates; `placeholder` is true while
+      // the committed table is still the hand-seeded guess, so the page can
+      // say so rather than presenting one as an observation. The browser used
+      // to carry its own hardcoded copy of these five numbers, which nothing
+      // could ever update.
+      exchange: { rates: EXCHANGE_RATES, asOf: EXCHANGE_AS_OF, placeholder: EXCHANGE_IS_PLACEHOLDER },
       // Annual pass programmes, and the default DVC take-home figure the
       // points box starts on. Sent from here so the catalogue has one home
       // and the browser never carries its own copy of a price.
@@ -661,9 +678,13 @@ const server = createServer(async (req, res) => {
     // has, the same way a curated promo is public to browse. What Plus buys
     // is the personalisation: picking yours and having the board answer.
     if (url.pathname === "/api/attractions") {
-      return send(200, ATTRACTIONS.map((a) => ({
+      // The owner's list, overlaid on the shipped one. No longer cacheable
+      // for five minutes at the edge: the owner editing a row and not seeing
+      // it is the exact complaint the admin page exists to answer.
+      const list = await effectiveAttractions(db);
+      return send(200, list.map((a) => ({
         ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null,
-      })), { cache: "public, max-age=300" });
+      })), { cache: "no-store" });
     }
 
     if (url.pathname === "/api/profile/attractions") {
@@ -1071,6 +1092,134 @@ const server = createServer(async (req, res) => {
       if (errors.length) return send(400, { error: "rejected", errors });
       for (const row of inputs) await addCorrection(db, row, owner.email);
       return send(200, { ok: true, added: inputs.length, corrections: await listCorrections(db) }, { cache: "no-store" });
+    }
+
+    /* ------------------------- the attraction list -------------------------
+     * The owner's ask, in their words: "make sure I have a way to maintain
+     * the attractions list." The shipped rows have always been a starter set
+     * Claude was confident about, and until now the only way to change one
+     * was to edit TypeScript and deploy.
+     *
+     * Everything here is an OVERLAY on the shipped list — see
+     * ownerAttractions.ts for why a list needs that safety property even
+     * more than a price does.
+     * -------------------------------------------------------------------- */
+
+    if (url.pathname === "/api/admin/attractions" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const owner = await listOwnerAttractions(db);
+      const effective = await effectiveAttractions(db);
+      return send(200, {
+        // What the app is actually using, which is what somebody editing
+        // wants to see — not only the handful of rows they have overridden.
+        effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
+        owner,
+        resorts: RESORTS.map((r) => ({ id: r.id, name: r.name })),
+        shippedIds: ATTRACTIONS.map((a) => a.id),
+      }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/attractions" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await saveAttraction(db, body, owner.email);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      const effective = await effectiveAttractions(db);
+      return send(200, {
+        ok: true, id: r.id,
+        effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
+        owner: await listOwnerAttractions(db),
+      }, { cache: "no-store" });
+    }
+
+    const attrMatch = url.pathname.match(/^\/api\/admin\/attractions\/([^/]+)$/);
+    if (attrMatch && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      // On a SHIPPED attraction this restores the shipped version rather
+      // than deleting the attraction. That IS the safety property, and the
+      // page names the button accordingly.
+      const gone = await deleteOwnerAttraction(db, attrMatch[1]!);
+      if (!gone) return send(404, { error: "not found" });
+      const effective = await effectiveAttractions(db);
+      return send(200, {
+        ok: true,
+        effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
+        owner: await listOwnerAttractions(db),
+      }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/attractions.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const rows = sheetRows(await effectiveAttractions(db), await listOwnerAttractions(db));
+      const head = ["id", "name", "resorts", "note", "hidden", "only_here", "source"];
+      const lines = [head.join(",")];
+      for (const r of rows) {
+        lines.push([r.id, r.name, r.resorts, r.note, r.hidden, r.only_here, r.source].map(csvCell).join(","));
+      }
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-attractions-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
+    if (url.pathname === "/api/admin/attractions.csv" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const parsed = parseCsv(String(body.csv ?? ""));
+      if (!parsed.length) return send(400, { error: "unreadable", message: "That file had no rows in it." });
+      const header = parsed[0]!.map((h) => h.trim().toLowerCase());
+      const at = (name: string) => header.indexOf(name);
+      const need = ["id", "name", "resorts"];
+      const missing = need.filter((n) => at(n) < 0);
+      if (missing.length) {
+        return send(400, { error: "no_header", message:
+          `That file needs a header row with ${need.join(", ")} columns — missing: ${missing.join(", ")}. Download the attractions spreadsheet again and type into it.` });
+      }
+      const cell = (r: string[], name: string) => (at(name) >= 0 ? (r[at(name)] ?? "").trim() : "");
+      const inputs = parsed.slice(1)
+        // A blank line at the end of a spreadsheet is not an error worth
+        // refusing a whole file over.
+        .filter((r) => r.some((c) => c.trim()))
+        .map((r) => ({
+          id: cell(r, "id"), name: cell(r, "name"), resortIds: cell(r, "resorts"),
+          note: cell(r, "note"), hidden: /^(yes|true|1|y)$/i.test(cell(r, "hidden")),
+        }));
+
+      // All or nothing, and a duplicated id is refused rather than
+      // last-one-wins — the same two rules the settings and fares sheets
+      // follow, and for the same reason: silently taking the last row hides
+      // a real editing mistake.
+      const errors: string[] = [];
+      const seen = new Map<string, number>();
+      inputs.forEach((row, i) => {
+        const v = validateAttraction(row);
+        if (!v.ok) { errors.push(`row ${i + 2}: ${v.reason}`); return; }
+        const first = seen.get(v.value.id);
+        if (first !== undefined) errors.push(`row ${i + 2}: "${v.value.id}" is already on row ${first + 2}.`);
+        else seen.set(v.value.id, i);
+      });
+      if (errors.length) return send(400, { error: "rejected", errors });
+
+      // A row the owner DELETED from the sheet should disappear from the
+      // app. Without this, the spreadsheet could only ever add and change,
+      // and the only way to remove something would be the hidden column —
+      // which is not what deleting a row means to anybody.
+      const keep = new Set(inputs.map((r) => String(r.id).trim().toLowerCase()));
+      for (const existing of await listOwnerAttractions(db)) {
+        if (!keep.has(existing.id)) await deleteOwnerAttraction(db, existing.id);
+      }
+      for (const row of inputs) await saveAttraction(db, row, owner.email);
+
+      const effective = await effectiveAttractions(db);
+      return send(200, {
+        ok: true, applied: inputs.length,
+        effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
+        owner: await listOwnerAttractions(db),
+      }, { cache: "no-store" });
     }
 
     send(404, { error: "not found" });

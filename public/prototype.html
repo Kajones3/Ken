@@ -171,8 +171,23 @@ a{color:var(--ink)}
   border:1px dashed var(--accent-line); background:var(--accent-bg);
   color:var(--ink); border-radius:10px; padding:10px 13px; margin-bottom:18px; font-size:13px;
 }
+.mhead .pwhonest{font-size:13px; opacity:.85; margin-top:8px}
 .demo b{font-weight:700}
 .demo .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-line);margin-top:7px;flex:none}
+/* ---------- intro ----------
+   This used to be a dashed "prototype build" banner explaining that the
+   plumbing was a stand-in. It isn't one any more, and a notice telling
+   visitors the thing is half-built is a poor first impression of a site
+   whose numbers are real. What belongs here instead is why the tool exists,
+   in the owner's own words — so it reads as a piece of writing, not as an
+   alert about the software. */
+.intro{
+  border-left:3px solid var(--accent-line); background:var(--accent-bg);
+  color:var(--ink); border-radius:0 10px 10px 0; padding:14px 18px;
+  margin-bottom:18px; font-size:14.5px; line-height:1.62; max-width:68em;
+}
+.intro p{margin:0}
+.intro .sig{display:block; margin-top:8px; font-size:13px; color:var(--ink-2)}
 .gtk{margin-bottom:16px}
 .gtk ul{margin:6px 0 0; padding-left:18px}
 .gtk li{margin-bottom:5px}
@@ -278,38 +293,80 @@ a{color:var(--ink)}
 .namefield label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2)}
 .namefield input{background:var(--surface-2); border:1px solid var(--rule-strong); border-radius:9px; padding:10px 12px; color:var(--ink); font:inherit}
 #printCover{display:none}
+/* ---------- the shared document, on screen (hidden) and on paper ---------- */
+#printDoc{display:none}
+.pdfpick{display:grid; gap:2px; padding:4px 0}
+.pdfpick label{
+  display:flex; align-items:baseline; gap:10px; padding:9px 11px; border-radius:9px;
+  cursor:pointer; border:1px solid transparent;
+}
+.pdfpick label:hover{background:var(--accent-bg); border-color:var(--rule)}
+.pdfpick input{margin:0; width:16px; height:16px; flex:none; position:relative; top:2px}
+.pdfpick .pn{font-weight:650}
+.pdfpick .pt{margin-left:auto; font-variant-numeric:tabular-nums; color:var(--ink-2)}
+.pdfpick .lead{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--accent-line); margin-left:6px}
+
 @media print{
-  /* Everything that is a CONTROL rather than an answer. The form panel is
-     the big one: on paper it is a page of dropdowns before the reader
-     reaches a single number. */
-  header, .jumprow, .upsell, .ovcell, .demo, .back, #tablewrap button, .rowbtn,
-  #printTop, #tripPanel, .legend, footer, .notices, #saveSearchBtn{display:none!important}
-  @page{margin:14mm}
+  /* ONE rule, not a list. Everything the app is lives in .wrap and every
+     dialog is a .back; the document is neither, so it is the only thing that
+     survives. A card added next year cannot forget to opt out of the PDF. */
+  .wrap, .back, .tip{display:none!important}
+  #printDoc{display:block!important}
+  @page{margin:16mm 15mm}
   html, body{background:#fff!important; color:#000!important}
-  body{font-size:11pt}
-  /* No leading blank page: nothing before the cover may force a break, and
-     the cover itself starts the flow rather than following an empty one. */
-  main{padding:0!important; margin:0!important}
-  #printCover{display:block; break-after:avoid; margin:0 0 14px}
-  #printCover h1{font-family:"Archivo",sans-serif; font-size:23pt; font-weight:800;
-    letter-spacing:-.02em; line-height:1.15; margin:0 0 10px}
-  #printCover p{font-size:11.5pt; line-height:1.55; margin:0 0 6px; max-width:52em}
-  #printCover .coversub{font-size:9.5pt; color:#555}
-  .res-head{border-bottom:1px solid #bbb; padding-bottom:6px; margin-bottom:10px}
-  .res-head h2{font-size:12pt}
-  /* The park they chose to lead with goes first, whatever it cost. Its rank
-     number travels with it, so the price order is still legible. */
-  .board{display:flex!important; flex-direction:column; border:0!important; border-radius:0!important}
-  .row.printlead{order:-1; border-top:0}
-  .row, .card, .panel{break-inside:avoid; box-shadow:none!important}
-  .row{border-color:#ccc!important; background:#fff!important}
-  .row.best{background:#fff!important}
-  .card{border-color:#ccc!important; background:#fff!important}
-  .why{display:none!important}
-  /* Controls inside a card are dead on paper — a dropdown you cannot open
-     and a button you cannot press read as a broken document. */
-  .card select, .card input, .card button, .exactrow, #exactOut{display:none!important}
-  a[href]:after{content:" (" attr(href) ")"; font-size:8pt; color:#555; word-break:break-all}
+  body{font-size:10.5pt; line-height:1.55}
+  /* The app's ink is a light colour for the dark theme, and #printDoc would
+     otherwise inherit it — forcing white on <body> alone left the prose a
+     washed-out navy. A document states its own colours. */
+  #printDoc, #printDoc *{color:#111; background:transparent!important; box-shadow:none!important}
+  #printDoc .pnote, #printDoc .pcost caption, #printDoc .pcost tr.sub td,
+  #printDoc .presort .prank, #printDoc .pcover .psub{color:#555}
+
+  /* --- the cover --- */
+  .pcover{break-after:page}
+  .pcover h1{font-family:"Archivo",sans-serif; font-size:26pt; font-weight:800;
+    letter-spacing:-.025em; line-height:1.12; margin:0 0 14px}
+  .pcover p{font-size:11.5pt; line-height:1.6; margin:0 0 10px; max-width:50em}
+  .pcover .psub{font-size:9pt; color:#555; border-top:1px solid #ccc; padding-top:9px; margin-top:18px}
+
+  /* --- one resort --- */
+  .presort{break-before:page}
+  /* The first resort follows the cover's own page break; a second break here
+     would leave a blank sheet between them, which is the exact complaint
+     that started this work. */
+  .presort:first-of-type{break-before:auto}
+  .presort h2{font-family:"Archivo",sans-serif; font-size:18pt; font-weight:800;
+    letter-spacing:-.02em; margin:0 0 2px}
+  .presort .prank{font-size:9pt; color:#555; margin:0 0 14px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.05em}
+  .presort h3{font-family:"Archivo",sans-serif; font-size:11.5pt; font-weight:700;
+    margin:17px 0 6px; padding-bottom:3px; border-bottom:1px solid #ddd}
+  .presort p{margin:0 0 8px; max-width:52em}
+  .presort ul{margin:4px 0 10px; padding-left:19px}
+  .presort li{margin-bottom:4px}
+  .presort .pnote{font-size:9pt; color:#555}
+
+  /* The cost table. A document gets a table here, not four coloured bars:
+     the bars answer "which is biggest at a glance", which is the board's
+     job on screen, and a reader with the page in their hand wants the
+     figures. */
+  .pcost{width:100%; border-collapse:collapse; margin:4px 0 6px; font-size:10pt}
+  .pcost th, .pcost td{text-align:left; padding:5px 8px; border-bottom:1px solid #e3e3e3}
+  .pcost td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+  .pcost tr.tot td{border-top:2px solid #333; border-bottom:0; font-weight:800; font-size:11.5pt; padding-top:8px}
+  .pcost tr.sub td{color:#555; font-size:9pt}
+  .pcost caption{text-align:left; font-size:9pt; color:#555; padding-bottom:5px}
+
+  /* A whole section should not be split across a page break when it can be
+     helped; a long hotel list is allowed to, or it would push a mostly-empty
+     page ahead of it. */
+  .presort .keep{break-inside:avoid}
+
+  /* Links print as text plus their destination — a printed "Book this" is
+     useless without one. Scoped to the document so it cannot reach the app. */
+  #printDoc a[href]:after{content:" (" attr(href) ")"; font-size:7.5pt; color:#555; word-break:break-all}
+  #printDoc a{color:#000; text-decoration:underline}
 }
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
@@ -615,13 +672,12 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
   </header>
 
-  <div class="demo">
-    <span class="dot"></span>
-    <div><b>Prototype build — prices are real, pulled from the cache.</b> Every figure comes from <code>/api/compare</code> and
-    <code>/api/calendar</code>, backed by whatever the refresh job last cached — the mock provider until a Travelpayouts token is
-    configured. The pricing logic, the paywall and this fare data are real; only the flight and hotel <em>source</em> is a stand-in
-    until the live feeds described at the bottom of the page are connected.</div>
-  </div>
+  <section class="intro" id="intro">
+    <p>Could we really go to Shanghai if we didn't get Annual Passes this year? That was the question that led me down a
+    very long and deep rabbit hole of cost comparisons with flights, hotels, tickets, grocery bills, visas and more. From
+    that obsession, I developed this &mdash; a blue sky pricing tool for Disney adults. Because the magic isn't just
+    limited to the US anymore.</p>
+  </section>
 
   <section class="panel" id="tripPanel">
     <p class="panel-lab">Trip parameters</p>
@@ -865,16 +921,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
 
-  <!-- Print only. The PDF used to open on a page of form controls nobody can
-       use on paper, which is what the owner saw as a blank first page. This
-       is what a person opening the file should read first: where we are
-       going, who planned it, and for when. -->
-  <section id="printCover" aria-hidden="true">
-    <h1 id="coverTitle">Let's go to Walt Disney World!</h1>
-    <p id="coverLine"></p>
-    <p id="coverNote" class="coversub"></p>
-  </section>
-
   <div class="res-head">
     <div>
       <h2 id="resTitle">Six resorts, cheapest first</h2>
@@ -918,9 +964,45 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       feeds from authorized resellers. Disney has confirmed airline-style dynamic ticket pricing is coming to Walt Disney
       World and Disneyland after its trial at Disneyland Paris — which makes a stored price table go stale faster, and
       makes the "when should we go" question this app answers considerably more valuable.</p>
-      <p><b>Currency.</b> Local prices are converted at illustrative rates. A live FX feed replaces them.</p>
+      <p><b>Currency.</b> Local prices are converted at the European Central Bank's published reference rates,
+      regenerated monthly. An exchange rate converts a price; it does not say whether a country is cheap.</p>
     </div>
   </footer>
+</div>
+
+<!-- ===================== the shared document =====================
+     Print only, empty until something prints, and built fresh every time.
+
+     The owner's report was that "the PDF download is still wrong — it
+     shouldn't just be a screenshot", and it was: the old print stylesheet
+     dropped the controls off the live page and reordered the board, which
+     makes a tidier screenshot and still a screenshot. What gets emailed to
+     somebody's family is a document they read, so this is written as one —
+     sentences about a trip, in an order that answers the questions a person
+     actually has, with the numbers inside the sentences.
+
+     It sits OUTSIDE .wrap deliberately. That makes "hide the app, show the
+     document" one rule rather than a list of selectors that every future
+     card would have to remember to join. -->
+<section id="printDoc" aria-hidden="true"></section>
+
+<!-- Which resorts go in the file. The owner asked for this directly: the
+     whole point of the app is six resorts, but a document with all six is a
+     lot to send somebody who has already agreed on Tokyo. -->
+<div class="back" id="pdfPicker" role="dialog" aria-modal="true" aria-labelledby="pdfPickTitle">
+  <div class="modal" style="max-width:520px">
+    <div class="mhead">
+      <h3 id="pdfPickTitle">Which resorts do you want to include?</h3>
+      <p>Each one gets its own write-up — what it costs, how you get there, where you'd stay,
+      what the weather does and what's worth knowing before you book.</p>
+    </div>
+    <div id="pdfPickList" class="pdfpick"></div>
+    <div class="mfoot">
+      <span class="stub" id="pdfPickMsg"></span>
+      <button class="btn" id="pdfPickCancel">Cancel</button>
+      <button class="btn-primary" id="pdfPickGo">Create the PDF</button>
+    </div>
+  </div>
 </div>
 
 <!-- Sign in / your account. One dialog, two states: the form when signed
@@ -1022,10 +1104,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <h3 id="pwTitle">Plan your specific trip</h3>
       <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
       you should never have to pay to see what a trip costs. Flight numbers on the free plan are real estimates, built
-      from what people actually paid on that route, and shown with the range they sit in. Plus swaps the estimate for
-      the exact live fare on the dates you're actually travelling, and then watches them. <b>It may well come back
-      higher than the estimate</b> — that is the point: a real number you can book against beats a cheerful one
-      you can't.</p>
+      from what people actually paid on that route, and shown with the range they sit in. Plus gives you more control
+      and accuracy. Swap the estimate for the exact live fare on the dates you're actually traveling and then we'll
+      email you when prices change. Disney is magical. Planning should be too.</p>
+      <p class="pwhonest"><b>The exact fare may well come back higher than the estimate</b> — that is the feature
+      working, not failing. A real number you can book against beats a cheerful one you can't.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -1093,12 +1176,20 @@ let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus onl
 let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
-let CLIMATE = {};        // resortId -> twelve [high, low, rainDays] rows, January first
+let CLIMATE = {};        // resortId -> twelve {highF, lowF, rainDays, note?} rows, January first
 let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
 let DVC_DEFAULT_PER_POINT = 18;
 let RESORT_BY_ID = new Map();
 
-const FX = { USD:[1,"$"], EUR:[0.92,"€"], JPY:[148,"¥"], CNY:[7.12,"¥"], HKD:[7.79,"HK$"] };
+/* Currency symbols are editorial — the ECB publishes codes and rates, not
+   symbols — so they stay here. The RATES do not: they arrive from /api/meta,
+   generated from ECB reference rates. This used to be five hardcoded numbers
+   in the browser that nothing anywhere could update, which is why a rate
+   written at some point in 2026 was still what every traveller was shown. */
+const FX_SYMBOL = { USD:"$", EUR:"€", JPY:"¥", CNY:"¥", HKD:"HK$" };
+let FX_RATES = { USD:{perUsd:1,name:"US dollar"} };  // replaced by /api/meta
+let FX_AS_OF = "";
+let FX_PLACEHOLDER = true;
 
 const ON_TIERS  = ["value","moderate","deluxe"];
 const OFF_TIERS = ["budget","mid","upscale"];
@@ -1132,7 +1223,11 @@ const fmtDate = iso => {
 };
 
 function local(r, usdAmount){
-  const [rate,sym] = FX[r.currency];
+  const sym = FX_SYMBOL[r.currency] || "";
+  // Fall back to the identity rather than to undefined: a missing rate must
+  // show the dollar figure it already has, never "NaN" or "¥NaN". Same rule
+  // as priceTrip never returning NaN.
+  const rate = (FX_RATES[r.currency] || {}).perUsd || 1;
   const v = usdAmount*rate;
   if(r.currency==="JPY") return sym+Math.round(v/100)*100;
   if(r.currency==="CNY"||r.currency==="HKD") return sym+Math.round(v).toLocaleString("en-US");
@@ -1735,6 +1830,10 @@ function setSearchBusy(busy){
 }
 
 async function runSearch(keepId){
+  // A choice of resorts belongs to the comparison it was made against.
+  // Carrying it into a new search would quietly drop resorts the traveller
+  // never excluded.
+  pdfChoice = null;
   // Refused, not ignored. Never end this with a bare return — the hint text
   // and the focus below are what tell somebody why nothing happened.
   if(halfExactDates()){
@@ -2203,9 +2302,20 @@ async function renderDetail(){
            ? `, moved ${e.trendPct >= 0 ? "up" : "down"} ${Math.abs(e.trendPct)}% to match how fares we price
               for real have shifted since`
            : ""}.`;
+    // Where the shown number sits in the route's own range. The owner's call
+    // is to lean toward the dear end, and the card has to say so rather than
+    // letting a reader assume they are looking at the middle — this project's
+    // rule is to explain a shaky number, never to quietly bend one.
+    const shown = x.flightPick ? x.flightPick.price : e.med;
+    const leaning = shown > e.med + 0.5
+      ? ` We show <b>${usd(shown)}</b> — deliberately toward the dear end of that range, because an
+         estimate that comes in low is the one that costs you at the checkout.`
+      : shown < e.med - 0.5
+        ? ` We show <b>${usd(shown)}</b>, toward the cheap end of that range.`
+        : "";
     return `<details class="why"><summary>How this estimate is worked out</summary>
       <div class="whybody">Not a quote. This route has no real fare for this exact date, so it is estimated from
-        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${
+        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${leaning}${
         e.seasonMatched === false
           ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
           : ""}</div></details>`;
@@ -3701,16 +3811,42 @@ document.addEventListener("click", async e=>{
   if(!e.target.closest("#tripsMenu")) closeTripsDrop();
 });
 
-/* Print to PDF. Deliberately the browser's own print dialog rather than a
- * generated file: it works on a phone and a laptop, costs nothing to run,
- * and spends none of the email allowance. The @media print rules drop the
- * controls nobody can use on paper and spell out every link's destination,
- * since a printed "Book this fare →" is useless without its URL. */
+/* ====================== the shared document ("Save as PDF") ======================
+ *
+ * The owner's report: "The PDF download is still wrong. It shouldn't just be
+ * a screenshot." It was one. The previous version dropped the controls off
+ * the live page and reordered the board in the print stylesheet, which
+ * produces a tidier screenshot and still a screenshot — a reader got four
+ * coloured bars and a legend, and had to already know how the app works to
+ * read it.
+ *
+ * What actually gets emailed to somebody's family is a document they READ,
+ * so this writes one: sentences about a trip, in the order a person asks the
+ * questions, with the numbers inside the sentences. The board's bars answer
+ * "which is biggest at a glance", which is a screen job; a reader holding
+ * the page wants the figures and a table.
+ *
+ * TWO RULES, both of which this project has learned the hard way:
+ *
+ *  - Every sentence is built from data we actually hold. Where a fact is
+ *    missing — no cached fare, no carrier on the row, no pass programme —
+ *    the sentence is omitted rather than softened into a guess. A document
+ *    somebody forwards is the worst possible place to invent a number, and
+ *    it is the one artefact from this app that outlives the session that
+ *    made it.
+ *  - An estimate says so IN the document. The `est.` chip and the
+ *    dataConfidence badges do this on screen; on paper there is no tooltip
+ *    to hover, so the words have to carry it.
+ *
+ * Still the browser's own print dialog rather than a generated file: it works
+ * on a phone and a laptop, costs nothing to run, and spends none of the email
+ * allowance.
+ */
+
 /**
- * Which park the PDF leads with: the one the saver chose when a saved search
- * is open, otherwise whichever resort's detail is on screen, otherwise the
- * cheapest. `leadResortId` is read by renderBoard for the print-only reorder
- * and by the cover.
+ * Which park the document leads with: the one the saver chose when a saved
+ * search is open, otherwise whichever resort's detail is on screen, otherwise
+ * the cheapest.
  */
 function leadResort(){
   const priced = results.filter(r=>r.ok);
@@ -3721,41 +3857,6 @@ function leadResort(){
   return priced.find(r=>r.resortId === wanted) || priced[0];
 }
 
-/**
- * The cover sheet, written fresh at print time so it can never describe a
- * comparison other than the one on screen.
- */
-function buildPrintCover(){
-  const lead = leadResort();
-  const cover = $("#printCover");
-  if(!lead){ cover.hidden = true; return; }
-  cover.hidden = false;
-  const p = params;
-  const kids = p.ages.length;
-  const who = `${p.adults} adult${p.adults===1?"":"s"}`
-    + (kids ? ` and ${kids} child${kids===1?"":"ren"}` : "");
-  const when = (p.exactDate && p.exactReturn)
-    ? `${fmtDate(p.exactDate)} to ${fmtDate(p.exactReturn)}`
-    : `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
-  // The person, not the trip's name. An earlier version used the saved
-  // search's label here and produced "planned by Summer 2027 research",
-  // which reads as nonsense to whoever the file is sent to.
-  const planner = session.email ? session.email.split("@")[0] : "";
-  const travel = p.gettingThere && p.gettingThere.startsWith("drive")
-    ? `driving from ${esc(drivingFromLabel())}`
-    : `flying from ${esc(p.origin)}`;
-  $("#coverTitle").textContent = `Let's go to ${lead.resort.name}!`;
-  $("#coverLine").innerHTML =
-    `This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${when} — `
-    + `${who}, ${travel} to <b>${esc(lead.resort.name)}</b>, `
-    + `${p.nights} night${p.nights===1?"":"s"} with ${p.parkDays} park day${p.parkDays===1?"":"s"}. `
-    + `The estimated cost is <b>${usd(lead.price.total)}</b>. Here is how that breaks down, `
-    + `and what the same dates would have cost at the other five resorts.`;
-  $("#coverNote").textContent =
-    `Prepared with Parkfare on ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}. `
-    + `Flights and hotel rates are estimates from cached prices, not quotes — check them before booking.`;
-}
-
 /** Where a driving trip starts from, for the cover line. */
 function drivingFromLabel(){
   const picked = $("#geoPicked");
@@ -3763,13 +3864,505 @@ function drivingFromLabel(){
   return txt || params.origin;
 }
 
-$("#printTop").addEventListener("click", ()=>{
-  buildPrintCover();
+/** "2 adults and 1 child" — the party, written out. */
+function partyPhrase(p){
+  const kids = p.ages.length;
+  return `${p.adults} adult${p.adults===1?"":"s"}`
+    + (kids ? ` and ${kids} child${kids===1?"":"ren"}` : "");
+}
+
+/** "Sep 10 to Sep 22", or the month when no exact dates were given. */
+function whenPhrase(p){
+  return (p.exactDate && p.exactReturn)
+    ? `${fmtDate(p.exactDate)} to ${fmtDate(p.exactReturn)}`
+    : `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
+}
+
+/** A sentence fragment for how they are getting there. */
+function travelPhrase(p, item){
+  if(p.gettingThere && p.gettingThere.startsWith("drive") && item.price.transportMode === "drive"){
+    return `driving from ${esc(drivingFromLabel())}`;
+  }
+  return `flying from ${esc(p.origin)} into ${esc(item.price.destination)}`;
+}
+
+/* ------------------------------ the cover ------------------------------ */
+
+function coverHtml(lead, chosen){
+  const p = params;
+  const planner = session.email ? session.email.split("@")[0] : "";
+  const others = chosen.filter(c => c.resortId !== lead.resortId).length;
+  const prepared = new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+
+  // "and what the same dates would have cost at the other five resorts" is
+  // only true when the other five are in the file. The owner chooses which
+  // resorts to include, so the sentence has to follow that choice rather
+  // than describe the comparison the app happened to run.
+  const alsoLine = others
+    ? ` Here is how that breaks down, and what the same dates would have cost at ${
+        others === 1 ? "one other resort" : `${others} other resorts`}.`
+    : ` Here is how that breaks down.`;
+
+  return `<section class="pcover">
+    <h1>Let's go to ${esc(lead.resort.name)}!</h1>
+    <p>This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${esc(whenPhrase(p))} &mdash;
+    ${esc(partyPhrase(p))}, ${travelPhrase(p, lead)}, ${p.nights} night${p.nights===1?"":"s"}
+    with ${p.parkDays} park day${p.parkDays===1?"":"s"}.
+    The estimated cost is <b>${usd(lead.price.total)}</b>.${alsoLine}</p>
+    <p class="psub">Prepared with Parkfare on ${esc(prepared)}.
+    Flights and hotel rates are estimates from cached prices, not quotes &mdash; check them before booking.</p>
+  </section>`;
+}
+
+/* --------------------------- the cost table --------------------------- */
+
+function costTableHtml(item){
+  const pr = item.price;
+  const rows = [];
+  const line = (label, amount, cls) => {
+    if(!amount) return;
+    rows.push(`<tr${cls?` class="${cls}"`:""}><td>${label}</td><td class="n">${usd(amount)}</td></tr>`);
+  };
+
+  if(pr.transportMode === "drive"){
+    line("Driving there and back", pr.driving);
+  } else {
+    line("Flights", pr.flights);
+  }
+  line("Renting a car", pr.rentalCarUsd);
+  line("Park tickets", pr.tickets);
+  line("Hotel", pr.rooms);
+  line("Parking and transfers", pr.transport);
+  line("Food", pr.food);
+  for(const promo of (pr.appliedPromos || [])){
+    if(promo.skipped || !promo.amountUsd) continue;
+    rows.push(`<tr class="sub"><td>${esc(promo.label)}</td><td class="n">&minus;${usd(promo.amountUsd)}</td></tr>`);
+  }
+  const dvc = pr.membership && pr.membership.dvc;
+  if(dvc && dvc.creditUsd){
+    rows.push(`<tr class="sub"><td>Renting out ${dvc.points} DVC points (take-home)</td>`
+      + `<td class="n">&minus;${usd(dvc.creditUsd)}</td></tr>`);
+  }
+  rows.push(`<tr class="tot"><td>Total</td><td class="n">${usd(pr.total)}</td></tr>`);
+
+  const per = pr.partySize ? Math.round(pr.total / pr.partySize) : 0;
+  return `<table class="pcost">
+    <caption>${esc(partyPhrase(params))}, ${params.nights} night${params.nights===1?"":"s"}${
+      per ? ` &mdash; about ${usd(per)} a person` : ""}</caption>
+    <tbody>${rows.join("")}</tbody>
+  </table>`;
+}
+
+/* --------------------------- getting there --------------------------- */
+
+function gettingThereHtml(item){
+  const pr = item.price, out = [];
+  const r = item.resort;
+
+  if(pr.transportMode === "drive" && pr.drivingPick){
+    const d = pr.drivingPick;
+    out.push(`<p>You're driving &mdash; ${d.roundTripMiles.toLocaleString("en-US")} miles there and back from
+      ${esc(d.from)}, which comes to <b>${usd(pr.driving)}</b>. That is ${usd(d.gasCostUsd)} of fuel at
+      $${d.gasPricePerGallonUsd.toFixed(2)} a gallon${
+        d.overnightUsd ? `, ${usd(d.overnightUsd)} for overnight stops on the way` : ""}${
+        d.wearAndTearUsd ? `, and ${usd(d.wearAndTearUsd)} of wear on the car at the IRS standard mileage rate` : ""}.</p>`);
+    if(d.wearAndTearUsd && d.mileageRate && d.mileageRate.carriedForward){
+      out.push(`<p class="pnote">The wear figure uses the ${d.mileageRate.rateYear} IRS rate, because the rate for
+        ${d.mileageRate.tripYear} has not been published yet.</p>`);
+    }
+  } else {
+    const f = pr.flightPick;
+    const est = f && f.estimate;
+    if(est){
+      // The owner's own shape: typical, and the range it sits in. p25/median/p75
+      // from this route's own history — a real observed spread, not a percentage
+      // invented around a midpoint.
+      out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} typically run about
+        <b>${usd(est.med)}</b> a seat, ranging from ${usd(est.low)} at the cheap end to ${usd(est.high)} at the dear end.
+        That is an <b>estimate</b>, not a quote: it is built from what people actually paid on this route in
+        ${esc(est.basisQuarter)}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
+      if(est.seasonMatched === false){
+        out.push(`<p class="pnote">No fare history existed for this time of year on this route, so an off-season
+          quarter was used instead. Treat this one as weaker than the others.</p>`);
+      }
+      if(typeof est.routeSamples === "number" && est.routeSamples <= 2){
+        out.push(`<p class="pnote">Only ${est.routeSamples} real fare${est.routeSamples===1?"":"s"} on this exact route
+          sit behind that figure, so it could easily be a peak date rather than a typical one.</p>`);
+      }
+    } else if(f){
+      out.push(`<p>The cheapest cached fare from ${esc(params.origin)} to ${esc(pr.destination)} on these dates is
+        <b>${usd(f.price)}</b> a seat.</p>`);
+    }
+    if(f && !est && (f.carrier || typeof f.stops === "number")){
+      // One carrier, because one cached fare is what we hold. We do not know
+      // the route's full carrier list and will not imply that we do.
+      const stops = typeof f.stops === "number"
+        ? (f.stops === 0 ? "nonstop" : `${f.stops} stop${f.stops===1?"":"s"}`)
+        : "";
+      out.push(`<p>That fare is ${f.carrier ? `on ${esc(f.carrier)}` : "on an unnamed carrier"}${
+        stops ? `, ${stops}` : ""}. It is the cheapest one we have cached, not the only one flying.</p>`);
+    }
+    if(pr.flights){
+      out.push(`<p>For ${esc(partyPhrase(params))} that is <b>${usd(pr.flights)}</b> in all.</p>`);
+    }
+    if(pr.fareBelowFloor){
+      out.push(`<p class="pnote">You told us to price this at ${usd(pr.fareBelowFloor.yours)} a seat. We used your
+        number, but the cheapest fare we know of on this route is ${usd(pr.fareBelowFloor.cheapestKnown)}.</p>`);
+    }
+  }
+
+  if(pr.rentalCarUsd && pr.rentalCarPick){
+    out.push(`<p>A rental car adds <b>${usd(pr.rentalCarUsd)}</b> &mdash;
+      ${pr.rentalCarPick.nights} day${pr.rentalCarPick.nights===1?"":"s"} at
+      $${pr.rentalCarPick.dailyRateUsd} a day. That is one national average rate, not a quote for
+      ${esc(r.city.split(",")[0])}.</p>`);
+  }
+  return out.join("");
+}
+
+/* ------------------------------ tickets ------------------------------ */
+
+function ticketsHtml(item){
+  const r = item.resort, pr = item.price, out = [];
+  const parkWord = r.parks === 1 ? "1 park" : `${r.parks} parks`;
+  const perDay = params.parkDays ? Math.round(pr.tickets / params.parkDays / Math.max(1, pr.partySize)) : 0;
+
+  out.push(`<p>${esc(r.name)} has <b>${parkWord}</b>${
+    r.parkList.length ? ` &mdash; ${r.parkList.map(k=>esc(k.name)).join(", ")}` : ""}.
+    ${params.parkDays} park day${params.parkDays===1?"":"s"} for ${esc(partyPhrase(params))} comes to
+    <b>${usd(pr.tickets)}</b>${perDay ? `, roughly ${usd(perDay)} per person per day` : ""}.</p>`);
+
+  if(pr.hopperUsd){
+    out.push(`<p>That includes <b>${usd(pr.hopperUsd)}</b> for Park Hopper, which lets you visit more than one
+      park in a day.</p>`);
+  }
+  if(r.parks === 1){
+    out.push(`<p class="pnote">With one park there is no Park Hopper to buy here.</p>`);
+  }
+
+  const pass = pr.membership && pr.membership.pass;
+  if(pass){
+    out.push(`<p>You told us you hold ${pass.count} &times; <b>${esc(pass.label)}</b>, and
+      ${pass.used} of ${pass.used===1?"it":"them"} can be used by this party. That takes
+      <b>${usd(pass.savedUsd)}</b> off this trip: without the pass${pass.count===1?"":"es"} the gate would have cost
+      ${usd(pass.ticketsWithoutPassUsd)}. The pass${pass.count===1?"":"es"} cost
+      <b>${usd(pass.annualCostUsd)}</b> a year, which is not added to this trip &mdash; an annual pass is not bought
+      for one visit, so the two figures are shown side by side for you to weigh.</p>`);
+    if(pass.coversDearestFirst){
+      out.push(`<p class="pnote">We assume the passes cover the most expensive tickets in the party. Nothing here
+        knows which member of a family actually holds which pass.</p>`);
+    }
+  }
+
+  // Said plainly, because it is the single weakest number in this document
+  // and the one most likely to embarrass somebody at the checkout.
+  out.push(`<p class="pnote">Ticket prices are a maintained table, not a live feed &mdash; no Disney park publishes
+    a pricing API. Real admission is tiered by date in ways this flat curve only approximates, so check
+    <a href="${esc(r.ticketUrl)}">${esc(r.name)}'s own ticket page</a> before you budget on it.</p>`);
+  return out.join("");
+}
+
+/* ------------------------------- hotel ------------------------------- */
+
+/** A hotel's descriptor minus its leading tier word, which the "(Value)"
+ *  beside the name has already said. "Value \u00b7 shuttle" -> "shuttle". */
+function hotelDescriptorTail(h){
+  const parts = String(h.descriptor || "").split("\u00b7").map(x=>x.trim()).filter(Boolean);
+  const label = (TIER_LABEL[h.tier] || "").toLowerCase();
+  const kept = parts.filter(x => x.toLowerCase() !== label);
+  return (kept.length ? kept : parts).join(" \u00b7 ");
+}
+
+function hotelHtml(item){
+  const r = item.resort, pr = item.price, out = [];
+  const pick = pr.hotelPick;
+
+  if(!pick || pick.hotelId === "none"){
+    out.push(`<p>No hotel: you said you're staying with family or friends, or not staying over, so there is nothing
+      here for a room or for parking at one.</p>`);
+    return out.join("");
+  }
+
+  const onProp = r.hotels.filter(h=>h.onProperty);
+  if(onProp.length){
+    out.push(`<p>There ${onProp.length===1?"is":"are"} <b>${onProp.length}</b> hotel${onProp.length===1?"":"s"}
+      on property here, at roughly these nightly rates &mdash; each one an average across the whole year, so a
+      specific week can sit well above or below it:</p>`);
+    // Grouped by category with the real spread, which is what somebody
+    // comparing "Moderate here against Moderate there" needs. The figures
+    // are annual averages: a specific week moves them, which the note says.
+    const byTier = new Map();
+    for(const h of onProp){
+      if(!byTier.has(h.tier)) byTier.set(h.tier, []);
+      byTier.get(h.tier).push(h);
+    }
+    const lis = [];
+    for(const tier of ON_TIERS){
+      for(const h of (byTier.get(tier) || [])){
+        lis.push(`<li><b>${esc(h.name)}</b> (${esc(TIER_LABEL[h.tier] || h.tier)}) &mdash;
+          around ${usd(h.base)} a night${r.currency !== "USD" ? `, about ${esc(local(r, h.base))}` : ""}
+          <span class="pnote">&middot; ${esc(hotelDescriptorTail(h))}</span></li>`);
+      }
+    }
+    out.push(`<ul>${lis.join("")}</ul>`);
+  }
+
+  const nightly = pick.nightly;
+  out.push(`<p>You priced <b>${esc(pick.name)}</b> at <b>${usd(nightly)}</b> a night, which over
+    ${params.nights} night${params.nights===1?"":"s"} is <b>${usd(pr.rooms)}</b>${
+    pr.transport ? `, plus <b>${usd(pr.transport)}</b> for parking and getting to the parks` : ""}.</p>`);
+
+  if(pr.hotelTier && pr.hotelTier.swapped){
+    out.push(`<p class="pnote">Nothing was cached in the category you asked for on these dates, so this is the
+      nearest one we had.</p>`);
+  }
+  if(pr.stayCompare){
+    const sc = pr.stayCompare;
+    out.push(`<p>Staying ${sc.cheaper === "on" ? "on" : "off"} property is the cheaper of the two here:
+      ${esc(sc.on.name)} at ${usd(sc.on.nightly)} a night against ${esc(sc.off.name)} at ${usd(sc.off.nightly)},
+      a difference of <b>${usd(sc.savesTotal)}</b> over the trip once parking and transfers are counted.
+      Those last two are what people leave out when they conclude off-property is cheaper.</p>`);
+  }
+  if(!pick.onProperty && pr.transport){
+    out.push(`<p class="pnote">Off-property totals here include $${Math.round(r.transport.off)} a day for parking
+      at the parks and getting to them.</p>`);
+  }
+  out.push(`<p class="pnote">Room rates are estimates from cached and researched prices, not quotes.</p>`);
+  return out.join("");
+}
+
+/* -------------------------------- food -------------------------------- */
+
+const FOOD_STYLE_WORDS = {
+  grocery: "mostly groceries and eating in",
+  qs: "counter service",
+  mix: "a mix of table and counter service",
+  ts: "mostly table service",
+};
+
+function foodHtml(item){
+  const r = item.resort, pr = item.price, out = [];
+
+  if(pr.foodPlan){
+    out.push(`<p>You're on the <b>${esc(pr.foodPlan.label)}</b> dining plan, which comes to
+      <b>${usd(pr.food)}</b>. There is nothing to estimate about food you have already bought.</p>`);
+  } else {
+    const style = FOOD_STYLE_WORDS[params.food] || "the style you picked";
+    out.push(`<p>You said you'd be doing <b>${esc(style)}</b> during your trip. We estimated
+      <b>${usd(pr.food)}</b> for that.</p>`);
+  }
+
+  // A real comparison from our OWN per-resort food model, which is the only
+  // place this app holds anything about local prices. NOT from the exchange
+  // rate, which says nothing whatsoever about whether a country is cheap.
+  const wdw = RESORT_BY_ID.get("wdw");
+  const style = (params.food && r.food[params.food]) ? params.food : "mix";
+  if(wdw && r.id !== "wdw" && wdw.food[style] && r.food[style]){
+    const pct = Math.round((1 - r.food[style] / wdw.food[style]) * 100);
+    if(Math.abs(pct) >= 5){
+      out.push(`<p>Eating the same way costs about <b>${Math.abs(pct)}% ${pct > 0 ? "less" : "more"}</b> here than
+        at Walt Disney World &mdash; our own per-resort daily figures are $${r.food[style]} a day against
+        $${wdw.food[style]}. That is a comparison of food prices, not of the exchange rate.</p>`);
+    }
+  }
+  out.push(`<p class="pnote">Food figures come from budget guides and are per person per day, scaled for
+    children. No API prices a family's meals.</p>`);
+  return out.join("");
+}
+
+/* ------------------------------ weather ------------------------------ */
+
+function weatherHtml(item){
+  const rows = CLIMATE[item.resortId] || [];
+  const start = item.price.start || (params.month + "-01");
+  const when = new Date(start + "T00:00:00Z");
+  const monthIdx = when.getUTCMonth();
+  const wx = rows[monthIdx];
+  if(!wx) return "";
+  const days = daysInMonth(when);
+  // The season note is editorial text attached to the month, not a field on
+  // the resort — the generated numbers and the hand-written commentary are
+  // deliberately kept in different files so regenerating one cannot wipe
+  // the other.
+  const note = wx.note && wx.note.text ? wx.note.text : "";
+  return `<p>Weather in ${esc(MONTHSFULL[monthIdx])} is typically a high of <b>${wx.highF}&deg;F</b> and a low of
+    <b>${wx.lowF}&deg;F</b>, with about <b>${wx.rainDays} of ${days} days</b> seeing rain.${
+    note ? " " + esc(note) : ""}</p>
+    <p class="pnote">These are twenty-year averages of real daily observations &mdash; not a forecast, and not
+    last year.</p>`;
+}
+
+/* -------------------------- lands & attractions -------------------------- */
+
+function landsHtml(item){
+  const r = item.resort, out = [];
+  if(r.parkList && r.parkList.length){
+    const parts = r.parkList.map(k =>
+      `<li><b>${esc(k.name)}</b> &mdash; ${k.lands.map(l=>esc(l)).join(", ")}</li>`).join("");
+    out.push(`<p>${esc(r.name)} features these lands:</p><ul>${parts}</ul>`);
+  }
+  const mine = (allAttractions || []).filter(a => (a.resortIds || []).includes(r.id));
+  if(mine.length){
+    const only = mine.filter(a => (a.resortIds || []).length === 1);
+    out.push(`<p>Headline attractions here: ${mine.slice(0, 12).map(a=>esc(a.name)).join(", ")}.</p>`);
+    if(only.length){
+      // Derived from the resort list, never asserted per row — the rule the
+      // attractions feature was corrected on before it was built.
+      out.push(`<p>Of those, ${only.length === 1 ? "one is" : `${only.length} are`} found at no other Disney resort:
+        <b>${only.map(a=>esc(a.name)).join(", ")}</b>.</p>`);
+    }
+  }
+  return out.join("");
+}
+
+/* ----------------------------- good to know ----------------------------- */
+
+function goodToKnowHtml(item){
+  const r = item.resort, out = [];
+
+  for(const note of (r.goodToKnow || [])) out.push(`<li>${esc(note)}</li>`);
+
+  // Currency. A conversion, stated as a conversion — see exchangeData.ts for
+  // why this must never be dressed up as "your dollar goes further".
+  const fx = FX_RATES[r.currency];
+  if(fx && r.currency !== "USD" && fx.perUsd){
+    const example = 50;
+    out.push(`<li><b>Money.</b> One US dollar is about ${fx.perUsd} ${esc(fx.name)}${
+      FX_AS_OF ? ` (European Central Bank reference rate, ${esc(FX_AS_OF)})` : ""}. A $${example} dinner is roughly
+      ${esc(local(r, example))}. That converts a price; it does not tell you whether prices here are high or low.${
+      FX_PLACEHOLDER ? " <b>This rate is a placeholder and has not been refreshed yet.</b>" : ""}</li>`);
+  }
+
+  // Age bands, but only when there is actually a child in the party — a rule
+  // about 11-year-olds is noise to two adults travelling alone.
+  if(params.ages.length){
+    const b = r.bands;
+    const bits = [`children under ${b.freeUnder} go free`,
+                  `ages ${b.child[0]}&ndash;${b.child[1]} pay the child price`];
+    if(b.junior) bits.push(`ages ${b.junior[0]}&ndash;${b.junior[1]} pay a Junior price, which is unique to this resort`);
+    bits.push(`anyone ${b.adult} or over pays the adult price`);
+    out.push(`<li><b>Ages.</b> ${esc(r.name)} counts ages differently from some of the others: ${bits.join("; ")}.
+      ${params.ages.length === 1 ? "Your child is" : "Your children are"} ${params.ages.join(", ")}.</li>`);
+  }
+
+  if(r.dataConfidence){
+    out.push(`<li><b>${esc(r.dataConfidence.level)}.</b> ${esc(r.dataConfidence.note)}</li>`);
+  }
+  if(r.closuresUrl){
+    out.push(`<li><b>Closures.</b> Rides close for refurbishment for months at a time. Check
+      <a href="${esc(r.closuresUrl)}">${esc(r.closuresLabel || "the closure calendar")}</a> before booking a trip
+      around one ride.</li>`);
+  }
+  return out.length ? `<ul>${out.join("")}</ul>` : "";
+}
+
+/* --------------------------- one resort's page --------------------------- */
+
+function resortSectionHtml(item, rank, isLead){
+  const r = item.resort;
+  const sections = [
+    ["Getting there", gettingThereHtml(item)],
+    ["Park tickets", ticketsHtml(item)],
+    ["Where you'd stay", hotelHtml(item)],
+    ["Food", foodHtml(item)],
+    ["Weather", weatherHtml(item)],
+    ["What's there", landsHtml(item)],
+    ["Good to know", goodToKnowHtml(item)],
+  ];
+  const body = sections
+    .filter(([, html]) => html)     // a section with nothing real to say is dropped
+    .map(([title, html]) => `<div class="keep"><h3>${esc(title)}</h3>${html}</div>`)
+    .join("");
+
+  return `<section class="presort">
+    <h2>${esc(r.name)}</h2>
+    <p class="prank">${esc(r.city)} &middot; ${isLead ? "Your pick &middot; " : ""}${
+      rank ? `${rank}${rank===1?"st":rank===2?"nd":rank===3?"rd":"th"} cheapest of the ${
+        results.filter(x=>x.ok).length} compared` : ""}</p>
+    ${costTableHtml(item)}
+    ${body}
+  </section>`;
+}
+
+/* ------------------------------ assembly ------------------------------ */
+
+/** Which resort ids the last picker run chose. Null means "not chosen yet",
+ *  which is what a Ctrl+P with no trip through the dialog looks like. */
+let pdfChoice = null;
+
+function buildPrintDoc(){
+  const doc = $("#printDoc");
+  const priced = results.filter(r=>r.ok);
+  if(!priced.length){ doc.innerHTML = ""; return; }
+
+  // Price order, so a rank means something, and so the document reads the
+  // same way the board does.
+  const ordered = [...priced].sort((a,b)=>a.price.total - b.price.total);
+  const rankOf = new Map(ordered.map((x,i)=>[x.resortId, i+1]));
+
+  const lead = leadResort();
+  const wanted = pdfChoice && pdfChoice.length ? new Set(pdfChoice) : new Set(ordered.map(x=>x.resortId));
+  let chosen = ordered.filter(x => wanted.has(x.resortId));
+  if(!chosen.length) chosen = ordered;
+
+  // The park they chose leads the document. On screen the board stays in
+  // price order — that is the app's one job — but a document opens on the
+  // thing it is about, and the rank line keeps the price order legible.
+  const leadFirst = lead && wanted.has(lead.resortId)
+    ? [lead, ...chosen.filter(x=>x.resortId !== lead.resortId)]
+    : chosen;
+
+  doc.innerHTML = coverHtml(leadFirst[0], chosen)
+    + leadFirst.map(item =>
+        resortSectionHtml(item, rankOf.get(item.resortId), lead && item.resortId === lead.resortId)).join("");
+}
+
+/* ------------------------------ the picker ------------------------------ */
+
+function openPdfPicker(){
+  const priced = results.filter(r=>r.ok);
+  if(!priced.length){
+    // Never end a click handler with a silent return: the user cannot tell
+    // that from a broken build.
+    alert("Run a comparison first — there is nothing to put in a PDF yet.");
+    return;
+  }
+  const ordered = [...priced].sort((a,b)=>a.price.total - b.price.total);
+  const lead = leadResort();
+  $("#pdfPickList").innerHTML = ordered.map(item => `
+    <label>
+      <input type="checkbox" value="${esc(item.resortId)}" checked>
+      <span class="pn">${esc(item.resort.name)}</span>
+      ${lead && item.resortId === lead.resortId ? `<span class="lead">Your pick</span>` : ""}
+      <span class="pt">${usd(item.price.total)}</span>
+    </label>`).join("");
+  $("#pdfPickMsg").textContent = "";
+  $("#pdfPicker").classList.add("on");
+}
+
+function closePdfPicker(){ $("#pdfPicker").classList.remove("on"); }
+
+$("#printTop").addEventListener("click", openPdfPicker);
+$("#pdfPickCancel").addEventListener("click", closePdfPicker);
+$("#pdfPicker").addEventListener("click", e => { if(e.target.id === "pdfPicker") closePdfPicker(); });
+
+$("#pdfPickGo").addEventListener("click", ()=>{
+  const picked = [...$("#pdfPickList").querySelectorAll("input:checked")].map(i=>i.value);
+  if(!picked.length){
+    $("#pdfPickMsg").textContent = "Pick at least one resort.";
+    return;
+  }
+  pdfChoice = picked;
+  closePdfPicker();
+  buildPrintDoc();
   window.print();
 });
-// Printing from the browser's own menu or Ctrl+P skips the button, so the
-// cover is built on the event the browser fires either way too.
-window.addEventListener("beforeprint", buildPrintCover);
+
+// Printing from the browser's own menu or Ctrl+P skips the dialog entirely,
+// so the document is built on the event the browser fires either way. Without
+// this, Ctrl+P produces a blank sheet — which is exactly the bug that started
+// this work, one layer down.
+window.addEventListener("beforeprint", buildPrintDoc);
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */
@@ -3963,7 +4556,17 @@ async function boot(){
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
   CLIMATE = meta.climate || {};
+  if(meta.exchange){
+    FX_RATES = meta.exchange.rates || FX_RATES;
+    FX_AS_OF = meta.exchange.asOf || "";
+    FX_PLACEHOLDER = !!meta.exchange.placeholder;
+  }
   PASS_PROGRAMS = meta.passPrograms || [];
+  // Public, small, and needed by the shared PDF's "what's there" section
+  // whether or not anybody ever opens the attractions panel. Not awaited:
+  // a slow request here must not hold up the form.
+  apiGet("/api/attractions", {}).then(a => { if(Array.isArray(a) && !allAttractions.length) allAttractions = a; })
+    .catch(()=>{});
   DVC_DEFAULT_PER_POINT = meta.dvcTakeHomePerPoint || 18;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();

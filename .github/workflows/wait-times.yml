@@ -1,0 +1,60 @@
+name: Parkfare wait times
+
+# Records posted wait times into wait_time_samples. NOTHING READS THAT TABLE
+# and nothing is shown to anybody — this job exists only to start the clock.
+#
+# The owner asked for an "average wait this month" card and then withdrew it
+# on the evidence: every automated source records POSTED waits, TouringPlans
+# publish that Disney over-states them by 11.5-15.5 minutes a day, and that
+# bias has no reason to be uniform across six resorts, three of which Disney
+# does not run. A non-uniform bias distorts the comparison rather than just
+# the number.
+#
+# What survived is the recording, because elapsed time is the one input that
+# cannot be bought later: Thrill Data has an archive back to 2019 only
+# because it started in 2019. In a year there will be real data to decide
+# with. See src/jobs/waitTimes.ts for how the aggregation must be done when
+# somebody does — averaging the raw rows is the obvious approach and it is
+# wrong.
+#
+# EVERY TWO HOURS, and the cadence is doing two jobs:
+#   * Twelve evenly-spaced UTC slots are evenly spaced in EVERY timezone, so
+#     no park is systematically sampled at its own quiet hour. The job then
+#     keeps only samples falling 9am-7pm in the PARK's local time, so each
+#     one contributes about five a day from the part of the day that
+#     actually describes a visit.
+#   * It survives the repo going private. GitHub bills Actions per job
+#     rounded up to the whole minute, so ~365 runs a month is ~365 of a
+#     private repo's 2,000 free minutes — comfortable beside the six
+#     existing daily jobs. Hourly would be ~730 and leave little headroom.
+#
+# No key: Queue-Times is free and needs none. Their terms ask for a "Powered
+# by Queue-Times.com" credit in any app that SHOWS the data; nothing shows it
+# yet, so nothing owes it yet, and anything that ever renders these numbers
+# must carry it.
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print what would be recorded without writing it"
+        type: boolean
+        required: false
+        default: false
+
+jobs:
+  wait-times:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run wait-times
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          WAIT_TIMES_DRY_RUN: ${{ inputs.dry_run }}

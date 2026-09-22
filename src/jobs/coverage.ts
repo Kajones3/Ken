@@ -143,6 +143,58 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // --- 4b. Is the baseline on the right BASIS? ---
+  //
+  // DB1B's MktFare is the whole round trip, not one leg — BTS's own
+  // documentation describes the Market table as holding a "prorated" fare
+  // for a "directional" market, which reads like one leg and is the obvious
+  // way to get this wrong in either direction. It was checked against a real
+  // 2024 Q4 file when the parser was written, and checked again on
+  // 2026-09-22 against the fare trend: across 74 routes, real round-trip
+  // SerpApi fares sat between 0.58x and 1.24x the BTS baseline. Had the
+  // baseline been one leg, every one of those ratios would have been near 2.
+  //
+  // This check exists so that stops being something anyone has to reason
+  // about. BTS publishes an average domestic ITINERARY fare, around $390 in
+  // recent years; our own national passenger-weighted average should land in
+  // the same neighbourhood. Half of it means the basis slipped to one leg;
+  // double means it is being counted twice. A fare that is wrong by a factor
+  // of two is still a perfectly plausible-looking fare, which is exactly why
+  // nothing inside the program can notice it.
+  const basis = await db.query<{ avg: string | null; routes: string; pax: string }>(
+    `select sum(avg_fare_usd * passengers_sampled) / nullif(sum(passengers_sampled), 0) as avg,
+            count(*) as routes,
+            sum(passengers_sampled) as pax
+       from historical_fares
+      where source = 'bts_db1b' and avg_fare_usd > 0 and passengers_sampled > 0`,
+  );
+  out.push("## Baseline sanity — are these round trips?");
+  const row = basis.rows[0];
+  const nationalAvg = row?.avg == null ? null : Number(row.avg);
+  if (nationalAvg == null || !Number.isFinite(nationalAvg)) {
+    out.push("No BTS rows to check. Run the bts-baseline workflow.");
+  } else {
+    out.push(`Our national passenger-weighted average: $${nationalAvg.toFixed(2)}`
+      + ` (${row!.routes} routes, ${Math.round(Number(row!.pax)).toLocaleString("en-US")} passengers sampled)`);
+    out.push("BTS's published average domestic itinerary fare: roughly $390 in recent years.");
+    // Bands rather than a pass/fail: this is a rough external comparison
+    // between our leisure-route subset and a national figure, so it can
+    // only catch an error of the size that actually matters — a factor of
+    // two. Anything subtler is not what this check is for.
+    if (nationalAvg < 260) {
+      out.push(`*** SUSPICIOUS — far below $390. Check whether MktFare has started being`);
+      out.push(`    read as ONE LEG rather than the whole round trip; that would halve every`);
+      out.push(`    domestic estimate in the app. See the header of src/jobs/btsBaseline.ts.`);
+    } else if (nationalAvg > 620) {
+      out.push(`*** SUSPICIOUS — far ABOVE $390. Check the fare is not being counted twice.`);
+    } else {
+      out.push("Plausible: the round-trip basis looks right.");
+    }
+    out.push("(Our routes are leisure routes to six resorts, not a national sample, so exact");
+    out.push(" agreement is not expected — this is here to catch a factor of two, not a few percent.)");
+  }
+  out.push("");
+
   // --- 5. Freshness ---
   const runs = await db.query<{ job: string; note: string; calls: number; rows_written: number; errors: number; finished_at: string }>(
     `select job, note, calls, rows_written, errors, finished_at

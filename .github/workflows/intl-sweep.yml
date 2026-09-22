@@ -11,12 +11,18 @@ name: Parkfare international sweep
 #
 # COST — this and popular-routes are the only jobs that spend money:
 #   19 origins x 5 international airports = 95 routes
-#   x 12 travel months x INTL_SWEEP_DATES
-#   = 1,140 metered SerpApi lookups a month at the default of 1 date.
-# That fits SerpApi's $75/month Developer plan (5,000 included) with room to
-# spare. Each extra date multiplies it: 2 -> 2,280, 3 -> 3,420. Check the
-# plan's allowance before raising it. SERPAPI_FLIGHTS_BUDGET is the hard stop
-# regardless, enforced inside the provider.
+#   x travel months x INTL_SWEEP_DATES
+#   = 1,140 metered SerpApi lookups at 12 months and the default of 1 date.
+# Each extra date multiplies it directly. SERPAPI_FLIGHTS_BUDGET is the hard
+# stop regardless, enforced inside the provider.
+#
+# THE INTENDED DEVELOPER-MONTH SHAPE IS 13 MONTHS x 2 DATES (~2,470), not the
+# Starter-sized defaults below. Two dates rather than one is not padding:
+# INTL_BASELINE_MIN_SAMPLES is 3, and one date a month gives exactly three
+# per quarter — so a single route where no fare comes back drops that quarter
+# below the floor and no baseline is built at all, which is the one thing
+# this whole job exists to produce. See README's "One month of SerpApi
+# Developer, one sweep".
 #
 # MANUAL ONLY — deliberately not scheduled. On SerpApi Starter (1,000
 # searches/month) a full 12-month sweep is ~1,140 lookups, more than the

@@ -677,11 +677,109 @@ after a confirmed fresh deploy, capture the exact `display_name` values in
 the response and check them against the regex directly rather than assuming
 the code path is untouched.
 
+## One month of SerpApi Developer, one sweep
+
+The owner's plan, in their words: buy Developer for one month, make one
+complete run, drop back to Starter, and "leave the rest of the room for
+individuals to search with." That is the right shape. This is the sequence,
+the arithmetic, and what the money does not buy.
+
+**Nothing here needs new code.** Every budget in the project is already an
+environment variable.
+
+### Do this first, and it is free
+
+**Check the fare estimates are actually too low before paying to raise them.**
+Run `npm run coverage` and read the "Baseline sanity" section: our national
+passenger-weighted average should sit near BTS's published average domestic
+itinerary fare, around $390. If it is near half that, the baseline has slipped
+to one directional leg and every domestic estimate in the app is half — a free
+fix that no amount of SerpApi spending would paper over. (Checked 2026-09-22:
+the basis is right. The check exists so nobody has to take that on trust
+again.)
+
+Then look at the **estimate lean** in `/admin`. A BTS median is the median
+fare *paid* across a whole quarter, by people who largely booked months ahead,
+including deep-discount carriers — structurally below what somebody is quoted
+today for one specific date. The lean shows a higher point in that same real
+range and costs nothing. It ships at 100, the dear end.
+
+### The sweep itself
+
+Domestic routes already have a free, real baseline — BTS DB1B. International
+routes have **none**: grepping a real 2024 Q4 file for `CDG` returns zero rows,
+because it is a US domestic survey. So a dollar spent internationally buys an
+estimate that does not otherwise exist, and a dollar spent domestically
+improves one that already does. **International first, and mostly only.**
+
+`intl-sweep` is also the only job that *can* do a complete pass.
+`popular-routes` buys a fixed number of routes for one rotation month per run,
+by design — so there is no domestic sweep to run even if one were wanted.
+**Do not build one**: it would spend real money improving numbers that already
+have free real data behind them.
+
+| Step | Workflow | Inputs | Lookups |
+|---|---|---|---|
+| 1. International, whole year | Parkfare international sweep | months 13, **dates 2**, budget 300/shard | ~2,470 |
+| 2. Hotels, every resort and month | Parkfare refresh | `REFRESH_BACKFILL=true`, `SERPAPI_HOTELS_BUDGET=80` | ~78 |
+| 3. Nightly domestic, left running | Parkfare popular routes | unchanged | ~300/month |
+| | | **Committed** | **~2,850 of 5,000** |
+
+**`INTL_SWEEP_DATES=2`, not the default 1.** `INTL_BASELINE_MIN_SAMPLES` is 3,
+and one date a month gives exactly three per quarter — so a single route where
+no fare comes back drops that quarter below the floor and no baseline is built
+at all. Two buys margin on the thing the whole sweep exists to produce.
+
+**One run, not two.** A second sweep in the same month re-buys fares that have
+barely moved and spends the headroom being deliberately reserved.
+
+### Raise the exact-fare caps for that month
+
+`EXACT_FARE_PER_USER_PER_DAY` to **25** and `EXACT_FARE_GLOBAL_PER_DAY` to
+**90** — what they were sized at before the plan was downgraded to Starter.
+
+**These caps bound one button, not searching.** Comparing six resorts, twelve
+months of fare calendars, cheapest dates and every override are unlimited and
+free forever; they read a cache already paid for. The caps apply only to the
+Plus-only "exact fare" button, which spends one real search per press. At
+today's 3 and 6, two friends exhaust the whole site for the day and Plus users
+cannot physically spend enough to "pay for themselves" — which is the thing
+this month is meant to test.
+
+### What the money does not buy
+
+**Not a real fare for every date.** 363 routes across a year is 132,495
+date-route pairs. One lookup buys one route on one date; the rest of that
+month gets a better-anchored estimate. Somebody picking a specific Tuesday
+still sees a labelled estimate, and the thing that returns a bookable number
+is the exact-fare button.
+
+**Not a permanent fix.** The 13-month window rolls. Six months on, today's far
+months have aged off the end and the new ones have nothing. Repeat annually,
+or keep a small monthly international top-up on Starter.
+
+**Not park tickets.** They come from a maintained table with a
+two-parameter curve, not from SerpApi, and no Disney park publishes a pricing
+API. If admission is reported as wildly off, `ticket_prices` is the thing to
+fix.
+
+**Not on-property hotel rates.** SerpApi buys off-property only; Disney-owned
+rooms are generated locally from bases in `config.ts`, four of which are still
+Claude drafts. `/admin` is where those change.
+
+### One thing worth fixing before spending more
+
+On-property hotel rows are written with the provider's `serpapi_hotels` source
+tag even though no vendor returned them (see the note in `refresh.ts`). The
+rotation works around it by counting only `on_property = false` rows, but the
+real-pulls digest reads the same tag — so a bigger hotel budget makes an
+existing mislabelling report more pulls that never happened.
+
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `db/schema.sql` | Thirteen tables. Safe to re-run. |
+| `db/schema.sql` | 25 tables. Safe to re-run. |
 | `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport, the IRS mileage rate, and the flat rental-car guess. |
 | `src/gettingThere.ts` | Pure resolver: turns one "Getting there" preset (fly / fly-with-miles / drive-to-WDW / drive-to-Disneyland / drive-domestic) into a per-resort transport mode, so one six-resort comparison can drive to some resorts and fly to others. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
@@ -897,9 +995,16 @@ Four things bound it, checked in this order:
    bought for that exact route/date/length and still fresh is returned free
    and does not touch the user's allowance — revisiting a trip is not
    punished. The second person to ask the same question pays nothing.
-2. **Per-user daily cap** (`EXACT_FARE_PER_USER_PER_DAY`, default 25).
-3. **Site-wide daily cap** (`EXACT_FARE_GLOBAL_PER_DAY`, default 90 — sized
-   so the month still fits the plan alongside the two nightly jobs).
+2. **Per-user daily cap** (`EXACT_FARE_PER_USER_PER_DAY`, **default 3**).
+3. **Site-wide daily cap** (`EXACT_FARE_GLOBAL_PER_DAY`, **default 6**).
+
+   Both were retuned downward when the plan bought was SerpApi Starter
+   (1,000/month) rather than Developer (5,000). The nightly flight rotation
+   takes ~300 a month and hotels ~240, which leaves about 180 to reserve for
+   on-demand lookups — roughly 6 a day. This paragraph documented the old
+   Developer-sized figures (25 and 90) for a while after the code had moved;
+   if you go back to Developer those are the numbers to restore, and they are
+   what the runbook above recommends.
 4. **Provider budget**, the same hard ceiling every paid job here has.
 
 A failed lookup still counts: the provider bills for a search that finds

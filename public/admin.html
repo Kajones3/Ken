@@ -93,11 +93,39 @@ details.group[open]>summary::after{transform:rotate(90deg)}
 .farerow{display:grid; gap:8px; margin-bottom:8px;
   grid-template-columns:80px 80px minmax(0,1.1fr) minmax(0,1fr) minmax(0,1.2fr) auto; align-items:center}
 .farerow-2{grid-template-columns:minmax(0,3fr) minmax(0,1fr)}
+.arow{display:grid; gap:8px; margin-bottom:8px;
+  grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.6fr) auto}
+.arow-2{grid-template-columns:1fr}
+.arowhead{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+.arowhead span{padding-left:2px}
+.alist{border-top:1px solid var(--rule)}
+/* A GRID, not a flex row. Flex let every cell size itself, so a long
+   attraction name and a two-resort list pushed the buttons onto their own
+   lines at different widths per row and the whole list read as ragged. Fixed
+   columns keep the Edit buttons on one vertical line, which is what makes a
+   list of ten scannable. */
+.aitem{display:grid; gap:4px 10px; align-items:baseline;
+  grid-template-columns:minmax(0,1.5fr) minmax(0,1.2fr) auto minmax(0,auto);
+  padding:10px 2px; border-bottom:1px solid var(--rule); font-size:13px}
+.aitem .an{font-weight:650; min-width:0}
+.aitem .ar{color:var(--muted); font-size:12px; min-width:0}
+.aitem .atags{display:flex; gap:5px; flex-wrap:wrap}
+.aitem .atag{font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  padding:1px 6px; border-radius:99px; border:1px solid var(--rule); color:var(--muted); white-space:nowrap}
+.aitem .atag.only{color:var(--ok); border-color:var(--ok)}
+.aitem .atag.bad{color:var(--bad); border-color:var(--bad)}
+.aitem .aacts{display:flex; gap:6px; justify-content:flex-end; white-space:nowrap}
+.aitem .aacts .btn{padding:4px 9px; font-size:12px}
+.aitem .anote{grid-column:1/-1; color:var(--muted); font-size:12px}
+@media (max-width:760px){
+  .aitem{grid-template-columns:1fr; gap:3px}
+  .aitem .aacts{justify-content:flex-start; margin-top:4px}
+}
 .farehead{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
   color:var(--muted); margin-bottom:2px}
 .farehead span{padding-left:2px}
 @media (max-width:720px){
-  .farerow,.farerow-2{grid-template-columns:1fr}
+  .farerow,.farerow-2,.arow,.arow-2{grid-template-columns:1fr}
   .farehead{display:none}
 }
 select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface);
@@ -169,6 +197,47 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
     </div>
     <div class="said" id="fCsvSaid"></div>
     <div class="errs hidden" id="fCsvErrs"></div>
+  </section>
+
+  <section class="sheet" id="attractions">
+    <h2>The attraction list</h2>
+    <p>What each resort has, which is how the board can tell somebody that only Shanghai has Zootopia.
+      The list below is what the app is using right now. The rows it shipped with are a starting point,
+      not a researched catalogue &mdash; changing one here takes effect immediately, with no deploy.</p>
+    <p><b>List every resort that has it.</b> &ldquo;Only here&rdquo; is never something you tick: it is worked out
+      from how many resorts you name, so adding Paris to Ratatouille automatically stops the app claiming
+      EPCOT is the only place to ride it. A ride with a different name abroad is still the same ride &mdash;
+      put both resorts on one row and explain the difference in the note.</p>
+
+    <div class="arow arowhead">
+      <span>Id</span><span>Name</span><span>Resorts that have it</span><span></span>
+    </div>
+    <div class="arow">
+      <input type="text" id="aId" placeholder="space-mountain" maxlength="64" aria-label="Id">
+      <input type="text" id="aName" placeholder="Space Mountain" maxlength="120" aria-label="Name">
+      <input type="text" id="aResorts" placeholder="wdw dlr dlp tdr hkdl" aria-label="Resorts">
+      <button class="btn primary" id="aAdd">Save</button>
+    </div>
+    <div class="arow arow-2">
+      <input type="text" id="aNote" maxlength="400" aria-label="Note"
+        placeholder="Note (optional) — what makes one resort's version different from its clones">
+    </div>
+    <p class="count" id="aHint"></p>
+    <div class="said" id="aSaid"></div>
+
+    <p class="count" id="aCount" style="margin-top:14px">Loading…</p>
+    <div id="attrList"></div>
+
+    <div class="tools">
+      <a class="btn" href="/api/admin/attractions.csv" download>Download attractions spreadsheet</a>
+      <button class="btn" id="aPick">Upload a filled-in one</button>
+      <input type="file" id="aFile" accept=".csv,text/csv" class="hidden">
+    </div>
+    <p class="count">The spreadsheet holds the whole live list, not only your changes. Delete a row there and
+      it goes from the app; a file with a mistake in it is refused whole, so nothing changes until every row
+      is right.</p>
+    <div class="said" id="aCsvSaid"></div>
+    <div class="errs hidden" id="aCsvErrs"></div>
   </section>
 
   <section class="sheet">
@@ -437,8 +506,180 @@ $("#fFile").addEventListener("change", async e => {
   loadFares();
 });
 
+/* ----------------------------- the attraction list -----------------------
+ * The owner's ask was "make sure I have a way to maintain the attractions
+ * list". Everything typed here is an OVERLAY on the list in config.ts, never
+ * a replacement: an empty table leaves the app behaving exactly as it shipped.
+ * That is why the button on a shipped row says Revert and not Delete — taking
+ * your row away puts the shipped one back, which is the safety property
+ * working rather than a missing feature.
+ */
+let ATTR_RESORTS = [];
+let ATTR_SHIPPED = new Set();
+
+function renderAttractions(d){
+  ATTR_RESORTS = d.resorts || ATTR_RESORTS;
+  ATTR_SHIPPED = new Set(d.shippedIds || [...ATTR_SHIPPED]);
+  const owned = new Map((d.owner || []).map(o => [o.id, o]));
+  const eff = d.effective || [];
+
+  $("#aHint").textContent = "Resort ids: " + ATTR_RESORTS.map(r => r.id + " (" + r.name + ")").join(", ");
+  $("#aCount").textContent = eff.length + " attraction" + (eff.length === 1 ? "" : "s") + " live"
+    + (owned.size ? " \u00b7 " + owned.size + " changed by you" : "");
+
+  const rows = eff.map(a => {
+    const mine = owned.get(a.id);
+    const shipped = ATTR_SHIPPED.has(a.id);
+    const names = (a.resortIds || [])
+      .map(id => (ATTR_RESORTS.find(r => r.id === id) || {}).name || id).join(", ");
+    return `<div class="aitem">
+      <span class="an">${esc(a.name)}</span>
+      <span class="ar">${esc(names)}</span>
+      <span class="atags">
+        ${a.onlyAt ? `<span class="atag only">Only here</span>` : ""}
+        ${mine ? `<span class="atag">Yours</span>` : ""}
+      </span>
+      <span class="aacts">
+        <button class="btn" data-edit="${esc(a.id)}">Edit</button>
+        ${mine
+          ? `<button class="btn" data-revert="${esc(a.id)}">${shipped ? "Revert" : "Delete"}</button>`
+          : `<button class="btn" data-hide="${esc(a.id)}">Remove</button>`}
+      </span>
+      ${a.note ? `<span class="anote">${esc(a.note)}</span>` : ""}
+    </div>`;
+  });
+
+  // Rows that cannot be applied are listed anyway, marked. "Where did my row
+  // go?" is a worse question than seeing it greyed out.
+  for(const o of (d.owner || [])){
+    if(o.hidden){
+      rows.push(`<div class="aitem">
+        <span class="an">${esc(o.name || o.id)}</span>
+        <span class="ar"></span>
+        <span class="atags"><span class="atag bad">Removed by you</span></span>
+        <span class="aacts"><button class="btn" data-revert="${esc(o.id)}">Put it back</button></span>
+      </div>`);
+    } else if(!o.applied){
+      rows.push(`<div class="aitem">
+        <span class="an">${esc(o.name || o.id)}</span>
+        <span class="ar">${esc((o.resortIds || []).join(", "))}</span>
+        <span class="atags"><span class="atag bad">Not applied</span></span>
+        <span class="aacts">
+          <button class="btn" data-edit="${esc(o.id)}">Edit</button>
+          <button class="btn" data-revert="${esc(o.id)}">Delete</button>
+        </span>
+        <span class="anote">${esc(o.problem || "")}</span>
+      </div>`);
+    }
+  }
+  $("#attrList").className = "alist";
+  $("#attrList").innerHTML = rows.join("");
+  window.__attrEffective = eff;
+  window.__attrOwner = d.owner || [];
+}
+
+async function loadAttractions(){
+  const r = await fetch("/api/admin/attractions");
+  if(!r.ok){ $("#aCount").textContent = "Couldn't load the attraction list."; return; }
+  renderAttractions(await r.json());
+}
+
+function attrSay(el, ok, text){
+  el.className = "said " + (ok ? "ok" : "bad");
+  el.textContent = text;
+}
+
+$("#aAdd").addEventListener("click", async () => {
+  const said = $("#aSaid");
+  const body = {
+    id: $("#aId").value.trim(),
+    name: $("#aName").value.trim(),
+    resortIds: $("#aResorts").value.trim(),
+    note: $("#aNote").value.trim(),
+  };
+  const r = await fetch("/api/admin/attractions", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){
+    // Printed as the server wrote it. The message names what to do; replacing
+    // it with "invalid" would throw that away.
+    attrSay(said, false, d.message || "That wasn't saved.");
+    return;
+  }
+  attrSay(said, true, `Saved "${body.name || body.id}". It is live now.`);
+  $("#aId").value = ""; $("#aName").value = ""; $("#aResorts").value = ""; $("#aNote").value = "";
+  renderAttractions(d);
+});
+
+document.addEventListener("click", async e => {
+  const edit = e.target.closest("[data-edit]");
+  if(edit){
+    const id = edit.dataset.edit;
+    const a = (window.__attrEffective || []).find(x => x.id === id)
+      || (window.__attrOwner || []).find(x => x.id === id);
+    if(!a) return;
+    $("#aId").value = a.id;
+    $("#aName").value = a.name || "";
+    $("#aResorts").value = (a.resortIds || []).join(" ");
+    $("#aNote").value = a.note || "";
+    $("#aId").scrollIntoView({ behavior: "smooth", block: "center" });
+    $("#aName").focus();
+    attrSay($("#aSaid"), true, "Loaded into the form above. Change it and press Save.");
+    return;
+  }
+
+  const hide = e.target.closest("[data-hide]");
+  if(hide){
+    const a = (window.__attrEffective || []).find(x => x.id === hide.dataset.hide);
+    if(!confirm(`Remove "${a ? a.name : hide.dataset.hide}" from the list?\n\nIt came with the app, so you can put it back afterwards.`)) return;
+    hide.disabled = true;
+    const r = await fetch("/api/admin/attractions", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: hide.dataset.hide, hidden: true }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if(r.ok) renderAttractions(d); else hide.disabled = false;
+    return;
+  }
+
+  const rev = e.target.closest("[data-revert]");
+  if(rev){
+    rev.disabled = true;
+    const r = await fetch("/api/admin/attractions/" + encodeURIComponent(rev.dataset.revert), { method: "DELETE" });
+    const d = await r.json().catch(() => ({}));
+    if(r.ok) renderAttractions(d); else rev.disabled = false;
+  }
+});
+
+$("#aPick").addEventListener("click", () => $("#aFile").click());
+$("#aFile").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const said = $("#aCsvSaid"), errs = $("#aCsvErrs");
+  errs.classList.add("hidden"); errs.innerHTML = "";
+  const csv = await f.text();
+  e.target.value = "";
+  const r = await fetch("/api/admin/attractions.csv", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ csv }),
+  });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){
+    attrSay(said, false, d.message || "Nothing was changed — the file needs fixing first.");
+    if(d.errors && d.errors.length){
+      errs.classList.remove("hidden");
+      errs.innerHTML = `<b>Nothing was changed.</b> ${d.errors.length} row${d.errors.length===1?"":"s"} to fix:
+        <ul>${d.errors.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    }
+    return;
+  }
+  attrSay(said, true, `The list is now ${d.applied} row${d.applied === 1 ? "" : "s"} as you sent it.`);
+  renderAttractions(d);
+});
+
 load();
 loadFares();
+loadAttractions();
 </script>
 </body>
 </html>

@@ -441,3 +441,90 @@ create table if not exists fare_corrections (
 );
 create index if not exists fare_corrections_route
   on fare_corrections (origin, destination, depart_date);
+
+-- The owner's own attraction list, as an OVERLAY on the one in config.ts —
+-- never a replacement for it. Same safety property as owner_settings, and for
+-- the same reason: an empty table, a wiped row or a row the code no longer
+-- considers valid must leave the app behaving exactly as it did before any of
+-- this existed. A list is the one place where "the database is the truth"
+-- would be genuinely dangerous — a failed migration or a bad import would
+-- empty the attractions picker for everybody, silently.
+--
+-- Three things a row can do, decided by which fields it carries:
+--   * an id that matches a shipped attraction REPLACES its name, resorts and
+--     note;
+--   * an id that matches nothing ADDS an attraction;
+--   * hidden = true takes one out of the list, which is how a shipped row is
+--     removed without editing code.
+--
+-- resort_ids is stored as a comma-separated text field rather than an array
+-- so PGlite and Postgres behave identically — every other list in this schema
+-- does the same. It is parsed and re-validated on the way out, so a resort id
+-- that stops existing degrades to "this row is not applied" rather than to an
+-- attraction that belongs to nowhere.
+create table if not exists owner_attractions (
+  id          text primary key,
+  name        text not null default '',
+  resort_ids  text not null default '',
+  note        text not null default '',
+  hidden      boolean not null default false,
+  updated_by  text not null default '',
+  updated_at  timestamptz not null default now()
+);
+
+-- Wait-time observations, recorded and nothing else. NOTHING READS THIS YET
+-- and that is deliberate.
+--
+-- The owner wanted an "average wait this month" card beside the weather box,
+-- on the condition that all six resorts could have one. Two things killed the
+-- card and neither killed the data:
+--
+--   * Every automated source records POSTED waits. TouringPlans, who measure
+--     actual waits with a stopwatch, publish that Disney over-states by
+--     roughly 11.5-15.5 minutes a day depending on season. So an average
+--     built from any feed is an average of what a park CLAIMS.
+--   * That bias is only harmless if all six inflate equally, and there is no
+--     reason to think they do — Tokyo is run by Oriental Land Co. under
+--     licence, and Paris and Shanghai post on their own systems. A
+--     non-uniform bias distorts the comparison rather than just the number,
+--     which is the same trap as the ERA5 rain-day count.
+--
+-- But elapsed time is the one input that cannot be bought later. Thrill Data
+-- only has an archive going back to 2019 because it started in 2019. So this
+-- records from today and the decision about what, if anything, to show with
+-- it gets made in a year against real data.
+--
+-- local_hour is stored AT WRITE TIME and is load-bearing. A fixed UTC poll
+-- time is a fixed LOCAL time per park, so without it Orlando would be sampled
+-- at its quiet morning while Shanghai got its busy afternoon — a timezone
+-- bias walking straight into the six-resort comparison. Aggregating later has
+-- to average by local hour before averaging across hours.
+--
+-- ONE ROW PER RIDE, not one per park, and the reason is that you can always
+-- average rides down to a park number and can never recover detail you did
+-- not keep. The owner's own analysis notebook computes dollars-per-ride,
+-- headliner share and open-ride availability — none of which a park average
+-- can answer. Storing closed rides too is what makes availability
+-- computable: open rides over total listed.
+--
+-- The cost is rows, and it is affordable. Their notebook counted 119 rides
+-- across Walt Disney World's four parks, so roughly 330 across all eleven;
+-- at five samples a day that is ~1,650 rows a day, ~600k a year, on the
+-- order of 70MB against Neon's 500MB free tier. Prune old raw samples once
+-- a month has been aggregated, if it ever matters.
+create table if not exists wait_time_samples (
+  park_id       int          not null,
+  observed_at   timestamptz  not null,
+  ride_name     text         not null,
+  resort_id     text         not null,
+  local_hour    smallint     not null,
+  is_open       boolean      not null,
+  -- Null means the ride is open and no wait was reported, which is a
+  -- different fact from a zero-minute queue. Reading one as the other is the
+  -- mistake the climate generator's null handling already exists to prevent.
+  wait_min      int,
+  source        text         not null default 'queue_times',
+  primary key (park_id, observed_at, ride_name)
+);
+create index if not exists wait_time_samples_month
+  on wait_time_samples (resort_id, observed_at);

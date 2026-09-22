@@ -164,6 +164,47 @@ export interface FlightRow {
     ownerCorrected?: boolean;
   };
 }
+/**
+ * Where in a route's own observed fare range the shown estimate sits.
+ *
+ * 0 = p25, 50 = the median, 100 = p75. The owner's call, in their words:
+ * "lean high". The reasoning is this project's oldest rule — showing $100 and
+ * landing on $200 is the failure the whole estimate machinery exists to
+ * prevent, while showing high and finding it cheaper costs nobody a booking.
+ *
+ * It is NOT a fudge factor. Every value it can produce is interpolated
+ * between three real observed statistics of that route's own fare
+ * distribution, so it can only ever choose among numbers people actually
+ * paid. It cannot invent one outside the spread.
+ *
+ * Owner-editable, because the right lean is a judgement about how travellers
+ * react to a number and not something the code can know.
+ */
+export const ESTIMATE_LEAN_KEY = "flight.estimateLean";
+export const DEFAULT_ESTIMATE_LEAN = 100;
+
+/**
+ * Piecewise-linear through p25 -> median -> p75. Pure.
+ *
+ * Piecewise rather than a straight line from low to high because the median
+ * is the point that carries meaning: a lean of 50 has to land exactly on it,
+ * and a straight interpolation would miss it whenever the spread is
+ * lopsided — which on a real fare distribution it usually is.
+ */
+export function leanedFare(
+  est: { low: number; med: number; high: number },
+  leanPct: number,
+): number {
+  const t = Number.isFinite(leanPct) ? Math.max(0, Math.min(100, leanPct)) : DEFAULT_ESTIMATE_LEAN;
+  // The three arrive sorted from book.ts, but a caller could hand over
+  // anything; guard rather than return a number below the low end.
+  const lo = Math.min(est.low, est.med, est.high);
+  const mid = est.med;
+  const hi = Math.max(est.low, est.med, est.high);
+  if (t <= 50) return lo + (mid - lo) * (t / 50);
+  return mid + (hi - mid) * ((t - 50) / 50);
+}
+
 export interface HotelNight {
   hotelId: string; name: string; descriptor: string;
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
@@ -571,13 +612,23 @@ export function priceTrip(
     // quietly undercutting what most travellers will actually pay; a real
     // fare that's already representative (at or above the median) still
     // shows as real, plain, with its carrier and booking link.
+    // Deliberately still the MEDIAN, not the leaned figure. This decides
+    // whether a real cached fare is trustworthy enough to show, and the
+    // honest central estimate is the right yardstick for that. Comparing
+    // against a leaned figure would start overriding real fares far more
+    // often, which is a different change wearing this one's clothes.
     const useRow = !!row && !(est && est.med > row.price);
+    // Whenever an ESTIMATE is what gets shown, it is leaned. See
+    // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
+    // estimate that comes in low is the one that costs somebody at checkout.
+    const leanPct = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+    const estShown = est ? leanedFare(est, leanPct) : undefined;
     // Flying: an override may raise the fare but never fall below the cheapest fare we know of —
     // "cheapest we know of" is still the real row, even on the rare date the median corrects it up.
     // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
     // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
     const floor = row?.price ?? est?.med ?? 0;
-    const modelFare = useRow ? row!.price : (est?.med ?? floor);
+    const modelFare = useRow ? row!.price : (estShown ?? floor);
     if (transportMode === "miles") {
       const base = ov.farePerSeat !== undefined ? ov.farePerSeat : modelFare;
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
@@ -597,8 +648,12 @@ export function priceTrip(
     flights = ages.reduce((sum, age) => sum + perSeatFare * flightMultiplier(age), 0);
     flightPick = useRow
       ? { price: row!.price, carrier: row!.carrier, stops: row!.stops, deepLink: row!.deepLink }
+      // The leaned figure, NOT est.med — this is the number the card prints,
+      // and it has to be the same one the total was built from. Having the
+      // two disagree is worse than either choice on its own: a reader adds
+      // up the card and gets a different answer from the board.
       : est
-      ? { price: est.med, estimate: est }
+      ? { price: estShown ?? est.med, estimate: est }
       : null;
   }
 
