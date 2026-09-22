@@ -285,8 +285,6 @@ a{color:var(--ink)}
 .spreadnote{margin:6px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:70ch}
 .spreadnote b{color:var(--text)}
 .spreadlow{display:inline-block; margin-top:2px; font-weight:600; color:var(--text)}
-/* The second booking link reads as the alternative it is, not as a rival. */
-.booksecond{display:inline-block; margin-left:14px; font-weight:500; opacity:.75}
 .crowdnote{background:var(--surface-2); border:1px solid var(--line);
   border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
 .crowdnote b{font-weight:680}
@@ -2536,31 +2534,25 @@ async function renderDetail(){
   // owner clicked through on a July 10-17 trip and landed on another week at
   // another price. A link to the right trip beats a link to a specific
   // itinerary for the wrong one.
-  const flightQuery = `Flights from ${p.origin} to ${x.destination} on ${x.start} through ${backDate}`;
-  const flightLink =
-    `https://www.google.com/travel/flights?hl=en&curr=USD&q=${encodeURIComponent(flightQuery)}`;
-
   /**
-   * KAYAK, the second link — and the reason there are two.
+   * WHERE "CHECK LIVE FARES" SENDS YOU. Kayak, confirmed by the owner's own
+   * click on 2026-09-22 — route, both dates, adults and every child's age,
+   * all arriving filled in.
    *
-   * Google's `q=` search carries the route and both dates and NOT the party
-   * size: no wording was found that it parses into a passenger count, so the
-   * card has to tell people to set it themselves. Kayak puts all of it in the
-   * path, party size included, which is the one thing the Google link cannot
-   * do.
+   * It replaced a Google Flights `q=` search, which carried the route and
+   * both dates and NOT the party size: no wording was found that Google
+   * parses into a passenger count, so the card had to ask people to set it
+   * themselves. Kayak puts all of it in the path. Both shipped side by side
+   * for one round precisely because kayak.com is refused by this sandbox's
+   * egress proxy (tested) and the Google link had just been confirmed
+   * working — swapping a working link for an untestable one is how the
+   * `#flt=` regression happened. The owner's click is what settled it, and
+   * Google's is gone now that Kayak is the confirmed one.
    *
    * There is no conflict with SerpApi. SerpApi is where the app's fare DATA
    * comes from, server-side and overnight; this is where a traveller is sent
-   * to book. They are unrelated choices and always have been — the cached
-   * row's own affiliate deep link has always pointed wherever the provider
-   * said, not at Google.
-   *
-   * Both ship because kayak.com is refused by this sandbox's egress proxy
-   * (tested, `CONNECT tunnel failed, 403`) exactly as google.com is, so this
-   * format cannot be confirmed from here and the Google one now demonstrably
-   * works. Shipping the unverified link alone would repeat the `#flt=`
-   * mistake: a link nobody here could test, replacing one that worked.
-   * Whichever the owner confirms, the other goes.
+   * to book. Unrelated choices, and a cached row's own affiliate deep link
+   * has always pointed wherever the provider said.
    *
    * Children are carried BY AGE, never as a count. Kayak's segment is
    * `children-1-4` for a one-year-old and a four-year-old — the ages
@@ -2895,12 +2887,10 @@ async function renderDetail(){
           <div class="foot">
             ${fareWhy}
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
-              <a class="book booksecond" href="${flightLink}" target="_blank" rel="noopener">or on Google Flights →</a>
-              <p class="sub" style="margin:6px 0 0">Both open ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}.
-                Kayak also carries ${kayakAdults} adult${kayakAdults===1?"":"s"}${
-                  kayakKidAges.length ? ` and ${kayakKidAges.length === 1 ? "a child aged" : "children aged"} ${kayakKidAges.join(" and ")}` : ""};
-                Google cannot, so set the travellers there yourself.
-                If either lands on different dates, the price you see is not this trip's.</p>` : ""}
+              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)},
+                for ${kayakAdults} adult${kayakAdults===1?"":"s"}${
+                  kayakKidAges.length ? ` and ${kayakKidAges.length === 1 ? "a child aged" : "children aged"} ${kayakKidAges.join(" and ")}` : ""}.
+                If it lands on a different trip, the price you see there is not this one's.</p>` : ""}
           </div>
         </div>`}
         <div class="card">
