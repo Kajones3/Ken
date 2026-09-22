@@ -26,7 +26,8 @@
  * free feature is everybody's problem, a broken Plus feature is a paying
  * customer's problem, and they deserve different urgency.
  */
-import { NEWS_FEEDS, RESORTS, mileageRateStatus } from "./config.js";
+import { NEWS_FEEDS, RESORTS, mileageRateStatus, CROWDS_REVIEWED, CROWDS_ARE_PLACEHOLDER, CLIMATE_SOURCE } from "./config.js";
+import { EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { requireVerifiedEmail } from "./verifyEmail.js";
@@ -94,6 +95,62 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
 /** How old a resort's ticket rows may get before it is worth a nudge. */
 export const TICKET_STALE_DAYS = 30;
 
+/**
+ * HAND-MAINTAINED DATA THAT GOES STALE ON A CLOCK.
+ *
+ * Every table in this project that no API publishes has the same failure
+ * mode: it keeps working, keeps looking right, and quietly stops being true.
+ * Ticket rows had a staleness check; nothing else did, so each new list
+ * (attractions, then crowd bands) arrived with its own bespoke reminder or
+ * none at all.
+ *
+ * This is the registry so the NEXT one is a row here rather than a new idea.
+ * Add an entry the same day you add a hand-maintained table.
+ *
+ *   reviewedOn   — a date constant kept next to the data itself, bumped when
+ *                  somebody actually looks at it. Not the file's git mtime:
+ *                  reformatting a file is not reviewing it, and a git date
+ *                  would silently reset the clock every time it was touched.
+ *   everyDays    — how long the data stays believable, from how often the
+ *                  real world republishes it. DVC points charts and ticket
+ *                  prices come out annually; visa rules change whenever they
+ *                  change, so they get a shorter fuse than their publication
+ *                  schedule would suggest.
+ *
+ * None of these is blocking. Stale is not broken — it is the thing that
+ * becomes broken while nobody is looking, which is exactly what a nightly
+ * nag is for.
+ */
+interface ReviewableData {
+  id: string;
+  title: string;
+  why: string;
+  side: TaskSide;
+  reviewedOn: string;
+  everyDays: number;
+}
+
+const YEARLY = 365;
+
+const REVIEWABLE: ReviewableData[] = [
+  {
+    id: "crowd-bands",
+    title: "Re-check the crowd bands against the current DVC points charts",
+    why: "CROWDS in config.ts is how the app answers 'when should we go' — the free half of the product's promise. Walt Disney World and Disneyland are read off DVC points charts, which Disney republishes every year, and the four international resorts are judgement with no chart behind them at all. A band that is a year out is a confident recommendation to travel in a week that is no longer quiet. Bump CROWDS_REVIEWED in src/config.ts when you have looked.",
+    side: "free",
+    reviewedOn: CROWDS_REVIEWED,
+    everyDays: YEARLY,
+  },
+];
+
+/** Days between two ISO dates, positive when `later` is after `earlier`. */
+function daysBetween(earlier: string, later: string): number {
+  const a = Date.parse(earlier + "T00:00:00Z");
+  const b = Date.parse(later + "T00:00:00Z");
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.floor((b - a) / 86_400_000);
+}
+
 export interface OwnerTaskOptions {
   env?: NodeJS.ProcessEnv;
   today?: ISODate;
@@ -120,6 +177,52 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
       blocking: true,
     });
   }
+
+  // --- 1b. Hand-maintained tables that have aged out ---------------------
+  // A date comparison, not a judgement: the row appears when the clock says
+  // so and disappears the day the constant is bumped.
+  for (const d of REVIEWABLE) {
+    const age = daysBetween(d.reviewedOn, today);
+    if (age < d.everyDays) continue;
+    checked({
+      id: d.id,
+      title: d.title,
+      why: `Last reviewed ${d.reviewedOn}, ${age} days ago — this data is meant to be checked every ${d.everyDays}. ${d.why}`,
+      side: d.side,
+      blocking: false,
+    });
+  }
+
+  // --- 1c. Generated or seeded tables still holding placeholder rows ------
+  // These say so in their own data rather than on a clock, so each exposes a
+  // flag and this reads it. A placeholder that nobody replaces is the
+  // failure mode: the UI admits it is a guess, in small text, forever.
+  const placeholders: { id: string; title: string; why: string; side: TaskSide }[] = [];
+  if (CROWDS_ARE_PLACEHOLDER) {
+    placeholders.push({
+      id: "crowd-bands-placeholder",
+      title: "Replace the placeholder crowd bands with your own points-chart reading",
+      why: "CROWDS in src/config.ts still ships Claude's first-pass bands, and the crowd card tells every visitor so. Send your own per-resort, per-month bands, then set CROWDS_ARE_PLACEHOLDER to false in the same commit.",
+      side: "free",
+    });
+  }
+  if (EXCHANGE_IS_PLACEHOLDER) {
+    placeholders.push({
+      id: "exchange-placeholder",
+      title: "Run the 'Parkfare exchange rates' workflow",
+      why: "src/exchangeData.ts still holds hand-seeded rates rather than ECB reference rates, and the shared PDF says so in words. The workflow is free and takes one dispatch.",
+      side: "free",
+    });
+  }
+  if (/hand-seeded|seed/i.test(CLIMATE_SOURCE)) {
+    placeholders.push({
+      id: "climate-placeholder",
+      title: "Run the 'Parkfare climate normals' workflow",
+      why: "src/climateData.ts still holds hand-seeded weather rather than observations. CLIMATE_SOURCE in that file says which it currently is.",
+      side: "free",
+    });
+  }
+  for (const pl of placeholders) checked({ ...pl, blocking: false });
 
   // --- 2. IRS mileage rate ----------------------------------------------
   const mileage = mileageRateStatus(today);

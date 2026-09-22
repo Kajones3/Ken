@@ -24,6 +24,7 @@
   --s3:#1baf7a;            /* hotel    */
   --s4:#4a3aa7;            /* food     */
   --s5:#0f8f7c;            /* weather (was airport transport, since removed) */
+  --s6:#b0761c;            /* crowds   */
   --dv-lo-4:#0d366b; --dv-lo-3:#256abf; --dv-lo-2:#6da7ec; --dv-lo-1:#b7d3f6;
   --dv-mid:#E6E6E2;
   --dv-hi-1:#f7c9c5; --dv-hi-2:#eb8b85; --dv-hi-3:#cf3f3f; --dv-hi-4:#8c2323;
@@ -50,6 +51,8 @@
     --s3:#199e70;
     --s4:#9085e9;
     --s5:#2dd4c4;
+  --s6:#e0a93f;
+    --s6:#e0a93f;
     --dv-lo-4:#cde2fb; --dv-lo-3:#86b6ef; --dv-lo-2:#2a78d6; --dv-lo-1:#1c4478;
     --dv-mid:#3A3F49;
     --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
@@ -275,6 +278,19 @@ a{color:var(--ink)}
    emoji is decoration beside a written label rather than the label itself.
    Deliberately no tabular-nums: these are standalone values, and forcing every
    digit to a zero's width makes "71" read loose at this size. */
+/* Five bands, five widths. Deliberately not a numeric score: a bar says
+   "busier than not" without implying anybody was counted. */
+/* Sits above the board, not inside it: this is a statement about the whole
+   comparison, and putting it on a row would attach it to one resort. */
+.crowdnote{background:var(--surface-2); border:1px solid var(--line);
+  border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
+.crowdnote b{font-weight:680}
+.crowdc{display:inline-block; font-size:11px; font-weight:650; padding:2px 8px;
+  border-radius:999px; background:var(--surface-2); color:var(--muted)}
+.crowdc-peak{background:color-mix(in srgb, var(--s6) 18%, transparent); color:var(--s6)}
+.crowdbar{display:block; width:100%; height:10px; border-radius:5px;
+  background:var(--surface-2); overflow:hidden; margin-top:6px}
+.crowdbar>span{display:block; height:100%; border-radius:5px}
 .wxnote{display:flex; gap:9px; align-items:flex-start; background:var(--surface-2);
   border:1px solid var(--rule); border-left:3px solid var(--accent-line); border-radius:10px;
   padding:10px 12px; font-size:12.5px; line-height:1.5; color:var(--ink-2)}
@@ -859,6 +875,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="1">Yes, add Park Hopper</option>
         </select>
       </div>
+      <div class="f">
+        <label for="crowdCare">How much do crowds matter?</label>
+        <select id="crowdCare">
+          <option value="none">Not much</option>
+          <option value="some" selected>Somewhat</option>
+          <option value="high">A lot</option>
+        </select>
+      </div>
     </div>
 
     <div class="fields" id="hotelDetailFields">
@@ -920,6 +944,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
+
+  <div class="crowdnote" id="crowdNote" hidden></div>
 
   <div class="res-head">
     <div>
@@ -1176,7 +1202,12 @@ let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus onl
 let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
 let originDowngrade = null;  // set when a free request asked for a Plus airport
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
+// The six resorts ranked quietest-first for the month being priced. A fact
+// about the whole comparison rather than about any one row, so it lives here
+// rather than on `results`.
+let crowdRanking = null;
 let CLIMATE = {};        // resortId -> twelve {highF, lowF, rainDays, note?} rows, January first
+let CROWDS_PLACEHOLDER = false;  // true while the shipped crowd bands are a first pass, not the owner's own
 let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
 let DVC_DEFAULT_PER_POINT = 18;
 let RESORT_BY_ID = new Map();
@@ -1475,6 +1506,7 @@ function readParams(){
     tier: $("#tier").value,
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
+    crowdCare: $("#crowdCare").value,
     passes: readPasses(),
     dvcPoints: +$("#dvcPoints").value || 0,
     dvcPerPoint: +$("#dvcPerPoint").value || 0,
@@ -1590,6 +1622,10 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(params.hopper) q.hopper = "1";
+  // Sent on every search, including the default, so a saved search reopens
+  // with the answer its owner actually gave rather than silently reverting
+  // to "somewhat" and showing a different set of flags under the same name.
+  if(params.crowdCare) q.crowdCare = params.crowdCare;
   // resort:tier:count triples — one param carries the whole party's holdings
   // across a six-resort board.
   if(params.passes && params.passes.length){
@@ -1850,6 +1886,7 @@ async function runSearch(keepId){
     const compareData = await apiGet("/api/compare", compareQuery());
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+    crowdRanking = compareData.crowdRanking || null;
     // A free user who picked a Plus airport gets the nearest free one priced
     // instead. Say which, rather than silently showing someone else's airport.
     originDowngrade = compareData.originDowngrade || null;
@@ -1875,6 +1912,7 @@ async function recompute(changedResortId){
   const compareData = await apiGet("/api/compare", compareQuery());
   if(token !== searchToken) return;
   results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
+  crowdRanking = compareData.crowdRanking || null;
   if(changedResortId) calendars[changedResortId] = await fetchCalendarFor(changedResortId);
   if(token !== searchToken) return;
   const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
@@ -1926,7 +1964,53 @@ function attractionChip(item){
   return `<div class="attrline"><span class="${cls}" title="${esc(detail)}">${esc(a.summary)}</span></div>`;
 }
 
+/**
+ * A crowd flag on a board row, when the traveller said crowds matter enough
+ * for this month to be worth mentioning. The server decides whether there is
+ * anything to say — see crowds.ts — so the threshold lives in one place and
+ * the browser cannot disagree with the detail card about it.
+ *
+ * It never reorders anything. Same rule as attractionChip.
+ */
+function crowdChip(item){
+  const w = item.crowdWarning;
+  if(!w) return "";
+  const cls = w.band === "peak" ? "crowdc crowdc-peak" : "crowdc";
+  return `<div class="attrline"><span class="${cls}" title="${esc(w.detail)}">${esc(w.chip)}</span></div>`;
+}
+
+/**
+ * "The domestic parks are at peak this month and Tokyo is not."
+ *
+ * The owner's own case for the feature, and the one thing a six-resort board
+ * could never say before: crowds are not a property of a month, they are a
+ * property of a month AT A RESORT, and those disagree a lot in November.
+ *
+ * Shown only when the resorts genuinely disagree — at least two bands apart.
+ * A note that fires every month, saying some resort is marginally quieter
+ * than another, is one people stop reading by March.
+ */
+function renderCrowdNote(){
+  const el = $("#crowdNote");
+  if(!el) return;
+  const rank = crowdRanking;
+  if(!rank || rank.length < 2){ el.hidden = true; return; }
+  const quiet = rank[0], busy = rank[rank.length - 1];
+  if(busy.rank - quiet.rank < 2){ el.hidden = true; return; }
+  const nameOf = id => (RESORTS.find(r=>r.id===id) || {name:id}).name;
+  const quietest = rank.filter(c=>c.rank === quiet.rank).map(c=>nameOf(c.resortId));
+  const busiest  = rank.filter(c=>c.rank === busy.rank).map(c=>nameOf(c.resortId));
+  const month = MONTHSFULL[(rank[0].month || 1) - 1];
+  el.innerHTML = `<b>${esc(month)} is not equally busy everywhere.</b> `
+    + `${esc(busiest.join(", "))} ${busiest.length>1?"are":"is"} typically at `
+    + `${esc(busy.label.toLowerCase())} crowds, while ${esc(quietest.join(", "))} `
+    + `${quietest.length>1?"are":"is"} usually ${esc(quiet.label.toLowerCase())}. `
+    + `The board below is still ordered by price.`;
+  el.hidden = false;
+}
+
 function renderBoard(){
+  renderCrowdNote();
   const board = $("#board");
   if(!results.length){
     board.innerHTML = `<li class="row empty-prompt">
@@ -1951,6 +2035,7 @@ function renderBoard(){
           <div class="rname">${item.name}</div>
           <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
           ${attractionChip(item)}
+        ${crowdChip(item)}
         </div>
         <div></div><div></div>
         <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
@@ -2354,17 +2439,25 @@ async function renderDetail(){
     // something new — if this date already has a real fare, there is nothing
     // to buy. Free users see what it is and what it costs to unlock, rather
     // than a disabled control with no explanation.
-    + (fp && fp.estimate
+    // Offered wherever the shown fare is NOT a real vendor row — an estimate,
+    // or the traveller's own typed number. It used to require fp.estimate,
+    // which hid the verify button in the one case with nothing behind the
+    // number at all: no cached row, no BTS baseline, just what somebody
+    // typed. That is the fare most likely to be wrong and the only one they
+    // cannot check, which is backwards. Still never offered when flights are
+    // excluded (nothing to look up) or when a real fare is already in hand
+    // (nothing to buy).
+    + (!excludeFlights && (!fp || fp.estimate)
       ? (session.plus
         ? `<div class="li exactrow"><div class="l"><b>Check the exact fare</b>
-            <small>Look up the real round-trip price for ${fmtDate(x.start)} right now.${
+            <small>${fp ? "" : "Nothing is cached for this route, so this is the only way to get a real number. "}Look up the real round-trip price for ${fmtDate(x.start)} right now.${
               session.exactFare ? ` ${session.exactFare.remainingToday} of ${session.exactFare.perDay} checks left today.` : ""}</small></div>
             <div class="p"><button class="btn btn-sm" id="exactBtn"
               data-resort="${r.id}" data-dest="${item.iata}" data-date="${x.start}"
               data-nights="${p.nights}">Check now</button></div></div>
            <div class="li exactout" id="exactOut" hidden></div>`
         : `<div class="li"><div class="l"><b>Want the exact fare?</b>
-            <small>The estimate above is free and unlimited. Plus adds a live lookup of the
+            <small>${fp ? "The estimate above is free and unlimited." : "We have no cached fare for this route."} Plus adds a live lookup of the
             real round-trip price for a date you're serious about.</small></div>
             <div class="p"><button class="btn btn-sm openpw">Get Plus</button></div></div>`)
       : "");
@@ -2667,7 +2760,7 @@ async function renderDetail(){
           ${excludeFlights ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.perSeatFare)}</div>
-              <div class="s">${fp && fp.estimate ? "estimate" : "cached fare"}</div></div>
+              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate" : "cached fare"}</div></div>
             <div class="kpitile"><div class="k">Seats</div>
               <div class="v">${pax}</div><div class="s">round trip</div></div>
             <div class="kpitile total"><div class="k">Flights</div>
@@ -2795,6 +2888,48 @@ async function renderDetail(){
               <div class="whybody">Long-run averages for a typical ${monthName} — not a forecast, and not last
                 year, because one year is a sample of one. Any single trip can be wetter or hotter than
                 this.</div></details></div>
+          </div>`;
+        })()}
+
+        ${(()=>{
+          /* How busy this resort typically is in the month being priced.
+           * Comes from the server so crowds.ts stays the one home for the
+           * bands and the thresholds — the browser only renders what it is
+           * handed. Silently absent for a resort with no row, same rule as
+           * the weather box: a missing crowd card must never take a board
+           * down with it. */
+          const cr = item.crowd;
+          if(!cr) return "";
+          const monthName = MONTHSFULL[sd.getUTCMonth()];
+          const warn = item.crowdWarning;
+          /* Five bands, five widths. A bar rather than a number on purpose:
+           * a filled bar says "busier than not" without implying we counted
+           * anybody, which is exactly the claim we can defend. */
+          const pct = [12, 30, 52, 76, 100][cr.rank] || 52;
+          const tone = cr.rank >= 4 ? "var(--s1)" : cr.rank === 3 ? "var(--s2)" : "var(--s5)";
+          return `<div class="card">
+            <h5><i style="background:var(--s6)"></i>Crowds in ${monthName}</h5>
+            <p class="sub">How busy ${esc(r.name)} usually is — a forecast of demand, not a head count</p>
+            <div class="kpi">
+              <div class="kpitile"><div class="k"><span aria-hidden="true">👥</span>Typical crowds</div>
+                <div class="v">${esc(cr.label)}</div>
+                <div class="s">${cr.basis === "dvcPoints" ? "from DVC points pricing" : "estimated"}</div></div>
+              <div class="kpitile"><div class="k"><span aria-hidden="true">📊</span>Against the year</div>
+                <div class="v"><span class="crowdbar"><span style="width:${pct}%;background:${tone}"></span></span></div>
+                <div class="s">${cr.rank + 1} of 5</div></div>
+            </div>
+            ${cr.why ? `<div class="wxnote"><span class="wxemoji" aria-hidden="true">🗓️</span>
+              <div>${esc(cr.why)}.</div></div>` : ""}
+            ${warn && warn.alternatives.length ? `<div class="li"><div class="l"><b>Quieter here</b>
+              <small>Same resort, a different time of year</small></div>
+              <div class="p">${warn.alternatives.map(a=>MONTHSFULL[a.month-1]).join(", ")}</div></div>` : ""}
+            ${CROWDS_PLACEHOLDER ? `<div class="li"><div class="l"><b>Not yet checked</b>
+              <small>These bands are a first pass, not yet set against a current points chart</small></div>
+              <div class="p">—</div></div>` : ""}
+            <div class="foot"><details class="why"><summary>Where this comes from</summary>
+              <div class="whybody">${esc(cr.basisNote)} It does not change the price or the order of the board —
+                the cheapest trip stays the cheapest trip, and this tells you what you would be walking
+                into.</div></details></div>
           </div>`;
         })()}
       </div>
@@ -3697,6 +3832,7 @@ async function openSavedTrip(trip){
     if(q.stay !== "none") $("#stay").value = q.stay;
   }
   $("#hopper").value = q.hopper ? "1" : "0";
+  $("#crowdCare").value = q.crowdCare || "some";
   // Passes and points come back too — reopening a saved trip that priced
   // itself against four Incredi-Passes and then quietly dropping them would
   // show a different, much larger total under the same trip's name.
@@ -4556,6 +4692,7 @@ async function boot(){
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
   CLIMATE = meta.climate || {};
+  CROWDS_PLACEHOLDER = !!(meta.crowds && meta.crowds.placeholder);
   if(meta.exchange){
     FX_RATES = meta.exchange.rates || FX_RATES;
     FX_AS_OF = meta.exchange.asOf || "";

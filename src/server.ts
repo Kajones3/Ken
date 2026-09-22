@@ -13,9 +13,10 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
          KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
+import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
   effectiveAttractions, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
   validateAttraction,
@@ -285,6 +286,16 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // spent to answer a question nothing asks.
   const catalogue = picks.length ? await effectiveAttractions(db) : [];
 
+  // How much this traveller said crowds matter. Free, and read straight from
+  // the query string — unlike promos or attraction picks there is nothing to
+  // entitle here: it changes what the board SAYS, never what it charges or
+  // what order it is in.
+  const crowdCare = parseCrowdSensitivity(q.get("crowdCare"));
+  // The month actually being priced drives the crowd lookup. An explicit date
+  // wins over the month picker, the same rule the weather box follows, so a
+  // Plus trip pinned to real dates is not told about the wrong month.
+  const crowdMonth = Number((explicitDate ?? `${month}-01`).slice(5, 7));
+
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
     // A "Getting there" preset can send different resorts down different
@@ -301,9 +312,15 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const attractions = m
       ? { ...m, summary: matchSummary(m, picks.length) }
       : undefined;
+    // Same standing as the attraction match: attached to the row, never used
+    // for ordering. "The cheapest week is also the busiest" is a trade-off a
+    // traveller should make knowingly; quietly reordering the board because
+    // we guessed they would mind is the app deciding for them.
+    const crowd = crowdFor(resort.id, crowdMonth) ?? undefined;
+    const crowdWarning = crowdFlag(resort.id, crowdMonth, crowdCare) ?? undefined;
     return best
-      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions }
-      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions };
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning }
+      : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions, crowd, crowdWarning };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
   return {
@@ -318,6 +335,13 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     /** How many picks the matches above were measured against, so the UI can
      *  say "3 of your 5" without a second request. */
     attractionPicks: picks.length,
+    /** The six resorts ranked quietest-first for the month being priced.
+     *  This is the Thanksgiving case: the domestic parks are at peak and an
+     *  overseas park may be a fine time to go, and until now nothing in the
+     *  app could say so. A comparison, not a recommendation — the board it
+     *  sits beside stays in price order. */
+    crowdRanking: crowdCare === "none" ? undefined : quietestThisMonth(RESORTS.map((r) => r.id), crowdMonth),
+    crowdCare,
     results,
   };
 }
@@ -460,6 +484,21 @@ const server = createServer(async (req, res) => {
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
       climate: CLIMATE,
+      // How busy each resort typically is, month by month. Sent whole, like
+      // climate, because the crowd box, the "quieter overseas this month"
+      // comparison and the shared PDF all read different slices of it and a
+      // per-request slice would need three round trips.
+      //
+      // `placeholder` is the same honesty flag the exchange rates carry: true
+      // while the shipped bands are Claude's rather than the owner's own
+      // reading of a DVC points chart. The card says so rather than
+      // presenting a guess as researched.
+      crowds: {
+        byResort: CROWDS,
+        labels: CROWD_LABELS,
+        placeholder: CROWDS_ARE_PLACEHOLDER,
+        reviewed: CROWDS_REVIEWED,
+      },
       // USD -> local, for the "a $50 dinner is about ¥355" line on a shared
       // PDF. Generated from ECB reference rates; `placeholder` is true while
       // the committed table is still the hand-seeded guess, so the page can

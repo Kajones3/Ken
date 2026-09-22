@@ -2,7 +2,8 @@ import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { memoryDb } from "./db.js";
 import { ownerTasks, renderOwnerTasks, TICKET_STALE_DAYS } from "./ownerTasks.js";
-import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS } from "./config.js";
+import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS, CROWDS_REVIEWED, CROWDS_ARE_PLACEHOLDER } from "./config.js";
+import { addDaysISO, type ISODate } from "./dates.js";
 
 /** Everything configured, so only the standing tasks remain. */
 const ALL_SET = {
@@ -170,4 +171,41 @@ test("the rendered list labels each job free, Plus or both", async () => {
 
 test("an empty list says so rather than printing a bare heading", () => {
   assert.match(renderOwnerTasks([]), /none outstanding/);
+});
+
+/**
+ * The staleness registry. These pin the two halves that can go wrong
+ * independently: a date that has aged out must produce a row, and a date that
+ * has not must produce nothing — a nag that fires on day one is one the owner
+ * learns to scroll past.
+ */
+test("a hand-maintained table that has aged out earns a task, and one that has not does not", async () => {
+  const db = await memoryDb();
+  // CROWDS_REVIEWED is a real date in config.ts, reviewed yearly. Ask on the
+  // day after it was reviewed, and two years later.
+  const fresh = await ownerTasks(db, { env: ALL_SET, today: addDaysISO(CROWDS_REVIEWED as ISODate, 1) });
+  assert.equal(fresh.find((t) => t.id === "crowd-bands"), undefined,
+    "a table reviewed yesterday should not be nagged about");
+
+  const stale = await ownerTasks(db, { env: ALL_SET, today: addDaysISO(CROWDS_REVIEWED as ISODate, 800) });
+  const row = stale.find((t) => t.id === "crowd-bands");
+  assert.ok(row, "a table two years past review should earn a task");
+  assert.equal(row.source, "checked", "it is computed from a date, not a standing reminder");
+  assert.equal(row.blocking, false, "stale is not broken");
+  assert.match(row.why, /Last reviewed/, "it should say when it was last looked at");
+  assert.match(row.why, /CROWDS_REVIEWED/, "it should say how to clear it");
+  await db.close();
+});
+
+test("a placeholder table is nagged about while its own flag says it is one", async () => {
+  const db = await memoryDb();
+  const tasks = await ownerTasks(db, { env: ALL_SET, today: CROWDS_REVIEWED as ISODate });
+  const row = tasks.find((t) => t.id === "crowd-bands-placeholder");
+  if (CROWDS_ARE_PLACEHOLDER) {
+    assert.ok(row, "the crowd bands say they are a placeholder, so this must be nagged about");
+    assert.match(row.why, /CROWDS_ARE_PLACEHOLDER/, "it should say which flag to flip");
+  } else {
+    assert.equal(row, undefined, "the flag is off, so the nag must be gone");
+  }
+  await db.close();
 });
