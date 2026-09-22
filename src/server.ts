@@ -291,6 +291,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // entitle here: it changes what the board SAYS, never what it charges or
   // what order it is in.
   const crowdCare = parseCrowdSensitivity(q.get("crowdCare"));
+  // Free, and read straight from the query string — like crowdCare it changes
+  // which day is described, never what anything costs.
+  const priceBasis: "typical" | "cheapest" = q.get("basis") === "cheapest" ? "cheapest" : "typical";
   // The month actually being priced drives the crowd lookup. An explicit date
   // wins over the month picker, the same rule the weather box follows, so a
   // Plus trip pinned to real dates is not told about the wrong month.
@@ -308,7 +311,16 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // still computed and still shown — see typicalIn's header for why the
     // floor stays visible instead of being hidden behind a better headline.
     const { typical, cheapest, spread, skipped } = typicalIn(book, resort, resortParams, overrides, dates);
-    const best = typical;
+    // Which day the traveller asked to be quoted. "typical" is the default and
+    // the honest answer; "cheapest" is the old behaviour, offered deliberately
+    // because somebody with flexible dates is asking a real and different
+    // question — what is the best this month can do — and answering it is not
+    // the same as quoting it at somebody who cannot move their dates.
+    //
+    // It applies to ALL SIX resorts, never one. A board that quoted one
+    // resort's best day against another's typical day would not be comparing
+    // anything, which is the one thing this app exists to do.
+    const best = priceBasis === "cheapest" ? cheapest : typical;
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
@@ -329,7 +341,8 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
            *  request. Absent on an exact-date search: one day has no spread,
            *  and printing a range built from a single number would invent one. */
           spread: explicitDate ? undefined : spread ?? undefined,
-          cheapest: explicitDate || !cheapest || cheapest.total === best.total ? undefined : { total: cheapest.total } }
+          cheapest: explicitDate || !cheapest || cheapest.total === best.total ? undefined : { total: cheapest.total },
+          priceBasis }
       : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions, crowd, crowdWarning };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 
@@ -352,6 +365,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
      *  sits beside stays in price order. */
     crowdRanking: crowdCare === "none" ? undefined : quietestThisMonth(RESORTS.map((r) => r.id), crowdMonth),
     crowdCare,
+    priceBasis,
     results,
   };
 }
@@ -876,6 +890,13 @@ const server = createServer(async (req, res) => {
       // Disney has since retired (or a number somebody hand-edited) must not
       // reach pricing — parsePassHoldings drops what it does not recognise,
       // the same rule saved attraction picks follow.
+      // Which day the board quoted when this was saved. Normalised here and
+      // stored, because the alert job compares a fresh re-price against
+      // baseline_total months later: a trip saved on its cheapest day and
+      // re-priced on a typical one comes back dearer for no reason, and the
+      // reverse fires "the price dropped" about a drop that never happened.
+      // The basis is part of what was promised, so it is saved with it.
+      params.priceBasis = params.priceBasis === "cheapest" ? "cheapest" : "typical";
       params.annualPasses = parsePassHoldings(params.annualPasses);
       params.dvcRental = parseDvcRental(
         (params.dvcRental as { points?: unknown } | null)?.points,

@@ -94,6 +94,11 @@ export interface TripParams {
    *  take home per point. A credit against the trip, not a discount on any
    *  one line — the money has nothing to do with what a room here costs. */
   dvcRental?: DvcRental | null;
+  /** Which day of the month the board quoted: a typical one (the default) or
+   *  the cheapest. It changes nothing about how a single date is priced —
+   *  priceTrip never reads it — but it is saved with a trip so the alert job
+   *  re-prices on the same basis the traveller was shown. */
+  priceBasis?: "typical" | "cheapest";
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
