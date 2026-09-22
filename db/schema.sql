@@ -499,16 +499,32 @@ create table if not exists owner_attractions (
 -- at its quiet morning while Shanghai got its busy afternoon — a timezone
 -- bias walking straight into the six-resort comparison. Aggregating later has
 -- to average by local hour before averaging across hours.
+--
+-- ONE ROW PER RIDE, not one per park, and the reason is that you can always
+-- average rides down to a park number and can never recover detail you did
+-- not keep. The owner's own analysis notebook computes dollars-per-ride,
+-- headliner share and open-ride availability — none of which a park average
+-- can answer. Storing closed rides too is what makes availability
+-- computable: open rides over total listed.
+--
+-- The cost is rows, and it is affordable. Their notebook counted 119 rides
+-- across Walt Disney World's four parks, so roughly 330 across all eleven;
+-- at five samples a day that is ~1,650 rows a day, ~600k a year, on the
+-- order of 70MB against Neon's 500MB free tier. Prune old raw samples once
+-- a month has been aggregated, if it ever matters.
 create table if not exists wait_time_samples (
   park_id       int          not null,
   observed_at   timestamptz  not null,
+  ride_name     text         not null,
   resort_id     text         not null,
   local_hour    smallint     not null,
-  mean_wait_min numeric(5,1) not null,
-  max_wait_min  int          not null,
-  open_rides    int          not null,
+  is_open       boolean      not null,
+  -- Null means the ride is open and no wait was reported, which is a
+  -- different fact from a zero-minute queue. Reading one as the other is the
+  -- mistake the climate generator's null handling already exists to prevent.
+  wait_min      int,
   source        text         not null default 'queue_times',
-  primary key (park_id, observed_at)
+  primary key (park_id, observed_at, ride_name)
 );
 create index if not exists wait_time_samples_month
   on wait_time_samples (resort_id, observed_at);

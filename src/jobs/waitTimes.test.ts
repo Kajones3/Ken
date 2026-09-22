@@ -2,58 +2,73 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { memoryDb } from "../db.js";
 import {
-  summarise, localHour, withinSampleWindow, trackedParks, namesAgree, runWaitTimes,
+  ridesOf, summarise, localHour, withinSampleWindow, trackedParks, namesAgree, runWaitTimes,
 } from "./waitTimes.js";
 import { QUEUE_TIMES_PARKS, RESORTS, WAIT_SAMPLE_FROM_HOUR, WAIT_SAMPLE_TO_HOUR } from "../config.js";
 
-/* ------------------------------ summarise ------------------------------ */
+/* ------------------------------- ridesOf ------------------------------- */
 
-test("a closed park summarises to NULL, not to a row of zeros", () => {
+test("a closed park yields NULL, not a page of zeros", () => {
   // The whole mechanism for handling park hours without an hours table. A
-  // zero is a number and would drag the month's mean toward it forever.
+  // zero is a number and would drag every later average toward it forever.
   const shut = { lands: [{ rides: [
     { name: "A", is_open: false, wait_time: 0 },
     { name: "B", is_open: false, wait_time: 45 },
   ] }] };
-  assert.equal(summarise(shut), null);
+  assert.equal(ridesOf(shut), null);
 });
 
-test("closed rides are excluded from the mean, open ones kept", () => {
+test("an OPEN park keeps its closed rides, so availability stays computable", () => {
+  // Their analysis notebook computes open-ride availability as open over
+  // total listed. Dropping closed rides would make a park with half its
+  // rides down look identical to one running everything.
   const mixed = { lands: [{ rides: [
     { name: "open 20", is_open: true, wait_time: 20 },
     { name: "open 40", is_open: true, wait_time: 40 },
-    { name: "shut 999", is_open: false, wait_time: 999 },
+    { name: "down", is_open: false, wait_time: 999 },
   ] }] };
-  const s = summarise(mixed)!;
-  assert.equal(s.meanWait, 30);
-  assert.equal(s.maxWait, 40, "a closed ride cannot set the maximum either");
-  assert.equal(s.openRides, 2);
+  const rides = ridesOf(mixed)!;
+  assert.equal(rides.length, 3, "all three are kept");
+  const down = rides.find((r) => r.name === "down")!;
+  assert.equal(down.isOpen, false);
+  assert.equal(down.waitMin, null, "a closed ride has no wait, whatever the feed says");
 });
 
-test("a null wait on an OPEN ride is skipped, never read as zero", () => {
+test("a null wait on an OPEN ride stays null, never zero", () => {
   // "Not reported" and "no queue" are different facts — the same rule the
   // climate generator applies to a missing temperature.
-  const s = summarise({ lands: [{ rides: [
+  const rides = ridesOf({ lands: [{ rides: [
     { name: "reported", is_open: true, wait_time: 30 },
     { name: "unreported", is_open: true, wait_time: null },
   ] }] })!;
-  assert.equal(s.meanWait, 30, "averaging 30 and 0 would give 15");
-  assert.equal(s.openRides, 1);
+  assert.equal(rides.find((r) => r.name === "unreported")!.waitMin, null);
+  assert.equal(summarise(rides).meanWait, 30, "averaging 30 and 0 would give 15");
 });
 
 test("both payload shapes are walked — nested under lands, and top level", () => {
-  const both = {
+  const rides = ridesOf({
     rides: [{ name: "top", is_open: true, wait_time: 10 }],
     lands: [{ rides: [{ name: "nested", is_open: true, wait_time: 30 }] }],
-  };
-  const s = summarise(both)!;
-  assert.equal(s.openRides, 2);
-  assert.equal(s.meanWait, 20);
+  })!;
+  assert.equal(rides.length, 2);
+  assert.equal(summarise(rides).meanWait, 20);
 });
 
-test("junk in never becomes a number out", () => {
+test("a ride with no name is dropped, and a duplicate name is kept once", () => {
+  // The name is half the primary key. A nameless row cannot be de-duplicated
+  // on the next poll, and two rows sharing a name would collide on insert.
+  const rides = ridesOf({ rides: [
+    { name: "Real", is_open: true, wait_time: 10 },
+    { name: "   ", is_open: true, wait_time: 20 },
+    { is_open: true, wait_time: 30 },
+    { name: "Real", is_open: true, wait_time: 40 },
+  ] })!;
+  assert.deepEqual(rides.map((r) => r.name), ["Real"]);
+});
+
+test("junk in never becomes a row out", () => {
   for (const junk of [null, undefined, 42, "rides", {}, { lands: null }, { rides: "no" }]) {
-    assert.equal(summarise(junk), null, `${JSON.stringify(junk)} produced a summary`);
+    assert.equal(ridesOf(junk), null, `${JSON.stringify(junk)} produced rows`);
   }
 });
 
@@ -138,37 +153,84 @@ function stubFetch(handler: (url: string) => unknown) {
 const busyPark = { lands: [{ rides: [
   { name: "A", is_open: true, wait_time: 25 },
   { name: "B", is_open: true, wait_time: 35 },
+  { name: "Down", is_open: false, wait_time: 0 },
 ] }] };
 
 // 16:00 New York, comfortably inside the window for the stub's timezone.
 const MIDDAY_UTC = new Date("2027-03-16T20:00:00Z");
 
-test("a full run records one row per park", async () => {
+test("a full run records one row per RIDE, at every park", async () => {
   const db = await memoryDb();
+  const ridesPerPark = 3;
   const res = await runWaitTimes(db, {
     now: MIDDAY_UTC, sleep: async () => {},
     fetchImpl: stubFetch((url) => (url.endsWith("parks.json") ? PARKS_JSON : busyPark)),
   });
   assert.equal(res.errors, 0);
-  assert.equal(res.written, trackedParks().length);
+  assert.equal(res.written, trackedParks().length * ridesPerPark);
   const rows = await db.query<{ n: string }>(`select count(*) as n from wait_time_samples`);
-  assert.equal(Number(rows.rows[0]!.n), trackedParks().length);
+  assert.equal(Number(rows.rows[0]!.n), trackedParks().length * ridesPerPark);
 });
 
-test("what lands in the row is what we measured", async () => {
+test("what lands in a row is what we measured", async () => {
   const db = await memoryDb();
   await runWaitTimes(db, {
     now: MIDDAY_UTC, sleep: async () => {},
     fetchImpl: stubFetch((url) => (url.endsWith("parks.json") ? PARKS_JSON : busyPark)),
   });
-  const r = await db.query<{ mean_wait_min: string; max_wait_min: number; open_rides: number; local_hour: number; source: string }>(
-    `select mean_wait_min, max_wait_min, open_rides, local_hour, source from wait_time_samples limit 1`);
+  const r = await db.query<{ ride_name: string; is_open: boolean; wait_min: number | null; local_hour: number; source: string }>(
+    `select ride_name, is_open, wait_min, local_hour, source from wait_time_samples
+      where ride_name = 'A' limit 1`);
   const row = r.rows[0]!;
-  assert.equal(Number(row.mean_wait_min), 30);
-  assert.equal(row.max_wait_min, 35);
-  assert.equal(row.open_rides, 2);
+  assert.equal(row.ride_name, "A");
+  assert.equal(row.is_open, true);
+  assert.equal(row.wait_min, 25);
   assert.equal(row.local_hour, 16, "the PARK's hour, not 20:00 UTC");
   assert.equal(row.source, "queue_times");
+});
+
+test("the closed ride is stored too, with no wait", async () => {
+  // This is the row that makes open-ride availability computable, and it is
+  // the one a park-average schema would have thrown away.
+  const db = await memoryDb();
+  await runWaitTimes(db, {
+    now: MIDDAY_UTC, sleep: async () => {},
+    fetchImpl: stubFetch((url) => (url.endsWith("parks.json") ? PARKS_JSON : busyPark)),
+  });
+  const r = await db.query<{ is_open: boolean; wait_min: number | null }>(
+    `select is_open, wait_min from wait_time_samples where ride_name = 'Down' limit 1`);
+  assert.equal(r.rows[0]!.is_open, false);
+  assert.equal(r.rows[0]!.wait_min, null);
+});
+
+test("the park average is derivable from the stored rows", async () => {
+  // The point of keeping rides: the number the original design stored is
+  // still available, and everything else is available too.
+  const db = await memoryDb();
+  await runWaitTimes(db, {
+    now: MIDDAY_UTC, sleep: async () => {},
+    fetchImpl: stubFetch((url) => (url.endsWith("parks.json") ? PARKS_JSON : busyPark)),
+  });
+  const r = await db.query<{ mean: string; open_rides: string; total_rides: string }>(
+    `select avg(wait_min) as mean,
+            count(*) filter (where is_open) as open_rides,
+            count(*) as total_rides
+       from wait_time_samples where park_id = $1`, [trackedParks()[0]!.id]);
+  assert.equal(Number(r.rows[0]!.mean), 30, "(25 + 35) / 2");
+  assert.equal(Number(r.rows[0]!.open_rides), 2);
+  assert.equal(Number(r.rows[0]!.total_rides), 3, "availability is 2 of 3");
+});
+
+test("re-polling the same minute updates rather than duplicating", async () => {
+  const db = await memoryDb();
+  const deps = {
+    now: MIDDAY_UTC, sleep: async () => {},
+    fetchImpl: stubFetch((url) => (url.endsWith("parks.json") ? PARKS_JSON : busyPark)),
+  };
+  await runWaitTimes(db, deps);
+  await runWaitTimes(db, deps);
+  const rows = await db.query<{ n: string }>(`select count(*) as n from wait_time_samples`);
+  assert.equal(Number(rows.rows[0]!.n), trackedParks().length * 3, "no duplicates on a re-run");
 });
 
 test("outside the window, nothing is recorded at all", async () => {
@@ -218,7 +280,7 @@ test("one park failing still writes the others", async () => {
 
   const res = await runWaitTimes(db, { now: MIDDAY_UTC, sleep: async () => {}, fetchImpl });
   assert.equal(res.errors, 1);
-  assert.equal(res.written, trackedParks().length - 1);
+  assert.equal(res.written, (trackedParks().length - 1) * 3, "the other parks' rides still land");
 });
 
 test("if the park list cannot be read, NOTHING is recorded", async () => {

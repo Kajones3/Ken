@@ -29,6 +29,15 @@
  *     app exists to make.
  *   - carry a "Powered by Queue-Times.com" credit, which their terms ask for
  *     and which nothing owes yet because nothing is shown yet.
+ *
+ * WHY ONE ROW PER RIDE. The first version stored a park average, which is the
+ * only number the withdrawn card would have needed — and it can answer
+ * nothing else. The owner's own analysis notebook computes dollars-per-ride,
+ * headliner share and open-ride availability, none of which survive an
+ * average. The API call is identical either way; the only difference is what
+ * gets kept, and you can always average rides down to a park number while
+ * you can never recover detail you did not store. So closed rides are kept
+ * too: open over total IS the availability figure.
  */
 import { QUEUE_TIMES_PARKS, WAIT_SAMPLE_FROM_HOUR, WAIT_SAMPLE_TO_HOUR } from "../config.js";
 import type { Db } from "../db.js";
@@ -39,44 +48,69 @@ const BASE = "https://queue-times.com";
 interface Ride { name?: string; is_open?: boolean; wait_time?: number | null }
 interface ParkPayload { lands?: { rides?: Ride[] }[]; rides?: Ride[] }
 
-export interface ParkSummary {
-  meanWait: number;
-  maxWait: number;
-  openRides: number;
+/** One ride, as it will be stored. */
+export interface RideSample {
+  name: string;
+  isOpen: boolean;
+  /** Null when open but no wait was reported — a different fact from zero. */
+  waitMin: number | null;
 }
 
 /**
- * Every open ride's posted wait, summarised. Pure.
+ * Every ride in a park payload, flattened. Pure.
  *
- * Returns null when nothing is open — which is how park hours are handled
- * without an hours table. A shut park must record NOTHING rather than a row
- * of zeros, because a zero is a number and it would drag the month's mean
- * toward it forever.
+ * Returns null when NOTHING is open, which is how park hours are handled
+ * without an hours table: a shut park records nothing at all rather than a
+ * page of zeros that would drag every later average toward zero.
+ *
+ * When the park IS open, CLOSED RIDES ARE KEPT. That is what makes
+ * "open-ride availability" computable later — open rides over total listed —
+ * and it costs one boolean. Dropping them would mean a park with half its
+ * rides down looks identical to one running everything.
  *
  * Both payload shapes are walked: most parks nest rides under `lands`, some
  * carry a top-level `rides` array, and a park can have both.
  */
-export function summarise(payload: unknown): ParkSummary | null {
+export function ridesOf(payload: unknown): RideSample[] | null {
   if (!payload || typeof payload !== "object") return null;
   const p = payload as ParkPayload;
-  const rides: Ride[] = [
+  const raw: Ride[] = [
     ...(Array.isArray(p.rides) ? p.rides : []),
     ...(Array.isArray(p.lands) ? p.lands.flatMap((l) => (Array.isArray(l?.rides) ? l.rides : [])) : []),
   ];
 
-  let sum = 0, n = 0, max = 0;
-  for (const r of rides) {
-    if (!r || r.is_open !== true) continue;
+  const out: RideSample[] = [];
+  const seen = new Set<string>();
+  let anyOpen = false;
+  for (const r of raw) {
+    const name = typeof r?.name === "string" ? r.name.trim() : "";
+    // No name means no primary key. A row we cannot identify is a row we
+    // cannot de-duplicate on the next poll, so it is dropped rather than
+    // stored under an empty string that every future nameless ride collides
+    // with.
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    const isOpen = r.is_open === true;
+    if (isOpen) anyOpen = true;
     const w = r.wait_time;
-    // A null wait on an open ride is "not reported", not "no queue". Reading
-    // it as zero is the same mistake the climate generator's null handling
-    // exists to prevent.
-    if (typeof w !== "number" || !Number.isFinite(w) || w < 0) continue;
-    sum += w; n += 1;
-    if (w > max) max = w;
+    const waitMin = isOpen && typeof w === "number" && Number.isFinite(w) && w >= 0
+      ? Math.round(w) : null;
+    out.push({ name, isOpen, waitMin });
   }
-  if (!n) return null;
-  return { meanWait: Math.round((sum / n) * 10) / 10, maxWait: max, openRides: n };
+  return anyOpen ? out : null;
+}
+
+/** The park-level view of one sample, for the log line only — nothing stores
+ *  this, because it is derivable from the rows that do get stored. */
+export function summarise(rides: RideSample[]): { meanWait: number; maxWait: number; openRides: number } {
+  const waits = rides.filter((r) => r.isOpen && r.waitMin !== null).map((r) => r.waitMin!);
+  if (!waits.length) return { meanWait: 0, maxWait: 0, openRides: 0 };
+  const sum = waits.reduce((a, b) => a + b, 0);
+  return {
+    meanWait: Math.round((sum / waits.length) * 10) / 10,
+    maxWait: Math.max(...waits),
+    openRides: waits.length,
+  };
 }
 
 /**
@@ -129,6 +163,7 @@ export interface WaitTimesDeps {
 const nap = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export interface WaitTimesResult {
+  /** RIDE rows written, not parks. */
   written: number;
   skippedClosed: number;
   skippedWindow: number;
@@ -204,13 +239,13 @@ export async function runWaitTimes(db: Db, deps: WaitTimesDeps = {}): Promise<Wa
       continue;
     }
 
-    let summary: ParkSummary | null;
+    let rides: RideSample[] | null;
     try {
       const res = await fetchImpl(`${BASE}/parks/${park.id}/queue_times.json`, {
         headers: { "user-agent": UA, accept: "application/json" },
       });
       if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText} — ${(await res.text()).slice(0, 200)}`);
-      summary = summarise(await res.json());
+      rides = ridesOf(await res.json());
     } catch (e) {
       // One park's failure must not cost the other ten their sample. This is
       // a cache being accumulated, not a table being replaced, so partial is
@@ -221,30 +256,39 @@ export async function runWaitTimes(db: Db, deps: WaitTimesDeps = {}): Promise<Wa
       continue;
     }
 
-    if (!summary) {
+    if (!rides) {
       console.log(`  ${park.name}: nothing open at ${hour}:00 local — recorded nothing.`);
       result.skippedClosed += 1;
       continue;
     }
 
-    console.log(`  ${park.name}: ${summary.meanWait} min mean, ${summary.maxWait} max, `
-      + `${summary.openRides} open (${hour}:00 local)`);
+    const s = summarise(rides);
+    console.log(`  ${park.name}: ${rides.length} rides, ${s.openRides} with a posted wait, `
+      + `${s.meanWait} min mean, ${s.maxWait} max (${hour}:00 local)`);
     if (dryRun) continue;
 
+    // One statement for the whole park rather than one per ride: ~30 rides a
+    // park x 11 parks is 330 round trips to Neon otherwise, and Neon's free
+    // tier sleeps between them.
+    const values: unknown[] = [];
+    const tuples = rides.map((ride, i) => {
+      const b = i * 7;
+      values.push(park.id, now.toISOString(), ride.name, park.resortId, hour, ride.isOpen, ride.waitMin);
+      return `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5},$${b + 6},$${b + 7},'queue_times')`;
+    });
     await db.query(
       `insert into wait_time_samples
-         (park_id, observed_at, resort_id, local_hour, mean_wait_min, max_wait_min, open_rides, source)
-       values ($1,$2,$3,$4,$5,$6,$7,'queue_times')
-       on conflict (park_id, observed_at) do update set
-         mean_wait_min = excluded.mean_wait_min, max_wait_min = excluded.max_wait_min,
-         open_rides = excluded.open_rides, local_hour = excluded.local_hour`,
-      [park.id, now.toISOString(), park.resortId, hour,
-       summary.meanWait, summary.maxWait, summary.openRides],
+         (park_id, observed_at, ride_name, resort_id, local_hour, is_open, wait_min, source)
+       values ${tuples.join(",")}
+       on conflict (park_id, observed_at, ride_name) do update set
+         is_open = excluded.is_open, wait_min = excluded.wait_min,
+         local_hour = excluded.local_hour`,
+      values,
     );
-    result.written += 1;
+    result.written += rides.length;
   }
 
-  console.log(`wait-times: ${result.written} recorded, ${result.skippedWindow} outside hours, `
+  console.log(`wait-times: ${result.written} ride row(s) recorded, ${result.skippedWindow} park(s) outside hours, `
     + `${result.skippedClosed} closed, ${result.errors} error(s)${dryRun ? " (dry run, nothing written)" : ""}`);
   return result;
 }
