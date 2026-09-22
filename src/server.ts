@@ -27,7 +27,7 @@ import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
-import { cheapestIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { cheapestIn, typicalIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
 import { parsePassHoldings, parseDvcRental, PASS_RESORTS, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
@@ -304,7 +304,11 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const mode = resortTransportMode(gettingThere, resort);
     const modeParams = mode === "drive" ? driveBase : flyBase;
     const resortParams = { ...params, ...modeParams, destination: iata };
-    const { best, skipped } = cheapestIn(book, resort, resortParams, overrides, dates);
+    // The day worth QUOTING, not the luckiest day in the month. `cheapest` is
+    // still computed and still shown — see typicalIn's header for why the
+    // floor stays visible instead of being hidden behind a better headline.
+    const { typical, cheapest, spread, skipped } = typicalIn(book, resort, resortParams, overrides, dates);
+    const best = typical;
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
@@ -319,7 +323,13 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const crowd = crowdFor(resort.id, crowdMonth) ?? undefined;
     const crowdWarning = crowdFlag(resort.id, crowdMonth, crowdCare) ?? undefined;
     return best
-      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning }
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
+          /** What the rest of the month looks like around the quoted day, so
+           *  the card can say "as low as $X on the 31st" without a second
+           *  request. Absent on an exact-date search: one day has no spread,
+           *  and printing a range built from a single number would invent one. */
+          spread: explicitDate ? undefined : spread ?? undefined,
+          cheapest: explicitDate || !cheapest || cheapest.total === best.total ? undefined : { total: cheapest.total } }
       : { resortId: resort.id, name: resort.name, iata, ok: false as const, reason: skipped[0] ?? "no data", attractions, crowd, crowdWarning };
   }).sort((a, b) => (a.ok ? a.price.total : Infinity) - (b.ok ? b.price.total : Infinity));
 

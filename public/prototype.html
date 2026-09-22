@@ -282,6 +282,9 @@ a{color:var(--ink)}
    "busier than not" without implying anybody was counted. */
 /* Sits above the board, not inside it: this is a statement about the whole
    comparison, and putting it on a row would attach it to one resort. */
+.spreadnote{margin:6px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:70ch}
+.spreadnote b{color:var(--text)}
+.spreadlow{display:inline-block; margin-top:2px; font-weight:600; color:var(--text)}
 .crowdnote{background:var(--surface-2); border:1px solid var(--line);
   border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
 .crowdnote b{font-weight:680}
@@ -2705,6 +2708,16 @@ async function renderDetail(){
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
         <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
            prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
+        ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
+          <b>This is a typical ${MONTHSFULL[sd.getUTCMonth()]} trip, not the cheapest one.</b>
+          Across the ${item.spread.priced} days we can price this month, the whole trip runs
+          ${usd(item.spread.low)} to ${usd(item.spread.high)}, averaging <b>${usd(item.spread.trimmedMean)}</b>${
+            item.spread.trimmedPerTail ? ` once the ${item.spread.trimmedPerTail} cheapest and ${item.spread.trimmedPerTail} dearest days are left out` : ""}.
+          We quote the real day closest to that average, so every line below belongs to one bookable trip.
+          The very cheapest days are cheap because few people want them — a dawn flight on a holiday —
+          so quoting one would be a price most travellers could not actually get.
+          <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
+        </p>` : ""}
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
@@ -2760,7 +2773,7 @@ async function renderDetail(){
           ${excludeFlights ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.perSeatFare)}</div>
-              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate" : "cached fare"}</div></div>
+              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate" : item.spread ? "typical for " + MONTHSFULL[sd.getUTCMonth()] : "cached fare"}</div></div>
             <div class="kpitile"><div class="k">Seats</div>
               <div class="v">${pax}</div><div class="s">round trip</div></div>
             <div class="kpitile total"><div class="k">Flights</div>
