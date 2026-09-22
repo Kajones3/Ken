@@ -34,66 +34,97 @@ left the code.** All on `claude/compassionate-hopper-0pot3d`, none live yet.
   *Paris note* says which half of the bundling constraint is real.
 - *The intro* is the owner's own words, not a "prototype build" banner.
 
-## NEXT SESSION — start here (queued 2026-09-22)
+## Where things stand — 2026-09-22 (afternoon session)
 
-Merged as PR #54; `master` is at `f272ae8`. Four jobs, in this order.
+On `claude/intelligent-dijkstra-vaws5x`, not merged, not live.
 
-**1. Where does a $139 AUS-MCO round trip come from?** The owner's
-screenshot shows the Flights card reading **"cached fare"**, carrier
-JetBlue, nonstop — so `fp.estimate` is undefined and this is a REAL row in
-`flight_prices`, not an estimate. Two consequences that were nearly missed:
-the estimate lean shipped this session does not touch it, and `#exactBtn`
-is never offered (it renders only when `fp.estimate` exists,
-`prototype.html:2357`), so the traveller cannot buy a verification of the
-one number most likely to be wrong.
+**1. The $139 fare: the premise was wrong, and the report is what showed
+it.** `src/jobs/coverage.ts` now prints `source` and the carrier on every
+cached fare plus a by-source summary, and the AUS run says:
 
-Prime suspect, NOT confirmed: `loadBook`'s flight query has no source
-filter (`book.ts:79`), and Travelpayouts writes a carrier
-(`travelpayouts.ts:98`) while its calendar endpoint is documented here as
-a "cheapest fares our users recently found" feed that skews cheap.
+> `## Real cached fares in flight_prices` — **NONE. Every date from this
+> origin falls back to an estimate or a gap.**
 
-*Do this first, it is free:* add a `source` column to the flight section of
-`src/jobs/coverage.ts` and run "Parkfare debug coverage" for AUS. That
-settles it in one run. **Do not fix anything before that report** — the
-same documentation-over-evidence mistake already produced a doubling fix
-this session that was written, tested and wrong.
+So there is **no cached AUS fare at all**, for any future date, any trip
+length. The queued hypothesis — a real `flight_prices` row written by
+Travelpayouts' deal feed — cannot be what the screenshot showed, and the
+fix that was queued behind it (badge or exclude deal-feed sources) would
+have been built for a row that does not exist. *This is the second time in
+two sessions that the evidence-first rule has stopped a wrong fix.* Do not
+skip that step.
 
-**2. Then, depending on what it says:**
-- *Offer the exact-fare button even when a cached row exists*, at least
-  where that row came from a deal feed. Hiding the verify button exactly
-  where the app is most confident and possibly most wrong is backwards,
-  and the owner's words are "that's the only way to actually verify the
-  live fare."
-- *And either exclude untrusted sources from being shown as authoritative
-  fares, or badge them.*
+What the card CAN legitimately have shown, found by reading the render
+path rather than guessing:
 
-**3. "Check live fares" is broken** (owner, 2026-09-22). It is a Google
-Flights deep link built in `prototype.html` around line 2400 — free, no
-SerpApi cost, which is worth knowing. But it "doesn't come in with the
-airport correctly filled nor the dates correct. The user has to fill in
-their own information, which kinda defeats the purpose." The `#flt=`
-fragment was never verifiable from this sandbox (google.com is blocked),
-and the card prints the dates it is asking for precisely so a mismatch
-shows. It shows. Fix it, and get the owner to click-test, since nothing
-here can.
+- *The KPI tile said "cached fare" whenever no estimate was attached* —
+  including when `flightPick` was null, which is the case where nothing is
+  cached and the number is the traveller's own typed fare. So a number the
+  app never cached was labelled as cached. **Fixed**: three states now, and
+  the no-data one says "your number".
+- *`#exactBtn` rendered only when `fp.estimate` existed*, so the one case
+  with nothing behind the number at all — no row, no BTS baseline, just
+  what somebody typed — was also the one case offering no way to verify it.
+  **Fixed**: offered wherever the shown fare is not a real vendor row.
 
-**4. Plus should ZERO IN, free should ESTIMATE** (owner's framing). They
-want a Plus search for a real date range — their example is
-**September 19-24** — to price on actual data throughout: the cheapest
-fare really found for those dates, the hotel rate in the category they
-chose, real ticket prices. The owner is supplying ticket data to make that
-half as close as possible. Free stays estimates; Plus buys precision.
-This is a design pass, not a patch — scope it before building.
+**Still unexplained, and it needs the owner**: the screenshot's carrier
+("JetBlue", nonstop). No code path prints a carrier without a real row, and
+no real row exists. **Send the screenshot again, or re-run that search and
+say what the Flights card reads now** — that is the one remaining fact.
+
+**2. Crowd levels shipped.** See the decision note below. `CROWDS` in
+`config.ts`, logic in `src/crowds.ts`, a card beside the weather box, a
+"How much do crowds matter?" control, and a cross-resort note above the
+board. **The bands are placeholders** — `CROWDS_ARE_PLACEHOLDER` is true
+and the card says so — waiting on the owner's own points-chart reading.
+
+**3. Everything hand-maintained now nags.** `REVIEWABLE` in
+`ownerTasks.ts` is a registry of hand-maintained tables with a
+last-reviewed date and a re-check interval, so the NEXT such table is a row
+there rather than another bespoke reminder or none at all. Placeholder
+flags (`CROWDS_ARE_PLACEHOLDER`, `EXCHANGE_IS_PLACEHOLDER`, a seeded
+`CLIMATE_SOURCE`) each earn their own row until flipped.
+
+**Bookkeeping, stated rather than hidden**: commit `f40a39a` carries the
+crowds feature, the two flights-card fixes and the owner-task registry
+under a crowds-only message. Three commits would have been right.
+
+## NEXT SESSION — start here
+
+1. **The carrier question above** — one screenshot settles it.
+2. **"Check live fares" is still broken** (owner, 2026-09-22). A Google
+   Flights deep link built in `prototype.html` around line 2400 — free, no
+   SerpApi cost. It "doesn't come in with the airport correctly filled nor
+   the dates correct." `google.com` is blocked from this sandbox, so the
+   fix cannot be verified here; the owner must click-test it.
+3. **Plus should ZERO IN, free should ESTIMATE** (owner's framing). A Plus
+   search for a real date range — their example is September 19-24 — priced
+   on actual data throughout. A design pass across flights, hotels and
+   tickets at once, not a patch. Scope it before building.
+4. **A Disney deals/news monitor** (owner asked, 2026-09-22). Note before
+   designing it: `news-digest` already reads RSS and emails the owner, so
+   this is likely an extension of that job rather than a new one — and
+   every Disney domain is refused by this sandbox's egress proxy, so
+   anything that fetches has to run in Actions, like the climate and
+   exchange generators.
 
 **Still open from before:** the four international hotel baselines and
 `parkList`'s lands are Claude drafts; `QUEUE_TIMES_PARKS` in `config.ts`
-holds DRAFT Queue-Times park ids, and every scheduled wait-times run
-refuses each park while logging the real name, so correcting them is a
-copy-paste into that one constant.
+holds DRAFT Queue-Times park ids; `src/exchangeData.ts` is still the
+hand-seeded placeholder (run the workflow).
 
-**Live at https://pricingthemagic.com.** `master` is at `1debf8f`;
-**Render has not been redeployed, so nothing from this or the previous
-session is on the live site.**
+**A second finding from the same coverage run, not acted on.** The
+baseline sanity check printed `*** SUSPICIOUS`: our national
+passenger-weighted average is **$204.52** against BTS's published ~$390,
+a ratio of 1.9. That is close to the factor of two the check exists to
+catch. **Do not act on it alone.** The counter-evidence in the decision
+note below still stands — 74 measured SerpApi-vs-BTS ratios spanning
+0.580-1.242, none near 2.0 — and our routes are leisure routes to six
+resorts rather than a national sample. Worth a deliberate look with the
+DB1B two-market debug workflow; not worth a fix on this number.
+
+**Live at https://pricingthemagic.com.** `master` is at `c369e70`;
+**Render has not been redeployed, so nothing from the last three sessions
+is on the live site.**
 
 ## Where things stood — 2026-09-20
 
@@ -1229,6 +1260,60 @@ recording survived.
 - *The park ids are a DRAFT* and the name check makes that safe — a park whose
   returned name disagrees is refused and the log prints what they call it.
   The probe workflow settles them and **needs this branch merged first**.
+
+**Crowds are a band, a forecast, and never a reason to reorder the board**
+(2026-09-22, the owner: they hold DVC points charts and can read demand off
+them). `CROWDS` in `config.ts`, `src/crowds.ts` for the logic.
+
+- *Five bands, never a number.* "Crowd level 7.2" implies a precision nobody
+  here has and starts arguments about 7.2 versus 7.6. Same reasoning as the
+  Low/Medium/High fare-correction bands.
+- *A points chart is better evidence than it looks, and worse than it
+  sounds.* It is Disney's own demand forecast — published months ahead,
+  backed by real inventory — and it carries NONE of the bias that killed the
+  wait-times card, because a price is not a posted wait time and no operator
+  is inflating it. It is still a forecast of demand, not a count of people,
+  and every basis note says so. There is a test that no note claims to have
+  measured anything.
+- *`basis` is per resort, because DVC is.* Only Walt Disney World and
+  Disneyland have inventory to read; the other four are judgement from school
+  and national holidays. A test pins that only those two may claim
+  `dvcPoints`, so an international resort can never print a source that does
+  not exist for it.
+- *Sensitivity annotates, it never sorts.* At "somewhat" only a peak month
+  flags; at "a lot" a busy one does too and quieter months at the same resort
+  are offered. The board stays in price order — the app's one job — and "the
+  cheapest week is also the busiest" is a trade-off to make knowingly.
+  Identical rule and reasoning to the attraction matcher.
+- *Thresholds live server-side, in `crowds.ts` only.* The browser renders what
+  it is handed, so the chip and the detail card cannot disagree about whether
+  there is anything to say.
+- *An alternative month must be TWO bands quieter.* One band is noise when the
+  data is bands to begin with.
+- *The cross-resort note fires only on a two-band spread.* A note that appears
+  every month, saying some resort is marginally quieter, is one people stop
+  reading by March.
+- *The shipped rows are placeholders and say so*, `CROWDS_ARE_PLACEHOLDER`.
+  Flip it in the same commit that replaces them — a forgotten flag means the
+  app presents a guess as researched.
+
+**Hand-maintained data now nags on a clock** (2026-09-22, the owner: "make
+sure you nag me on anything that is hand maintained and not done"). Ticket
+rows had a staleness check and nothing else did, so each new hand-maintained
+list arrived with a bespoke reminder or none. `REVIEWABLE` in
+`ownerTasks.ts` is the registry: a last-reviewed date kept beside the data
+itself, plus how long that data stays believable.
+
+- *A date constant, not the file's git mtime.* Reformatting a file is not
+  reviewing it, and a git date would silently reset the clock every time the
+  file was touched.
+- *The interval comes from how often the world republishes it*, not from how
+  often we would like to look. Points charts and ticket prices are annual.
+- *Nothing here is blocking.* Stale is not broken — it is what becomes broken
+  while nobody is looking, which is what a nightly nag is for.
+- *Placeholder flags are separate from the clock* and each earns its own row
+  until flipped, because a placeholder nobody replaces is the real failure:
+  the UI admits it is a guess, in small text, forever.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
