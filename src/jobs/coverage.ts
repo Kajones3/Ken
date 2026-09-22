@@ -41,18 +41,20 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   out.push("");
 
   // --- 1. What the flight cache actually holds, by destination and month ---
-  const fp = await db.query<{ destination: string; month: string; trip_length: number; n: string; min_p: string; max_p: string; med_p: string }>(
+  const fp = await db.query<{ destination: string; month: string; trip_length: number; source: string | null; carrier: string | null; n: string; min_p: string; max_p: string; med_p: string }>(
     `select destination,
             to_char(depart_date,'YYYY-MM') as month,
             trip_length,
+            coalesce(source, '(unlabelled)') as source,
+            min(carrier) as carrier,
             count(*) as n,
             min(price_usd) as min_p,
             max(price_usd) as max_p,
             percentile_cont(0.5) within group (order by price_usd) as med_p
        from flight_prices
       where origin = $1 and depart_date >= $2
-      group by destination, month, trip_length
-      order by destination, month, trip_length`,
+      group by destination, month, trip_length, coalesce(source, '(unlabelled)')
+      order by destination, month, trip_length, source`,
     [origin, today],
   );
 
@@ -60,13 +62,40 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   if (!fp.rows.length) {
     out.push("NONE. Every date from this origin falls back to an estimate or a gap.");
   } else {
-    out.push("dest  month    nights  rows  min      median   max");
+    out.push("dest  month    nights  source            rows  min      median   max      carrier");
     for (const r of fp.rows) {
       out.push(
-        `${r.destination}   ${r.month}  ${String(r.trip_length).padStart(6)}  ${String(r.n).padStart(4)}  ` +
-        `${Number(r.min_p).toFixed(0).padStart(7)}  ${Number(r.med_p).toFixed(0).padStart(7)}  ${Number(r.max_p).toFixed(0).padStart(7)}`,
+        `${r.destination}   ${r.month}  ${String(r.trip_length).padStart(6)}  ${String(r.source).padEnd(16)}  ${String(r.n).padStart(4)}  ` +
+        `${Number(r.min_p).toFixed(0).padStart(7)}  ${Number(r.med_p).toFixed(0).padStart(7)}  ${Number(r.max_p).toFixed(0).padStart(7)}  ${r.carrier ?? "-"}`,
       );
     }
+    // Which provider wrote these rows, and how cheap each one runs. The
+    // question this exists for: a fare far below every other source for the
+    // same route is a deal-feed row, not a bookable round trip.
+    const bySource = new Map<string, { n: number; min: number; max: number; sum: number }>();
+    for (const r of fp.rows) {
+      const k = String(r.source);
+      const acc = bySource.get(k) ?? { n: 0, min: Infinity, max: 0, sum: 0 };
+      acc.n += Number(r.n);
+      acc.min = Math.min(acc.min, Number(r.min_p));
+      acc.max = Math.max(acc.max, Number(r.max_p));
+      acc.sum += Number(r.med_p) * Number(r.n);
+      bySource.set(k, acc);
+    }
+    out.push("");
+    out.push("### By source — who wrote these fares");
+    out.push("source            rows  min      max      mean-of-medians");
+    for (const [k, v] of [...bySource].sort((a, b) => b[1].n - a[1].n)) {
+      out.push(
+        `${k.padEnd(16)}  ${String(v.n).padStart(4)}  ${v.min.toFixed(0).padStart(7)}  ${v.max.toFixed(0).padStart(7)}  ${(v.sum / v.n).toFixed(0).padStart(15)}`,
+      );
+    }
+    out.push("");
+    out.push("Read this before fixing anything: `travelpayouts` rows come from a");
+    out.push("'cheapest fares our users recently found' feed and skew cheap; they are");
+    out.push("already excluded from the fare trend. `serpapi_flights` is a real");
+    out.push("round-trip lookup. A suspiciously low fare sitting under `travelpayouts`");
+    out.push("means the row is the deal feed, not a bug in the estimate path.");
   }
   out.push("");
 

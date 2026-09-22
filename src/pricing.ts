@@ -932,6 +932,119 @@ export function priceTrip(
 }
 
 /** Cheapest priceable start date in a window. Gaps are skipped, not fatal. */
+/** How much of each tail a month's prices are trimmed by before averaging. */
+export const TYPICAL_TRIM_KEY = "search.typicalTrimPct";
+export const DEFAULT_TYPICAL_TRIM = 10;
+/** Below this many priced dates, trimming throws away too much to be worth
+ *  it — a four-date month trimmed 10% either way is just the mean anyway. */
+export const MIN_DATES_TO_TRIM = 10;
+
+export interface MonthSpread {
+  /** Cheapest and dearest priced day in the window. */
+  low: number;
+  high: number;
+  /** The straight average of every priced day. */
+  mean: number;
+  /** The average after the cheapest and dearest tails are dropped — the
+   *  number the board quotes. */
+  trimmedMean: number;
+  /** How many days were priced, and how many were dropped from EACH tail. */
+  priced: number;
+  trimmedPerTail: number;
+  /** The cheapest day itself, so the card can name a date rather than just
+   *  a number. A floor with no date attached is not actionable. */
+  lowDate: ISODate;
+}
+
+export interface TypicalPick {
+  /** The day the board quotes: the priced day whose total lands nearest the
+   *  trimmed mean. A REAL bookable date with a real breakdown, never a
+   *  composite — a total averaged across days belongs to no trip anybody can
+   *  book, and every line under it would contradict it. */
+  typical: TripPrice | null;
+  /** The cheapest day, still computed and still offered. */
+  cheapest: TripPrice | null;
+  spread: MonthSpread | null;
+  priced: number;
+  skipped: string[];
+}
+
+/**
+ * Price a window and pick the day worth QUOTING, not the luckiest one.
+ *
+ * The board used to show the cheapest day in the month. That reads as a
+ * quote and behaves as a floor: the owner's October example priced Houston
+ * to Orlando at $143 against a month whose days ran $87 to $1,122. The $87
+ * was real and it was Halloween.
+ *
+ * The fix is a trimmed mean, and the reasoning is the owner's: the dear days
+ * are dear BECAUSE that is when people fly, and the rock-bottom days are
+ * cheap because those seats go out empty. Neither tail describes a trip
+ * somebody is actually going to take, so both are dropped before averaging.
+ * That is not the same argument as this project's older median-not-mean rule
+ * for BTS fares — there the mean was dragged by unrepresentative itineraries;
+ * here BOTH ends are unrepresentative and the middle is the product.
+ *
+ * Worked against the owner's October calendar: mean $354, median $222,
+ * trimmed mean $309, cheapest $87. The trim drops $87/$94/$112 and
+ * $1,122/$1,049/$760 and leaves every ordinary day standing.
+ *
+ * The cheapest day is NOT discarded — it is returned beside the typical one,
+ * because "as low as $87 if you can fly on the 31st" is genuinely useful and
+ * withholding it to make a headline look better would be the same dishonesty
+ * one rung up.
+ */
+export function typicalIn(
+  book: PriceBook, resort: Resort, params: TripParams,
+  overrides: Overrides, dates: ISODate[],
+): TypicalPick {
+  const priced: { date: ISODate; price: TripPrice }[] = [];
+  const skipped: string[] = [];
+  for (const d of dates) {
+    const r = priceTrip(book, resort, params, overrides, d);
+    if (!r.ok) { skipped.push(`${d}: ${r.reason}`); continue; }
+    priced.push({ date: d, price: r.price });
+  }
+  if (!priced.length) return { typical: null, cheapest: null, spread: null, priced: 0, skipped };
+
+  const byTotal = [...priced].sort((a, b) => a.price.total - b.price.total || (a.date < b.date ? -1 : 1));
+  const cheapest = byTotal[0]!;
+  const dearest = byTotal[byTotal.length - 1]!;
+
+  const raw = book.setting?.(TYPICAL_TRIM_KEY) ?? DEFAULT_TYPICAL_TRIM;
+  const trimPct = Number.isFinite(raw) ? Math.max(0, Math.min(45, raw)) : DEFAULT_TYPICAL_TRIM;
+  // Floor, not round: trimming must never remove more than it is asked to,
+  // and 45% is capped above so a trim can never empty the set from both ends.
+  const perTail = byTotal.length >= MIN_DATES_TO_TRIM
+    ? Math.min(Math.floor((byTotal.length * trimPct) / 100), Math.floor((byTotal.length - 1) / 2))
+    : 0;
+  const kept = perTail > 0 ? byTotal.slice(perTail, byTotal.length - perTail) : byTotal;
+
+  const mean = byTotal.reduce((sum, x) => sum + x.price.total, 0) / byTotal.length;
+  const trimmedMean = kept.reduce((sum, x) => sum + x.price.total, 0) / kept.length;
+
+  // The kept day nearest the trimmed mean. Chosen from `kept` rather than
+  // from every priced day so a trimmed outlier can never come back as the
+  // headline, which it can when the distribution is lopsided enough that the
+  // trimmed mean sits closer to a dropped day than to any surviving one.
+  let typical = kept[0]!;
+  for (const x of kept) {
+    if (Math.abs(x.price.total - trimmedMean) < Math.abs(typical.price.total - trimmedMean)) typical = x;
+  }
+
+  return {
+    typical: typical.price,
+    cheapest: cheapest.price,
+    spread: {
+      low: cheapest.price.total, high: dearest.price.total,
+      mean, trimmedMean, priced: byTotal.length, trimmedPerTail: perTail,
+      lowDate: cheapest.date,
+    },
+    priced: byTotal.length,
+    skipped,
+  };
+}
+
 export function cheapestIn(
   book: PriceBook, resort: Resort, params: TripParams,
   overrides: Overrides, dates: ISODate[],

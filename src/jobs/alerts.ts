@@ -16,7 +16,7 @@ import { addDaysISO, monthBounds, range, todayISO } from "../dates.js";
 import { getDb, type Db } from "../db.js";
 import { loadBook } from "../book.js";
 import { bucketFor } from "../config.js";
-import { cheapestIn, poolFor, type Overrides, type TripParams } from "../pricing.js";
+import { typicalIn, poolFor, type Overrides, type TripParams } from "../pricing.js";
 import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
@@ -104,7 +104,12 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
       from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
     });
 
-    const { best } = cheapestIn(book, resort, params, overrides, range(from, to));
+    // MUST use the same basis the board quoted. The board moved from the
+    // cheapest day in the month to a trimmed-mean typical day; had this stayed
+    // on the cheapest, every saved trip's re-price would come in below the
+    // total it was saved at and fire an instant "the price dropped!" email
+    // about a drop that never happened. The two are one decision, not two.
+    const { typical: best } = typicalIn(book, resort, params, overrides, range(from, to));
     if (!best) continue;
 
     const oldTotal = Number(row.baseline_total);

@@ -1109,3 +1109,133 @@ export function climateFor(resortId: string, month1: number): ClimateMonth | nul
 /** Re-exported so the UI can say where the weather numbers came from without
  *  importing the generated file directly. */
 export { CLIMATE_SOURCE };
+
+/* ------------------------------------------------------------------ crowds */
+
+/**
+ * HOW BUSY A RESORT TYPICALLY IS, BY MONTH.
+ *
+ * Five bands, never a number. "Crowd level 7.2" implies a precision nobody
+ * here has and invites arguments about 7.2 versus 7.6; a band is a claim you
+ * can actually defend. Same reasoning as the Low/Medium/High fare-correction
+ * bands.
+ *
+ * WHERE THE DOMESTIC NUMBERS COME FROM, and why they are better evidence than
+ * they look. Walt Disney World and Disneyland are derived from DVC points
+ * charts — Disney's own demand forecast, published months ahead and backed by
+ * real inventory. A week priced at twice another week is Disney saying it
+ * expects that week to sell out. Crucially it carries NONE of the bias that
+ * killed the wait-times card: a points chart is a price, not a posted wait
+ * time, so there is no operator inflating it and no reanalysis grid smearing
+ * it. It is also not a measurement of crowds and must never be described as
+ * one — it is a forecast of demand, which is a different and more honest
+ * claim.
+ *
+ * THE FOUR INTERNATIONAL RESORTS HAVE NO DVC INVENTORY AT ALL, so there is no
+ * chart to read and their rows are judgement — local school holidays, national
+ * weeks off, and the weather already in CLIMATE. `basis` says which is which
+ * per resort and the card prints it, exactly as dataConfidence does: a
+ * confident wrong claim about when to go is worse than a hedged right one.
+ *
+ * HAND-MAINTAINED. Points charts are republished annually, so these go stale
+ * quietly — ownerTasks.ts nags about `CROWDS_REVIEWED` below rather than
+ * leaving that to memory.
+ */
+export type CrowdBand = "veryLow" | "low" | "moderate" | "high" | "peak";
+
+/** Ordered weakest to strongest, so a caller can compare two bands without
+ *  hard-coding the order in three places. */
+export const CROWD_BANDS: CrowdBand[] = ["veryLow", "low", "moderate", "high", "peak"];
+
+export const CROWD_LABELS: Record<CrowdBand, string> = {
+  veryLow: "Very low",
+  low: "Low",
+  moderate: "Moderate",
+  high: "High",
+  peak: "Peak",
+};
+
+export interface CrowdYear {
+  /** Where this resort's twelve rows came from. `dvcPoints` is derived from a
+   *  points chart; `estimate` is judgement and says so on the card. */
+  basis: "dvcPoints" | "estimate";
+  /** Twelve bands, January first. */
+  months: CrowdBand[];
+  /** Optional per-month plain-language reason ("Thanksgiving week", "Golden
+   *  Week"). Keyed by 1-based month. A band with no reason still renders. */
+  why?: Record<number, string>;
+}
+
+/**
+ * When the bands were last checked against a current points chart. The owner
+ * task reads this; bump it whenever you review them.
+ */
+export const CROWDS_REVIEWED = "2026-09-22";
+
+/**
+ * PLACEHOLDER ROWS — see CROWDS_ARE_PLACEHOLDER below.
+ *
+ * These are Claude's, not the owner's points charts, and the UI says so. They
+ * exist only so the feature runs end to end before the real bands arrive, the
+ * same standing the hand-seeded climate and exchange rows had. Replace them
+ * wholesale; unlike the generated files, this one IS meant to be hand-edited.
+ */
+export const CROWDS: Record<string, CrowdYear> = {
+  wdw: {
+    basis: "dvcPoints",
+    months: ["low", "low", "high", "high", "moderate", "high",
+             "high", "veryLow", "low", "moderate", "high", "peak"],
+    why: { 1: "After New Year the parks empty out", 3: "Spring break and Easter",
+           7: "Summer, and the hottest month to queue in", 8: "Back-to-school lull — the emptiest weeks of the year",
+           11: "Thanksgiving week is a genuine peak", 12: "Christmas week is the busiest of the year" },
+  },
+  dlr: {
+    basis: "dvcPoints",
+    months: ["low", "moderate", "high", "moderate", "moderate", "high",
+             "high", "low", "moderate", "high", "high", "peak"],
+    why: { 1: "The quietest stretch at Disneyland", 3: "Spring break",
+           8: "Back-to-school lull", 10: "Halloween season is busier than people expect",
+           11: "Thanksgiving week", 12: "Christmas week" },
+  },
+  dlp: {
+    basis: "estimate",
+    months: ["low", "moderate", "low", "high", "moderate", "moderate",
+             "high", "high", "low", "high", "low", "high"],
+    why: { 4: "French Easter holidays", 7: "European summer holidays",
+           9: "The quietest month, and the weather is still good",
+           10: "Toussaint half-term", 12: "Christmas season" },
+  },
+  tdr: {
+    basis: "estimate",
+    months: ["low", "low", "high", "high", "peak", "low",
+             "moderate", "high", "moderate", "high", "moderate", "high"],
+    why: { 3: "Japanese spring break", 4: "Cherry blossom season",
+           5: "Golden Week is the single busiest stretch of the Japanese year",
+           6: "Tsuyu, the rainy season — wet, and correspondingly quiet",
+           8: "Obon and school holidays", 10: "Halloween is a major event at Tokyo" },
+  },
+  shdr: {
+    basis: "estimate",
+    months: ["low", "high", "moderate", "moderate", "peak", "moderate",
+             "high", "high", "moderate", "peak", "low", "low"],
+    why: { 2: "Chinese New Year", 5: "Labour Day golden week",
+           7: "Chinese school summer holidays", 10: "National Day golden week",
+           11: "Cool, dry and quiet — the best value month" },
+  },
+  hkdl: {
+    basis: "estimate",
+    months: ["low", "high", "low", "high", "moderate", "low",
+             "high", "high", "low", "high", "moderate", "high"],
+    why: { 2: "Chinese New Year", 4: "Easter and Ching Ming",
+           7: "Hong Kong school holidays, and the wettest, hottest weeks",
+           9: "Typhoon season keeps numbers down", 10: "National Day golden week" },
+  },
+};
+
+/**
+ * True while CROWDS holds Claude's placeholder bands rather than the owner's
+ * own reading of a points chart. Set to false in the same commit that replaces
+ * the rows — the UI and the shared PDF both read this, so a forgotten flag
+ * means the app presents a guess as researched.
+ */
+export const CROWDS_ARE_PLACEHOLDER = true;

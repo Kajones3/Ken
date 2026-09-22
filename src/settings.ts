@@ -34,7 +34,7 @@
 import type { Db } from "./db.js";
 import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
-import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN } from "./pricing.js";
+import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 
 export type SettingKind = "money" | "number" | "percent";
 
@@ -110,6 +110,16 @@ export const SETTINGS: SettingDef[] = [
       + "100 the dear end. Higher is the safer mistake: an estimate that comes in low is the one "
       + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
+  },
+  {
+    key: TYPICAL_TRIM_KEY,
+    label: "Typical price — how much of each end to ignore",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_TYPICAL_TRIM,
+    min: 0,
+    max: 45,
+    help: "A month's cheapest days are cheap because nobody wants them (a 4am flight on Halloween) and its dearest days are the week everybody travels. Both ends describe trips people do not take, so this share of each end is dropped before averaging. 0 uses every day, which pulls the quote toward whichever end is more extreme.",
   },
   // Two per year, because the IRS sets a January-June rate and a July-December
   // one and has changed it mid-year before. Adding a new year is still a code
