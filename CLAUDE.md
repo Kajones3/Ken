@@ -34,97 +34,68 @@ left the code.** All on `claude/compassionate-hopper-0pot3d`, none live yet.
   *Paris note* says which half of the bundling constraint is real.
 - *The intro* is the owner's own words, not a "prototype build" banner.
 
-## Where things stand — 2026-09-22 (afternoon session)
+## Where things stand — 2026-09-22 (end of day)
 
-On `claude/intelligent-dijkstra-vaws5x`, not merged, not live.
+**Merged and on `master`** (PRs #56-#60). Render redeploys are the owner's
+click; ask whether one has happened before trusting what the live site shows.
 
-**1. The $139 fare: the premise was wrong, and the report is what showed
-it.** `src/jobs/coverage.ts` now prints `source` and the carrier on every
-cached fare plus a by-source summary, and the AUS run says:
+Shipped today: crowd levels, the typical-day quote, the cheapest-day search
+option, the Kayak booking link, the mobile KPI fix, two honest-number fixes
+on the Flights card, and a staleness registry that nags about every
+hand-maintained table.
 
-> `## Real cached fares in flight_prices` — **NONE. Every date from this
-> origin falls back to an estimate or a gap.**
+### The $139 fare: the premise was wrong, and the report is what showed it
 
-So there is **no cached AUS fare at all**, for any future date, any trip
-length. The queued hypothesis — a real `flight_prices` row written by
-Travelpayouts' deal feed — cannot be what the screenshot showed, and the
-fix that was queued behind it (badge or exclude deal-feed sources) would
-have been built for a row that does not exist. *This is the second time in
-two sessions that the evidence-first rule has stopped a wrong fix.* Do not
-skip that step.
+`src/jobs/coverage.ts` now prints `source` and the carrier on every cached
+fare. The AUS run said **"NONE. Every date from this origin falls back to an
+estimate or a gap."** The queued hypothesis — a real `flight_prices` row
+from Travelpayouts' deal feed — could not have been it, and the fix queued
+behind it would have been built for a row that does not exist. *Second time
+in two sessions the evidence-first rule stopped a wrong fix.*
 
-What the card CAN legitimately have shown, found by reading the render
-path rather than guessing:
+Two real defects came out of reading the render path instead:
 
 - *The KPI tile said "cached fare" whenever no estimate was attached* —
-  including when `flightPick` was null, which is the case where nothing is
-  cached and the number is the traveller's own typed fare. So a number the
-  app never cached was labelled as cached. **Fixed**: three states now, and
-  the no-data one says "your number".
-- *`#exactBtn` rendered only when `fp.estimate` existed*, so the one case
-  with nothing behind the number at all — no row, no BTS baseline, just
-  what somebody typed — was also the one case offering no way to verify it.
-  **Fixed**: offered wherever the shown fare is not a real vendor row.
+  including when `flightPick` was null and the number was the traveller's
+  own typed fare. Three states now; the no-data one says "your number".
+- *`#exactBtn` rendered only when `fp.estimate` existed*, hiding the verify
+  button in the one case with nothing behind the number at all. Now offered
+  wherever the shown fare is not a real vendor row.
 
-**Still unexplained, and it needs the owner**: the screenshot's carrier
-("JetBlue", nonstop). No code path prints a carrier without a real row, and
-no real row exists. **Send the screenshot again, or re-run that search and
-say what the Flights card reads now** — that is the one remaining fact.
-
-**2. Crowd levels shipped.** See the decision note below. `CROWDS` in
-`config.ts`, logic in `src/crowds.ts`, a card beside the weather box, a
-"How much do crowds matter?" control, and a cross-resort note above the
-board. **The bands are placeholders** — `CROWDS_ARE_PLACEHOLDER` is true
-and the card says so — waiting on the owner's own points-chart reading.
-
-**3. Everything hand-maintained now nags.** `REVIEWABLE` in
-`ownerTasks.ts` is a registry of hand-maintained tables with a
-last-reviewed date and a re-check interval, so the NEXT such table is a row
-there rather than another bespoke reminder or none at all. Placeholder
-flags (`CROWDS_ARE_PLACEHOLDER`, `EXCHANGE_IS_PLACEHOLDER`, a seeded
-`CLIMATE_SOURCE`) each earn their own row until flipped.
-
-**Bookkeeping, stated rather than hidden**: commit `f40a39a` carries the
-crowds feature, the two flights-card fixes and the owner-task registry
-under a crowds-only message. Three commits would have been right.
+**Closed:** the owner's screenshot was a different search (IAH, then AUS
+with a real row present) and the card was behaving correctly. Do not
+re-open it.
 
 ## NEXT SESSION — start here
 
-1. **The carrier question above** — one screenshot settles it.
-2. **"Check live fares" is still broken** (owner, 2026-09-22). A Google
-   Flights deep link built in `prototype.html` around line 2400 — free, no
-   SerpApi cost. It "doesn't come in with the airport correctly filled nor
-   the dates correct." `google.com` is blocked from this sandbox, so the
-   fix cannot be verified here; the owner must click-test it.
-3. **Plus should ZERO IN, free should ESTIMATE** (owner's framing). A Plus
-   search for a real date range — their example is September 19-24 — priced
-   on actual data throughout. A design pass across flights, hotels and
-   tickets at once, not a patch. Scope it before building.
-4. **A Disney deals/news monitor** (owner asked, 2026-09-22). Note before
-   designing it: `news-digest` already reads RSS and emails the owner, so
-   this is likely an extension of that job rather than a new one — and
-   every Disney domain is refused by this sandbox's egress proxy, so
-   anything that fetches has to run in Actions, like the climate and
-   exchange generators.
+1. **The owner is filling in real numbers.** In their own priority order:
+   ticket prices, crowd bands, promos, the four international hotel
+   baselines. Everything else waits on those.
+2. **Food rates are not owner-editable yet** — 24 numbers (four styles x six
+   resorts) still only in `config.ts`, and food is ~40% of a typical total.
+   Adding them to `settings.ts` is the obvious next admin job.
+3. **A Disney deals/news monitor** (owner asked). `news-digest` already reads
+   RSS and emails the owner, so this is likely an extension of that job
+   rather than a new one — and every Disney domain is refused by this
+   sandbox's egress proxy, so anything that fetches must run in Actions.
+4. **CPM ads** (owner raised, not designed). One thing worth saying before
+   anyone builds it: this page's whole credibility is that every number is
+   either real or labelled a guess, and travel ads are ads for flights and
+   hotels. Placement has to be unmistakably not-content; not inside a resort
+   card.
 
-**Still open from before:** the four international hotel baselines and
-`parkList`'s lands are Claude drafts; `QUEUE_TIMES_PARKS` in `config.ts`
-holds DRAFT Queue-Times park ids; `src/exchangeData.ts` is still the
-hand-seeded placeholder (run the workflow).
+**Still open from before:** `parkList`'s lands are a Claude draft;
+`QUEUE_TIMES_PARKS` holds DRAFT Queue-Times park ids; `src/exchangeData.ts`
+is still the hand-seeded placeholder (run the workflow — it is free).
 
-**A second finding from the same coverage run, not acted on.** The
-baseline sanity check printed `*** SUSPICIOUS`: our national
-passenger-weighted average is **$204.52** against BTS's published ~$390,
-a ratio of 1.9. That is close to the factor of two the check exists to
-catch. **Do not act on it alone.** The counter-evidence in the decision
-note below still stands — 74 measured SerpApi-vs-BTS ratios spanning
-0.580-1.242, none near 2.0 — and our routes are leisure routes to six
-resorts rather than a national sample. Worth a deliberate look with the
-DB1B two-market debug workflow; not worth a fix on this number.
-
-**Live at https://pricingthemagic.com.** `master` is at `c369e70`;
-**Render has not been redeployed, so nothing from the last three sessions
-is on the live site.**
+**A finding not acted on.** The coverage run printed `*** SUSPICIOUS`: our
+national passenger-weighted average is **$204.52** against BTS's published
+~$390, a ratio of 1.9, close to the factor of two the check exists to catch.
+**Do not act on it alone.** The counter-evidence below still stands — 74
+measured SerpApi-vs-BTS ratios spanning 0.580-1.242, none near 2.0 — and our
+routes are leisure routes to six resorts, not a national sample. Worth a
+deliberate look with the DB1B two-market debug workflow; not a fix on this
+number.
 
 ## Where things stood — 2026-09-20
 
@@ -1314,6 +1285,82 @@ itself, plus how long that data stays believable.
 - *Placeholder flags are separate from the clock* and each earns its own row
   until flipped, because a placeholder nobody replaces is the real failure:
   the UI admits it is a guess, in small text, forever.
+
+**The board quotes a typical day, and the traveller can ask for the
+cheapest** (2026-09-22). It used to price the cheapest date in the month and
+show that date's numbers, which reads as a quote and behaves as a floor: the
+owner's October calendar for Houston to Orlando ran $87 to $1,122 a person
+and the board showed $143. The $87 was real, and it was a dawn flight on
+Halloween.
+
+`typicalIn()` prices every date, drops the cheapest and dearest 10% of days,
+averages what is left and quotes the real day nearest that average. Against
+that October calendar: mean $354, median $222, trimmed mean $309, and the
+trim drops exactly $87/$94/$112 and $760/$1,049/$1,122.
+
+- *The owner's reasoning is what settled the statistic, and it is not this
+  project's older median-not-mean rule.* There one tail was unrepresentative;
+  here BOTH are. The dear days are dear because that is when people fly, and
+  the rock-bottom days are cheap because those seats go out empty. Neither
+  describes a trip anybody takes.
+- *The quoted day is a REAL day, never a composite.* A total averaged across
+  days belongs to no bookable trip and every line under it would contradict
+  it. The average picks the day; the day supplies the numbers. The month's
+  average is printed in words beside it.
+- *The cheapest day is still computed, returned, and named with its date.*
+  Hiding the floor to protect a headline is the same dishonesty one rung up.
+- *The alert job moved in the same commit, and that is not tidiness.* It
+  re-prices saved trips against the total the board quoted, so leaving it on
+  the cheapest day would have fired an instant "the price dropped" email
+  about a drop that never happened. The basis is STAMPED on a saved trip for
+  the same reason.
+- *"Which day should we price?" is a SEARCH parameter, not a resort card
+  control* (owner's correction). It always applied to all six — a board
+  quoting one resort's best day against another's typical day compares
+  nothing — and the owner's framing is sharper: somebody chasing a cheap
+  fare to Shanghai is not also looking for first class to Orlando.
+- *The trim is owner-editable* (`search.typicalTrimPct`, 0-45).
+
+**"Check live fares" goes to Kayak, and the regression before it is the
+lesson** (2026-09-22).
+
+- *Why it broke.* A pass had replaced a `q=` search with Google's `#flt=`
+  structured form. `#flt=` is a URL FRAGMENT — never sent to the server, only
+  the page's own JavaScript sees it — and it is an old internal format Google
+  no longer honours. An unrecognised fragment is silently ignored, so it
+  failed by showing a blank form rather than an error.
+- *Why Kayak.* It puts the route, both dates, the adults and every child's
+  AGE in the path. Google's `q=` carries the route and dates and no party
+  size at all. Kayak's segment is `children-1-4` — the ages, ascending, not a
+  count; a first pass guessed `/2children` and Kayak ignored it, dropping
+  both children silently. Ages are also why the link is worth having: an
+  airline prices a four-year-old and a lap infant differently.
+- *No conflict with SerpApi, which was the owner's question.* SerpApi is
+  where the app's fare DATA comes from, server-side and overnight. This is
+  where a traveller is sent to BOOK. Unrelated choices.
+- *Both links shipped side by side for exactly one round*, because
+  kayak.com and google.com are both refused by this sandbox's egress proxy
+  and the Google link had just been confirmed working. Swapping a working
+  link for an untestable one is how `#flt=` happened. The owner's click
+  settled it; Google's link is gone.
+- *Kayak's `ucs=` and `fs=` are stripped*, same reason Tokyo's ticket link
+  lost its `_gl=` token: session state, not routing.
+- **Anything that cannot be fetched from this sandbox needs the owner's
+  click, and the card prints what it is asking for so a mismatch is visible.**
+
+**`1fr` is `minmax(auto,1fr)`, and that clipped a price** (2026-09-22). The
+mobile KPI tiles sat on different lines with the total stranded in a
+half-width cell and "$1,273" cut to "$1,27". Two causes, both worth knowing:
+
+- *A `1fr` track refuses to shrink below its own content.* These tiles hold
+  a monospace nowrap number, so 66px of fare would not fit a 58px track and
+  the digits were cut. `minmax(0,1fr)` fixes it. **A clipped NUMBER is worse
+  than a clipped label** — "$1,27" reads as a real price — which is the
+  `text-overflow` lesson already in this file, one level up in severity.
+- *The phone media query had NEVER applied.* It sat above the base rule with
+  the same specificity, so the base rule won on source order and three
+  columns were being squeezed into 296px the whole time. A media query that
+  loses on source order fails silently and looks like a layout bug.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
