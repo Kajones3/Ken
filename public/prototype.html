@@ -2562,16 +2562,30 @@ async function renderDetail(){
    * mistake: a link nobody here could test, replacing one that worked.
    * Whichever the owner confirms, the other goes.
    *
-   * Children are counted, never dropped. A family sent to a page quietly
-   * priced for the adults alone is a wrong number presented as a real one —
-   * the same rule that stops Disney's hotel link carrying `numAdults` when
-   * there are children it cannot also carry.
+   * Children are carried BY AGE, never as a count. Kayak's segment is
+   * `children-1-4` for a one-year-old and a four-year-old — the ages
+   * themselves, ascending, not how many there are. A first pass guessed
+   * `/2children`, which Kayak ignored: the owner clicked through and got the
+   * two adults with the children silently dropped. That is the failure this
+   * whole link exists to avoid, so the format below is the owner's own
+   * click-tested URL rather than a guess.
+   *
+   * Ages are sent as the app holds them, which is also why this is worth
+   * doing: an airline prices a four-year-old and a lap infant differently,
+   * and a count could not say which is which.
+   *
+   * Kayak's own trip id (`ucs=`) and filter state (`fs=`) are stripped from
+   * that URL. They belong to one browsing session, the same reason Tokyo's
+   * ticket link lost its `_gl=` tracking token — shipping one would pin every
+   * traveller to a stranger's expired search.
    */
-  const kayakKids = list.filter(a => a < 18).length;
-  const kayakAdults = Math.max(1, list.length - kayakKids);
+  const kayakKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
+  const kayakAdults = Math.max(1, list.length - kayakKidAges.length);
   const kayakLink =
     `https://www.kayak.com/flights/${p.origin}-${x.destination}/${x.start}/${backDate}`
-    + `/${kayakAdults}adults${kayakKids ? `/${kayakKids}children` : ""}?sort=bestflight_a`;
+    + `/${kayakAdults}adults`
+    + (kayakKidAges.length ? `/children${kayakKidAges.map(a => `-${a}`).join("")}` : "")
+    + `?sort=bestflight_a`;
 
   // tickets, grouped by this resort's own age bands — split from the real total
   const { groups, perGroup } = splitByBand(r, list, x.tickets);
@@ -2883,7 +2897,8 @@ async function renderDetail(){
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
               <a class="book booksecond" href="${flightLink}" target="_blank" rel="noopener">or on Google Flights →</a>
               <p class="sub" style="margin:6px 0 0">Both open ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}.
-                Kayak also carries ${kayakAdults} adult${kayakAdults===1?"":"s"}${kayakKids ? ` and ${kayakKids} child${kayakKids===1?"":"ren"}` : ""};
+                Kayak also carries ${kayakAdults} adult${kayakAdults===1?"":"s"}${
+                  kayakKidAges.length ? ` and ${kayakKidAges.length === 1 ? "a child aged" : "children aged"} ${kayakKidAges.join(" and ")}` : ""};
                 Google cannot, so set the travellers there yourself.
                 If either lands on different dates, the price you see is not this trip's.</p>` : ""}
           </div>
