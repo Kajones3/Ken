@@ -34,18 +34,62 @@ left the code.** All on `claude/compassionate-hopper-0pot3d`, none live yet.
   *Paris note* says which half of the bundling constraint is real.
 - *The intro* is the owner's own words, not a "prototype build" banner.
 
-**Open with the owner, and each has one action:**
+## NEXT SESSION — start here (queued 2026-09-22)
 
-- *The wait-time card is half-decided.* The owner asked for "XX mins
-  average wait" beside the weather box, on the condition that all six
-  resorts can have it — and chose "probe first, then start collecting".
-  The probe (`.github/workflows/debug-wait-times.yml`) **cannot be
-  dispatched until this branch merges**, because GitHub only lists
-  `workflow_dispatch` workflows that exist on the default branch. Merge,
-  run it, then build the collector on what it reports.
-- *The four international hotel baselines* are still Claude drafts.
-- *`parkList`'s lands* are the same, and the probe prints Queue-Times'
-  own land names, which would be a real source to check them against.
+Merged as PR #54; `master` is at `f272ae8`. Four jobs, in this order.
+
+**1. Where does a $139 AUS-MCO round trip come from?** The owner's
+screenshot shows the Flights card reading **"cached fare"**, carrier
+JetBlue, nonstop — so `fp.estimate` is undefined and this is a REAL row in
+`flight_prices`, not an estimate. Two consequences that were nearly missed:
+the estimate lean shipped this session does not touch it, and `#exactBtn`
+is never offered (it renders only when `fp.estimate` exists,
+`prototype.html:2357`), so the traveller cannot buy a verification of the
+one number most likely to be wrong.
+
+Prime suspect, NOT confirmed: `loadBook`'s flight query has no source
+filter (`book.ts:79`), and Travelpayouts writes a carrier
+(`travelpayouts.ts:98`) while its calendar endpoint is documented here as
+a "cheapest fares our users recently found" feed that skews cheap.
+
+*Do this first, it is free:* add a `source` column to the flight section of
+`src/jobs/coverage.ts` and run "Parkfare debug coverage" for AUS. That
+settles it in one run. **Do not fix anything before that report** — the
+same documentation-over-evidence mistake already produced a doubling fix
+this session that was written, tested and wrong.
+
+**2. Then, depending on what it says:**
+- *Offer the exact-fare button even when a cached row exists*, at least
+  where that row came from a deal feed. Hiding the verify button exactly
+  where the app is most confident and possibly most wrong is backwards,
+  and the owner's words are "that's the only way to actually verify the
+  live fare."
+- *And either exclude untrusted sources from being shown as authoritative
+  fares, or badge them.*
+
+**3. "Check live fares" is broken** (owner, 2026-09-22). It is a Google
+Flights deep link built in `prototype.html` around line 2400 — free, no
+SerpApi cost, which is worth knowing. But it "doesn't come in with the
+airport correctly filled nor the dates correct. The user has to fill in
+their own information, which kinda defeats the purpose." The `#flt=`
+fragment was never verifiable from this sandbox (google.com is blocked),
+and the card prints the dates it is asking for precisely so a mismatch
+shows. It shows. Fix it, and get the owner to click-test, since nothing
+here can.
+
+**4. Plus should ZERO IN, free should ESTIMATE** (owner's framing). They
+want a Plus search for a real date range — their example is
+**September 19-24** — to price on actual data throughout: the cheapest
+fare really found for those dates, the hotel rate in the category they
+chose, real ticket prices. The owner is supplying ticket data to make that
+half as close as possible. Free stays estimates; Plus buys precision.
+This is a design pass, not a patch — scope it before building.
+
+**Still open from before:** the four international hotel baselines and
+`parkList`'s lands are Claude drafts; `QUEUE_TIMES_PARKS` in `config.ts`
+holds DRAFT Queue-Times park ids, and every scheduled wait-times run
+refuses each park while logging the real name, so correcting them is a
+copy-paste into that one constant.
 
 **Live at https://pricingthemagic.com.** `master` is at `1debf8f`;
 **Render has not been redeployed, so nothing from this or the previous
