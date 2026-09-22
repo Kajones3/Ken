@@ -109,7 +109,11 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
     // on the cheapest, every saved trip's re-price would come in below the
     // total it was saved at and fire an instant "the price dropped!" email
     // about a drop that never happened. The two are one decision, not two.
-    const { typical: best } = typicalIn(book, resort, params, overrides, range(from, to));
+    const { typical, cheapest } = typicalIn(book, resort, params, overrides, range(from, to));
+    // On the basis this trip was SAVED on — see server.ts where it is stamped.
+    // An older row predating the setting has no basis and gets "typical",
+    // which is what the board quoted it at.
+    const best = params.priceBasis === "cheapest" ? cheapest : typical;
     if (!best) continue;
 
     const oldTotal = Number(row.baseline_total);

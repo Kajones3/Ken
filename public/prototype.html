@@ -285,6 +285,13 @@ a{color:var(--ink)}
 .spreadnote{margin:6px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:70ch}
 .spreadnote b{color:var(--text)}
 .spreadlow{display:inline-block; margin-top:2px; font-weight:600; color:var(--text)}
+/* Sits with the flight numbers because that is where the question occurs to
+   people, even though it moves the whole board. The copy says so. */
+.basisbox{display:flex; gap:10px; align-items:flex-start; margin:0 0 10px; padding:9px 11px;
+  border:1px solid var(--rule); border-radius:10px; background:var(--surface); cursor:pointer}
+.basisbox input{margin-top:2px; flex:0 0 auto}
+.basisbox b{display:block; font-size:12.5px; font-weight:650}
+.basisbox small{display:block; margin-top:3px; font-size:11.5px; color:var(--muted); line-height:1.45}
 .crowdnote{background:var(--surface-2); border:1px solid var(--line);
   border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
 .crowdnote b{font-weight:680}
@@ -298,7 +305,6 @@ a{color:var(--ink)}
   border:1px solid var(--rule); border-left:3px solid var(--accent-line); border-radius:10px;
   padding:10px 12px; font-size:12.5px; line-height:1.5; color:var(--ink-2)}
 .wxnote .wxemoji{font-size:17px; line-height:1.2; flex:0 0 auto}
-@media (max-width:520px){ .kpi{grid-template-columns:1fr 1fr} }
 .tripsmenu{position:relative}
 .tripsdrop{position:absolute; right:0; top:calc(100% + 6px); z-index:40; min-width:270px; max-height:60vh; overflow-y:auto;
   background:var(--surface); border:1px solid var(--rule-strong); border-radius:12px; box-shadow:0 18px 44px -14px rgba(0,0,0,.5); padding:6px}
@@ -546,8 +552,28 @@ tbody tr[data-open].sel{background:var(--surface-2)}
    piece of this layout the owner said already read well, generalised. Nearly
    every card is secretly "unit x quantity = total", so the tiles say that and
    the totals line up down the third column. */
-.kpi{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:2px 0 12px}
-.kpi.two{grid-template-columns:repeat(2,1fr)}
+/* minmax(0,1fr), NOT 1fr. A bare `1fr` is `minmax(auto,1fr)`, so a track
+   refuses to shrink below its own content — and these tiles hold a monospace
+   number with nowrap. On a phone "$1,273" wants 66px in a 58px track, so the
+   track would not give and the number was cut off mid-digit. A clipped
+   NUMBER is worse than a clipped label, which this file already has a note
+   about: "$1,27" reads as a real price. */
+.kpi{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:2px 0 12px}
+.kpi.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* Phones. This lives AFTER the base rule on purpose: the previous attempt sat
+   above it with the same specificity, so the base rule won on source order and
+   the mobile layout never applied at all — three columns were being squeezed
+   into 296px the whole time.
+
+   Two columns, and the total spans both. The total is the answer, it carries
+   the longest number, and leaving it to auto-placement is what stranded it
+   alone in a half-width cell below its own row. */
+@media (max-width:560px){
+  .kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .kpi > .kpitile.total{grid-column:1 / -1}
+  .kpitile .v{font-size:17px}
+}
 .kpitile{background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:10px 11px;
   min-width:0; display:flex; flex-direction:column}
 /* Labels WRAP rather than clip. Clipping them silently turned "Average high"
@@ -1510,6 +1536,9 @@ function readParams(){
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
     crowdCare: $("#crowdCare").value,
+    // Not a form control — it lives on the Flights card, so it is read from
+    // the last search rather than from the DOM, which is rebuilt on render.
+    priceBasis: (params && params.priceBasis) === "cheapest" ? "cheapest" : "typical",
     passes: readPasses(),
     dvcPoints: +$("#dvcPoints").value || 0,
     dvcPerPoint: +$("#dvcPerPoint").value || 0,
@@ -1629,6 +1658,7 @@ function tripQuery(){
   // with the answer its owner actually gave rather than silently reverting
   // to "somewhat" and showing a different set of flags under the same name.
   if(params.crowdCare) q.crowdCare = params.crowdCare;
+  if(params.priceBasis === "cheapest") q.basis = "cheapest";
   // resort:tier:count triples — one param carries the whole party's holdings
   // across a six-resort board.
   if(params.passes && params.passes.length){
@@ -2723,11 +2753,15 @@ async function renderDetail(){
         <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
            prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
-          <b>This is a typical ${MONTHSFULL[sd.getUTCMonth()]} trip, not the cheapest one.</b>
+          <b>${item.priceBasis === "cheapest"
+            ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, not a typical one.`
+            : `This is a typical ${MONTHSFULL[sd.getUTCMonth()]} trip, not the cheapest one.`}</b>
           Across the ${item.spread.priced} days we can price this month, the whole trip runs
           ${usd(item.spread.low)} to ${usd(item.spread.high)}, averaging <b>${usd(item.spread.trimmedMean)}</b>${
             item.spread.trimmedPerTail ? ` once the ${item.spread.trimmedPerTail} cheapest and ${item.spread.trimmedPerTail} dearest days are left out` : ""}.
-          We quote the real day closest to that average, so every line below belongs to one bookable trip.
+          ${item.priceBasis === "cheapest"
+            ? "You asked for the cheapest day, so that is what is quoted above — a real fare, on a day many travellers would not pick."
+            : "We quote the real day closest to that average, so every line below belongs to one bookable trip."}
           The very cheapest days are cheap because few people want them — a dawn flight on a holiday —
           so quoting one would be a price most travellers could not actually get.
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
@@ -2787,12 +2821,22 @@ async function renderDetail(){
           ${excludeFlights ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.perSeatFare)}</div>
-              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate" : item.spread ? "typical for " + MONTHSFULL[sd.getUTCMonth()] : "cached fare"}</div></div>
+              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate"
+                : item.priceBasis === "cheapest" ? "cheapest in " + MONTHSFULL[sd.getUTCMonth()]
+                : item.spread ? "typical for " + MONTHSFULL[sd.getUTCMonth()] : "cached fare"}</div></div>
             <div class="kpitile"><div class="k">Seats</div>
               <div class="v">${pax}</div><div class="s">round trip</div></div>
             <div class="kpitile total"><div class="k">Flights</div>
               <div class="v">${usd(x.flights)}</div><div class="s">all in</div></div>
           </div>`}
+          ${excludeFlights ? "" : `<label class="basisbox">
+            <input type="checkbox" id="cheapBasis"${item.priceBasis === "cheapest" ? " checked" : ""}>
+            <span><b>Show the cheapest fares we found</b>
+              <small>${item.priceBasis === "cheapest"
+                ? "Showing the best day this month — a real fare, but often a day few people would pick."
+                : "Right now you're seeing a typical day. Tick this if your dates are flexible and you want the best this month can do."}
+                Applies to all six resorts, so the comparison stays fair.</small></span>
+          </label>`}
           ${fareCtl}
           ${r.altArrivalAirports.length ? (()=>{
             const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
@@ -3860,6 +3904,7 @@ async function openSavedTrip(trip){
   }
   $("#hopper").value = q.hopper ? "1" : "0";
   $("#crowdCare").value = q.crowdCare || "some";
+  params.priceBasis = q.basis === "cheapest" ? "cheapest" : "typical";
   // Passes and points come back too — reopening a saved trip that priced
   // itself against four Incredi-Passes and then quietly dropping them would
   // show a different, much larger total under the same trip's name.
@@ -4526,6 +4571,21 @@ $("#pdfPickGo").addEventListener("click", ()=>{
 // this, Ctrl+P produces a blank sheet — which is exactly the bug that started
 // this work, one layer down.
 window.addEventListener("beforeprint", buildPrintDoc);
+
+/* "Show the cheapest fares we found" — switches which day of the month the
+   whole board quotes. Delegated, because the Flights card it lives on is
+   rebuilt on every render, so a handler bound to the element would be lost
+   the first time anything re-renders.
+
+   It re-runs the search rather than re-rendering: the basis is resolved
+   server-side (see compare() in server.ts), which is also what stops a
+   client deciding it for one resort and not the others. */
+document.addEventListener("change", (e) => {
+  if (!e.target.closest || !e.target.matches("#cheapBasis")) return;
+  params.priceBasis = e.target.checked ? "cheapest" : "typical";
+  // recompute() already keeps whichever resort is open; no second argument.
+  recompute();
+});
 
 /* exact live fare — the one control that spends metered provider money, so
    it is Plus-only, server-gated, and reports the real remaining allowance. */
