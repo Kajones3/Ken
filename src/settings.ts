@@ -34,6 +34,7 @@
 import type { Db } from "./db.js";
 import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
+import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN } from "./pricing.js";
 
 export type SettingKind = "money" | "number" | "percent";
 
@@ -94,6 +95,22 @@ export const SETTINGS: SettingDef[] = [
     "What a member RECEIVES per point, not what a renter pays. Brokers paid roughly $18-20 a point when this was last checked. Travellers can type their own figure over it."),
   money("carRental.dailyRateUsd", "Rental car, per day", "Rental car", CAR_RENTAL.dailyRateUsd, 10, 400,
     "One flat national average, not a per-city rate. Real rates vary a lot by city."),
+  // Not money and not really a percentage of anything — it picks a point in a
+  // range. `percent` is the closest kind the admin page renders, and 0-100
+  // reads naturally for "how far up the range".
+  {
+    key: ESTIMATE_LEAN_KEY,
+    label: "Estimated flights — where in the range to show",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_ESTIMATE_LEAN,
+    min: 0,
+    max: 100,
+    help: "0 shows the cheap end of what people actually paid on that route, 50 the middle, "
+      + "100 the dear end. Higher is the safer mistake: an estimate that comes in low is the one "
+      + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
+      + "it cannot push a fare above or below the observed range.",
+  },
   // Two per year, because the IRS sets a January-June rate and a July-December
   // one and has changed it mid-year before. Adding a new year is still a code
   // change (the registry has to know the key exists) — see the note below.

@@ -2302,9 +2302,20 @@ async function renderDetail(){
            ? `, moved ${e.trendPct >= 0 ? "up" : "down"} ${Math.abs(e.trendPct)}% to match how fares we price
               for real have shifted since`
            : ""}.`;
+    // Where the shown number sits in the route's own range. The owner's call
+    // is to lean toward the dear end, and the card has to say so rather than
+    // letting a reader assume they are looking at the middle — this project's
+    // rule is to explain a shaky number, never to quietly bend one.
+    const shown = x.flightPick ? x.flightPick.price : e.med;
+    const leaning = shown > e.med + 0.5
+      ? ` We show <b>${usd(shown)}</b> — deliberately toward the dear end of that range, because an
+         estimate that comes in low is the one that costs you at the checkout.`
+      : shown < e.med - 0.5
+        ? ` We show <b>${usd(shown)}</b>, toward the cheap end of that range.`
+        : "";
     return `<details class="why"><summary>How this estimate is worked out</summary>
       <div class="whybody">Not a quote. This route has no real fare for this exact date, so it is estimated from
-        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${
+        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${leaning}${
         e.seasonMatched === false
           ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
           : ""}</div></details>`;

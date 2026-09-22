@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
-import { bandOf, cheapestIn, poolFor, priceTrip, resortById, type Overrides, type TripParams } from "./pricing.js";
+import { bandOf, cheapestIn, poolFor, priceTrip, resortById, leanedFare, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
 import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS } from "./config.js";
 
@@ -381,8 +381,42 @@ test("flight estimate: no exact cache hit falls back to a labeled BTS-baseline e
   const r = priceTrip(withEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  assert.equal(r.price.perSeatFare, estimate.med);
-  assert.deepEqual(r.price.flightPick, { price: estimate.med, estimate });
+  // The shipped lean is 100, so the shown figure is this route's p75 — the
+  // dear end of what people actually paid on it. The full low/med/high is
+  // still attached, so the card can show the range it came from.
+  assert.equal(r.price.perSeatFare, estimate.high);
+  assert.deepEqual(r.price.flightPick, { price: estimate.high, estimate });
+});
+
+test("flight estimate: the lean is an owner setting, and dialling it back shows the median", () => {
+  const wdw = resortById("wdw");
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2025Q2" };
+  const withEstimate = {
+    ...noFlights,
+    flight: () => undefined,
+    flightEstimate: () => estimate,
+    setting: (key: string) => (key === ESTIMATE_LEAN_KEY ? 50 : undefined),
+  };
+  const r = priceTrip(withEstimate, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, estimate.med, "a lean of 50 is the median");
+});
+
+test("flight estimate: with the lean hook absent, pricing still works and leans high", () => {
+  // The safety property the whole settings registry rests on: an empty
+  // table, or a book with no setting hook at all, must price exactly as the
+  // app ships. Here that means the default lean, not a fare of zero.
+  const wdw = resortById("wdw");
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2025Q2" };
+  const noSettingHook = { ...noFlights, flight: () => undefined, flightEstimate: () => estimate };
+  assert.equal((noSettingHook as { setting?: unknown }).setting, undefined);
+  const r = priceTrip(noSettingHook, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, estimate.high);
 });
 
 test("flight estimate: a route with no BTS baseline still fails cleanly, not with a fabricated number", () => {
@@ -416,8 +450,14 @@ test("flight estimate: the median wins and is shown as an estimate when it's HIG
   const r = priceTrip(highEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  assert.equal(r.price.perSeatFare, 450, "the median (450) wins over the real-but-unrepresentative $90 fare");
-  assert.equal(r.price.flightPick?.price, 450);
+  // Which number wins is still decided on the MEDIAN — $450 beats the
+  // suspicious $90, so the estimate is what gets shown. What then gets
+  // DISPLAYED is the leaned figure, $600. Keeping those two decisions
+  // separate matters: comparing the real row against the leaned figure
+  // instead would start overriding genuine fares far more often, which is a
+  // different change wearing this one's clothes.
+  assert.equal(r.price.perSeatFare, 600, "the estimate wins over the real-but-unrepresentative $90 fare");
+  assert.equal(r.price.flightPick?.price, 600);
   assert.ok(r.price.flightPick?.estimate, "shown honestly as an estimate, not passed off as the real $90 quote");
 });
 
@@ -806,4 +846,66 @@ test("transport mode: plain flying ignores a stray milesPct — no accidental di
   const r = priceTrip(book, resortById("wdw"), { ...base, milesPct: 90 }, {}, START);
   assert.ok(r.ok);
   assert.equal(r.price.perSeatFare, 300);
+});
+
+/* ------------------- leaning the estimate high ------------------------- */
+
+test("leanedFare picks a point in the route's OWN observed range", () => {
+  const est = { low: 200, med: 280, high: 360 };
+  assert.equal(leanedFare(est, 0), 200, "0 is p25");
+  assert.equal(leanedFare(est, 50), 280, "50 is the median exactly");
+  assert.equal(leanedFare(est, 100), 360, "100 is p75");
+  assert.equal(leanedFare(est, 25), 240, "halfway between p25 and the median");
+  assert.equal(leanedFare(est, 75), 320, "halfway between the median and p75");
+});
+
+test("leanedFare lands ON the median at 50 even when the spread is lopsided", () => {
+  // A straight line from low to high would miss the median entirely here,
+  // and the median is the one point in the range that carries meaning.
+  const lopsided = { low: 100, med: 120, high: 900 };
+  assert.equal(leanedFare(lopsided, 50), 120);
+});
+
+test("leanedFare can never leave the observed range", () => {
+  // The whole defence of this setting is that it chooses among real numbers
+  // rather than inventing one. Out-of-range input must not break that.
+  const est = { low: 200, med: 280, high: 360 };
+  for (const lean of [-50, 0, 37, 50, 99, 100, 1000, NaN, Infinity]) {
+    const v = leanedFare(est, lean);
+    assert.ok(v >= 200 && v <= 360, `lean ${lean} produced ${v}, outside 200-360`);
+  }
+});
+
+test("a garbled lean falls back to the default rather than to zero", () => {
+  const est = { low: 200, med: 280, high: 360 };
+  assert.equal(leanedFare(est, NaN), leanedFare(est, DEFAULT_ESTIMATE_LEAN));
+});
+
+test("the shipped default leans HIGH — the owner's call", () => {
+  // Recorded as a test because it is a decision, not a default: showing $100
+  // and landing on $200 is the failure this app exists to prevent, and the
+  // reverse costs nobody a booking.
+  assert.equal(DEFAULT_ESTIMATE_LEAN, 100);
+  assert.equal(leanedFare({ low: 200, med: 280, high: 360 }, DEFAULT_ESTIMATE_LEAN), 360);
+});
+
+test("the fare on the card and the fare in the total are the same number", () => {
+  // Found by a test, not by reading: the leaned figure went into the total
+  // while flightPick kept the plain median, so a reader adding up the card
+  // would have got a different answer from the board. Two places holding
+  // the same number is how that happens, and this is the guard.
+  const wdw = resortById("wdw");
+  const noFlights = fullBook("wdw", "MCO", { days: 6 });
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2025Q2" };
+  for (const lean of [0, 25, 50, 75, 100]) {
+    const b = {
+      ...noFlights, flight: () => undefined, flightEstimate: () => estimate,
+      setting: (key: string) => (key === ESTIMATE_LEAN_KEY ? lean : undefined),
+    };
+    const r = priceTrip(b, wdw, base, {}, START);
+    assert.ok(r.ok);
+    if (!r.ok) return;
+    assert.equal(r.price.flightPick?.price, r.price.perSeatFare,
+      `lean ${lean}: card says ${r.price.flightPick?.price}, total priced ${r.price.perSeatFare}`);
+  }
 });
