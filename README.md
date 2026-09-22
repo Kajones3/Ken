@@ -677,91 +677,109 @@ after a confirmed fresh deploy, capture the exact `display_name` values in
 the response and check them against the regex directly rather than assuming
 the code path is untouched.
 
-## Filling the cache on the SerpApi Developer plan
+## One month of SerpApi Developer, one sweep
 
-The owner's ask, before letting friends test: "can you run a full API refresh
-on everything so we can get accurate data across flights, hotels, etc." Here
-is what that actually costs and what it does and does not fix. **Nothing below
-needs new code** — every budget in the project is already an environment
-variable, so this is a sequence of existing workflows run with bigger numbers.
+The owner's plan, in their words: buy Developer for one month, make one
+complete run, drop back to Starter, and "leave the rest of the room for
+individuals to search with." That is the right shape. This is the sequence,
+the arithmetic, and what the money does not buy.
 
-### What "everything" measures
+**Nothing here needs new code.** Every budget in the project is already an
+environment variable.
 
-Counted from `config.ts` rather than estimated: 41 origins (19 free, 22 Plus)
-against 9 arrival airports gives **363 priceable routes** — 158 domestic, 205
-international, 6 local pairs correctly skipped. Restricted to the 19 free
-origins it is **169 routes**: 74 domestic, 95 international. The app prices
-**13 months**, and hotels are 6 resorts x 13 months = **78 slots**.
+### Do this first, and it is free
 
-### The distinction that decides the order
+**Check the fare estimates are actually too low before paying to raise them.**
+Run `npm run coverage` and read the "Baseline sanity" section: our national
+passenger-weighted average should sit near BTS's published average domestic
+itinerary fare, around $390. If it is near half that, the baseline has slipped
+to one directional leg and every domestic estimate in the app is half — a free
+fix that no amount of SerpApi spending would paper over. (Checked 2026-09-22:
+the basis is right. The check exists so nobody has to take that on trust
+again.)
 
-Domestic routes already have a free baseline — the BTS DB1B survey — so they
-price without buying anything. International routes have **none**: grepping a
-real 2024 Q4 DB1B file for `CDG` returns zero rows, because it is a US
-domestic survey. So a dollar spent on an international route buys an estimate
-that does not otherwise exist, and a dollar spent on a domestic one improves
-an estimate that already does. International goes first.
+Then look at the **estimate lean** in `/admin`. A BTS median is the median
+fare *paid* across a whole quarter, by people who largely booked months ahead,
+including deep-discount carriers — structurally below what somebody is quoted
+today for one specific date. The lean shows a higher point in that same real
+range and costs nothing. It ships at 100, the dear end.
 
-### A sequence that fits 5,000/month
+### The sweep itself
+
+Domestic routes already have a free, real baseline — BTS DB1B. International
+routes have **none**: grepping a real 2024 Q4 file for `CDG` returns zero rows,
+because it is a US domestic survey. So a dollar spent internationally buys an
+estimate that does not otherwise exist, and a dollar spent domestically
+improves one that already does. **International first, and mostly only.**
+
+`intl-sweep` is also the only job that *can* do a complete pass.
+`popular-routes` buys a fixed number of routes for one rotation month per run,
+by design — so there is no domestic sweep to run even if one were wanted.
+**Do not build one**: it would spend real money improving numbers that already
+have free real data behind them.
 
 | Step | Workflow | Inputs | Lookups |
 |---|---|---|---|
-| 1. International, free origins, whole year | Parkfare international sweep | months 13, dates 1, budget 260 | ~1,235 |
+| 1. International, whole year | Parkfare international sweep | months 13, **dates 2**, budget 300/shard | ~2,470 |
 | 2. Hotels, every resort and month | Parkfare refresh | `REFRESH_BACKFILL=true`, `SERPAPI_HOTELS_BUDGET=80` | ~78 |
-| 3. Domestic, widened nightly | Parkfare popular routes | limit 30, budget 30 | ~900/month |
-| | | **Total** | **~2,200** |
+| 3. Nightly domestic, left running | Parkfare popular routes | unchanged | ~300/month |
+| | | **Committed** | **~2,850 of 5,000** |
 
-That leaves roughly 2,800 of the 5,000 for the exact-fare button, which is
-the part friends will actually press. Raise `EXACT_FARE_GLOBAL_PER_DAY` from
-its default of 6 and `EXACT_FARE_PER_USER_PER_DAY` from 3 before inviting
-anybody — at 6 a day site-wide, the first two people to try it spend the
-whole day's allowance between them and everyone else sees the cap message.
-2,800 a month is about 90 a day, which is exactly what these two were set to
-before the plan was downgraded to Starter: **90 site-wide and 25 per person**.
-Restoring those is the change, not inventing new ones.
+**`INTL_SWEEP_DATES=2`, not the default 1.** `INTL_BASELINE_MIN_SAMPLES` is 3,
+and one date a month gives exactly three per quarter — so a single route where
+no fare comes back drops that quarter below the floor and no baseline is built
+at all. Two buys margin on the thing the whole sweep exists to produce.
 
-Run step 1 first and check the run's summary before starting step 3: the
-international sweep is sharded five ways and is the only step big enough to
-be worth watching.
+**One run, not two.** A second sweep in the same month re-buys fares that have
+barely moved and spends the headroom being deliberately reserved.
 
-### What this does NOT fix, stated plainly
+### Raise the exact-fare caps for that month
 
-**It cannot give every date a real fare.** 363 routes across a year is
-132,495 date-route pairs. Buying one date a month per route gives a real
-fare for that one date and a better-anchored estimate for the other thirty.
-Somebody who picks a specific Tuesday will still usually see an estimate.
+`EXACT_FARE_PER_USER_PER_DAY` to **25** and `EXACT_FARE_GLOBAL_PER_DAY` to
+**90** — what they were sized at before the plan was downgraded to Starter.
 
-**The mechanism for "the price I clicked was double" is the exact-fare
-button, not the sweep.** That is the one thing that returns a real fare for
-a real date, it is Plus-only because it spends metered money per press, and
-its own bought fare is written back into the shared cache so the next person
-asking gets it free. A bigger plan mainly buys a bigger cap on that button.
+**These caps bound one button, not searching.** Comparing six resorts, twelve
+months of fare calendars, cheapest dates and every override are unlimited and
+free forever; they read a cache already paid for. The caps apply only to the
+Plus-only "exact fare" button, which spends one real search per press. At
+today's 3 and 6, two friends exhaust the whole site for the day and Plus users
+cannot physically spend enough to "pay for themselves" — which is the thing
+this month is meant to test.
 
-**Park ticket prices are untouched by any of this.** They come from a
-maintained table with a two-parameter curve, not from SerpApi, and no Disney
-park publishes a pricing API at any of the six resorts. If a friend reports
-that admission is nearly double what the board said, spending more on
-SerpApi will not move it by a cent — `ticket_prices` is the thing to fix.
+### What the money does not buy
 
-**On-property hotel rates are untouched too.** SerpApi buys off-property
-rates only; Disney-owned rooms are generated locally from the bases in
-`config.ts`, four of which are still Claude drafts the owner has not
-corrected. `/admin` is where those are changed.
+**Not a real fare for every date.** 363 routes across a year is 132,495
+date-route pairs. One lookup buys one route on one date; the rest of that
+month gets a better-anchored estimate. Somebody picking a specific Tuesday
+still sees a labelled estimate, and the thing that returns a bookable number
+is the exact-fare button.
+
+**Not a permanent fix.** The 13-month window rolls. Six months on, today's far
+months have aged off the end and the new ones have nothing. Repeat annually,
+or keep a small monthly international top-up on Starter.
+
+**Not park tickets.** They come from a maintained table with a
+two-parameter curve, not from SerpApi, and no Disney park publishes a pricing
+API. If admission is reported as wildly off, `ticket_prices` is the thing to
+fix.
+
+**Not on-property hotel rates.** SerpApi buys off-property only; Disney-owned
+rooms are generated locally from bases in `config.ts`, four of which are still
+Claude drafts. `/admin` is where those change.
 
 ### One thing worth fixing before spending more
 
-On-property hotel rows are written with the provider's `serpapi_hotels`
-source tag even though no vendor returned them (`refresh.ts`, and the note
-is in the code). The rotation works around it by counting only
-`on_property = false` rows, but the real-pulls digest reads the same tag —
-so a bigger hotel budget makes a mislabelling that already exists report
-more pulls that never happened.
+On-property hotel rows are written with the provider's `serpapi_hotels` source
+tag even though no vendor returned them (see the note in `refresh.ts`). The
+rotation works around it by counting only `on_property = false` rows, but the
+real-pulls digest reads the same tag — so a bigger hotel budget makes an
+existing mislabelling report more pulls that never happened.
 
 ## Layout
 
 | Path | What it is |
 |---|---|
-| `db/schema.sql` | Thirteen tables. Safe to re-run. |
+| `db/schema.sql` | 25 tables. Safe to re-run. |
 | `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport, the IRS mileage rate, and the flat rental-car guess. |
 | `src/gettingThere.ts` | Pure resolver: turns one "Getting there" preset (fly / fly-with-miles / drive-to-WDW / drive-to-Disneyland / drive-domestic) into a per-resort transport mode, so one six-resort comparison can drive to some resorts and fly to others. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |

@@ -161,7 +161,8 @@ filter, and Stripe.
 | Exchange rates | **Wired, free — and still a placeholder.** `src/exchangeData.ts` is generated from ECB reference rates by a monthly Actions job; the browser's five hardcoded numbers are gone. **The committed rows are Claude's seed and `EXCHANGE_IS_PLACEHOLDER` says so in the UI** — run the "Parkfare exchange rates" workflow. |
 | Lands per park | **Wired, free.** `parkList` names every park and its lands, pinned against the `parks` count by a test. **A Claude draft for the owner to correct**, same standing as the international hotels. |
 | The shared PDF | **Rebuilt.** Written prose per resort, not a print stylesheet over the live board, and "Save as PDF" asks which resorts to include. See the decision note for the three things deliberately left out. |
-| Average wait times | **Researched, not built.** All six resorts are covered by Queue-Times (free, credit required) but its documented API is live-only, and every wait-time host is blocked from this sandbox. A probe workflow exists and needs this branch merged before it can be dispatched. |
+| Average wait times | **Recorded, shown to nobody.** `wait_time_samples` + a two-hourly Actions job reading Queue-Times, keeping only 9am-7pm local. No card, no API wiring, no aggregation — the card was dropped because every automated source records POSTED waits and that bias is not uniform across six operators. This exists so there is an archive to decide with in a year. Park ids are a draft until the probe runs. See the decision note. |
+| Flight estimate lean | **Wired, owner-editable.** `flight.estimateLean` picks a point between a route's own p25 / median / p75; ships at 100, the dear end. A BTS median is the median fare *paid* over a quarter and runs structurally below what you are quoted today. See the decision note, including the halving bug that was diagnosed, written, and turned out to be wrong. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
 | Saved searches | **Wired, Plus-only.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
 | Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
@@ -1067,6 +1068,123 @@ because four providers here were written to a documented shape and never
 run, and the one finally exercised failed on first contact. **It cannot be
 dispatched until this branch merges**: GitHub only lists `workflow_dispatch`
 workflows present on the default branch.
+
+**Estimates lean HIGH, and the near-miss that got there is the lesson**
+(2026-09-22). The owner priced IAH-MCO for March 2027 and got $139 a person
+against real fares of $250-350: "$300 would be much more accurate."
+
+**A halving bug was diagnosed, written, tested — and was wrong.** $139 doubled
+is $278, squarely in that range, and BTS's own documentation describes
+DB1BMarket as holding a "prorated market fare" for a "directional" market with
+a round trip as two entries. That reads unambiguously like MktFare being one
+leg, which would mean every domestic estimate in the app was half. The fix was
+about to be committed.
+
+*The fare trend stopped it.* `trimmedMultiplier`'s low and high are the MIN and
+MAX of the observed ratios, and the live row is x0.945 across 74 routes with a
+range of 0.580-1.242 — real round-trip SerpApi fares measured against BTS
+baselines. Had the baseline been one leg, every one of those 74 ratios would
+have sat near 2.0 and not one reached 1.25. So `MktFare` really is the whole
+round trip, the parser's original claim was right, and doubling would have put
+every domestic price on the board at twice its value. **Do not re-open this on
+the strength of the documentation alone.**
+
+Two guards so nobody re-runs that argument: `npm run coverage` prints our
+national passenger-weighted average beside BTS's published ~$390 average
+domestic itinerary fare, and the DB1B debug workflow now finds a two-market
+itinerary and prints every row of it with the fares and their sum. Its old
+`grep -m 5` returned five *different* itineraries and could never have answered
+the question it existed for.
+
+**The real cause was not a bug at all.** A DB1B median is the median fare PAID
+across a whole quarter — Q1 includes January — largely by people who booked
+months ahead, including deep-discount carriers. That is a different quantity
+from what somebody is quoted today for one March date, and it is structurally
+lower. The statistic was answering a different question.
+
+So `leanedFare()` interpolates p25 -> median -> p75 and the shipped default is
+**100, the dear end**. The reasoning is this project's oldest rule: showing
+$100 and landing on $200 is the failure the estimate machinery exists to
+prevent, and showing high and finding it cheaper costs nobody a booking.
+
+- *It is not a fudge factor.* Every value it can produce lies between three
+  real observed statistics of that route's own distribution, so it can only
+  choose among numbers people actually paid.
+- *Piecewise, not a straight line*, because a lean of 50 has to land exactly on
+  the median and a straight interpolation misses it whenever the spread is
+  lopsided — which on real fares it usually is.
+- *Which number WINS is still decided on the median.* A real cached fare beats
+  the estimate at or above it. Comparing the real row against the leaned figure
+  would start overriding genuine fares far more often — a different change
+  wearing this one's clothes.
+- *Owner-editable* (`flight.estimateLean`), because the right lean is a
+  judgement about how people react to a number.
+- *Found by a test, not by reading:* the leaned figure went into the total
+  while `flightPick` kept the plain median, so a reader adding up the card
+  would have got a different answer from the board. Two places holding the same
+  number is how that happens; there is a test across every lean now.
+
+**The exact-fare caps bound ONE BUTTON, not searching** (2026-09-22, the owner:
+"I don't want the entire site limited to six exact searches"). Worth stating
+plainly because the names do not say it. Comparing six resorts, twelve months
+of fare calendars, cheapest dates and every override are unlimited and free
+forever — they read a cache already paid for. `EXACT_FARE_PER_USER_PER_DAY`
+and `EXACT_FARE_GLOBAL_PER_DAY` apply only to the Plus-only "exact fare"
+button, which spends one real SerpApi search per press. At 3 and 6 two friends
+exhaust the site for the day.
+
+**The Developer month: one sweep, international, then back to Starter**
+(2026-09-22, the owner's plan — "one or two total runs a month ... leave the
+rest of the room for individuals to search with"). The shape is right and the
+README has the runbook. What is worth not re-deriving:
+
+- *Fix the free things first.* The coverage basis check and the estimate lean
+  both cost nothing and may be most of the problem. Buying real fares to
+  correct a number a setting could fix is paying cash for a free fix.
+- *International only.* Domestic has a free real BTS baseline; international
+  has none. `intl-sweep` is also the only job that CAN do a complete pass —
+  `popular-routes` buys a fixed number of routes for one rotation month per
+  run by design. **Do not build a domestic sweep.**
+- *`INTL_SWEEP_DATES=2`.* `INTL_BASELINE_MIN_SAMPLES` is 3 and one date a month
+  gives exactly three per quarter, so one route returning nothing drops that
+  quarter below the floor and no baseline is built at all.
+- *One run, not two.* A second sweep re-buys fares that have barely moved.
+- *It does not buy a real fare for every date.* 363 routes across a year is
+  132,495 pairs. The 13-month window also rolls, so this is a boost with a
+  half-life.
+
+**Wait times are RECORDED and shown to nobody** (2026-09-22). The owner asked
+for a card beside the weather box and withdrew it on the evidence; the
+recording survived.
+
+- *Why no card.* Every automated source records POSTED waits — Thrill Data has
+  done exactly this since 2019 off the parks' own public APIs, as would we.
+  TouringPlans measure ACTUAL waits with a stopwatch in their app and staff
+  paid to stand in queues, and publish that Disney over-states by roughly
+  11.5-15.5 minutes a day. That bias is harmless only if all six resorts
+  inflate equally, and Tokyo is run by Oriental Land Co. while Paris and
+  Shanghai post on their own systems. A non-uniform bias distorts the
+  comparison, not just the number — the ERA5 rain-day trap again.
+- *Why record anyway.* Elapsed time cannot be bought later. Thrill Data has a
+  2019 archive only because it started in 2019.
+- *Thrill Data's terms require permission for this*, not just attribution:
+  "contact ... if you intend to build a database or other application off of
+  the ability to download data. Permission is required." The owner chose to
+  skip them rather than ask.
+- *9am-7pm LOCAL only*, the owner's call — single-digit rope-drop and
+  last-hour waits describe an experience nobody has. Twelve evenly-spaced UTC
+  slots are evenly spaced in every timezone, so one schedule serves six of
+  them.
+- *`local_hour` is stored at write time and is load-bearing.* Aggregating the
+  raw rows later would weight whichever local hours happened to get sampled.
+  The intended aggregation is written into `src/jobs/waitTimes.ts`: by local
+  hour first, then across hours, with a floor of distinct days, and all six
+  resorts or none.
+- *A closed park records nothing, not zeros.* That is how operating hours are
+  handled without an hours table.
+- *The park ids are a DRAFT* and the name check makes that safe — a park whose
+  returned name disagrees is refused and the log prints what they call it.
+  The probe workflow settles them and **needs this branch merged first**.
 
 **Cache-first. Users never call a provider API.**
 One search in the prototype triggers ~1,265 price lookups. Travelpayouts caps the
