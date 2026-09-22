@@ -2468,17 +2468,32 @@ async function renderDetail(){
    * Where "Check live fares" sends you when the cache has no real booking
    * link of its own.
    *
-   * The old version asked Google for `Flights from RDU to MCO on 2027-07-10`
-   * and nothing else — no return date, no passenger count, no round trip. So
-   * Google picked its own dates, and the owner landed on a different week at
-   * a different price and reasonably concluded the app was wrong. It wasn't
-   * quoting a different fare; it was sending people to a different trip.
+   * THE REGRESSION, AND WHY IT WAS INVISIBLE FROM HERE. A previous pass
+   * replaced a `q=` search with Google Flights' `#flt=` structured form, to
+   * carry the return date and passenger count the old link lacked. It
+   * carried nothing: the owner reported the page arriving with neither the
+   * airports nor the dates filled in, which is the empty-search default.
    *
-   * The `#flt=` fragment is Google Flights' own structured form: both legs,
-   * both dates, explicit passenger count. It cannot be verified from this
-   * sandbox (google.com is refused by the egress proxy, tested), so the
-   * board also prints the dates it is asking for — if the page ever lands
-   * somewhere else, the mismatch is visible rather than silent.
+   * `#flt=` is a URL FRAGMENT. Fragments are never sent to the server — only
+   * the page's own JavaScript ever sees them — so the format has to be one
+   * Google still parses in the browser, and `#flt=` is an old internal one it
+   * no longer honours. An unrecognised fragment is silently ignored, which is
+   * why this failed by showing a blank form rather than an error. `q=` is a
+   * real query parameter that reaches Google's server, which is exactly why
+   * the older link at least got the airports right.
+   *
+   * So this goes back to `q=`, with the return date the old one was missing.
+   * Google's flight search parses "from X to Y on DATE through DATE" as a
+   * round trip. Passenger count is NOT carried: no query wording was found
+   * that Google reliably parses into a party size, and claiming it in the
+   * card while the page quietly showed one traveller is the same class of
+   * silent-wrong this whole note is about. The card says to set it there.
+   *
+   * NONE OF THIS IS VERIFIABLE FROM THIS SANDBOX — google.com is refused by
+   * the egress proxy (re-tested 2026-09-22, `CONNECT tunnel failed, 403`).
+   * That is why the card prints the route and dates it is asking for: if the
+   * page ever lands somewhere else, the mismatch is visible rather than
+   * silent. It needs a real click to confirm.
    */
   const backDate = (() => {
     const d = new Date(x.start + "T00:00:00Z");
@@ -2491,10 +2506,9 @@ async function renderDetail(){
   // owner clicked through on a July 10-17 trip and landed on another week at
   // another price. A link to the right trip beats a link to a specific
   // itinerary for the wrong one.
+  const flightQuery = `Flights from ${p.origin} to ${x.destination} on ${x.start} through ${backDate}`;
   const flightLink =
-    `https://www.google.com/travel/flights?hl=en&curr=USD#flt=`
-      + `${p.origin}.${x.destination}.${x.start}*${x.destination}.${p.origin}.${backDate}`
-      + `;c:USD;e:1;px:${pax};sd:1;t:f`;
+    `https://www.google.com/travel/flights?hl=en&curr=USD&q=${encodeURIComponent(flightQuery)}`;
 
   // tickets, grouped by this resort's own age bands — split from the real total
   const { groups, perGroup } = splitByBand(r, list, x.tickets);
@@ -2798,8 +2812,8 @@ async function renderDetail(){
           <div class="foot">
             ${fareWhy}
             ${!excludeFlights ? `<a class="book" href="${flightLink}" target="_blank" rel="noopener">Check live fares →</a>
-              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}, ${pax} ${pax===1?"traveller":"travellers"}.
-                If it lands on different dates, the price you see there is not this trip's.</p>` : ""}
+              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)}.
+                ${pax > 1 ? `Set it to ${pax} travellers there — the link cannot carry that. ` : ""}If it lands on different dates, the price you see there is not this trip's.</p>` : ""}
           </div>
         </div>`}
         <div class="card">
