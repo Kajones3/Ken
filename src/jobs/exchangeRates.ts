@@ -137,7 +137,7 @@ export const EXCHANGE_SOURCE =
 
 /** The ECB reference date these rates are quoted for. Rewritten by the
  *  generator. Printed in the UI so a stale table shows itself. */
-export const EXCHANGE_AS_OF = "${asOf}";
+export const EXCHANGE_AS_OF: string = "${asOf}";
 
 /**
  * Keyed by the \`currency\` field on each resort in config.ts. USD is here as
@@ -151,6 +151,14 @@ ${rows}
 
 /** True while the table is still the hand-seeded placeholder. The UI uses
  *  this to say so rather than presenting a guess as an observation. */
+/* The annotation on EXCHANGE_AS_OF above is load-bearing, not style. Without
+   it TypeScript infers the LITERAL type of whatever date is written here, so
+   the moment this generator succeeds the comparison below is provably false
+   and tsc rejects it — the job could only pass while it had nothing to show.
+   That is exactly how the first real run failed: it fetched real ECB rates,
+   wrote them, and then broke its own build before it could commit them.
+   Widening to the plain string type keeps this a runtime question, which
+   is what it always was. */
 export const EXCHANGE_IS_PLACEHOLDER = EXCHANGE_AS_OF === "";
 `;
 }
