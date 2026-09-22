@@ -76,12 +76,33 @@ test("rates round to their own scale", () => {
 
 test("the generated file is real TypeScript and stops claiming to be a placeholder", () => {
   const out = renderFile("2026-09-18", { EUR: 0.9123, JPY: 149.87, CNY: 7.0912, HKD: 7.7801 });
-  assert.match(out, /EXCHANGE_AS_OF = "2026-09-18"/);
+  assert.match(out, /EXCHANGE_AS_OF: string = "2026-09-18"/);
   assert.match(out, /USD: \{ code: "USD", perUsd: 1,/);
   assert.match(out, /CNY: \{ code: "CNY", perUsd: 7\.091,/);
   // The seeded file says loudly that it is a guess. A generated one must not.
   assert.doesNotMatch(out, /HAND-SEEDED/);
   assert.match(out, /European Central Bank/);
+});
+
+/**
+ * The regression that broke the very first real run, pinned.
+ *
+ * EXCHANGE_IS_PLACEHOLDER compares EXCHANGE_AS_OF against "". Without a
+ * `string` annotation TypeScript infers the LITERAL type of whatever date is
+ * written, so the comparison becomes provably false and tsc rejects the file
+ * the moment this generator actually succeeds — it could only pass while it
+ * had nothing to show. The real run fetched live ECB rates, wrote them, and
+ * then failed its own typecheck before it could commit them.
+ *
+ * This asserts the annotation is emitted for a REAL date, which is the only
+ * case that ever broke.
+ */
+test("the placeholder flag still compiles once a real date is written", () => {
+  const out = renderFile("2026-09-22", { EUR: 0.8724, JPY: 157.2, CNY: 6.7, HKD: 7.843 });
+  assert.match(out, /export const EXCHANGE_AS_OF: string =/,
+    "without the annotation, a successful run cannot typecheck");
+  assert.match(out, /EXCHANGE_IS_PLACEHOLDER = EXCHANGE_AS_OF === ""/,
+    "the flag itself must survive regeneration");
 });
 
 test("the file says what an exchange rate is NOT", () => {

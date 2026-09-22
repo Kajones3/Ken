@@ -38,7 +38,7 @@ export const EXCHANGE_SOURCE =
 
 /** The ECB reference date these rates are quoted for. Rewritten by the
  *  generator. Printed in the UI so a stale table shows itself. */
-export const EXCHANGE_AS_OF = "";
+export const EXCHANGE_AS_OF: string = "";
 
 /**
  * Keyed by the `currency` field on each resort in config.ts. USD is here as
