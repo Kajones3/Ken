@@ -33,12 +33,11 @@ export type Rate = { code: string; perUsd: number; name: string };
 
 /** Where these came from, and as of when. Rewritten by the generator. */
 export const EXCHANGE_SOURCE =
-  "HAND-SEEDED PLACEHOLDER — Claude's approximate figures, NOT observed rates. " +
-  "Run the \"Parkfare exchange rates\" workflow to replace this with real ECB reference rates.";
+  "European Central Bank reference rates via Frankfurter, generated 2026-09-22";
 
 /** The ECB reference date these rates are quoted for. Rewritten by the
  *  generator. Printed in the UI so a stale table shows itself. */
-export const EXCHANGE_AS_OF: string = "";
+export const EXCHANGE_AS_OF: string = "2026-09-22";
 
 /**
  * Keyed by the `currency` field on each resort in config.ts. USD is here as
@@ -48,12 +47,20 @@ export const EXCHANGE_AS_OF: string = "";
  */
 export const EXCHANGE_RATES: Record<string, Rate> = {
   USD: { code: "USD", perUsd: 1, name: "US dollar" },
-  EUR: { code: "EUR", perUsd: 0.92, name: "euro" },
-  JPY: { code: "JPY", perUsd: 150, name: "Japanese yen" },
-  CNY: { code: "CNY", perUsd: 7.1, name: "Chinese yuan" },
-  HKD: { code: "HKD", perUsd: 7.8, name: "Hong Kong dollar" },
+  CNY: { code: "CNY", perUsd: 6.7, name: "Chinese yuan" },
+  EUR: { code: "EUR", perUsd: 0.8724, name: "euro" },
+  HKD: { code: "HKD", perUsd: 7.843, name: "Hong Kong dollar" },
+  JPY: { code: "JPY", perUsd: 157.2, name: "Japanese yen" },
 };
 
-/** True while the table is still the hand-seeded placeholder above. The UI
- *  uses this to say so rather than presenting a guess as an observation. */
+/** True while the table is still the hand-seeded placeholder. The UI uses
+ *  this to say so rather than presenting a guess as an observation. */
+/* The annotation on EXCHANGE_AS_OF above is load-bearing, not style. Without
+   it TypeScript infers the LITERAL type of whatever date is written here, so
+   the moment this generator succeeds the comparison below is provably false
+   and tsc rejects it — the job could only pass while it had nothing to show.
+   That is exactly how the first real run failed: it fetched real ECB rates,
+   wrote them, and then broke its own build before it could commit them.
+   Widening to the plain string type keeps this a runtime question, which
+   is what it always was. */
 export const EXCHANGE_IS_PLACEHOLDER = EXCHANGE_AS_OF === "";
