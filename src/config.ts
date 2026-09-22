@@ -516,6 +516,49 @@ export function isOnlyAt(attraction: AttractionDef): boolean {
 }
 
 export interface Origin { iata: string; name: string; lat: number; lon: number }
+/* ===========================================================================
+ * Queue-Times park ids, for the wait-time recorder.
+ *
+ * DRAFT UNTIL THE PROBE HAS RUN. These ids are Claude's best recollection,
+ * not observations — the "Parkfare debug wait times" workflow prints the real
+ * list, and it cannot be dispatched until this branch reaches the default
+ * branch (GitHub only lists workflow_dispatch workflows that live there).
+ *
+ * The `name` is here to be CHECKED, never displayed. The collector refuses a
+ * park whose returned name does not match, so a wrong id fails loudly instead
+ * of quietly recording Alton Towers as Walt Disney World — which is exactly
+ * the failure a draft list invites.
+ *
+ * Attribution: Queue-Times asks for a "Powered by Queue-Times.com" credit in
+ * any app that shows their data. Nothing shows it yet, so nothing owes the
+ * credit yet — but anything that ever renders these numbers must carry it.
+ * ======================================================================== */
+export interface QueueTimesPark { id: number; name: string }
+
+export const QUEUE_TIMES_PARKS: Record<string, QueueTimesPark[]> = {
+  wdw:  [{ id: 6, name: "Magic Kingdom" }, { id: 5, name: "Epcot" },
+         { id: 7, name: "Disney's Hollywood Studios" }, { id: 8, name: "Disney's Animal Kingdom" }],
+  dlr:  [{ id: 16, name: "Disneyland" }, { id: 17, name: "Disney California Adventure" }],
+  dlp:  [{ id: 4, name: "Disneyland Paris" }, { id: 28, name: "Walt Disney Studios" }],
+  tdr:  [{ id: 274, name: "Tokyo Disneyland" }, { id: 275, name: "Tokyo DisneySea" }],
+  shdr: [{ id: 32, name: "Shanghai Disneyland" }],
+  hkdl: [{ id: 31, name: "Hong Kong Disneyland" }],
+};
+
+/**
+ * Only record a sample while a park is properly open for the day.
+ *
+ * The owner's call, and it is about what the number MEANS rather than about
+ * saving requests: "sometimes wait times are single digits ... 9am - 7:00pm
+ * will be enough data." Rope-drop and the last hour are genuinely quiet, so
+ * including them produces an average describing an experience nobody has.
+ *
+ * Local to the park, which is what makes one UTC schedule work for six
+ * timezones at once.
+ */
+export const WAIT_SAMPLE_FROM_HOUR = 9;
+export const WAIT_SAMPLE_TO_HOUR = 19;
+
 export const ORIGINS: Origin[] = [
   { iata: "ATL", name: "Atlanta", lat: 33.64, lon: -84.43 },
   { iata: "BWI", name: "Baltimore", lat: 39.18, lon: -76.67 },

@@ -471,3 +471,44 @@ create table if not exists owner_attractions (
   updated_by  text not null default '',
   updated_at  timestamptz not null default now()
 );
+
+-- Wait-time observations, recorded and nothing else. NOTHING READS THIS YET
+-- and that is deliberate.
+--
+-- The owner wanted an "average wait this month" card beside the weather box,
+-- on the condition that all six resorts could have one. Two things killed the
+-- card and neither killed the data:
+--
+--   * Every automated source records POSTED waits. TouringPlans, who measure
+--     actual waits with a stopwatch, publish that Disney over-states by
+--     roughly 11.5-15.5 minutes a day depending on season. So an average
+--     built from any feed is an average of what a park CLAIMS.
+--   * That bias is only harmless if all six inflate equally, and there is no
+--     reason to think they do — Tokyo is run by Oriental Land Co. under
+--     licence, and Paris and Shanghai post on their own systems. A
+--     non-uniform bias distorts the comparison rather than just the number,
+--     which is the same trap as the ERA5 rain-day count.
+--
+-- But elapsed time is the one input that cannot be bought later. Thrill Data
+-- only has an archive going back to 2019 because it started in 2019. So this
+-- records from today and the decision about what, if anything, to show with
+-- it gets made in a year against real data.
+--
+-- local_hour is stored AT WRITE TIME and is load-bearing. A fixed UTC poll
+-- time is a fixed LOCAL time per park, so without it Orlando would be sampled
+-- at its quiet morning while Shanghai got its busy afternoon — a timezone
+-- bias walking straight into the six-resort comparison. Aggregating later has
+-- to average by local hour before averaging across hours.
+create table if not exists wait_time_samples (
+  park_id       int          not null,
+  observed_at   timestamptz  not null,
+  resort_id     text         not null,
+  local_hour    smallint     not null,
+  mean_wait_min numeric(5,1) not null,
+  max_wait_min  int          not null,
+  open_rides    int          not null,
+  source        text         not null default 'queue_times',
+  primary key (park_id, observed_at)
+);
+create index if not exists wait_time_samples_month
+  on wait_time_samples (resort_id, observed_at);

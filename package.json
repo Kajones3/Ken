@@ -30,7 +30,8 @@
     "test-email": "tsx src/testEmail.ts",
     "climate-normals": "tsx src/jobs/climateNormals.ts",
     "probe-wait-times": "tsx src/jobs/probeWaitTimes.ts",
-    "exchange-rates": "tsx src/jobs/exchangeRates.ts"
+    "exchange-rates": "tsx src/jobs/exchangeRates.ts",
+    "wait-times": "tsx src/jobs/waitTimes.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",
