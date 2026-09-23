@@ -12,186 +12,121 @@ say when something is a guess.
 
 ---
 
-## Where things stand — 2026-09-21 (read this first in a new session)
+## START HERE — state as of 2026-09-23
 
-**Latest session: the shared PDF became a document, and two more things
-left the code.** All on `claude/compassionate-hopper-0pot3d`, none live yet.
+**Live at https://pricingthemagic.com.** `master` is at `86935ed`.
+**Ask whether Render has been redeployed before trusting what the live site
+shows** — the owner clicks that by hand and it has lagged `master` for days
+at a time.
 
-- *The PDF is no longer a screenshot.* It is written prose per resort —
-  cost table, getting there, tickets, every on-property hotel, food,
-  weather, lands, attractions, then visa/currency/age notes — and
-  **"Save as PDF" asks which resorts to include** first. See the decision
-  note.
-- *The attraction list is the owner's to maintain.* `/admin` has a section
-  for it, backed by `owner_attractions` as an OVERLAY on `config.ts`, with
-  its own spreadsheet. Same safety property as `owner_settings`.
-- *Exchange rates are generated, not hardcoded.* `src/exchangeData.ts` +
-  a monthly Actions job on ECB reference rates. The five numbers that used
-  to sit in `prototype.html` are gone. **The committed rows are still the
-  hand-seeded placeholder** and the UI says so — run the workflow.
-- *Lands per park* (`parkList` on each resort) — a Claude draft to correct.
-- *Tokyo's ticket link* now points at the real purchase flow, and the
-  *Paris note* says which half of the bundling constraint is real.
-- *The intro* is the owner's own words, not a "prototype build" banner.
+Run `npm test` and `npm run typecheck` before you believe anything. 537 tests.
 
-## Where things stand — 2026-09-22 (end of day)
+### What is REAL data and what is still a guess
 
-**Merged and on `master`** (PRs #56-#60). Render redeploys are the owner's
-click; ask whether one has happened before trusting what the live site shows.
+This is the question that matters most, because the product's whole claim is
+that every number is either real or labelled a guess.
 
-Shipped today: crowd levels, the typical-day quote, the cheapest-day search
-option, the Kayak booking link, the mobile KPI fix, two honest-number fixes
-on the Flights card, and a staleness registry that nags about every
-hand-maintained table.
+| Data | State |
+|---|---|
+| **Tickets — WDW, Disneyland** | **REAL.** Published multi-day totals 1-7 / 1-5 days, adult and child, plus Park Hopper by ticket length. Stored as published in `ticket.multiDayAdultUsd`; the old base x slope curve is now only a fallback for resorts without a table. |
+| **Tickets — Tokyo, Shanghai, Hong Kong** | **REAL** (owner-checked against each resort's own purchase flow, 2026-09-23). Hong Kong's CHILD RATIO is still a guess. |
+| **Tickets — Paris** | Still the curve. No real table. |
+| **Crowd bands** | **REAL from DVC points charts** at WDW and Disneyland (all 12 months) and Hong Kong (Apr-Dec). Tokyo and Paris have one-quarter charts that only ORDER their own months. Shanghai is judgement. `chartMonths` says which per resort, per month. |
+| **Exchange rates** | **REAL.** ECB via the monthly Actions job, generated 2026-09-22. |
+| **Weather** | **REAL.** Open-Meteo ERA5, 2006-2025. |
+| **Hotels — WDW, Disneyland** | Owner-researched against 2026 published ranges. **See the open question below.** |
+| **Hotels — Hong Kong, Shanghai** | **REAL** (owner's screenshots, 2026-09-23). Hong Kong Disneyland Hotel's Deluxe rate is DERIVED from a ratio, not observed. |
+| **Hotels — Tokyo** | Mostly guesses. Only Disney Ambassador Hotel is real. |
+| **Hotels — Paris** | Claude draft. |
+| **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. |
+| **Promos** | Three ILLUSTRATIVE rows. A Plus user applying one today gets a discount that does not exist. |
+| **Attractions** | Starter set, ~10 rows. |
+| `parkList` lands, `QUEUE_TIMES_PARKS` | Claude drafts. |
 
-### The $139 fare: the premise was wrong, and the report is what showed it
+### Open questions for the owner — do not decide these alone
 
-`src/jobs/coverage.ts` now prints `source` and the carrier on every cached
-fare. The AUS run said **"NONE. Every date from this origin falls back to an
-estimate or a gap."** The queued hypothesis — a real `flight_prices` row
-from Travelpayouts' deal feed — could not have been it, and the fix queued
-behind it would have been built for a row that does not exist. *Second time
-in two sessions the evidence-first rule stopped a wrong fix.*
+1. **WDW hotel medians.** CLAUDE.md records Value/Moderate/Deluxe as
+   270/450/1090, researched by the OWNER against 2026 published ranges. A
+   Gemini-generated sheet they supplied says 225/327/727 — a 25-33% gap on
+   the two lines that decide which resort wins the board. **An AI draft does
+   not silently overwrite the owner's own research.** Unresolved.
+2. **Shanghai's `dataConfidence` badge** claims children are priced by height
+   (1.0-1.4m, unmodelled). The owner's own screenshot of Shanghai's purchase
+   flow shows AGE bands — Standard 12-59, Child 3-11 — which is exactly what
+   is modelled. The badge is probably removable; it has not been removed on
+   the strength of one screenshot.
+3. **Weekly rather than monthly crowd bands.** WDW December reads "moderate"
+   because 1-23 December is one of the cheapest periods of the year and 24-31
+   the most expensive. Thanksgiving is the same shape. The monthly average is
+   honest but blunt, and the charts support weekly. Owner's call.
 
-Two real defects came out of reading the render path instead:
+### Next work, in the owner's priority order
 
-- *The KPI tile said "cached fare" whenever no estimate was attached* —
-  including when `flightPick` was null and the number was the traveller's
-  own typed fare. Three states now; the no-data one says "your number".
-- *`#exactBtn` rendered only when `fp.estimate` existed*, hiding the verify
-  button in the one case with nothing behind the number at all. Now offered
-  wherever the shown fare is not a real vendor row.
+1. **Real promos** with real dates.
+2. **Food rates** — send the 24 numbers, and add them to `settings.ts` at the
+   same time so the owner can edit them.
+3. **The attraction list** — paste-and-structure, 40-80 headline rows, every
+   cross-resort clone FLAGGED for the owner rather than asserted.
+4. **Disney Cruise pricing** — agreed as the Plus anchor. No API exists, so it
+   is a fourth hand-maintained table and sailings are dated, which means it
+   goes stale faster than anything else here. Add it to `REVIEWABLE` the day
+   it ships.
+5. **Paris tickets**, still on the curve.
 
-**Closed:** the owner's screenshot was a different search (IAH, then AUS
-with a real row present) and the card was behaving correctly. Do not
-re-open it.
+### Free/Plus split, settled 2026-09-22
 
-## NEXT SESSION — start here
+The rule that decides every row: **free is anything that makes a booking
+click more likely** (affiliate pays ~$90-165 a trip against $9 for Plus);
+**Plus is a separate product, or something that spends metered money.**
 
-1. **The owner is filling in real numbers.** In their own priority order:
-   ticket prices, crowd bands, promos, the four international hotel
-   baselines. Everything else waits on those.
-2. **Food rates are not owner-editable yet** — 24 numbers (four styles x six
-   resorts) still only in `config.ts`, and food is ~40% of a typical total.
-   Adding them to `settings.ts` is the obvious next admin job.
-3. **A Disney deals/news monitor** (owner asked). `news-digest` already reads
-   RSS and emails the owner, so this is likely an extension of that job
-   rather than a new one — and every Disney domain is refused by this
-   sandbox's egress proxy, so anything that fetches must run in Actions.
-4. **CPM ads** (owner raised, not designed). One thing worth saying before
-   anyone builds it: this page's whole credibility is that every number is
-   either real or labelled a guess, and travel ads are ads for flights and
-   hotels. Placement has to be unmistakably not-content; not inside a resort
-   card.
+- **Free:** the six-resort comparison, calendars, crowd bands, weather, every
+  override, booking links, **attraction picks** and **applying promos**.
+- **Plus:** **Disney Cruise pricing** (the anchor), the shareable PDF, saved
+  searches and alerts, the 22 Plus airports, custom expenses, exact live
+  fares (gated because it spends real SerpApi money, NOT as a selling point —
+  the free Kayak link now shows live fares too).
 
-**Still open from before:** `parkList`'s lands are a Claude draft;
-`QUEUE_TIMES_PARKS` holds DRAFT Queue-Times park ids; `src/exchangeData.ts`
-is still the hand-seeded placeholder (run the workflow — it is free).
+**Attractions and promos moving to free is a REVERSAL** of earlier decisions
+still written below. Gating them protected $9 while costing a shot at
+$90-165. Not yet built — see the work list above.
 
-**A finding not acted on.** The coverage run printed `*** SUSPICIOUS`: our
-national passenger-weighted average is **$204.52** against BTS's published
-~$390, a ratio of 1.9, close to the factor of two the check exists to catch.
-**Do not act on it alone.** The counter-evidence below still stands — 74
-measured SerpApi-vs-BTS ratios spanning 0.580-1.242, none near 2.0 — and our
-routes are leisure routes to six resorts, not a national sample. Worth a
-deliberate look with the DB1B two-market debug workflow; not a fix on this
-number.
+### Known environment limits — do not rediscover these
 
-## Where things stood — 2026-09-20
+- **This sandbox's egress proxy denies almost everything.** Disney, Google,
+  Kayak, docs.google.com, every weather and wait-time host: `CONNECT tunnel
+  failed, 403`. Web SEARCH works; fetching a page does not.
+- **So anything needing the network runs in GitHub Actions**, which is not
+  restricted — that is why the climate, exchange-rate and coverage jobs are
+  workflows.
+- **And anything that cannot be tested from here needs the owner's click.**
+  The card prints what it is asking for so a mismatch stays visible. This is
+  how the Kayak link, the Disney URL parameters and `PUBLIC_BASE_URL` were
+  all settled.
+- **If a page must be fetched, ask the owner to paste it or upload it.** That
+  has worked well: the ticket tables, the points charts and the hotel rates
+  all arrived that way. Offer this EARLY rather than parking work on the
+  owner's list — a session was lost to not offering it.
 
-**Latest session: getting the owner out of the code, and the front of the
-house in order.** Four pieces, all on `claude/brave-carson-eg7ng8` and none
-of them live yet:
+### Working agreement
 
-- *Owner settings, end to end.* `src/settings.ts` is a registry of 73 numbers
-  the owner can change without touching code — every hotel base, every
-  resort's parking and transfers, the hopper differentials, the rental-car
-  rate — and `/admin` is the screen for it. The database OVERRIDES the
-  shipped defaults and never replaces them; see the decision note.
-- *Typing a date works again.* Hand-entered travel dates were impossible to
-  complete — two bugs, both ours, both invisible to the calendar picker.
-- *Sign-in has a brake, and a way back in.* Five wrong passwords lock an
-  address for fifteen minutes (`src/signinThrottle.ts`), and "Forgot your
-  password?" is a real emailed link (`src/passwordReset.ts`) which also
-  signs out every device — the revoke button the app never had.
-- *Weather.* A per-month box on each resort, from a generated table. The
-  generator has still never been run; see the note below.
-- *The detail cards all share one shape now.* KPI tiles, collapsed prose,
-  aligned footers. The owner's report was that the weather box read well and
-  nothing around it did.
-
-**The admin page is now built** — `/admin`, owner-only, reached from a
-"Numbers" button in the masthead that only the owner sees. One form per
-number with the shipped figure and the allowed range beside it, a search box,
-and a spreadsheet download/upload for bulk edits. See the decision note.
-
-**Still designed but unbuilt:** fare corrections as weighted evidence
-(Low/Medium/High bands, deletable, expiring).
-
-**Previous session: a round of owner UX fixes.** Five trip-form bugs, the
-hotel links, an all-six hotel re-baseline, free-text override boxes, and
-saved trips you can get back to. Read the decision notes below before
-re-litigating any of them; the short version:
-
-- *Dates.* Typed travel dates no longer vanish, a half-filled pair is
-  refused instead of silently falling back to the month, the return date
-  is guarded on a phone as well as a laptop, and both inputs cap at the
-  13-month booking horizon.
-- *Hotels.* On-property rooms link to Disney's own site (Walt Disney World
-  by category), and every resort's category medians were re-based
-  together. **The four international sets are Claude drafts the owner is
-  correcting**, and the four international hotel URLs have never been
-  fetched — the egress proxy blocks every Disney domain.
-- *Your numbers.* The airfare slider is gone and its floor is now advisory
-  — a reversal, on the owner's instruction. Food can be typed as a
-  whole-party daily total.
-- *Saved trips.* Named on save, reopened from a "My trips" masthead
-  dropdown. "Save as PDF" prints the board.
-
-**Open with the owner:** corrections to the four international hotel
-baselines. (The Disney URL question is closed — dates can't be carried,
-party size can; see the decision note.)
-
-**Live at https://pricingthemagic.com.** `master` is at `619b454` (PR #48,
-which brought the weather feature and the last UX round); **Render has not
-been redeployed since, so nothing from this session is on the live site.**
-Version check in the browser: a resort's detail view shows a "Weather in
-<month>" box. If it doesn't, Render is serving a stale build — Manual Deploy
-→ Deploy latest commit. The weather numbers there are still Claude's
-hand-seeded figures until the "Parkfare climate normals" workflow is run by
-hand.
-
-Shipped in the last two sessions: mandatory passwords, email verification
-that actually delivers, honest paywall copy, a masthead sign-out, airports
-listed by city, attractions (starter data), and the owner's manual-job list
-riding the nightly digest.
-
-**The next piece of work is the real attraction list** — see "Building the
-real attraction list" below for why scraping is out and what the agreed
-route is. Short version: the owner pastes Walt Disney World and Disneyland
-names in any rough form, Claude structures them into `ATTRACTIONS` rows and
-**flags candidate cross-resort clones for the owner to confirm**, never
-asserting one itself; the four international resorts get a Claude draft the
-owner corrects. Aim for 40–80 headline attractions total, not a complete
-inventory.
-
-**Three loose ends, each with a one-line check** (details in the email
-section below): is `OWNER_EMAIL` set in GitHub Actions; is
-`REQUIRE_VERIFIED_EMAIL=true` on Render; is `PUBLIC_BASE_URL` pointed at the
-apex rather than `www`.
-
-**Still unbuilt and deliberately so:** the day-by-day trip planner, the
-souvenir basket, a per-city rental-car rate, the 10-mile hotel radius
-filter, and Stripe.
+- **Push and merge at the end of a piece of work** unless told otherwise. The
+  owner merges through `mcp__github__` tools here rather than by hand.
+- **Evidence before fixes.** Twice now a documented-but-wrong theory nearly
+  shipped a bad fix (the BTS halving bug, the $139 fare). Run the free
+  diagnostic first.
+- **Never overwrite owner-researched numbers with an AI draft.** Flag the
+  disagreement instead.
+- The owner is non-technical-to-semi-technical. Plain language, and say when
+  something is a guess.
 
 ## Current state
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 82 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 537 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
 | "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). Plus-only add-on unchanged: an alert when the cached gas price has moved since a driving trip was saved. |
-| Park Hopper | **Wired, free.** A flat per-ticket add-on at the four multi-park resorts (WDW, Disneyland, Tokyo, Paris); silently has no effect at Hong Kong or Shanghai, which each have one park. WDW/Disneyland's differentials are researched against real 2026 pricing; Tokyo/Paris are unresearched guesses, flagged weaker-confidence below. |
+| Park Hopper | **Wired, free, and now real where it exists.** An add-on that SCALES WITH TICKET LENGTH at WDW ($70-95) and Disneyland ($70-135) from published figures; a flat guess still at Paris. **Tokyo sells no hopper at all** (owner-confirmed) and neither do Hong Kong or Shanghai, which each have one park — asking for one there costs $0. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
 | Real-pulls digest | **Wired, owner-only.** `npm run pulls-digest` emails a daily list of every flight route and hotel a real provider actually returned prices for in the last 15 days (`PULLS_WINDOW_DAYS` to change it), grouped by route/hotel and source, with the departure/stay dates covered and when it was last pulled. Sends even when the answer is "nothing" — a quiet cache is the signal worth having. Mock and unlabelled rows are excluded and footnoted, never folded in. `hotel_rates.source` was added for this: without it there was no way to tell a rate a vendor returned from one the mock provider invented. Read-only; no provider calls. |
@@ -275,7 +210,12 @@ see the "Plus and paywall" decisions below for what was actually decided.
   see "NOT verified" below.
 - **Discounts & promos** (Plus-only): a curated `promos` table (owner hand-maintains,
   same pattern as tickets) is public to *browse* — "let friends see what Plus would
-  unlock" — but *applying* one is Plus. A personal discount (Annual Passholder, DVC,
+  unlock" — but *applying* one is Plus.
+  **>> SUPERSEDED 2026-09-22: applying a promo is moving to FREE** — a lower
+  total makes somebody book, and the booking is worth ten times the
+  subscription. The server-side lookup rule below does NOT change: a curated
+  promo's effect is always resolved from `promosFor()` and only its id ever
+  comes from the client. A personal discount (Annual Passholder, DVC,
   military, Florida resident, or custom) reuses the existing `ResortOverride` shape
   rather than a new table, since it's the same "free to try, Plus to save" thing
   overrides already are. The composition rule, in order: (1) a curated room discount
@@ -1947,7 +1887,15 @@ Four decisions worth not re-deriving:
   their results. Verified live: with Zootopia and Ratatouille picked, the
   board still ran WDW-first on price while Shanghai (5th) carried "Only
   place with Zootopia".
-- **The list is free to browse; picking yours is Plus.** Exactly the promos
+- **The list is free to browse; picking yours is Plus.**
+  **>> SUPERSEDED 2026-09-22: BOTH attraction picks AND applying a promo are
+  moving to FREE.** See the free/Plus split at the top of this file. Gating
+  them protects a $9 subscription while costing a shot at $90-165 of
+  affiliate commission, because both make a booking click MORE likely. The
+  reasoning below is kept because it was sound for the question it answered —
+  which side of a paywall a curated list belongs on — and only the economics
+  changed. Not yet built.
+  Exactly the promos
   precedent — a curated promo is public to browse and Plus to apply — and
   the owner's "keep it on the Plus side". `GET /api/attractions` is public;
   `PUT /api/profile/attractions` answers 402 without Plus, and `compare()`
