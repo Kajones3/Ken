@@ -1292,19 +1292,40 @@ export const CROWDS_REVIEWED = "2026-09-22";
  */
 export const CROWDS: Record<string, CrowdYear> = {
   wdw: {
-    /* NO CHART SUPPLIED YET. Walt Disney World has DVC points charts and the
-       owner holds them, but none has reached this table, so every month here
-       is still Claude's guess and `chartMonths: []` makes each one say so.
-       Leaving `basis` at dvcPoints without that empty list would have had the
-       card print "from DVC points pricing" over twelve numbers nobody read
-       off a chart — caught by the test below, not by reading. */
+    /* OWNER DATA, 2026-09-23. Read off the 2027 Disney's Animal Kingdom
+       Villas points chart. That chart is SEASON-BANDED rather than daily —
+       seven travel periods covering all 365 days of 2027 — so each day was
+       assigned its period's weekly Deluxe Studio points and averaged per
+       month, then normalised across the year the same way Disneyland's was.
+       All 365 days are accounted for; a gap would mean a misread period.
+
+       TWO THINGS THE MONTHLY AVERAGE HIDES, and both are in the notes below
+       because a band alone would mislead:
+
+       December reads MODERATE because the chart splits it in half — 1-23
+       December is one of the cheapest periods of the year and 24-31 is the
+       single most expensive. Averaged, that is a moderate month; lived, it
+       is two completely different trips. Same shape at Thanksgiving, where
+       24-26 November is a peak inside an otherwise ordinary month.
+
+       SUMMER READS LOW, and that is what the chart says rather than an
+       error: Disney prices 11 June to 31 August the same as early February,
+       and well below the spring-break weeks. Orlando in July is hot enough
+       that demand really does sit under March and April. It will still
+       surprise anyone who equates school holidays with crowds, so the note
+       says it out loud. */
     basis: "dvcPoints",
-    chartMonths: [],
-    months: ["low", "low", "high", "high", "moderate", "high",
-             "high", "veryLow", "low", "moderate", "high", "peak"],
-    why: { 1: "After New Year the parks empty out", 3: "Spring break and Easter",
-           7: "Summer, and the hottest month to queue in", 8: "Back-to-school lull — the emptiest weeks of the year",
-           11: "Thanksgiving week is a genuine peak", 12: "Christmas week is the busiest of the year" },
+    chartMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    months: ["veryLow", "moderate", "peak", "peak", "veryLow", "veryLow",
+             "low", "low", "veryLow", "moderate", "moderate", "moderate"],
+    why: { 1: "After the New Year the parks empty out — one of the quietest months",
+           3: "Spring break: the busiest stretch of the whole year, and 21-28 March is the peak of it",
+           4: "Easter and spring break keep April at the top of the year",
+           6: "Quieter than you would expect — Orlando's heat keeps summer demand below spring",
+           7: "Hot, and busier than June but still well under the spring months",
+           9: "The quietest month of the year here",
+           11: "Moderate for most of the month, but Thanksgiving week itself is a peak",
+           12: "Two different months: 1-23 December is one of the cheapest weeks of the year, Christmas week the most expensive" },
   },
   dlr: {
     /* OWNER DATA, 2026-09-23. Read off the 2026 Disney Collection Exchange

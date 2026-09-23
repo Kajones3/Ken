@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   crowdFor, crowdFlag, crowdRank, quietestMonths, quietestThisMonth,
-  parseCrowdSensitivity,
+  parseCrowdSensitivity, MONTH_NAMES,
 } from "./crowds.js";
 import { CROWDS, CROWD_BANDS, CROWD_LABELS, RESORTS, type CrowdBand } from "./config.js";
 
@@ -79,29 +79,47 @@ test("'not much' never flags, however busy the month", () => {
   }
 });
 
+/** Find a month at a given band, so these tests survive a resort's bands
+ *  being re-read off a new points chart — which has now happened twice. */
+function monthAt(resortId: string, band: CrowdBand): number | null {
+  const months = CROWDS[resortId]?.months ?? [];
+  const i = months.indexOf(band);
+  return i === -1 ? null : i + 1;
+}
+
 test("'somewhat' flags only peak; 'a lot' also flags high", () => {
-  // wdw: December is peak, March is high, August is veryLow.
-  assert.ok(crowdFlag("wdw", 12, "some"), "peak should flag at 'somewhat'");
-  assert.equal(crowdFlag("wdw", 3, "some"), null, "a high month should not flag at 'somewhat'");
-  assert.ok(crowdFlag("wdw", 3, "high"), "a high month should flag at 'a lot'");
-  assert.equal(crowdFlag("wdw", 8, "high"), null, "a quiet month should never flag");
+  const peak = monthAt("wdw", "peak")!;
+  assert.ok(peak, "wdw should have a peak month");
+  assert.ok(crowdFlag("wdw", peak, "some"), "peak should flag at 'somewhat'");
+
+  // A "high" month exists at Disneyland; wdw's real chart has none, which is
+  // itself worth not hard-coding either way.
+  const high = monthAt("dlr", "high")!;
+  assert.ok(high, "dlr should have a high month");
+  assert.equal(crowdFlag("dlr", high, "some"), null, "a high month should not flag at 'somewhat'");
+  assert.ok(crowdFlag("dlr", high, "high"), "a high month should flag at 'a lot'");
+
+  const quiet = monthAt("wdw", "veryLow")!;
+  assert.equal(crowdFlag("wdw", quiet, "high"), null, "a quiet month should never flag");
 });
 
 test("alternatives are offered only at 'a lot', and only when genuinely quieter", () => {
-  const peak = crowdFlag("wdw", 12, "high");
+  const peakMonth = monthAt("wdw", "peak")!;
+  const peak = crowdFlag("wdw", peakMonth, "high");
   assert.ok(peak);
   assert.ok(peak.alternatives.length > 0, "a peak month should offer quieter months");
   for (const a of peak.alternatives) {
     assert.ok(peak.alternatives.every(() => crowdRank(peak.band) - a.rank >= 2),
       "an alternative must be at least two bands quieter");
   }
-  assert.deepEqual(crowdFlag("wdw", 12, "some")?.alternatives, [],
+  assert.deepEqual(crowdFlag("wdw", peakMonth, "some")?.alternatives, [],
     "'somewhat' should not push alternative months");
 });
 
 test("the detail sentence names the month and does not claim to measure crowds", () => {
-  const f = crowdFlag("wdw", 12, "high");
-  assert.ok(f?.detail.includes("December"));
+  const peakMonth = monthAt("wdw", "peak")!;
+  const f = crowdFlag("wdw", peakMonth, "high");
+  assert.ok(f?.detail.includes(MONTH_NAMES[peakMonth - 1]!));
 });
 
 /**
