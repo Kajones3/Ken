@@ -385,6 +385,21 @@ export const RESORTS: Resort[] = [
     hotels: [
       h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 180, "value", true),
       h("tdr-ts", "Toy Story Hotel", "Moderate · monorail", 250, "moderate", true),
+      /* OWNER DATA, 2026-09-23, PARTLY USABLE. The fetched rate sheet gives
+         four months of real per-night rates, and Disney Ambassador Hotel's
+         column is clean and distinct (JPY 51,000-106,900, typical ~66,500,
+         which is $423) — a real Disney hotel this table was missing
+         entirely, now added.
+         THE OTHER THREE COLUMNS COLLAPSED. Tokyo Disneyland Hotel, Hotel
+         MiraCosta and Toy Story Hotel carry IDENTICAL rates on most dates,
+         which cannot be true of a Moderate priced beside two Deluxes: Toy
+         Story at JPY 92,500 would be $588 a night, above Tokyo Disneyland
+         Hotel's own real rate. The sheet's own check — that the columns
+         differ on SOME dates — is too weak to rule that out. So those three
+         rates are left where they were, and what the shared column does
+         support (a Deluxe running JPY 92,500-96,500, or $588-614) sits close
+         enough to the 620 median already on file to leave it standing. */
+      h("tdr-amb", "Disney Ambassador Hotel", "Deluxe · Ikspiari walk", 425, "deluxe", true),
       h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 460, "deluxe", true),
       h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 620, "deluxe", true),
       h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 700, "deluxe", true),
@@ -1244,11 +1259,18 @@ export const CROWD_LABELS: Record<CrowdBand, string> = {
 };
 
 export interface CrowdYear {
-  /** Where this resort's twelve rows came from. `dvcPoints` is derived from a
-   *  points chart; `estimate` is judgement and says so on the card. */
+  /** The strongest basis any month in this year has. Per-MONTH provenance
+   *  lives in `chartMonths` below, because a chart rarely covers a whole
+   *  year: Hong Kong's runs April to December and Tokyo's covers one
+   *  quarter. Saying the whole resort is chart-derived when a third of it is
+   *  judgement would be the confident-wrong-claim this file keeps refusing to
+   *  make. */
   basis: "dvcPoints" | "estimate";
   /** Twelve bands, January first. */
   months: CrowdBand[];
+  /** 1-based months whose band was read off a real points chart. Absent means
+   *  none were, and every month falls back to `basis`. */
+  chartMonths?: number[];
   /** Optional per-month plain-language reason ("Thanksgiving week", "Golden
    *  Week"). Keyed by 1-based month. A band with no reason still renders. */
   why?: Record<number, string>;
@@ -1270,7 +1292,14 @@ export const CROWDS_REVIEWED = "2026-09-22";
  */
 export const CROWDS: Record<string, CrowdYear> = {
   wdw: {
+    /* NO CHART SUPPLIED YET. Walt Disney World has DVC points charts and the
+       owner holds them, but none has reached this table, so every month here
+       is still Claude's guess and `chartMonths: []` makes each one say so.
+       Leaving `basis` at dvcPoints without that empty list would have had the
+       card print "from DVC points pricing" over twelve numbers nobody read
+       off a chart — caught by the test below, not by reading. */
     basis: "dvcPoints",
+    chartMonths: [],
     months: ["low", "low", "high", "high", "moderate", "high",
              "high", "veryLow", "low", "moderate", "high", "peak"],
     why: { 1: "After New Year the parks empty out", 3: "Spring break and Easter",
@@ -1278,16 +1307,37 @@ export const CROWDS: Record<string, CrowdYear> = {
            11: "Thanksgiving week is a genuine peak", 12: "Christmas week is the busiest of the year" },
   },
   dlr: {
+    /* OWNER DATA, 2026-09-23. Read off the 2026 Disney Collection Exchange
+       points chart for the Disneyland Hotel — all twelve months, one hotel,
+       one scale. Each day's cheapest room category was normalised against
+       that chart's own range and averaged per month, so the bands describe
+       where a month sits in ITS OWN resort's year, which is the only thing a
+       points chart can honestly say.
+
+       It disagreed with four of Claude's placeholder guesses and the chart
+       wins every time: March and November are moderate rather than high,
+       June is a peak rather than merely high, and April and September are
+       quieter than guessed. */
     basis: "dvcPoints",
-    months: ["low", "moderate", "high", "moderate", "moderate", "high",
-             "high", "low", "moderate", "high", "high", "peak"],
-    why: { 1: "The quietest stretch at Disneyland", 3: "Spring break",
-           8: "Back-to-school lull", 10: "Halloween season is busier than people expect",
-           11: "Thanksgiving week", 12: "Christmas week" },
+    chartMonths: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    months: ["veryLow", "low", "moderate", "low", "moderate", "peak",
+             "high", "low", "low", "high", "moderate", "peak"],
+    why: { 1: "The quietest month of the year at Disneyland",
+           6: "Summer peaks in June, ahead of July",
+           8: "California schools go back early, and it shows",
+           9: "One of the best-value months to go",
+           10: "Halloween season is busier than people expect",
+           11: "Thanksgiving week is a peak inside an otherwise moderate month",
+           12: "Christmas week is the busiest of the year" },
   },
   dlp: {
     basis: "estimate",
-    months: ["low", "moderate", "low", "high", "moderate", "moderate",
+    /* January, February and March are ORDERED by the owner's Hotel New York
+       Jan-Mar 2027 points chart: March sits clearly above February, which
+       sits above January. March moved up a band on that. As with Tokyo the
+       chart covers one quarter, so it ranks those months against each other
+       and not against the rest of the year; these stay estimates. */
+    months: ["low", "moderate", "moderate", "high", "moderate", "moderate",
              "high", "high", "low", "high", "low", "high"],
     why: { 4: "French Easter holidays", 7: "European summer holidays",
            9: "The quietest month, and the weather is still good",
@@ -1295,8 +1345,14 @@ export const CROWDS: Record<string, CrowdYear> = {
   },
   tdr: {
     basis: "estimate",
+    /* July, August and September are ORDERED by the owner's 2026 Jul-Sep
+       points chart, which puts July clearly below September and August
+       clearly above both. The chart covers one quarter, so it can rank those
+       three against each other and says nothing about where they sit in the
+       year — the bands stay estimates and chartMonths stays empty. July moved
+       down a band on that evidence. */
     months: ["low", "low", "high", "high", "peak", "low",
-             "moderate", "high", "moderate", "high", "moderate", "high"],
+             "low", "high", "moderate", "high", "moderate", "high"],
     why: { 3: "Japanese spring break", 4: "Cherry blossom season",
            5: "Golden Week is the single busiest stretch of the Japanese year",
            6: "Tsuyu, the rainy season — wet, and correspondingly quiet",
@@ -1311,12 +1367,20 @@ export const CROWDS: Record<string, CrowdYear> = {
            11: "Cool, dry and quiet — the best value month" },
   },
   hkdl: {
-    basis: "estimate",
-    months: ["low", "high", "low", "high", "moderate", "low",
-             "high", "high", "low", "high", "moderate", "high"],
-    why: { 2: "Chinese New Year", 4: "Easter and Ching Ming",
+    /* OWNER DATA, 2026-09-23 for APRIL TO DECEMBER, read off the 2026 Hong
+       Kong Disneyland Hotel points chart the same way as Disneyland's.
+       January to March are NOT on that chart and remain judgement — see
+       chartMonths, which the card reads so it can say which a given month
+       is rather than claiming the whole year is sourced. */
+    basis: "dvcPoints",
+    chartMonths: [4, 5, 6, 7, 8, 9, 10, 11, 12],
+    months: ["low", "high", "low", "veryLow", "veryLow", "low",
+             "peak", "peak", "veryLow", "moderate", "low", "peak"],
+    why: { 2: "Chinese New Year — estimated, not on the points chart",
            7: "Hong Kong school holidays, and the wettest, hottest weeks",
-           9: "Typhoon season keeps numbers down", 10: "National Day golden week" },
+           8: "The busiest month of the year here",
+           9: "Typhoon season keeps numbers right down — the quietest month",
+           12: "Christmas and the New Year run busy" },
   },
 };
 

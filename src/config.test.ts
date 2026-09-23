@@ -301,7 +301,12 @@ const CATEGORY_MEDIANS: Record<string, Partial<Record<string, number>>> = {
   // Tokyo's VALUE median moved because Toy Story Hotel is a Moderate, not a
   // Value — Disney's own reservation page lists it that way. No rate changed;
   // one hotel changed category, which left Celebration Hotel alone in Value.
-  tdr:  { value: 180, moderate: 250, deluxe: 620 },
+  // Deluxe moved 620 -> 540 on 2026-09-23 because a HOTEL WAS ADDED, not
+  // because a rate changed: Disney Ambassador Hotel was missing from this
+  // table entirely and its real rates ($423 typical) make it Tokyo's
+  // cheapest Deluxe, which is true of the real resort. Every other Tokyo
+  // rate is untouched.
+  tdr:  { value: 180, moderate: 250, deluxe: 540 },
   // Re-based 2026-09-23 from the owner's own screenshots of each resort's
   // booking flow. See the notes in config.ts for what each figure is and,
   // where it matters, what it is not.

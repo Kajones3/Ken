@@ -65,16 +65,27 @@ export function crowdFor(resortId: string, month1: number): CrowdMonth | null {
   if (!year || month1 < 1 || month1 > 12) return null;
   const band = year.months[month1 - 1];
   if (!band) return null;
+  // PER MONTH, not per resort. A points chart rarely covers a whole year —
+  // Hong Kong's runs April to December — and a card that said "from DVC
+  // points pricing" over a month nobody charted would be claiming a source
+  // that does not exist for it. `chartMonths` is the list that actually has
+  // one; everything else falls back to judgement and says so.
+  const charted = year.chartMonths
+    ? year.chartMonths.includes(month1)
+    : year.basis === "dvcPoints";
+  const basis: CrowdYear["basis"] = charted ? "dvcPoints" : "estimate";
   return {
     resortId,
     month: month1,
     band,
     label: CROWD_LABELS[band] ?? band,
     rank: crowdRank(band),
-    basis: year.basis,
-    basisNote: BASIS_NOTES[year.basis],
+    basis,
+    basisNote: BASIS_NOTES[basis],
     why: year.why?.[month1],
-    provisional: CROWDS_ARE_PLACEHOLDER,
+    // A month read off a real chart is no longer provisional, whatever the
+    // rest of the table still is.
+    provisional: CROWDS_ARE_PLACEHOLDER && !charted,
   };
 }
 
