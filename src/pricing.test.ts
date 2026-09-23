@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
-import { bandOf, cheapestIn, poolFor, priceTrip, resortById, leanedFare, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
+import { bandOf, cheapestIn, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
 import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS } from "./config.js";
 
@@ -341,8 +341,20 @@ test("ticket base no longer inverts WDW vs. Disneyland at the off-peak floor", (
   // WDW (132) at every date, which put a WDW trip cheaper than Disneyland's
   // even in Disneyland's own off-peak season — backwards from published
   // 2026 pricing where WDW's low end ($119) sits above Disneyland's ($104).
+  //
+  // Relaxed to >= on 2026-09-23, when real published totals replaced the
+  // guessed bases: both resorts are $149 for a one-day ticket at standard
+  // mid-season, so they now tie. A tie is not the failure this guards
+  // against — the failure was Disneyland priced ABOVE Walt Disney World,
+  // which made an Orlando trip come back cheaper than Anaheim against a real
+  // booking that said otherwise. That direction is still pinned.
   const wdw = resortById("wdw"), dlr = resortById("dlr");
-  assert.ok(wdw.ticket.base > dlr.ticket.base, "WDW's base should sit above Disneyland's, not below");
+  assert.ok(wdw.ticket.base >= dlr.ticket.base, "Disneyland must never be priced above WDW");
+  // And the real one-day totals must agree with the bases they were taken
+  // from, or the two halves of the ticket model are describing different
+  // resorts.
+  assert.equal(wdw.ticket.multiDayAdultUsd?.[0], wdw.ticket.base);
+  assert.equal(dlr.ticket.multiDayAdultUsd?.[0], dlr.ticket.base);
 });
 
 test("a dining plan forces an on-property stay", () => {
@@ -908,4 +920,75 @@ test("the fare on the card and the fare in the total are the same number", () =>
     assert.equal(r.price.flightPick?.price, r.price.perSeatFare,
       `lean ${lean}: card says ${r.price.flightPick?.price}, total priced ${r.price.perSeatFare}`);
   }
+});
+
+/**
+ * The published multi-day tables. These exist because the straight-line
+ * `slope`/`floor` curve could not describe either US resort: Walt Disney
+ * World's marginal day drops from $140 (day three) to $35 (day five), and
+ * Disneyland's two-day ticket costs MORE per day than its one-day.
+ */
+test("a multi-day ticket charges Disney's published total, not a fitted curve", () => {
+  for (const id of ["wdw", "dlr"]) {
+    const r = resortById(id);
+    const totals = r.ticket.multiDayAdultUsd!;
+    assert.ok(totals, `${id} should carry published totals`);
+    for (let days = 1; days <= totals.length; days++) {
+      // one day's gate price x days x the factor must reproduce the published
+      // total, which is the entire claim this machinery makes.
+      const got = r.ticket.base * days * ticketMultiDay(r, days);
+      assert.ok(Math.abs(got - totals[days - 1]!) < 0.5,
+        `${id} ${days}-day: priced ${got.toFixed(2)}, Disney publishes ${totals[days - 1]}`);
+    }
+  }
+});
+
+test("Disneyland's two-day ticket really is dearer per day, and is not clamped away", () => {
+  const dlr = resortById("dlr");
+  assert.ok(ticketMultiDay(dlr, 2) > 1,
+    "clamping this to 1 would undercharge the most common Disneyland trip");
+  assert.ok(ticketMultiDay(dlr, 5) < ticketMultiDay(dlr, 2));
+});
+
+test("past the end of the table the last marginal day is repeated", () => {
+  const wdw = resortById("wdw");
+  const totals = wdw.ticket.multiDayAdultUsd!;
+  const lastMarginal = totals[totals.length - 1]! - totals[totals.length - 2]!;
+  const n = totals.length;
+  const eight = wdw.ticket.base * (n + 1) * ticketMultiDay(wdw, n + 1);
+  assert.ok(Math.abs(eight - (totals[n - 1]! + lastMarginal)) < 0.5,
+    "an extra day should cost what the last real extra day cost");
+});
+
+test("a resort with no published table still uses its curve", () => {
+  const dlp = resortById("dlp");
+  assert.equal(dlp.ticket.multiDayAdultUsd, undefined);
+  assert.equal(ticketMultiDay(dlp, 4),
+    Math.max(dlp.ticket.floor, 1 - dlp.ticket.slope * 3));
+});
+
+test("Park Hopper scales with ticket length where Disney publishes it", () => {
+  const dlr = resortById("dlr");
+  assert.equal(hopperPerTicket(dlr, 1, dlr.ticket.hopperAdultUsd), 70);
+  assert.equal(hopperPerTicket(dlr, 5, dlr.ticket.hopperAdultUsd), 135);
+  // Beyond the table, the longest published add-on stands rather than growing
+  // forever — Disney's own hopper stops rising too.
+  assert.equal(hopperPerTicket(dlr, 12, dlr.ticket.hopperAdultUsd), 135);
+});
+
+/**
+ * Tokyo sells no Park Hopper — its 1-Day Passport admits you to one park,
+ * named at purchase. The shipped +$38 was a guess at a product a traveller
+ * cannot normally buy, which put money on the board nobody could spend.
+ */
+test("Tokyo charges no Park Hopper even when one is asked for", () => {
+  const tdr = resortById("tdr");
+  assert.equal(tdr.ticket.hopperAdultUsd, undefined);
+  const book = fullBook("tdr", "NRT");
+  const on = priceTrip(book, tdr, { ...base, hopper: true }, {}, START);
+  const off = priceTrip(book, tdr, { ...base, hopper: false }, {}, START);
+  assert.ok(on.ok && off.ok);
+  if (!on.ok || !off.ok) return;
+  assert.equal(on.price.hopperUsd, 0);
+  assert.equal(on.price.total, off.price.total, "asking for a hopper must cost nothing here");
 });

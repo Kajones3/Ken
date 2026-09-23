@@ -141,7 +141,7 @@ test("a blank cell in a spreadsheet means back to the default, not zero", async 
  * whole design rests on "the database overrides code, never replaces it".
  * ------------------------------------------------------------------------ */
 
-import { priceTrip, type PriceBook, type TripParams } from "./pricing.js";
+import { hopperPerTicket, priceTrip, type PriceBook, type TripParams } from "./pricing.js";
 import { bookFrom } from "./book.js";
 
 const START = "2027-03-01";
@@ -194,7 +194,15 @@ test("an override for Park Hopper moves the ticket line", async () => {
   const wdw = RESORTS.find((r) => r.id === "wdw")!;
   const p = { ...baseParams, hopper: true };
   const shipped = priceTrip(bookWith({}), wdw, p, {}, START);
-  const raised = priceTrip(bookWith({ "hopper.wdw.adult": (wdw.ticket.hopperAdultUsd ?? 0) + 25 }), wdw, p, {}, START);
+  // The owner's figure REPLACES the by-length table outright rather than
+  // shifting it, so the expected move is measured against what this trip
+  // length actually charges, not against the flat fallback field. Walt Disney
+  // World publishes a hopper that grows with ticket length, and a typed
+  // number is a decision — silently scaling it would be the app overruling
+  // the owner.
+  const effective = hopperPerTicket(wdw, p.parkDays, wdw.ticket.hopperAdultUsd);
+  const ownerValue = effective + 25;
+  const raised = priceTrip(bookWith({ "hopper.wdw.adult": ownerValue }), wdw, p, {}, START);
   assert.ok(shipped.ok && raised.ok);
   if (!shipped.ok || !raised.ok) return;
   assert.equal(Math.round(raised.price.tickets - shipped.price.tickets), 25 * 2, "two adults");

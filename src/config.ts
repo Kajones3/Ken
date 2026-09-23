@@ -107,6 +107,28 @@ export interface Resort {
   bands: { freeUnder: number; child: [number, number]; junior?: [number, number]; adult: number };
   ticket: {
     base: number; child: number; junior?: number; slope: number; floor: number;
+    /** PUBLISHED MULTI-DAY TOTALS for an adult, index 0 = one day.
+     *
+     *  The `slope`/`floor` pair below is a straight line, and Disney's real
+     *  multi-day curve is not one: at Walt Disney World days two to four
+     *  barely discount at all and then day five falls off a cliff (the
+     *  marginal cost of day five is $35 against day three's $140). No single
+     *  slope fits both halves, so where real totals exist they are stored
+     *  here AS PUBLISHED and the discount is derived from them —
+     *  ticketMultiDay() turns them into the same kind of factor the curve
+     *  produced, so nothing downstream changes and seasonality still comes
+     *  from the nightly ticket_prices table.
+     *
+     *  The curve stays for every resort without a real table, and for trips
+     *  longer than one covers. Store the totals, never the factors: a total
+     *  is a number somebody can check against Disney's own page. */
+    multiDayAdultUsd?: number[];
+    /** Park Hopper add-on per ticket BY DAY COUNT, index 0 = one day. A flat
+     *  figure was always a simplification; at Disneyland the real add-on
+     *  nearly doubles between a one-day and a five-day ticket ($70 to $135),
+     *  which a single number cannot say. hopperAdultUsd stays as the
+     *  fallback for resorts with no table. */
+    hopperByDaysUsd?: number[];
     /** Park Hopper as a flat per-ticket add-on, not scaled by day count or
      *  season the way base admission is — a simplification of Disney's real
      *  (also date-tiered) hopper pricing. Omitted entirely at Hong Kong and
@@ -156,7 +178,17 @@ export const RESORTS: Resort[] = [
     // Disneyland's, which a flat 132 vs. 148 base did. Still a coarse two-
     // parameter approximation of a genuinely tiered, date-based system — not
     // a claim of exact per-date accuracy.
-    ticket: { base: 140, child: 0.93, slope: 0.058, floor: 0.58, hopperAdultUsd: 90, hopperChildUsd: 84 },
+    /* OWNER DATA, 2026-09-23. Published multi-day totals, standard mid-season,
+       tax excluded. Adult 1-7 days: 149/275/415/530/565/590/620. Child (3-9)
+       runs $5-20 under adult, which is 0.966 at one day — the old 0.93 made a
+       child $10 cheaper than Disney does. Hopper adds $70 at one day rising to
+       $95 at seven; the old flat $90 overcharged every short trip. */
+    ticket: {
+      base: 149, child: 0.966, slope: 0.058, floor: 0.58,
+      multiDayAdultUsd: [149, 275, 415, 530, 565, 590, 620],
+      hopperByDaysUsd: [70, 80, 80, 85, 90, 95, 95],
+      hopperAdultUsd: 85, hopperChildUsd: 85,
+    },
     food: { grocery: 38, qs: 62, mix: 96, ts: 158 },
     plans: [
       { label: "Disney Dining Plan · Quick Service", adult: 62.78, child: 25.82 },
@@ -207,7 +239,18 @@ export const RESORTS: Resort[] = [
     // researched — see CLAUDE.md): the old 148 sat *above* WDW's 132, which
     // inverted the two resorts' off-peak ordering versus reality. Still a
     // coarse approximation, not exact per-date accuracy — see the note on WDW.
-    ticket: { base: 128, child: 0.94, slope: 0.05, floor: 0.62, hopperAdultUsd: 75, hopperChildUsd: 70 },
+    /* OWNER DATA, 2026-09-23, same source and basis as Walt Disney World's.
+       Adult 1-5 days: 149/335/425/480/520 — note the TWO-day ticket costs
+       MORE per day than a one-day ($167.50 against $149), which is real at
+       Disneyland and which a declining curve could never produce. Hopper runs
+       $70 to $135 by length; the old flat $75 was under by nearly half on a
+       five-day trip. */
+    ticket: {
+      base: 149, child: 0.933, slope: 0.05, floor: 0.62,
+      multiDayAdultUsd: [149, 335, 425, 480, 520],
+      hopperByDaysUsd: [70, 100, 110, 120, 135],
+      hopperAdultUsd: 110, hopperChildUsd: 110,
+    },
     food: { grocery: 40, qs: 66, mix: 100, ts: 162 },
     plans: [],
     transport: { on: 0, off: 40 },
@@ -316,7 +359,18 @@ export const RESORTS: Resort[] = [
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
     // actual 2026 price check. Refine before relying on this one.
-    ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82, hopperAdultUsd: 38, hopperChildUsd: 21 },
+    /* NO PARK HOPPER. The owner confirmed it is a special-occasion product
+       rather than something on sale, and Tokyo's own 1-Day Passport says so
+       in its own words: it admits you to "Tokyo Disneyland OR Tokyo DisneySea
+       ... designating the date of visit and Park". The shipped +$38 was an
+       unresearched guess for a product a traveller cannot normally buy, which
+       put money on the six-resort board that nobody could spend. Omitting the
+       fields is how a resort says it has no hopper — Hong Kong and Shanghai
+       already do it this way.
+       The prices themselves were CHECKED against Tokyo's own page and needed
+       no change: the 1-Day Passport runs JPY 8,900-10,900, and the junior and
+       child ratios come out at 0.83 and 0.55 against 0.83 and 0.55 here. */
+    ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
     food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
     plans: [],
     transport: { on: 0, off: 14 },

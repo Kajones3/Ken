@@ -75,9 +75,15 @@ export const SETTINGS: SettingDef[] = [
       "Per day, added to every on-property stay. Usually zero, because Disney transport is included."),
     ...(r.ticket.hopperAdultUsd === undefined ? [] : [
       money(`hopper.${r.id}.adult`, `${r.name} — Park Hopper, adult`, "Park Hopper", r.ticket.hopperAdultUsd, 0, 400,
-        "A flat per-ticket add-on, not scaled by day count or season."),
+        "What Park Hopper adds to ONE ticket. Walt Disney World and Disneyland "
+        + "publish an add-on that grows with ticket length ($70 for a one-day up to "
+        + "$135 at Disneyland's five-day), and the app uses those real figures by "
+        + "default. Setting a number here replaces that whole table with your flat "
+        + "figure for every trip length — your number is your number. Never scaled "
+        + "by season."),
       money(`hopper.${r.id}.child`, `${r.name} — Park Hopper, child`, "Park Hopper", r.ticket.hopperChildUsd ?? 0, 0, 400,
-        "A flat per-ticket add-on for a child ticket."),
+        "The same, for a child ticket. Both US resorts charge a child the same "
+        + "hopper as an adult; leaving this alone keeps the published figures."),
     ]),
   ]),
   // Annual passes. Every tier is here because Disney raises them roughly once
