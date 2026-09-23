@@ -53,9 +53,9 @@ export interface CrowdMonth {
 
 const BASIS_NOTES: Record<CrowdYear["basis"], string> = {
   dvcPoints:
-    "Inferred from how Disney prices its own DVC points across the year — its forecast of demand, published months ahead. That is a price, not a measured wait time, so it carries none of the posted-wait bias. It is still a forecast, not a count of people.",
+    "Inferred from how Disney prices its own room inventory across the year — a real forecast of demand, published months ahead. That is a price, not a measured wait time, so it carries none of the posted-wait bias. It is still a forecast, not a count of people.",
   estimate:
-    "An estimate from school holidays, national holidays and weather — there is no DVC points chart for this resort to read. Treat it as a starting point, not a researched figure.",
+    "An estimate from school holidays, national holidays and weather — there is no year-ahead demand data for this resort yet. Treat it as a starting point, not a researched figure.",
 };
 
 /** The crowd picture for one resort in one month, or null if we have nothing.

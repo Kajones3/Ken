@@ -3017,7 +3017,7 @@ async function renderDetail(){
             <div class="kpi">
               <div class="kpitile"><div class="k"><span aria-hidden="true">👥</span>Typical crowds</div>
                 <div class="v">${esc(cr.label)}</div>
-                <div class="s">${cr.basis === "dvcPoints" ? "from DVC points pricing" : "estimated"}</div></div>
+                <div class="s">${cr.basis === "dvcPoints" ? "from real demand data" : "estimated"}</div></div>
               <div class="kpitile"><div class="k"><span aria-hidden="true">📊</span>Against the year</div>
                 <div class="v"><span class="crowdbar"><span style="width:${pct}%;background:${tone}"></span></span></div>
                 <div class="s">${cr.rank + 1} of 5</div></div>
@@ -3028,7 +3028,7 @@ async function renderDetail(){
               <small>Same resort, a different time of year</small></div>
               <div class="p">${warn.alternatives.map(a=>MONTHSFULL[a.month-1]).join(", ")}</div></div>` : ""}
             ${CROWDS_PLACEHOLDER ? `<div class="li"><div class="l"><b>Not yet checked</b>
-              <small>These bands are a first pass, not yet set against a current points chart</small></div>
+              <small>These bands are a first pass, not yet checked against real demand data</small></div>
               <div class="p">—</div></div>` : ""}
             <div class="foot"><details class="why"><summary>Where this comes from</summary>
               <div class="whybody">${esc(cr.basisNote)} It does not change the price or the order of the board —

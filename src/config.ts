@@ -1397,7 +1397,7 @@ export const CROWDS: Record<string, CrowdYear> = {
     chartMonths: [4, 5, 6, 7, 8, 9, 10, 11, 12],
     months: ["low", "high", "low", "veryLow", "veryLow", "low",
              "peak", "peak", "veryLow", "moderate", "low", "peak"],
-    why: { 2: "Chinese New Year — estimated, not on the points chart",
+    why: { 2: "Chinese New Year — estimated, not backed by real demand data",
            7: "Hong Kong school holidays, and the wettest, hottest weeks",
            8: "The busiest month of the year here",
            9: "Typhoon season keeps numbers right down — the quietest month",
