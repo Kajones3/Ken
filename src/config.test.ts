@@ -287,9 +287,11 @@ test("the picker order interleaves free and Plus airports", () => {
  * in the commit where it came from.
  */
 const CATEGORY_MEDIANS: Record<string, Partial<Record<string, number>>> = {
-  // Researched by the owner against 2026 published ranges: Value $150-390,
-  // Moderate $300-600+, Deluxe $680-1500+.
-  wdw:  { value: 270, moderate: 450, deluxe: 1090 },
+  // Value researched by the owner against 2026 published ranges: $150-390.
+  // Moderate/Deluxe RESOLVED 2026-09-23 (see config.ts's own comment on WDW's
+  // hotels array for the real per-hotel bands this was checked against):
+  // 450/1090 -> 305/700, the owner's call after a web-search cross-check.
+  wdw:  { value: 270, moderate: 305, deluxe: 700 },
   // Midpoints of per-hotel ranges researched earlier (Pixar Place $355-466,
   // Disneyland Hotel $464-631, Grand Californian $584-767).
   dlr:  { moderate: 410, deluxe: 611.5 },

@@ -14,7 +14,7 @@
  */
 import {
   CROWDS, CROWD_BANDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER,
-  type CrowdBand, type CrowdYear,
+  type CrowdBand, type CrowdYear, type CrowdWindow,
 } from "./config.js";
 
 /** How much low crowds matter to this traveller. */
@@ -49,6 +49,10 @@ export interface CrowdMonth {
   why?: string;
   /** True while the shipped rows are placeholders rather than the owner's. */
   provisional: boolean;
+  /** True when a real date-range window decided `band`, not a whole month's
+   *  average — the caller supplied a real day AND this resort has windows
+   *  covering it. Lets a card say "the actual week" rather than "the month". */
+  datePrecise: boolean;
 }
 
 const BASIS_NOTES: Record<CrowdYear["basis"], string> = {
@@ -58,21 +62,47 @@ const BASIS_NOTES: Record<CrowdYear["basis"], string> = {
     "An estimate from school holidays, national holidays and weather — there is no year-ahead demand data for this resort yet. Treat it as a starting point, not a researched figure.",
 };
 
+/** The real-date window covering month1/day, or null. First match wins, per
+ *  `windows`'s own doc comment — narrower windows are meant to sit earlier in
+ *  the array than the broader ones they carve out of. */
+function windowFor(year: CrowdYear, month1: number, day: number): CrowdWindow | null {
+  if (!year.windows) return null;
+  const md = `${String(month1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  for (const w of year.windows) if (md >= w.from && md <= w.to) return w;
+  return null;
+}
+
 /** The crowd picture for one resort in one month, or null if we have nothing.
- *  Null rather than a throw: a missing crowd box must never break a board. */
-export function crowdFor(resortId: string, month1: number): CrowdMonth | null {
+ *  Null rather than a throw: a missing crowd box must never break a board.
+ *
+ *  `day` is optional and additive: pass a real day of the month to get a
+ *  finer real-date-window band where this resort has one (see `windows` on
+ *  CrowdYear for why that exists — a monthly average can be honest and still
+ *  mislead about December or Thanksgiving). Every existing month-only caller
+ *  (quietestMonths, a bare month-to-month comparison) omits `day` and is
+ *  unaffected; only a caller pricing a real date opts into the finer answer. */
+export function crowdFor(resortId: string, month1: number, day?: number): CrowdMonth | null {
   const year = CROWDS[resortId];
   if (!year || month1 < 1 || month1 > 12) return null;
-  const band = year.months[month1 - 1];
-  if (!band) return null;
+  const monthBand = year.months[month1 - 1];
+  if (!monthBand) return null;
+
+  const window = day !== undefined ? windowFor(year, month1, day) : null;
+  const band = window?.band ?? monthBand;
+
   // PER MONTH, not per resort. A points chart rarely covers a whole year —
   // Hong Kong's runs April to December — and a card that said "from DVC
   // points pricing" over a month nobody charted would be claiming a source
   // that does not exist for it. `chartMonths` is the list that actually has
-  // one; everything else falls back to judgement and says so.
-  const charted = year.chartMonths
-    ? year.chartMonths.includes(month1)
-    : year.basis === "dvcPoints";
+  // one; everything else falls back to judgement and says so. A date-window
+  // match is real-chart-derived by construction (see `windows`'s doc
+  // comment), so it counts as charted even on a month `chartMonths` doesn't
+  // separately list.
+  const charted = window
+    ? true
+    : year.chartMonths
+      ? year.chartMonths.includes(month1)
+      : year.basis === "dvcPoints";
   const basis: CrowdYear["basis"] = charted ? "dvcPoints" : "estimate";
   return {
     resortId,
@@ -82,10 +112,11 @@ export function crowdFor(resortId: string, month1: number): CrowdMonth | null {
     rank: crowdRank(band),
     basis,
     basisNote: BASIS_NOTES[basis],
-    why: year.why?.[month1],
+    why: window?.why ?? year.why?.[month1],
     // A month read off a real chart is no longer provisional, whatever the
     // rest of the table still is.
     provisional: CROWDS_ARE_PLACEHOLDER && !charted,
+    datePrecise: window !== null,
   };
 }
 
@@ -138,9 +169,10 @@ export function crowdFlag(
   resortId: string,
   month1: number,
   sensitivity: CrowdSensitivity,
+  day?: number,
 ): CrowdFlag | null {
   if (sensitivity === "none") return null;
-  const c = crowdFor(resortId, month1);
+  const c = crowdFor(resortId, month1, day);
   if (!c) return null;
 
   const threshold = sensitivity === "high" ? crowdRank("high") : crowdRank("peak");
@@ -155,12 +187,16 @@ export function crowdFlag(
       : [];
 
   const why = c.why ? ` ${c.why}.` : "";
+  // A date-precise match describes the real window, not "typical for the
+  // whole month" — the exact distinction `windows` exists to make (this trip
+  // lands in the expensive back half of December, not "a moderate month").
+  const whenPhrase = c.datePrecise ? "for these dates" : `typical here in ${MONTH_NAMES[month1 - 1]}`;
   return {
     resortId,
     band: c.band,
     chip: c.band === "peak" ? "Peak crowds" : "Busy",
     detail:
-      `${c.label} crowds are typical here in ${MONTH_NAMES[month1 - 1]}.${why}` +
+      `${c.label} crowds are ${whenPhrase}.${why}` +
       (alternatives.length
         ? ` Quieter at this resort: ${alternatives.map((a) => MONTH_NAMES[a.month - 1]).join(", ")}.`
         : ""),

@@ -196,16 +196,33 @@ export const RESORTS: Resort[] = [
       { label: "Disney Dining Plan · Deluxe", adult: 163.01, child: 46.85 },
     ],
     transport: { on: 0, off: 35 },
+    // RESOLVED 2026-09-23 — the WDW-medians open question in CLAUDE.md.
+    // Moderate/Deluxe re-baselined from the owner's own 450/1090 to 305/700,
+    // the owner's call after a web-search cross-check (third-party rate
+    // write-ups, not Disney's own booking flow, which has no static price in
+    // its page source — only an interactive, date-driven search) landed
+    // closer to a Gemini-drafted estimate than to the owner's original
+    // figures. Value (270) was not in dispute and is unchanged.
+    //
+    // The real per-hotel BANDS this was checked against, kept here as
+    // information the single median can't carry on its own:
+    //   Moderate: Caribbean Beach $200-350, Coronado Springs $250-400 (Gran
+    //   Destino Tower specifically "from $380"), Port Orleans Riverside
+    //   $350-400.
+    //   Deluxe: overall $450-1200; Contemporary $500-900; Grand Floridian
+    //   theme-park-view rooms $1300+ (that figure is one premium room
+    //   category, not the hotel's typical rate, so it is not used as GF's
+    //   base below).
     hotels: [
       h("wdw-asm", "Disney's All-Star Movies", "Value resort", 217, "value", true),
       h("wdw-pop", "Disney's Pop Century", "Value resort", 323, "value", true),
-      h("wdw-cbr", "Disney's Caribbean Beach", "Moderate resort", 450, "moderate", true),
-      h("wdw-por", "Port Orleans Riverside", "Moderate resort", 445, "moderate", true),
-      h("wdw-gdt", "Coronado Springs · Gran Destino", "Moderate resort", 545, "moderate", true),
-      h("wdw-akl", "Animal Kingdom Lodge", "Deluxe resort", 972, "deluxe", true),
-      h("wdw-wl", "Wilderness Lodge", "Deluxe resort", 1018, "deluxe", true),
-      h("wdw-cr", "Contemporary Resort", "Deluxe resort", 1162, "deluxe", true),
-      h("wdw-gf", "Grand Floridian", "Deluxe resort", 1393, "deluxe", true),
+      h("wdw-cbr", "Disney's Caribbean Beach", "Moderate resort", 275, "moderate", true),
+      h("wdw-por", "Port Orleans Riverside", "Moderate resort", 305, "moderate", true),
+      h("wdw-gdt", "Coronado Springs · Gran Destino", "Moderate resort", 345, "moderate", true),
+      h("wdw-akl", "Animal Kingdom Lodge", "Deluxe resort", 620, "deluxe", true),
+      h("wdw-wl", "Wilderness Lodge", "Deluxe resort", 680, "deluxe", true),
+      h("wdw-cr", "Contemporary Resort", "Deluxe resort", 720, "deluxe", true),
+      h("wdw-gf", "Grand Floridian", "Deluxe resort", 950, "deluxe", true),
       h("wdw-kis", "Kissimmee value chain", "Off property · 20 min", 195, "budget", false),
       h("wdw-lbv", "Lake Buena Vista 3-star", "Off property · 15 min", 215, "budget", false),
       h("wdw-bc", "Bonnet Creek area", "Off property · 10 min", 265, "mid", false),
@@ -1272,6 +1289,35 @@ export interface CrowdYear {
   /** Optional per-month plain-language reason ("Thanksgiving week", "Golden
    *  Week"). Keyed by 1-based month. A band with no reason still renders. */
   why?: Record<number, string>;
+  /**
+   * Optional real date-range bands, finer than a whole month, for resorts
+   * whose points chart is itself period-banded rather than monthly (WDW's
+   * Animal Kingdom Villas chart is 7 real periods covering all 365 days,
+   * not 12 months). "MM-DD" to "MM-DD", inclusive, checked in array order —
+   * put narrower/later windows before the broader ones they sit inside.
+   *
+   * This exists for exactly one reason: a MONTHLY average can be honest and
+   * still mislead. December reads "moderate" averaged, but 1-23 December is
+   * one of the cheapest stretches of the year and 24-31 is the single most
+   * expensive — two completely different trips inside one label. Same shape
+   * at Thanksgiving, where the real peak is arriving Tue-Thu (22-26 Nov ish)
+   * and the weekend after is markedly cheaper, not the other way most people
+   * would guess.
+   *
+   * When a caller supplies a real day (not just a month), `crowdFor` checks
+   * these FIRST and falls back to `months`'s whole-month band only when no
+   * window matches or none are defined — so every existing month-only caller
+   * (quietestMonths, a bare "which month is quietest" comparison) is
+   * unaffected, and only a caller pricing a real date gets the finer answer.
+   */
+  windows?: CrowdWindow[];
+}
+
+export interface CrowdWindow {
+  from: string;
+  to: string;
+  band: CrowdBand;
+  why?: string;
 }
 
 /**
@@ -1324,6 +1370,30 @@ export const CROWDS: Record<string, CrowdYear> = {
            9: "The quietest month of the year here",
            11: "Moderate for most of the month, but Thanksgiving week itself is a peak",
            12: "Two different months: 1-23 December is one of the cheapest weeks of the year, Christmas week the most expensive" },
+    // Real per-period bands off the SAME 2027 Animal Kingdom Villas chart as
+    // `months` above — this is the whole point of `windows`: the monthly
+    // average is a summary of these, not a separate source. Boundaries match
+    // seasonality.ts's WDW SEASON_BANDS exactly; if the chart is ever re-read,
+    // update both together.
+    windows: [
+      { from: "09-01", to: "09-30", band: "veryLow" },
+      { from: "01-01", to: "01-31", band: "low" },
+      { from: "05-01", to: "05-14", band: "low" },
+      { from: "05-15", to: "06-10", band: "low" },
+      { from: "12-01", to: "12-23", band: "low" },
+      { from: "02-01", to: "02-15", band: "moderate" },
+      { from: "06-11", to: "08-31", band: "moderate" },
+      { from: "10-01", to: "11-23", band: "moderate" },
+      { from: "11-27", to: "11-30", band: "moderate" },
+      { from: "02-16", to: "03-20", band: "high" },
+      { from: "03-29", to: "04-30", band: "high" },
+      { from: "11-24", to: "11-26", band: "high",
+        why: "The days flying in for Thanksgiving are the real peak here — busier than the long weekend after it" },
+      { from: "03-21", to: "03-28", band: "peak",
+        why: "Spring break/Easter week — tied with Christmas as the single busiest stretch of the year" },
+      { from: "12-24", to: "12-31", band: "peak",
+        why: "Christmas/New Year's week — the single busiest stretch of the year" },
+    ],
   },
   dlr: {
     /* OWNER DATA, 2026-09-23. Read off the 2026 Disney Collection Exchange

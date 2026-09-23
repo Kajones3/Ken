@@ -45,11 +45,15 @@ that every number is either real or labelled a guess.
 
 ### Open questions for the owner — do not decide these alone
 
-1. **WDW hotel medians.** CLAUDE.md records Value/Moderate/Deluxe as
-   270/450/1090, researched by the OWNER against 2026 published ranges. A
-   Gemini-generated sheet they supplied says 225/327/727 — a 25-33% gap on
-   the two lines that decide which resort wins the board. **An AI draft does
-   not silently overwrite the owner's own research.** Unresolved.
+1. ~~**WDW hotel medians.**~~ **RESOLVED 2026-09-23.** CLAUDE.md had recorded
+   Value/Moderate/Deluxe as 270/450/1090, researched by the OWNER against 2026
+   published ranges; a Gemini-generated sheet said 225/327/727. A web-search
+   cross-check this session (third-party rate write-ups, not Disney's own
+   booking flow — its rate pages have no static price, only an interactive
+   date-driven search a fetch can't run) landed closer to the Gemini figures
+   for Moderate. The owner's call: **305/700** (Value's 270 was never in
+   dispute). See `config.ts`'s comment on WDW's hotels array for the real
+   per-hotel bands this was checked against.
 2. ~~**Shanghai's `dataConfidence` badge**~~ **RESOLVED 2026-09-23.** It claimed
    children are priced by height (1.0-1.4m, unmodelled), on model knowledge
    with no source. The owner confirmed via Shanghai's real purchase flow that
@@ -57,10 +61,20 @@ that every number is either real or labelled a guess.
    already modelled. The old claim was simply wrong, not a real cost-model
    gap, so the badge is gone (`config.ts`, `shdr`), not reworded. Pinned by a
    test named for the correction rather than the old claim.
-3. **Weekly rather than monthly crowd bands.** WDW December reads "moderate"
-   because 1-23 December is one of the cheapest periods of the year and 24-31
-   the most expensive. Thanksgiving is the same shape. The monthly average is
-   honest but blunt, and the charts support weekly. Owner's call.
+3. ~~**Weekly rather than monthly crowd bands.**~~ **BUILT 2026-09-23**, for WDW
+   (the resort with a real period-banded chart). `CrowdYear.windows` in
+   `config.ts` holds 14 real "MM-DD" date ranges off the same Animal Kingdom
+   Villas chart `months` already summarizes; `crowdFor()` takes an optional
+   `day` and checks these first, falling back to the whole-month band when no
+   day is given or no window matches — so every existing month-only caller is
+   unaffected. `server.ts` now derives that day from the trip's own priced
+   date (`best.start`), not just the search month. December: 1-23 is `low`,
+   24-31 is `peak`. Thanksgiving: 24-26 Nov (flying in) is `high`, 27-30 (the
+   weekend after) is `moderate` — genuinely the opposite of what most people
+   would guess, and now the card says so instead of averaging it away.
+   The other five resorts have no period-banded chart, so they still read
+   whole-month bands exactly as before; extend `windows` to any of them the
+   day a matching chart turns up.
 
 ### Next work, in the owner's priority order
 

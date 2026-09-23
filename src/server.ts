@@ -321,6 +321,12 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // resort's best day against another's typical day would not be comparing
     // anything, which is the one thing this app exists to do.
     const best = priceBasis === "cheapest" ? cheapest : typical;
+    // The real priced day, when there is one, drives the crowd lookup —
+    // finer than crowdMonth alone for resorts whose chart is itself
+    // period-banded rather than monthly (see CrowdYear.windows). Falls back
+    // to the month-only lookup for a resort typicalIn couldn't price at all.
+    const crowdMonthForRow = best ? Number(best.start.slice(5, 7)) : crowdMonth;
+    const crowdDay = best ? Number(best.start.slice(8, 10)) : undefined;
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
@@ -332,8 +338,8 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // for ordering. "The cheapest week is also the busiest" is a trade-off a
     // traveller should make knowingly; quietly reordering the board because
     // we guessed they would mind is the app deciding for them.
-    const crowd = crowdFor(resort.id, crowdMonth) ?? undefined;
-    const crowdWarning = crowdFlag(resort.id, crowdMonth, crowdCare) ?? undefined;
+    const crowd = crowdFor(resort.id, crowdMonthForRow, crowdDay) ?? undefined;
+    const crowdWarning = crowdFlag(resort.id, crowdMonthForRow, crowdCare, crowdDay) ?? undefined;
     return best
       ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
           /** What the rest of the month looks like around the quoted day, so

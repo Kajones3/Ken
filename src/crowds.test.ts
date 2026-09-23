@@ -171,3 +171,58 @@ test("an unknown sensitivity from a client falls back to 'somewhat'", () => {
   assert.equal(parseCrowdSensitivity("{}"), "some");
   assert.equal(parseCrowdSensitivity(7), "some");
 });
+
+/* -------------------------- real-date crowd windows ------------------------ */
+
+test("December splits into a cheap first three weeks and an expensive Christmas week", () => {
+  // The exact complaint that motivated windows: a monthly average calls all
+  // of December "moderate", which is honest and still misleading -- 1-23 and
+  // 24-31 are two different trips.
+  const early = crowdFor("wdw", 12, 10);
+  const christmas = crowdFor("wdw", 12, 26);
+  assert.equal(early?.band, "low");
+  assert.equal(christmas?.band, "peak");
+  assert.ok((early?.rank ?? 0) < (christmas?.rank ?? 0));
+  assert.equal(early?.datePrecise, true);
+  assert.equal(christmas?.datePrecise, true);
+});
+
+test("Thanksgiving's real peak is the arrival days, not the weekend after", () => {
+  const arriving = crowdFor("wdw", 11, 25); // Tue-ish, flying in for Thursday
+  const weekendAfter = crowdFor("wdw", 11, 29); // the following weekend
+  assert.equal(arriving?.band, "high");
+  assert.equal(weekendAfter?.band, "moderate");
+  assert.ok((arriving?.rank ?? 0) > (weekendAfter?.rank ?? 0));
+});
+
+test("without a day, WDW still returns its whole-month band unchanged", () => {
+  // Every existing month-only caller (quietestMonths, a bare comparison) must
+  // see exactly the old behaviour -- windows are additive, never a silent
+  // change to what a 2-argument call returns.
+  const decemberWholeMonth = crowdFor("wdw", 12);
+  assert.equal(decemberWholeMonth?.band, "moderate");
+  assert.equal(decemberWholeMonth?.datePrecise, false);
+});
+
+test("a resort with no windows defined is unaffected by passing a day", () => {
+  const withDay = crowdFor("dlr", 6, 15);
+  const withoutDay = crowdFor("dlr", 6);
+  assert.equal(withDay?.band, withoutDay?.band);
+  assert.equal(withDay?.datePrecise, false);
+});
+
+test("crowdFlag describes a date-precise match as \"for these dates\", not the whole month", () => {
+  const flag = crowdFlag("wdw", 12, "high", 26);
+  assert.ok(flag);
+  assert.match(flag!.detail, /for these dates/);
+  assert.doesNotMatch(flag!.detail, /typical here in December/);
+});
+
+test("an out-of-range day for a resort's windows falls back to the month band", () => {
+  // day=32 never matches any real "MM-DD" window -- windowFor must return
+  // null rather than throw or silently match the wrong thing.
+  assert.doesNotThrow(() => crowdFor("wdw", 1, 32));
+  const bogus = crowdFor("wdw", 1, 32);
+  assert.equal(bogus?.datePrecise, false);
+  assert.equal(bogus?.band, "veryLow"); // January's whole-month band
+});
