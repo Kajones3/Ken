@@ -663,7 +663,7 @@ export function priceTrip(
   }
 
   // --- tickets -----------------------------------------------------------
-  const multiDay = Math.max(resort.ticket.floor, 1 - resort.ticket.slope * (params.parkDays - 1));
+  const multiDay = ticketMultiDay(resort, params.parkDays);
   // Per traveller, not one running total, because an annual pass covers
   // PEOPLE. Zeroing a share of one lump sum would be arithmetic that happens
   // to land near the right answer for a party that is all adults and be
@@ -684,13 +684,20 @@ export function priceTrip(
   }
   let tickets = ticketPerHead.reduce((a, b) => a + b, 0);
 
-  // --- park hopper (flat per-ticket add-on, not scaled by parkDays or ------
-  // --- season) — silently a no-op at a resort with no hopper price. --------
+  // --- park hopper: a per-ticket add-on that scales with TICKET LENGTH -----
+  // --- where the resort publishes one, flat where it does not, and a real --
+  // --- no-op at a resort that does not sell one (Tokyo, Hong Kong, -----------
+  // --- Shanghai). Never scaled by season. ----------------------------------
   let hopperUsd = 0;
   // Owner override first, shipped value second — the same two-line shape
   // everywhere below, so there is no doubt which wins.
-  const hopperAdult = book.setting?.(`hopper.${resort.id}.adult`) ?? resort.ticket.hopperAdultUsd;
-  const hopperChild = book.setting?.(`hopper.${resort.id}.child`) ?? resort.ticket.hopperChildUsd;
+  // The owner's own figure still wins outright — if they have set one, it is
+  // used flat, because a typed number is a decision and silently scaling it
+  // by trip length would be the app overruling them.
+  const ownerAdult = book.setting?.(`hopper.${resort.id}.adult`);
+  const ownerChild = book.setting?.(`hopper.${resort.id}.child`);
+  const hopperAdult = ownerAdult ?? hopperPerTicket(resort, params.parkDays, resort.ticket.hopperAdultUsd);
+  const hopperChild = ownerChild ?? hopperPerTicket(resort, params.parkDays, resort.ticket.hopperChildUsd);
   const hopperPerHead = ages.map((age) => {
     if (!params.hopper || !hopperAdult) return 0;
     const band = bandOf(resort, age);
@@ -1048,6 +1055,63 @@ export function typicalIn(
     priced: byTotal.length,
     skipped,
   };
+}
+
+/**
+ * How much a multi-day ticket discounts a single day's gate price.
+ *
+ * Two sources, and the real one wins. Where a resort publishes actual
+ * multi-day totals (`multiDayAdultUsd`) the factor is derived from them, so
+ * the board charges what Disney charges. Everywhere else it is the old
+ * base x slope line, unchanged.
+ *
+ * Deriving rather than storing a factor is deliberate: the config holds
+ * numbers somebody can check against Disney's own page, and the arithmetic
+ * that turns them into a discount lives here where it is tested.
+ *
+ * PAST THE END OF THE TABLE the last marginal day is repeated — Walt Disney
+ * World's seventh day costs $30, so an eighth is priced at $30 too. That is
+ * far closer than falling back to a curve fitted to a different shape, and it
+ * degrades gently rather than stepping.
+ *
+ * A factor is NOT clamped to 1. Disneyland's two-day ticket genuinely costs
+ * more per day than its one-day ($167.50 against $149), so the factor is
+ * 1.124 and must stay there; clamping would quietly undercharge the single
+ * most common Disneyland trip.
+ */
+export function ticketMultiDay(resort: Resort, parkDays: number): number {
+  const days = Math.max(1, Math.round(parkDays));
+  const totals = resort.ticket.multiDayAdultUsd;
+  if (totals && totals.length >= 2 && totals[0]! > 0) {
+    const oneDay = totals[0]!;
+    let total: number;
+    if (days <= totals.length) {
+      total = totals[days - 1]!;
+    } else {
+      const last = totals[totals.length - 1]!;
+      const marginal = last - totals[totals.length - 2]!;
+      total = last + marginal * (days - totals.length);
+    }
+    const factor = total / (oneDay * days);
+    if (Number.isFinite(factor) && factor > 0) return factor;
+  }
+  return Math.max(resort.ticket.floor, 1 - resort.ticket.slope * (days - 1));
+}
+
+/**
+ * The Park Hopper add-on for one ticket of this length. Real published
+ * add-ons by day count where a resort has them, the flat figure otherwise,
+ * and zero at a resort that does not sell one at all.
+ */
+export function hopperPerTicket(
+  resort: Resort, parkDays: number, flat: number | undefined,
+): number {
+  const byDays = resort.ticket.hopperByDaysUsd;
+  if (byDays && byDays.length) {
+    const days = Math.max(1, Math.round(parkDays));
+    return byDays[Math.min(days, byDays.length) - 1] ?? flat ?? 0;
+  }
+  return flat ?? 0;
 }
 
 export function cheapestIn(
