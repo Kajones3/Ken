@@ -26,13 +26,35 @@ test("every band has a label", () => {
 });
 
 /**
- * The honesty pin. Only WDW and Disneyland have DVC inventory, so only they
- * can claim a points chart. If an international resort ever says dvcPoints,
- * the card prints a source that does not exist for it.
+ * The honesty pin, and it has already earned its keep twice.
+ *
+ * The rule is not "which resorts own DVC inventory" — Hong Kong turned out
+ * to have a real Disney Collection Exchange chart, so that version of the
+ * rule was wrong. The rule is: a month may only claim a points-chart basis
+ * if a chart actually covers it. Charts rarely cover a whole year (Hong
+ * Kong's runs April to December; Tokyo's is one quarter), and Walt Disney
+ * World's has not been supplied at all, so its twelve months are still
+ * guesses and must say so.
  */
-test("only the two DVC resorts claim a points-chart basis", () => {
-  const dvc = Object.entries(CROWDS).filter(([, y]) => y.basis === "dvcPoints").map(([id]) => id).sort();
-  assert.deepEqual(dvc, ["dlr", "wdw"]);
+test("a month claims a points chart only where one actually covers it", () => {
+  for (const [id, year] of Object.entries(CROWDS)) {
+    for (let m = 1; m <= 12; m++) {
+      const c = crowdFor(id, m);
+      assert.ok(c, `${id} month ${m} missing`);
+      if (c.basis !== "dvcPoints") continue;
+      assert.ok(year.chartMonths?.includes(m),
+        `${id} month ${m} claims a points chart, but chartMonths does not cover it`);
+    }
+  }
+});
+
+test("a charted month is no longer flagged provisional", () => {
+  const dlr = crowdFor("dlr", 6);
+  assert.equal(dlr?.basis, "dvcPoints");
+  assert.equal(dlr?.provisional, false, "a real chart reading is not a placeholder");
+  // Hong Kong's chart starts in April, so March is still judgement.
+  assert.equal(crowdFor("hkdl", 3)?.basis, "estimate");
+  assert.equal(crowdFor("hkdl", 8)?.basis, "dvcPoints");
 });
 
 test("bands rank in order, and an unknown band sorts as moderate", () => {
