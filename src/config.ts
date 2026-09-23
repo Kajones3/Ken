@@ -330,7 +330,7 @@ export const RESORTS: Resort[] = [
     // those two remain a rougher approximation than the other three.
     hotels: [
       h("tdr-ch", "Tokyo Disney Celebration Hotel", "Value · shuttle", 180, "value", true),
-      h("tdr-ts", "Toy Story Hotel", "Value · monorail", 250, "value", true),
+      h("tdr-ts", "Toy Story Hotel", "Moderate · monorail", 250, "moderate", true),
       h("tdr-tdh", "Tokyo Disneyland Hotel", "Deluxe · park gates", 460, "deluxe", true),
       h("tdr-mc", "Hotel MiraCosta", "Deluxe · inside DisneySea", 620, "deluxe", true),
       h("tdr-fs", "Fantasy Springs Hotel", "Deluxe · inside DisneySea", 700, "deluxe", true),
@@ -373,7 +373,12 @@ export const RESORTS: Resort[] = [
       note: "Shanghai charges children by height (1.0–1.4m), not age. We price by age like the other resorts, so if your child is near either cut-off the ticket total could be noticeably off. Check the official ticket page before you budget on it.",
     },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
-    ticket: { base: 82, child: 0.75, slope: 0.04, floor: 0.7 },
+    /* OWNER DATA, 2026-09-23. Shanghai's own purchase flow, October 2026
+       calendar: 22 bookable dates running CNY 475-799, mean CNY 579. At the
+       generated rate of 6.7 CNY to the dollar that is $86. The child ratio is
+       observed rather than assumed: on a CNY 719 date, Child (3-11) is CNY
+       539, which is 0.75. */
+    ticket: { base: 86, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
     plans: [],
     transport: { on: 0, off: 10 },
@@ -382,8 +387,19 @@ export const RESORTS: Resort[] = [
     // Shanghai Disneyland Hotel ~CNY1,800-3,500, at roughly CNY7/USD) — the
     // old bases sat below even the low end of the researched range.
     hotels: [
-      h("shdr-ts", "Toy Story Hotel", "Value · shuttle", 210, "value", true),
-      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 450, "deluxe", true),
+      /* OWNER DATA, 2026-09-23, from Shanghai's own booking flow for 1-10
+         December 2026. Prices there EXCLUDE a 15% service charge, which is
+         added here because a traveller pays it: Toy Story garden view CNY
+         1,427 and courtyard CNY 2,043 become $245 and $351 all-in, and the
+         Disneyland Hotel's deluxe garden/park views (CNY 2,856-3,293) become
+         $490-565.
+         Both are BELOW the annual average these bases are meant to be. Early
+         December is low season and the rates carried a stay-two-nights
+         discount, so they are set a little above what was quoted rather than
+         on it — feeding an off-peak floor into a field the seasonal
+         multiplier then discounts again is mistake #2 in CLAUDE.md. */
+      h("shdr-ts", "Toy Story Hotel", "Moderate · shuttle", 280, "moderate", true),
+      h("shdr-sdh", "Shanghai Disneyland Hotel", "Deluxe · lakeside", 520, "deluxe", true),
       h("shdr-pd", "Pudong business hotel", "Off property · 20 min", 98, "budget", false),
       h("shdr-adj", "Resort-adjacent hotel", "Off property · 10 min", 148, "mid", false),
       h("shdr-cty", "Shanghai city 5-star", "Off property · 45 min", 225, "upscale", false),
@@ -417,14 +433,32 @@ export const RESORTS: Resort[] = [
       note: "We haven't confirmed Hong Kong's child/adult ticket ages against an official source, so a family's ticket total is our least certain of the six. Worth checking the official ticket page before you budget on it.",
     },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
-    ticket: { base: 88, child: 0.72, slope: 0.045, floor: 0.68 },
+    /* OWNER DATA, 2026-09-23. Hong Kong's own reservation calendar, November
+       2026: a clean two-tier week at HKD 669 Tuesday-Thursday and HKD 759
+       Friday-Monday. Weighted across a week that is HKD 720, or $92 at the
+       generated 7.843 to the dollar.
+       The CHILD RATIO IS STILL A GUESS — the calendar shows general admission
+       only, so 0.72 is unchanged and unverified. */
+    ticket: { base: 92, child: 0.72, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87 },
     plans: [],
     transport: { on: 0, off: 12 },
     hotels: [
-      h("hkdl-hh", "Disney Hollywood Hotel", "Value · shuttle", 200, "value", true),
-      h("hkdl-el", "Disney Explorers Lodge", "Moderate · shuttle", 260, "moderate", true),
-      h("hkdl-hkd", "Hong Kong Disneyland Hotel", "Deluxe · walkable", 320, "deluxe", true),
+      /* OWNER DATA, 2026-09-23, from Hong Kong's own room list. Hollywood
+         Hotel ran HKD 2,550-2,890 and Explorers Lodge HKD 2,720-3,485; at the
+         generated 7.843 to the dollar those midpoints are $347 and $395.
+         These replace the weakest numbers in the whole table — the previous
+         figures came from "starts at" rates quoted during an active 40%-off
+         promotion, which is neither a median nor a rack rate, and they were
+         low by around 40%.
+         THE DELUXE FIGURE IS STILL DERIVED, not observed: the owner's
+         screenshots cover Hollywood and Explorers Lodge only, so Hong Kong
+         Disneyland Hotel keeps its previous ratio to Moderate (1.23x) applied
+         to the new Moderate. It is the one number here still waiting on a
+         real quote. */
+      h("hkdl-hh", "Disney Hollywood Hotel", "Value · shuttle", 345, "value", true),
+      h("hkdl-el", "Disney Explorers Lodge", "Moderate · shuttle", 395, "moderate", true),
+      h("hkdl-hkd", "Hong Kong Disneyland Hotel", "Deluxe · walkable", 485, "deluxe", true),
       h("hkdl-kln", "Kowloon hotel", "Off property · 30 min MTR", 148, "budget", false),
       h("hkdl-tc", "Tung Chung hotel", "Off property · 10 min", 188, "mid", false),
       h("hkdl-hki", "Hong Kong Island 4-star", "Off property · 40 min", 275, "upscale", false),

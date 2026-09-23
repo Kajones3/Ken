@@ -298,9 +298,15 @@ const CATEGORY_MEDIANS: Record<string, Partial<Record<string, number>>> = {
   // Kong is the weakest: the only figures found were "starts at" rates during
   // an active 40%-off promotion, which is neither a median nor a rack rate.
   dlp:  { value: 264, moderate: 326.5, deluxe: 826 },
-  tdr:  { value: 215, deluxe: 620 },
-  shdr: { value: 210, deluxe: 450 },
-  hkdl: { value: 200, moderate: 260, deluxe: 320 },
+  // Tokyo's VALUE median moved because Toy Story Hotel is a Moderate, not a
+  // Value — Disney's own reservation page lists it that way. No rate changed;
+  // one hotel changed category, which left Celebration Hotel alone in Value.
+  tdr:  { value: 180, moderate: 250, deluxe: 620 },
+  // Re-based 2026-09-23 from the owner's own screenshots of each resort's
+  // booking flow. See the notes in config.ts for what each figure is and,
+  // where it matters, what it is not.
+  shdr: { moderate: 280, deluxe: 520 },
+  hkdl: { value: 345, moderate: 395, deluxe: 485 },
 };
 
 function median(xs: number[]): number {
