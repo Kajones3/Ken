@@ -418,7 +418,6 @@ export const RESORTS: Resort[] = [
     ],
     goodToKnow: [
       "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
-      "Shanghai Disney's real ticket pricing bands some rides by height, not just age — not modeled here; the age-based child/adult split below is a simplification.",
     ],
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
@@ -432,15 +431,14 @@ export const RESORTS: Resort[] = [
     // so a US-origin lookup returns nothing and still costs a metered search.
     // PVG is the real gateway.
     altArrivalAirports: [],
-    // Shanghai prices children by HEIGHT (1.0-1.4m), not age — a different
-    // system from every other resort here, and one this model does not
-    // represent at all. The age bands below are a stand-in taken from model
-    // knowledge rather than a source, so a family's ticket total can be off
-    // in a way the general ticket disclaimer does not cover.
-    dataConfidence: {
-      level: "Rough ticket pricing",
-      note: "Shanghai charges children by height (1.0–1.4m), not age. We price by age like the other resorts, so if your child is near either cut-off the ticket total could be noticeably off. Check the official ticket page before you budget on it.",
-    },
+    // CORRECTED 2026-09-23: this badge used to claim Shanghai charges
+    // children by height (1.0-1.4m) rather than age, taken from model
+    // knowledge with no source. The owner's own screenshot of Shanghai's
+    // real purchase flow shows AGE bands — Standard 12-59, Child 3-11 —
+    // which is exactly what `bands` below already models. The old claim
+    // was simply wrong, not a real cost-model gap, so the badge is gone
+    // rather than reworded. Same rule as everywhere else in this file: a
+    // badge that outlives its reason trains people to ignore badges.
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     /* OWNER DATA, 2026-09-23. Shanghai's own purchase flow, October 2026
        calendar: 22 bookable dates running CNY 475-799, mean CNY 579. At the

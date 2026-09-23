@@ -18,9 +18,9 @@ import {
  * implementation detail: adding or removing a badge should be a deliberate
  * edit that fails a test first, never something that drifts.
  */
-test("only the three resorts with real cost-model gaps carry a confidence badge", () => {
+test("only the resorts with real cost-model gaps carry a confidence badge", () => {
   const flagged = RESORTS.filter((r) => r.dataConfidence).map((r) => r.id).sort();
-  assert.deepEqual(flagged, ["dlp", "hkdl", "shdr"]);
+  assert.deepEqual(flagged, ["dlp", "hkdl"]);
 });
 
 test("Paris's badge names the actual gap: we price room-only, Disney bundles", () => {
@@ -37,17 +37,17 @@ test("Paris's badge names the actual gap: we price room-only, Disney bundles", (
   );
 });
 
-test("Shanghai's badge names the actual gap: height bands, which are not modelled", () => {
+test("Shanghai carries no badge, now that its age bands are owner-verified", () => {
+  // Corrected 2026-09-23: this used to claim Shanghai charges by height, not
+  // age, with no source. The owner's own screenshot of Shanghai's purchase
+  // flow showed age bands (Standard 12-59, Child 3-11) — exactly what `bands`
+  // already modelled — so the claim was wrong, not a real gap, and the badge
+  // was removed rather than reworded. This pins the correction: if a badge
+  // reappears here, it needs a real, sourced reason, not a reversion to the
+  // unverified height claim.
   const shdr = RESORT_BY_ID.get("shdr")!;
-  assert.ok(shdr.dataConfidence);
-  assert.match(shdr.dataConfidence!.note, /height/i);
-  // The badge must stay true to the model. If height banding is ever
-  // implemented, `bands` grows a height field and this assertion is the
-  // reminder to drop the badge rather than leave it lying to people.
-  assert.ok(
-    !("height" in (shdr.bands as object)),
-    "height banding appears to be modelled now — remove Shanghai's badge",
-  );
+  assert.equal(shdr.dataConfidence, undefined);
+  assert.deepEqual(shdr.bands, { freeUnder: 3, child: [3, 11], adult: 12 });
 });
 
 test("Hong Kong's badge names the actual gap: unverified age bands", () => {
@@ -76,7 +76,7 @@ test("every badge renders and gives the reader somewhere to check", () => {
 test("a badged resort is still fully priced — badging is not hiding", () => {
   // The whole point of choosing badges over a staged launch: all six resorts
   // still price. A badge that quietly disabled a resort would defeat it.
-  for (const id of ["shdr", "hkdl", "dlp"]) {
+  for (const id of ["hkdl", "dlp"]) {
     const r = RESORT_BY_ID.get(id)!;
     assert.ok(r.ticket.base > 0, `${id} must still have real ticket pricing`);
     assert.ok(r.hotels.length > 0, `${id} must still have hotels to price`);

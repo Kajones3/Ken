@@ -50,11 +50,13 @@ that every number is either real or labelled a guess.
    Gemini-generated sheet they supplied says 225/327/727 — a 25-33% gap on
    the two lines that decide which resort wins the board. **An AI draft does
    not silently overwrite the owner's own research.** Unresolved.
-2. **Shanghai's `dataConfidence` badge** claims children are priced by height
-   (1.0-1.4m, unmodelled). The owner's own screenshot of Shanghai's purchase
-   flow shows AGE bands — Standard 12-59, Child 3-11 — which is exactly what
-   is modelled. The badge is probably removable; it has not been removed on
-   the strength of one screenshot.
+2. ~~**Shanghai's `dataConfidence` badge**~~ **RESOLVED 2026-09-23.** It claimed
+   children are priced by height (1.0-1.4m, unmodelled), on model knowledge
+   with no source. The owner confirmed via Shanghai's real purchase flow that
+   it uses AGE bands — Standard 12-59, Child 3-11 — exactly what `bands`
+   already modelled. The old claim was simply wrong, not a real cost-model
+   gap, so the badge is gone (`config.ts`, `shdr`), not reworded. Pinned by a
+   test named for the correction rather than the old claim.
 3. **Weekly rather than monthly crowd bands.** WDW December reads "moderate"
    because 1-23 December is one of the cheapest periods of the year and 24-31
    the most expensive. Thanksgiving is the same shape. The monthly average is
@@ -1469,9 +1471,12 @@ than it is — this is the comparison people get wrong.
   announcement — not fetched from Disney's own site directly (blocked from this
   environment's network). Re-check closer to booking; multi-year construction projects
   slip.
-- **Shanghai and Hong Kong age bands** come from model knowledge, not a source. Both are
-  configured as free under 3 / child 3–11 / adult 12+. Shanghai actually bands by *height*
-  (1.0–1.4m), which is not modelled at all.
+- **Hong Kong's age bands** come from model knowledge, not a source. Configured as free
+  under 3 / child 3–11 / adult 12+ — still unverified against Hong Kong Disneyland's own
+  ticket page, hence its own `dataConfidence` badge. **Shanghai's are no longer in this
+  category** (resolved 2026-09-23): the owner confirmed the same 3–11/12+ split against
+  Shanghai's real purchase flow, which also settled that Shanghai bands by *age*, not
+  *height* as an earlier, unsourced assumption here claimed.
 - **Ticket affiliate commission rates** (used ~3–6% in the revenue estimate). This is the
   largest commission line and the least certain number in the business case.
 - **Travelpayouts response shapes.** `providers/travelpayouts.ts` was written to the
