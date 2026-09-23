@@ -57,11 +57,26 @@ test("Shanghai's day-of-week curve is borrowed from Hong Kong, not its own", () 
   }
 });
 
-test("Shanghai's season curve is borrowed from Hong Kong, not its own", () => {
-  // same multiplier, deliberately different label -- Shanghai's says "borrowed"
+test("Shanghai's season curve is Hong Kong's shape, except its own real Golden Week", () => {
+  // Every OTHER window is still Hong Kong's ratios -- but not Hong Kong's exact
+  // numbers, because inserting one real, sharper Shanghai-specific week (Golden
+  // Week) and renormalizing the whole curve back to a ~1.0 annual average
+  // rescales every other window by the same small constant factor. That
+  // factor should be the same everywhere outside Golden Week.
+  const factors: number[] = [];
   for (const d of range("2026-01-01" as ISODate, "2026-12-31" as ISODate)) {
-    assert.equal(seasonOf("shdr", d).m, seasonOf("hkdl", d).m);
+    if (d >= "2026-10-01" && d <= "2026-10-07") continue;
+    factors.push(seasonOf("shdr", d).m / seasonOf("hkdl", d).m);
   }
+  const first = factors[0]!;
+  for (const f of factors) assert.ok(Math.abs(f - first) < 0.001, "the scale-down factor should be constant");
+});
+
+test("Shanghai's real Golden Week (Oct 1-7) is a sharper spike than Hong Kong's own October", () => {
+  const shanghaiGoldenWeek = seasonOf("shdr", "2026-10-03" as ISODate).m;
+  const hongKongOctober = seasonOf("hkdl", "2026-10-03" as ISODate).m;
+  assert.ok(shanghaiGoldenWeek > hongKongOctober * 1.3,
+    "Shanghai's real Golden Week evidence should clearly beat a borrowed October figure");
 });
 
 /* --------------------- specific, checkable calendar facts ------------------ */

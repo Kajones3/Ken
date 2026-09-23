@@ -174,28 +174,39 @@ const SEASON_BANDS: Record<string, Window[]> = {
     ["11-04","12-19", 0.866, "shoulder, extrapolated from Disneyland's shape"],
     ["12-20","12-31", 1.342, "override, NOT measured -- Christmas"],
   ],
-  // Shanghai Disney Resort has NO chart at all -- it isn't part of Disney
-  // Vacation Club's exchange collection, so there is nothing to calibrate
-  // from directly. Borrowed wholesale from Hong Kong (same region, and
-  // CLAUDE.md already flags both as this app's weakest-confidence resorts)
-  // rather than left on a flat multiplier, on the owner's instruction
-  // 2026-09-23. Replace the day this resort gets its own real screenshots --
-  // the owner has offered to supply Hong Kong pricing screenshots to refine
-  // this further, which would refine Shanghai's borrowed curve too.
+  // Shanghai Disney Resort has NO DVC chart at all -- it isn't part of Disney
+  // Vacation Club's exchange collection. Still borrowed wholesale from Hong
+  // Kong (same region, and CLAUDE.md already flags both as this app's
+  // weakest-confidence resorts) for every window except one.
+  //
+  // The one exception is real: the owner supplied Shanghai Disneyland's own
+  // live one-day-ticket calendar for October 2026, and it shows a National
+  // Day "Golden Week" (Oct 1-7) spike of ~1.48x the very next ordinary week
+  // (Oct 1-7 averaged CNY720 vs Oct 8-14's CNY485) -- sharper than anything
+  // in Hong Kong's own October, because Golden Week is a mainland-China-wide
+  // holiday that hits Shanghai harder than it hits Hong Kong specifically.
+  // That single week is now Shanghai's own real number, not Hong Kong's;
+  // every other window is still borrowed and still flagged as such.
+  // (The same screenshots also gave two real on-property nightly snapshots --
+  // Toy Story Hotel ~$299-352 and Shanghai Disneyland Hotel ~$474-652 for
+  // late-Sept 2026 dates, both converted at this app's own CNY rate. Both
+  // bracket the existing config.ts bases ($280 moderate / $520 deluxe)
+  // closely enough that nothing here needed correcting.)
   shdr: [
-    ["01-01","01-31", 0.896, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["02-01","02-14", 1.255, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["02-15","02-28", 0.941, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["03-01","03-31", 0.914, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["04-01","04-30", 0.909, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["05-01","05-31", 0.915, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["06-01","06-30", 0.964, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["07-01","07-31", 1.133, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["08-01","08-31", 1.172, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["09-01","09-30", 0.896, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["10-01","10-31", 1.009, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["11-01","11-30", 0.974, "borrowed from Hong Kong -- no Shanghai DVC data"],
-    ["12-01","12-31", 1.119, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["01-01","01-31", 0.888, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["02-01","02-14", 1.244, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["02-15","02-28", 0.932, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["03-01","03-31", 0.906, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["04-01","04-30", 0.901, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["05-01","05-31", 0.907, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["06-01","06-30", 0.955, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["07-01","07-31", 1.123, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["08-01","08-31", 1.161, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["09-01","09-30", 0.888, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["10-01","10-07", 1.484, "REAL -- Shanghai's own Oct 2026 ticket calendar (National Day Golden Week)"],
+    ["10-08","10-31", 1.000, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["11-01","11-30", 0.965, "borrowed from Hong Kong -- no Shanghai DVC data"],
+    ["12-01","12-31", 1.109, "borrowed from Hong Kong -- no Shanghai DVC data"],
   ],
 };
 
