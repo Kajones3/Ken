@@ -1246,6 +1246,107 @@ weeks apart for no reason a traveller could see.
   (matching `ROUTE_CORRECTION_MIN_SAMPLES`) restore the old full-trust
   behavior exactly.
 
+**"Pin exact dates" is gone, replaced by named holiday weeks — one canonical
+range, priced identically at all six resorts** (2026-09-25). The owner's own
+framing settled the design: "Paris doesn't move during Thanksgiving. That's
+the point. A week in Paris during Thanksgiving might beat a week in
+Disneyland in May." A free-text date pair implied day-level precision the
+flight model never had (see the fare-blending entry above) and, worse,
+priced ONE fixed day rather than scanning for a real typical one. Named
+weeks do neither.
+
+`src/holidayWindows.ts` (pure, tested, no I/O — same shape as pricing.ts and
+crowds.ts) is the one home for this:
+
+- *December always splits the same way, whatever the year* — "Before
+  Christmas" (Dec 1–23) and "Around Christmas" (Dec 24–31) are fixed MM-DD
+  ranges, since Christmas doesn't move.
+- *Thanksgiving is REAL calendar math, not a fixed range* — the 4th Thursday
+  of November, computed per year (`thanksgivingDate()`), with a window from
+  two days before through four days after (Tue arrival through the following
+  Monday) — chosen to match the real WDW crowd-window finding already built
+  this project (Nov 24-26 arrival days, Nov 27-30 the weekend after), so the
+  two features agree on what "Thanksgiving week" means. A hardcoded MM-DD
+  range would have quietly drifted wrong the next year Thanksgiving fell on
+  a different date.
+- *Two were deliberately left out, both checked against real data rather
+  than guessed:* July 4th/Labor Day (Disneyland's own real 2026 chart
+  explicitly says these "barely move the price at all" — see
+  seasonality.ts's `dlr` comment; building a window for a premium that isn't
+  real would be the ERA5 rain-day mistake in another costume) and spring
+  break (real, but genuinely resort-shaped rather than one calendar week —
+  WDW spikes hard for exactly one week then stays elevated through April,
+  Disneyland's real data barely moves, Paris ramps differently again; it
+  also spans two calendar months, which the single-month picker isn't
+  shaped for yet — a follow-up, not forced into this one).
+- *The client never computes or sends dates for a window — only an id.*
+  Same rule a curated promo's effect follows: `/api/meta` sends
+  `holidayWindows` (id + label per "YYYY-MM", for the ~14 months the picker
+  offers) purely so the dropdown can render itself, and `compare()` resolves
+  the id back to real dates itself via the same `holidayWindowsFor()`. A
+  client that lied about the dates would just get an unrecognised id and
+  fall back to the whole month.
+- *A saved trip stores the id (`params.window`), not raw dates* — the alert
+  job re-derives the same real range from `params.month` + `params.window`
+  months later, the same way it already re-derives everything else from a
+  saved row rather than trusting stored numbers to still be true.
+- *Verified against a live server, not just tests*: WDW's December scan
+  landed on Dec 22 (whole month) vs. Dec 27 at $1,296/night (Around
+  Christmas) — a real, materially different day and price. Disneyland
+  Paris's Thanksgiving-week hotel line came back **byte-for-byte identical**
+  to its whole-November scan ($766.47 either way), while WDW's moved
+  ($866.93) — the exact "Paris doesn't move, Disneyland does" comparison the
+  owner described, working for real rather than asserted.
+
+**Flights get a real, sourced holiday premium too — deliberately NOT derived
+from Parkfare's own BTS pipeline** (2026-09-25, the owner: "we have years of
+BTS data ... use that big brain and find the pattern"). Worth stating
+plainly why that specific ask can't be met the way it was asked: BTS DB1B is
+reported by QUARTER ONLY, with no month or day field at all. Thanksgiving
+and an ordinary November Tuesday both fall in Q4 and are statistically
+indistinguishable in DB1B — no amount of cleverness extracts a day-level
+pattern from data that was never collected at day-level granularity. This is
+structural, the same category of limit as "BTS is a US-domestic survey, so
+international routes get sampled instead" above, not a bug to fix later.
+
+What's used instead: a real, cited third-party fare study (Upgraded Points,
+2025 season — real Google Flights data across the 10 busiest US domestic
+routes, 40,000+ flights, comparing an early-November control week against
+the Thanksgiving and Christmas travel windows: **+55% and +58%**
+respectively, with the weekend right after Thanksgiving spiking hardest of
+all). Same standing as the IRS mileage rate or the hopper differentials — a
+real, sourced number, owner-editable (`flight.thanksgivingPremiumPct`,
+`flight.christmasPremiumPct`) because trusting a national average against
+any one route is a judgement call, not something this app measured itself.
+
+- *Applies to the calendar DATE, independent of the search UI.* A Dec 26
+  flight is pricier whether you scanned the whole month or picked "Around
+  Christmas" — `holidayFlightPremium(date)` is pure calendar math, computed
+  in `pricing.ts` from `start` directly, never from which window (if any)
+  the search happened to use.
+- *Never touches a REAL cached fare, only the fallback estimate.* A real
+  per-date fare already reflects whatever the market actually charges for
+  that date; layering a synthetic national-average premium on top would
+  double-count. Computed AFTER the `useRow` decision (which real-vs-estimate
+  comparison uses the RAW, unadjusted estimate) so the premium can never
+  itself tip a real row into looking "too cheap" and getting overridden.
+- *A test pins each half*: a Thanksgiving-week date with no real fare gets
+  the premium (and reports `holidayPremiumPct`/`holidayLabel` so the card
+  can say so); the same date WITH a real cached fare shows the real fare,
+  completely unmoved; the setting is genuinely owner-editable.
+
+**Food gets a real breakdown, not a random range — designed, not yet
+built** (2026-09-25, the owner: "Eating at Hoopty Doo Review is a lot more
+than Casey's Corner and we can help the user estimate that if we are clear
+rather than just giving them a box"). Agreed direction, deliberately
+deferred rather than rushed: the four existing dining styles (grocery /
+quick-service / mix / table-service) are already effectively discrete real
+options with genuinely different numbers, closer to the hotel-category
+spread than to an invented low-high band. The owner has a more specific
+idea for how to build this and ran out of tokens mid-session — pick this up
+fresh next time rather than guessing at what "help the user estimate that"
+means without asking.
+
 **The exact-fare caps bound ONE BUTTON, not searching** (2026-09-22, the owner:
 "I don't want the entire site limited to six exact searches"). Worth stating
 plainly because the names do not say it. Comparing six resorts, twelve months
@@ -1754,8 +1855,11 @@ path. BTS ingests baselines for BOTH lists — the survey is one file covering
 every US airport, so withholding data would cost nothing and buy nothing — so
 an unpre-cached origin still prices fine from its own BTS-baseline estimate,
 just without the nightly cache's freshness. **Real travel dates** (Mar 18-24,
-not "sometime in March") are free for everyone too now, via the `date` param
-compare() already had, with nights derived from the gap.
+not "sometime in March") were free for everyone too, via the `date` param
+compare() already had, with nights derived from the gap — **since REPLACED
+2026-09-25 by named holiday weeks (`holidayWindows.ts`)**, a different
+mechanism entirely; see that decision note for why a free-text date pair
+was replaced rather than kept alongside the new picker.
 
 **Timestamps: never `String(aDate)` to compare them.** Postgres returns
 timestamptz as JS Date objects and `String()` formats to WHOLE SECONDS, silently
@@ -2298,11 +2402,11 @@ the warning that there is nowhere to send warnings.
   `distanceMiles`/`lat`/`lon` field, only a free-text `descriptor` — building this needs
   new structured data across ~30-40 hotels, deliberately deferred (the owner picked the
   cheaper "Need a hotel?" toggle for this round instead).
-- **The trip form's "Arriving" field is a month picker**, with real travel dates as a
-  separate Plus control beside it. Filling both dates now stands the month down visibly
-  and the search refuses a half-filled pair rather than falling back to the month —
-  which is how a February trip came back priced for March, and how the Booking.com link
-  then carried March's dates.
+- ~~The trip form's "Arriving" field is a month picker, with real travel dates as a
+  separate Plus control beside it.~~ **REPLACED 2026-09-25**: free-text "pin exact
+  dates" is gone entirely. A month that has a real named holiday week (December,
+  Thanksgiving) now shows a "Which week" sub-picker instead — see the decision note
+  above for why and how `holidayWindows.ts` works.
 - **Disney's own hotel pages cannot accept dates in a URL** — established, not assumed;
   see the decision note above. The card carries the party size instead and tells the
   traveller to enter their dates. Whether Disney has a children parameter is the one

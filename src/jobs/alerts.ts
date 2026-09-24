@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { RESORT_BY_ID } from "../config.js";
 import { addDaysISO, monthBounds, range, todayISO } from "../dates.js";
+import { holidayWindowsFor } from "../holidayWindows.js";
 import { getDb, type Db } from "../db.js";
 import { loadBook } from "../book.js";
 import { bucketFor } from "../config.js";
@@ -91,14 +92,19 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
 
   const candidates: Candidate[] = [];
   for (const row of rows) {
-    const params = row.params as TripParams & { month?: string; resortId?: string; gasPriceAtSaveUsd?: number };
+    const params = row.params as TripParams & { month?: string; window?: string; resortId?: string; gasPriceAtSaveUsd?: number };
     const overrides = (row.overrides ?? {}) as Overrides;
     const resortId: string = params.resortId ?? "wdw";
     const resort = RESORT_BY_ID.get(resortId);
     if (!resort) continue;
 
     const month = params.month ?? todayISO().slice(0, 7);
-    const [from, to] = monthBounds(month);
+    // A trip saved against a named holiday window (see holidayWindows.ts)
+    // must re-price against that same real week, not the whole month it
+    // sits in — otherwise a saved "Around Christmas" search would silently
+    // widen back out to all of December on its next alert check.
+    const holidayWindow = params.window ? holidayWindowsFor(month).find((w) => w.id === params.window) : undefined;
+    const [from, to] = holidayWindow ? [holidayWindow.from, holidayWindow.to] : monthBounds(month);
     const book = await loadBook(db, {
       origin: params.origin, destinations: [resort.iata], resortIds: [resort.id],
       from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),

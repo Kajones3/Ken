@@ -16,6 +16,7 @@ import {
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
+import { holidayFlightPremium } from "./holidayWindows.js";
 import {
   findTier, passPriceKey, dvcCredit, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY,
   type PassHolding, type DvcRental,
@@ -167,6 +168,13 @@ export interface FlightRow {
      *  number a human has corrected deserves to say so, and it is still an
      *  estimate, not a quote. */
     ownerCorrected?: boolean;
+    /** Set when `start` falls in a real named holiday travel week (see
+     *  holidayWindows.ts) and this estimate was moved by that week's
+     *  owner-editable premium — never applied to a real cached fare, only
+     *  to the fallback estimate, so a real per-date price is never
+     *  double-counted against a national-average adjustment. */
+    holidayPremiumPct?: number;
+    holidayLabel?: string;
   };
 }
 /**
@@ -623,16 +631,34 @@ export function priceTrip(
     // against a leaned figure would start overriding real fares far more
     // often, which is a different change wearing this one's clothes.
     const useRow = !!row && !(est && est.med > row.price);
+    // A holiday week's premium only ever adjusts an ESTIMATE, never a real
+    // cached fare — a real fare for that exact date already reflects
+    // whatever the market actually charges, so layering a national-average
+    // premium on top of it would double-count. Computed from `est` (the raw,
+    // unmodified estimate) only when useRow is already decided, so the
+    // premium can never itself tip a real row into looking "too cheap" and
+    // getting overridden — see holidayFlightPremium's own doc comment for
+    // why this can't come from BTS.
+    const holiday = !useRow ? holidayFlightPremium(start) : null;
+    const estAdjusted = est && holiday
+      ? (() => {
+          const pct = book.setting?.(holiday.settingKey) ?? holiday.defaultPct;
+          const mult = 1 + pct / 100;
+          const r2 = (n: number) => Math.round(n * 100) / 100;
+          return { ...est, low: r2(est.low * mult), med: r2(est.med * mult), high: r2(est.high * mult),
+                    holidayPremiumPct: pct, holidayLabel: holiday.label };
+        })()
+      : est;
     // Whenever an ESTIMATE is what gets shown, it is leaned. See
     // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
     // estimate that comes in low is the one that costs somebody at checkout.
     const leanPct = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
-    const estShown = est ? leanedFare(est, leanPct) : undefined;
+    const estShown = estAdjusted ? leanedFare(estAdjusted, leanPct) : undefined;
     // Flying: an override may raise the fare but never fall below the cheapest fare we know of —
     // "cheapest we know of" is still the real row, even on the rare date the median corrects it up.
     // Miles: a real redemption isn't a market-price guess, so no floor — it can go below the
     // cheapest cash fare, discounted straight off the cache (or the user's own number, if set).
-    const floor = row?.price ?? est?.med ?? 0;
+    const floor = row?.price ?? estAdjusted?.med ?? 0;
     const modelFare = useRow ? row!.price : (estShown ?? floor);
     if (transportMode === "miles") {
       const base = ov.farePerSeat !== undefined ? ov.farePerSeat : modelFare;
@@ -657,8 +683,8 @@ export function priceTrip(
       // and it has to be the same one the total was built from. Having the
       // two disagree is worse than either choice on its own: a reader adds
       // up the card and gets a different answer from the board.
-      : est
-      ? { price: estShown ?? est.med, estimate: est }
+      : estAdjusted
+      ? { price: estShown ?? estAdjusted.med, estimate: estAdjusted }
       : null;
   }
 

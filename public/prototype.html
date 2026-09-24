@@ -268,9 +268,6 @@ a{color:var(--ink)}
 .viewtog button{background:var(--surface); border:0; padding:6px 11px; font-size:12px; font-weight:600; color:var(--ink-2)}
 .viewtog button[aria-pressed="true"]{background:var(--ink); color:var(--plane)}
 
-.f.stooddown{opacity:.42}
-.f.stooddown label{text-decoration:line-through}
-#exactDatesHint.needsend{color:var(--accent); font-weight:600}
 .estnote.staynote{color:var(--ink-2)}
 /* Weather: a KPI row of stat tiles, not a chart — three headline numbers is
    the case where a chart is the wrong form. Values wear ink tokens and the
@@ -757,19 +754,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <label for="month">Arriving</label>
         <select id="month"></select>
       </div>
-      <div class="f" id="exactDatesField" style="margin-top:10px">
-        <div class="labelrow">
-          <label for="exactDate">Or pin real travel dates</label>
-        </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-          <input type="date" id="exactDate" aria-label="Departure date">
-          <span style="color:var(--muted); font-size:12px">to</span>
-          <input type="date" id="exactReturn" aria-label="Return date">
-          <button class="btn btn-sm" id="clearExactDates" type="button" hidden>Clear</button>
-        </div>
-        <small id="exactDatesHint" style="color:var(--muted)">
-          Leave this blank to scan a whole month for the cheapest arrival, or pin the exact
-          days you're actually travelling.</small>
+      <div class="f" id="windowField" style="margin-top:10px" hidden>
+        <label for="window">Which week</label>
+        <select id="window"></select>
+        <small id="windowHint" style="color:var(--muted)"></small>
       </div>
     </div>
 
@@ -1243,6 +1231,7 @@ let crowdRanking = null;
 let CLIMATE = {};        // resortId -> twelve {highF, lowF, rainDays, note?} rows, January first
 let CROWDS_PLACEHOLDER = false;  // true while the shipped crowd bands are a first pass, not the owner's own
 let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
+let HOLIDAY_WINDOWS = {};  // "YYYY-MM" -> [{id,label,from,to}], only for months with one
 let DVC_DEFAULT_PER_POINT = 18;
 let RESORT_BY_ID = new Map();
 
@@ -1438,7 +1427,9 @@ function fillFormOptions(){
   $("#overnightNights").value = "1";
   $("#parkdays").value = "4";
   $("#month").value = monthOpts[5][0];
+  syncWindowUi();
 }
+$("#month").addEventListener("change", syncWindowUi);
 
 const DEFAULT_AGES = [11,8,2];   // 11 is the age the resorts actually disagree about
 function buildAges(){
@@ -1495,23 +1486,7 @@ function readPasses(){
 function readParams(){
   const needHotel = $("#needHotel").value;
   const gettingThere = $("#gettingThere").value;
-  const exactDate = exactDatesActive() ? $("#exactDate").value : "";
-  const exactReturn = exactDatesActive() ? $("#exactReturn").value : "";
-  /**
-   * Pinned dates decide the trip length, HERE — not only in the query.
-   *
-   * They used to be derived inside compareQuery(), so the request priced the
-   * real gap while everything on the page went on using the nights dropdown.
-   * Pin 10–17 July against a dropdown still reading 6 and the board priced
-   * seven nights, then titled the card "Hotel · 6 nights", divided by six for
-   * the per-night figure, and built the hotel and flight links to come home a
-   * day early. One trip, two different lengths, and the only visible symptom
-   * was a click-through landing on the wrong week.
-   *
-   * There is one nights value now and everything reads it.
-   */
-  const gap = exactDate && exactReturn ? nightsBetween(exactDate, exactReturn) : 0;
-  const nights = gap > 0 ? gap : +$("#nights").value;
+  const nights = +$("#nights").value;
   return {
     origin: $("#origin").value,
     adults: +$("#adults").value,
@@ -1531,11 +1506,10 @@ function readParams(){
     dvcPoints: +$("#dvcPoints").value || 0,
     dvcPerPoint: +$("#dvcPerPoint").value || 0,
     month: $("#month").value,
-    // Free. When both are set, the search prices those exact days instead
-    // of scanning the month — nights is derived from the gap, so the trip
-    // length matches the dates rather than the separate nights picker.
-    exactDate,
-    exactReturn,
+    // Which real named week within the month to scan, if the picked month
+    // has one and a sub-option was chosen — "" (the default "Whole month")
+    // means scan the month exactly as before. See holidayWindows.ts.
+    window: $("#windowField").hidden ? "" : $("#window").value,
     gettingThere,
     flyRentalCar: $("#flyRentalCar").value === "1",
     driveRentalCar: $("#driveRentalCar").value === "1",
@@ -1678,70 +1652,44 @@ function tripQuery(){
 }
 function compareQuery(){
   const q = { ...tripQuery(), month: params.month, overrides: JSON.stringify(OV), destinations: JSON.stringify(destinationChoice) };
-  // Pinned travel dates win over the month scan. The server prices that one
-  // arrival date; nights comes from the gap between the two dates so the trip
-  // length always matches what was actually picked.
-  if(params.exactDate && params.exactReturn){
-    q.date = params.exactDate;
-    q.month = params.exactDate.slice(0,7);
-    // params.nights is already the gap — readParams derives it, so the page
-    // and the request can never disagree about how long the trip is.
-  }
+  // A named holiday window narrows the scan to a real week within the month
+  // — resolved server-side from just this id (holidayWindows.ts), same rule
+  // a curated promo's effect follows. Never sent as raw dates.
+  if(params.window) q.window = params.window;
   return q;
 }
-/** Whole nights between two YYYY-MM-DD dates, UTC so no timezone drift. */
-function nightsBetween(a, b){
-  return Math.round((new Date(b+"T00:00:00Z") - new Date(a+"T00:00:00Z")) / 86400000);
-}
-/** Both dates set, in order, and the user is entitled to use them. */
 /**
- * Set min/max ONLY when they actually change.
+ * Fills and shows/hides the "Which week" control under the month picker,
+ * from the real named windows /api/meta sent for the currently-selected
+ * month (December, Thanksgiving — see holidayWindows.ts; most months have
+ * none, and the field simply stays hidden).
  *
- * This looks like a pointless micro-optimisation and is nothing of the kind.
- * Assigning `input.min` in Chrome while somebody is typing DISCARDS a value
- * that currently falls outside the new bound — and a date being typed by hand
- * is out of bounds for most of its life, because a year arrives one digit at a
- * time: "2027" is 0002, then 0020, then 0202 before it is ever 2027. Since
- * syncExactDatesUi() ran on every keystroke and reassigned min and max every
- * time, the box blanked itself on the second digit of the year and hand entry
- * could never finish. The calendar picker was unaffected — it commits one
- * whole in-range date — which is exactly why this read as "the calendar is
- * fine but typing doesn't work".
- *
- * Re-assigning the SAME string still triggers it, so comparing first is the
- * fix, not a shortcut around one.
+ * Replaces the old free-text "pin exact dates" control entirely (removed
+ * 2026-09-25, the owner's call): a hand-typed date pair let someone imply
+ * day-level precision the flight model didn't actually have, and it priced
+ * one fixed day rather than scanning for the typical one. A named week does
+ * neither — it's a real, bounded range, scanned the same way a whole month
+ * is, and it's the SAME canonical range at all six resorts. "Paris doesn't
+ * move during Thanksgiving. That's the point": each resort's own real
+ * season data decides whether the week is actually pricier for it, so
+ * Disneyland can show a real Thanksgiving premium right beside Paris
+ * showing none, in the same comparison.
  */
-/** Set when a date was cleared for a reason the traveller can't see, so the
- *  hint can say so. A box that empties itself silently is how somebody decides
- *  the feature is broken — which is exactly what happened here. */
-let exactDatesMsg = "";
-
-function setBound(el, which, value){
-  if(el.getAttribute(which) !== value) el.setAttribute(which, value);
-}
-
-/** A date the app can actually price: a real date inside the booking window.
- *  A half-typed year ("0002-03-09") is a syntactically valid date and a
- *  completely useless one, so it counts as "still typing", never as a date
- *  somebody chose. */
-function dateUsable(v){
-  if(!v) return false;
-  const today = new Date().toISOString().slice(0,10);
-  return v >= today && v <= CAL_TO;
-}
-
-function exactDatesActive(){
-  const a = $("#exactDate").value, b = $("#exactReturn").value;
-  if(!dateUsable(a) || !dateUsable(b)) return false;
-  return nightsBetween(a, b) > 0;
-}
-/** One exact-date box filled and not the other. A trip needs both ends, so
- *  this is a state the search REFUSES rather than quietly ignores — the quiet
- *  version priced somebody's February trip in March and then handed them a
- *  Booking.com link carrying the March dates. */
-function halfExactDates(){
-  const a = dateUsable($("#exactDate").value), b = dateUsable($("#exactReturn").value);
-  return a !== b;
+function syncWindowUi(){
+  const month = $("#month").value;
+  const options = HOLIDAY_WINDOWS[month] || [];
+  const field = $("#windowField");
+  if(!options.length){
+    field.hidden = true;
+    $("#window").innerHTML = "";
+    return;
+  }
+  const keep = $("#window").value;
+  fillSelect($("#window"), [["", "Whole month"], ...options.map(w=>[w.id, w.label])]);
+  $("#window").value = options.some(w=>w.id===keep) ? keep : "";
+  field.hidden = false;
+  $("#windowHint").textContent = "A real week with its own known pricing pattern, priced the same way at all "
+    + "six resorts — a resort whose own data says this week doesn't move will show that plainly, not a faked bump.";
 }
 function calendarQuery(resortId, from, to, tierOverride, stripNightly){
   // A "your rate" nightly override is a claim about ONE specific tier (the
@@ -1898,15 +1846,6 @@ async function runSearch(keepId){
   // Carrying it into a new search would quietly drop resorts the traveller
   // never excluded.
   pdfChoice = null;
-  // Refused, not ignored. Never end this with a bare return — the hint text
-  // and the focus below are what tell somebody why nothing happened.
-  if(halfExactDates()){
-    syncExactDatesUi();
-    const need = $("#exactDate").value ? $("#exactReturn") : $("#exactDate");
-    $("#exactDatesField").scrollIntoView({behavior:"smooth", block:"center"});
-    need.focus();
-    return;
-  }
   params = readParams();
   const token = ++searchToken;
   setSearchBusy(true);
@@ -3074,14 +3013,15 @@ function render(){
   const p = params;
   const pax = paxList(p).length;
   const kidStr = p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""} (${p.ages.join(", ")})` : "";
-  const whenStr = (p.exactDate && p.exactReturn)
-    ? `${fmtDate(p.exactDate)}–${fmtDate(p.exactReturn)}`
+  const winDef = p.window ? (HOLIDAY_WINDOWS[p.month]||[]).find(w=>w.id===p.window) : null;
+  const whenStr = winDef
+    ? `${winDef.label}, ${p.month.split("-")[0]}`
     : `arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
   $("#resSub").textContent =
     `${p.adults} adult${p.adults>1?"s":""}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · ${whenStr}`;
   $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
   $("#planChip").className = "chip" + (session.plus?" plus":"");
-  syncExactDatesUi();
+  syncWindowUi();
   $("#searchChip").hidden = true;
   // Only once there is something to save. A button that refuses every click
   // is the dead-handler problem in another costume. Saved trips are free at
@@ -3098,109 +3038,6 @@ function render(){
   $("#tablewrap").hidden = view!=="table";
 }
 
-/**
- * Bounds the exact-date inputs to dates that can actually be booked. Free
- * at launch — every account can pin real travel dates.
- */
-function syncExactDatesUi(){
-  const d = $("#exactDate"), r = $("#exactReturn");
-  if(!d || !r) return;
-  const todayISO = new Date().toISOString().slice(0,10);
-  // Disney sells about 13 months ahead, and CAL_TO is exactly the window this
-  // app prices. Offering 2031 offers a date nobody can book and we could
-  // never have a price for.
-  setBound(d, "min", todayISO); setBound(d, "max", CAL_TO);
-  // The browser's own min is the only return-date guard that works on a phone,
-  // where the date wheel doesn't fire `change` until the picker is dismissed.
-  // Only a departure date that is really a date may raise it — otherwise the
-  // half-typed year in the box next door would push the return's floor up.
-  setBound(r, "min", dateUsable(d.value) ? d.value : todayISO);
-  // ...and deliberately NO max here, which is the second half of the typing
-  // bug. When a date input's min and max fall in the SAME calendar year,
-  // Chrome decides the year is already known, fills it in, and sends the rest
-  // of what you type back into the day segment: "03152027" typed at a box
-  // bounded to 2027 lands as 27 March, silently. The departure box is safe
-  // from this by construction — a 13-month window always straddles two years —
-  // but the return's floor is the departure date, so the pair shares a year
-  // for any trip departing in CAL_TO's year. A wrong date presented as a real
-  // one is worse than an unbounded box, so the far end is checked below, on
-  // our side, where it can say what happened.
-  if(r.hasAttribute("max")) r.removeAttribute("max");
-  // Deliberately NOT blanking the boxes here any more. This used to clear both
-  // whenever the session read as not-Plus — and it runs on every render and
-  // every session refresh, so one slow /api/session call ate dates somebody
-  // had just typed, with nothing on screen saying why. exactDatesActive()
-  // already ignores a signed-out user's dates; erasing them too was the bug.
-  const active = exactDatesActive();
-  const half = halfExactDates();
-  $("#clearExactDates").hidden = !(d.value || r.value);
-  // Exact dates REPLACE the month scan rather than sitting beside it. Half-
-  // filled counts: leaving one box empty used to fall back to the month
-  // silently, which is how a February trip came back priced for March.
-  $("#month").disabled = active || half;
-  $("#monthField").classList.toggle("stooddown", active || half);
-  $("#exactDatesHint").classList.toggle("needsend", half || !!exactDatesMsg);
-  $("#exactDatesHint").textContent = exactDatesMsg ? exactDatesMsg
-    : half
-    ? (d.value
-        ? "Now pick the day you come home. A start date on its own can't price a trip, so the search won't run until both are set."
-        : "Now pick the day you leave. A return date on its own can't price a trip, so the search won't run until both are set.")
-    : active
-    ? `Pricing ${nightsBetween(d.value, r.value)} nights, ${fmtDate(d.value)} to ${fmtDate(r.value)}. The Arriving month above is ignored while these are set.`
-    : "Set both dates to price your real trip instead of scanning a month.";
-}
-
-/* Both events, deliberately. Desktop typing fires `input` per keystroke and
- * `change` on blur; an iOS date wheel fires `change` only when the picker is
- * dismissed. Listening to one of them alone is why the return date could be
- * set earlier than the departure on a phone but not on a laptop. */
-["change","input"].forEach(evt => document.addEventListener(evt, (e) => {
-  if(!e.target.closest("#exactDate, #exactReturn")) return;
-  exactDatesMsg = "";
-  syncExactDatesUi();
-}));
-
-/**
- * Corrections happen when you LEAVE a box, never while you are in it.
- *
- * This used to run on every keystroke, and that is the whole reason hand-typed
- * dates never worked. A date arrives one segment at a time, so a return date
- * on its way to 15 March passes through 1 March — which is "before departure"
- * and got wiped, over and over, so the box could only ever be filled from the
- * picker. Nothing may judge a date that is still being typed.
- *
- * focusout also covers a phone: dismissing the date wheel and tapping anything
- * else fires it, and runSearch refuses an unusable pair regardless, so there is
- * no path where a bad date reaches a price.
- */
-document.addEventListener("focusout", (e) => {
-  if(!e.target.closest("#exactDate, #exactReturn")) return;
-  const d = $("#exactDate"), r = $("#exactReturn");
-  const todayISO = new Date().toISOString().slice(0,10);
-  exactDatesMsg = "";
-  for(const [el, what] of [[d, "departure"], [r, "return"]]){
-    if(!el.value || dateUsable(el.value)) continue;
-    // Out of the window we can price, or a year that never finished being
-    // typed. Say which, rather than leaving a box that looks filled in.
-    exactDatesMsg = el.value < todayISO
-      ? `That ${what} date has already passed, so it's been cleared — pick a date from today onwards.`
-      : `We only have prices about 13 months out, so that ${what} date has been cleared.`;
-    el.value = "";
-  }
-  // A return on or before departure isn't a shorter trip, it's an impossible
-  // one. Clear it and ask again rather than inventing a stay nobody typed.
-  if(!exactDatesMsg && dateUsable(d.value) && dateUsable(r.value)
-     && nightsBetween(d.value, r.value) <= 0){
-    r.value = "";
-    exactDatesMsg = "Your return was on or before the day you leave, so it's been cleared. Pick a later day to come home.";
-  }
-  syncExactDatesUi();
-});
-document.addEventListener("click", (e) => {
-  if(!e.target.closest("#clearExactDates")) return;
-  $("#exactDate").value = ""; $("#exactReturn").value = "";
-  syncExactDatesUi();
-});
 
 /* ============================ events ============================ */
 
@@ -3801,8 +3638,9 @@ document.addEventListener("click", async e=>{
  */
 let pendingSave = null;
 function tripWhenLabel(){
-  return exactDatesActive()
-    ? `${fmtDate($("#exactDate").value)}–${fmtDate($("#exactReturn").value)}`
+  const winDef = params.window ? (HOLIDAY_WINDOWS[params.month]||[]).find(w=>w.id===params.window) : null;
+  return winDef
+    ? `${winDef.label}, ${params.month.split("-")[0]}`
     : MONTHSFULL[+params.month.split("-")[1]-1] + " " + params.month.split("-")[0];
 }
 function defaultTripName(){
@@ -3848,11 +3686,12 @@ $("#nameSave").addEventListener("click", async ()=>{
     method:"POST", headers:{"content-type":"application/json"},
     body: JSON.stringify({
       label,
-      // exactDate/exactReturn ride along so reopening a saved trip comes back
-      // on the real travel dates it was priced for, not just its month.
+      // window rides along so reopening a saved trip comes back on the same
+      // named week it was priced for, not just its whole month — and so the
+      // alert job re-prices against that same real range later.
       params: { ...tripQuery(), month: params.month, resortId,
                 highlightResortId: resortId,
-                exactDate: params.exactDate || "", exactReturn: params.exactReturn || "" },
+                window: params.window || "" },
       overrides,
       baselineTotal: item.price.total,
     }),
@@ -3919,8 +3758,10 @@ async function openSavedTrip(trip){
   $("#kids").value = String(ages.length);
   buildAges();
   ages.forEach((a,i)=>{ const el = document.getElementById("age"+i); if(el) el.value = a; });
-  $("#exactDate").value = q.exactDate || "";
-  $("#exactReturn").value = q.exactReturn || "";
+  // Populate the "which week" options for the restored month BEFORE setting
+  // its value, or the saved id has nothing to select yet.
+  syncWindowUi();
+  setIf("#window", q.window);
   // The trip's own numbers, restored under the same resort they were typed
   // for — merged, not swapped in, so reopening one trip doesn't wipe what
   // you've typed for the other five resorts on the board.
@@ -3928,7 +3769,7 @@ async function openSavedTrip(trip){
     if(ov && Object.keys(ov).length) OV[rid] = { ...ov };
   }
   store.set("ov", OV);
-  syncNeedHotel(); syncGettingThere(); syncExactDatesUi();
+  syncNeedHotel(); syncGettingThere();
   closeTripsDrop();
   openTrip = trip;
   collapseTripPanel(trip);
@@ -3948,8 +3789,9 @@ function collapseTripPanel(trip){
   const q = trip.params || {};
   const r = RESORT_BY_ID.get(trip.resortId);
   $("#tripCollapsedName").textContent = trip.label || (r ? r.name : "Your trip");
-  const when = q.exactDate && q.exactReturn
-    ? `${fmtDate(q.exactDate)} – ${fmtDate(q.exactReturn)}`
+  const qWinDef = q.window ? (HOLIDAY_WINDOWS[q.month]||[]).find(w=>w.id===q.window) : null;
+  const when = qWinDef
+    ? `${qWinDef.label}, ${String(q.month).slice(0,4)}`
     : q.month ? MONTHSFULL[Number(String(q.month).slice(5,7)) - 1] + " " + String(q.month).slice(0,4)
     : "";
   const who = `${q.adults || 2} adult${(q.adults||2) === 1 ? "" : "s"}`
@@ -4066,10 +3908,11 @@ function partyPhrase(p){
     + (kids ? ` and ${kids} child${kids===1?"":"ren"}` : "");
 }
 
-/** "Sep 10 to Sep 22", or the month when no exact dates were given. */
+/** "Around Christmas, 2026", or the plain month when no window was picked. */
 function whenPhrase(p){
-  return (p.exactDate && p.exactReturn)
-    ? `${fmtDate(p.exactDate)} to ${fmtDate(p.exactReturn)}`
+  const winDef = p.window ? (HOLIDAY_WINDOWS[p.month]||[]).find(w=>w.id===p.window) : null;
+  return winDef
+    ? `${winDef.label}, ${p.month.split("-")[0]}`
     : `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
 }
 
@@ -4758,6 +4601,7 @@ async function boot(){
     FX_PLACEHOLDER = !!meta.exchange.placeholder;
   }
   PASS_PROGRAMS = meta.passPrograms || [];
+  HOLIDAY_WINDOWS = meta.holidayWindows || {};
   // Public, small, and needed by the shared PDF's "what's there" section
   // whether or not anybody ever opens the attractions panel. Not awaited:
   // a slow request here must not hold up the form.
