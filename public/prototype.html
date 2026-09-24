@@ -455,7 +455,7 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 .seg.f1{background:var(--s1)} .seg.f2{background:var(--s2)} .seg.f3{background:var(--s3)} .seg.f4{background:var(--s4)} .seg.f5{background:var(--s5)}
 /* align-items:center is load-bearing, not cosmetic. Without it these items
    STRETCH to the tallest one in their wrapped line — and the flights item is
-   taller than the others whenever it carries the `est.`/`exact` chip. So each
+   taller than the others whenever it carries the `est.`/`live` chip. So each
    colour square's vertical position depended on whether its NEIGHBOUR had a
    chip, which is a thing browsers resolve slightly differently and a thing
    that changes as the line re-wraps. Measured identical in Chromium; the
@@ -907,7 +907,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <select id="stay">
           <option value="on" selected>On property</option>
           <option value="off">Off property</option>
-          <option value="both">Compare both</option>
         </select>
       </div>
       <div class="f">
@@ -1159,7 +1158,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <div class="modal">
     <div class="mhead">
       <h3 id="pwTitle">Take it with you</h3>
-      <p>Comparing all six resorts, exact live fares, saved searches, price-drop and deal alerts, custom planning
+      <p>Comparing all six resorts, live fare checks, saved searches, price-drop and deal alerts, custom planning
       expenses, picking your attractions and applying promos are all free, and always will be —
       you should never have to pay to plan a trip here. Plus buys exactly one thing: a shareable PDF you can send
       to whoever you're travelling with, written up per resort rather than a screenshot of the app.</p>
@@ -1178,7 +1177,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
     <ul class="feat">
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort (cost, getting there, where to stay, weather, what to know), not a screenshot of the board</span></li>
-      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, exact live fares, saved searches, price/deal/gas alerts, custom planning expenses, attraction picks and applying promos — stays free and unlimited</span></li>
+      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, live fare checks, saved searches, price/deal/gas alerts, custom planning expenses, attraction picks and applying promos — stays free and unlimited</span></li>
     </ul>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
@@ -1229,7 +1228,6 @@ let RESORTS = [];        // the six resorts, same shape as src/config.ts
 // rather than on `results`.
 let crowdRanking = null;
 let CLIMATE = {};        // resortId -> twelve {highF, lowF, rainDays, note?} rows, January first
-let CROWDS_PLACEHOLDER = false;  // true while the shipped crowd bands are a first pass, not the owner's own
 let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
 let HOLIDAY_WINDOWS = {};  // "YYYY-MM" -> [{id,label,from,to}], only for months with one
 let DVC_DEFAULT_PER_POINT = 18;
@@ -1929,6 +1927,26 @@ function attractionChip(item){
 }
 
 /**
+ * A few named restaurants for the style of food actually being priced, so
+ * "table service" is not just a per-day number — the owner's ask: "if I want
+ * to do table service, I need to know that Sanaa is $XX per person." Priced
+ * by $ tier, same convention Disney's own dining guide uses, since a real
+ * menu varies by what you order far more than this model can claim to know.
+ * Nothing here changes a price — it's context for the number above it.
+ */
+function foodExamplesLine(r, style){
+  const fe = r.foodExamples;
+  if(!fe) return "";
+  const list = style === "ts" ? (fe.ts||[])
+    : style === "qs" ? (fe.qs||[])
+    : style === "mix" ? [...(fe.qs||[]).slice(0,1), ...(fe.ts||[]).slice(0,1)]
+    : []; // grocery: nothing to show
+  if(!list.length) return "";
+  return `<p class="sub" style="margin:8px 0 0">Example restaurants: ${
+    list.map(x=>`${esc(x.name)} ${esc(x.tier)}`).join(", ")}</p>`;
+}
+
+/**
  * A crowd flag on a board row, when the traveller said crowds matter enough
  * for this month to be worth mentioning. The server decides whether there is
  * anything to say — see crowds.ts — so the threshold lives in one place and
@@ -2013,10 +2031,13 @@ function renderBoard(){
     // decide, and an unmarked estimate reads as a quote.
     const est = x.flightPick && x.flightPick.estimate;
     // A priced fare with no estimate attached is a real one somebody bought —
-    // the nightly job, or a traveller checking the exact fare for this date.
+    // the nightly job, or a traveller checking a live price for this date.
     // Say so on the board, not only inside Details: it's the more expensive
     // thing to get and should be visible where people actually compare.
-    const exact = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
+    // Never called "exact" — a real fare found today can still move by the
+    // time somebody actually books, and the owner's call (2026-09-25) was to
+    // stop implying a precision the site can't stand behind.
+    const live = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
     const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
@@ -2051,15 +2072,12 @@ function renderBoard(){
         <div class="barlabs">
           <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}${
             est ? ' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>'
-                : exact ? ' <span class="exactchip" title="A real fare, not an estimate">exact</span>' : ""}</span>
+                : live ? ' <span class="exactchip" title="A real fare we found recently, not a computed estimate — prices can still move">live</span>' : ""}</span>
           <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}${est.seasonMatched===false?" · based on a different season, treat as rough":""}</div>`:""}
-        ${x.stayCompare ? `<div class="estnote staynote">${x.stayCompare.savesPerNight < 1
-          ? "On and off property come out about the same here, once parking and transfers are counted."
-          : `Staying ${x.stayCompare.cheaper === "off" ? "off" : "on"} property saves ${usd(x.stayCompare.savesPerNight)} a night here — ${usd(x.stayCompare.savesTotal)} over ${params.nights} nights, parking and transfers included.`}</div>` : ""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -2408,8 +2426,8 @@ async function renderDetail(){
     // excluded (nothing to look up) or when a real fare is already in hand
     // (nothing to buy).
     + (!excludeFlights && (!fp || fp.estimate)
-      ? `<div class="li exactrow"><div class="l"><b>Check the exact fare</b>
-            <small>${fp ? "" : "Nothing is cached for this route, so this is the only way to get a real number. "}Look up the real round-trip price for ${fmtDate(x.start)} right now.${
+      ? `<div class="li exactrow"><div class="l"><b>Check a live price</b>
+            <small>${fp ? "" : "Nothing is cached for this route, so this is the only way to get a real number. "}Look up a real round-trip price for ${fmtDate(x.start)} right now — an up-to-the-minute estimate, still not a guarantee of what you'll pay at checkout.${
               session.exactFare ? ` ${session.exactFare.remainingToday} of ${session.exactFare.perDay} checks left today.` : ""}</small></div>
             <div class="p"><button class="btn btn-sm" id="exactBtn"
               data-resort="${r.id}" data-dest="${item.iata}" data-date="${x.start}"
@@ -2868,12 +2886,6 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
-          ${x.stayCompare ? `<p class="sub" style="margin:12px 0 0">Comparing both: ${x.stayCompare.on.name}
-            works out at ${usd(x.stayCompare.on.total)} and ${x.stayCompare.off.name} at ${usd(x.stayCompare.off.total)}
-            for these ${p.nights} nights, parking and transfers included — so
-            ${x.stayCompare.savesPerNight < 1 ? "there's almost nothing in it" :
-              `${x.stayCompare.cheaper === "on" ? "on" : "off"} property is ${usd(x.stayCompare.savesTotal)} cheaper`}.
-            The total above uses whichever came out lower.</p>` : ""}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
@@ -2891,6 +2903,7 @@ async function renderDetail(){
           </div>
           ${foodCtl}
           ${foodRows}
+          ${foodExamplesLine(r, fi ? "ts" : (p.food==="plan"?"qs":p.food))}
           <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
         </div>
         ${(()=>{
@@ -2956,9 +2969,6 @@ async function renderDetail(){
             ${warn && warn.alternatives.length ? `<div class="li"><div class="l"><b>Quieter here</b>
               <small>Same resort, a different time of year</small></div>
               <div class="p">${warn.alternatives.map(a=>MONTHSFULL[a.month-1]).join(", ")}</div></div>` : ""}
-            ${CROWDS_PLACEHOLDER ? `<div class="li"><div class="l"><b>Not yet checked</b>
-              <small>These bands are a first pass, not yet checked against real demand data</small></div>
-              <div class="p">—</div></div>` : ""}
             <div class="foot"><details class="why"><summary>Where this comes from</summary>
               <div class="whybody">${esc(cr.basisNote)} It does not change the price or the order of the board —
                 the cheapest trip stays the cheapest trip, and this tells you what you would be walking
@@ -3206,7 +3216,7 @@ function openAuth(mode){
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts, saving searches, price alerts and exact fares are all free. Plus adds the shareable PDF.";
+      : "Comparing all six resorts, saving searches, price alerts and live fare checks are all free. Plus adds the shareable PDF.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -4154,13 +4164,6 @@ function hotelHtml(item){
     out.push(`<p class="pnote">Nothing was cached in the category you asked for on these dates, so this is the
       nearest one we had.</p>`);
   }
-  if(pr.stayCompare){
-    const sc = pr.stayCompare;
-    out.push(`<p>Staying ${sc.cheaper === "on" ? "on" : "off"} property is the cheaper of the two here:
-      ${esc(sc.on.name)} at ${usd(sc.on.nightly)} a night against ${esc(sc.off.name)} at ${usd(sc.off.nightly)},
-      a difference of <b>${usd(sc.savesTotal)}</b> over the trip once parking and transfers are counted.
-      Those last two are what people leave out when they conclude off-property is cheaper.</p>`);
-  }
   if(!pick.onProperty && pr.transport){
     out.push(`<p class="pnote">Off-property totals here include $${Math.round(r.transport.off)} a day for parking
       at the parks and getting to them.</p>`);
@@ -4428,18 +4431,19 @@ document.addEventListener("click", async (e) => {
     }
     if(d.ok){
       const when = d.cached ? "checked within the last day" : "checked just now";
-      out.innerHTML = `<div class="l"><b>Exact fare ${usd(d.price)} <span class="exactchip">exact</span></b>
+      out.innerHTML = `<div class="l"><b>Live price ${usd(d.price)} <span class="exactchip">live</span></b>
         <small>${esc(d.carrier || "Airline varies")} · ${d.stops===0?"Nonstop":d.stops+" stop"+(d.stops>1?"s":"")}
-        · round trip, per person · ${when}. Re-pricing this trip with it…
+        · round trip, per person · ${when}. Still an estimate, not a guarantee of what you'll pay at checkout.
+        Re-pricing this trip with it…
         ${typeof d.remainingToday==="number" ? `${d.remainingToday} checks left today.` : ""}</small></div>
         <div class="p">${usd(d.price)}</div>`;
       // The lookup wrote a real fare into the shared cache, so a re-search
       // now prices the whole trip off it — the total drops the `est.` chip
-      // and the tilde on its own. Without this the exact number would sit in
+      // and the tilde on its own. Without this the live number would sit in
       // a box next to a total that still disagreed with it.
       await runSearch(b.dataset.resort);
     } else {
-      out.innerHTML = `<div class="l"><b>Couldn't get an exact fare</b>
+      out.innerHTML = `<div class="l"><b>Couldn't get a live price</b>
         <small>${esc(d.message || "Try again shortly.")}</small></div>`;
     }
   } catch(err){
@@ -4594,7 +4598,6 @@ async function boot(){
   ORIGIN_ORDER = meta.originOrder || [];
   RESORTS = meta.resorts;
   CLIMATE = meta.climate || {};
-  CROWDS_PLACEHOLDER = !!(meta.crowds && meta.crowds.placeholder);
   if(meta.exchange){
     FX_RATES = meta.exchange.rates || FX_RATES;
     FX_AS_OF = meta.exchange.asOf || "";

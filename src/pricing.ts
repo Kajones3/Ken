@@ -295,16 +295,6 @@ export interface TripPrice {
     | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean }
     | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
-  /** Only when the search asked to compare on- AND off-property. What the two
-   *  sides actually cost over these dates, parking and transfers included, so
-   *  "Compare both" can say what it found instead of silently picking. */
-  stayCompare: {
-    on: { name: string; nightly: number; total: number };
-    off: { name: string; nightly: number; total: number };
-    cheaper: "on" | "off";
-    savesPerNight: number;
-    savesTotal: number;
-  } | null;
   foodPlan: { label: string; adult: number; child: number } | null;
   partySize: number;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
@@ -437,7 +427,7 @@ export interface HotelPick {
 export function poolFor(nights: HotelNight[], stay: Stay, tier: TierIndex): HotelPick {
   const gather = (t: TierIndex): HotelNight[] =>
     nights.filter((h) =>
-      (stay === "both" || (stay === "on") === h.onProperty) &&
+      (stay === "on") === h.onProperty &&
       h.tier === (h.onProperty ? ON_TIERS[t] : OFF_TIERS[t]));
 
   const direct = gather(tier);
@@ -449,7 +439,7 @@ export function poolFor(nights: HotelNight[], stay: Stay, tier: TierIndex): Hote
       if (p.length) return { pool: p, actual: t as TierIndex, swapped: true };
     }
   }
-  const all = nights.filter((h) => stay === "both" || (stay === "on") === h.onProperty);
+  const all = nights.filter((h) => (stay === "on") === h.onProperty);
   return { pool: all, actual: tier, swapped: true };
 }
 
@@ -805,8 +795,7 @@ export function priceTrip(
   }
 
   // --- hotel -------------------------------------------------------------
-  // A dining plan forces an on-property stay, because that is how Disney sells it.
-  const stay: Stay = foodPlan && stayForResort === "both" ? "on" : stayForResort;
+  const stay: Stay = stayForResort;
 
   let rooms: number;
   let hotelPick: TripPrice["hotelPick"];
@@ -830,35 +819,6 @@ export function priceTrip(
     rooms = pick.rooms;
     hotelPick = pick.hotel;
     hotelTier = { requested: params.tier, actual: pick.actual, swapped: pick.swapped, custom: false };
-  }
-
-  /* "Compare both" widened the hotel pool to on- AND off-property and picked
-   * whichever was cheaper — correctly, and completely silently, so the owner's
-   * reasonable read was that the control did nothing at all.
-   *
-   * This is what it costs, priced the same way the rest of the card is: the
-   * two sides compared over the dates actually being priced, INCLUDING
-   * parking and transfers, because off-property's parking is exactly the cost
-   * people leave out when they conclude off-property is cheaper. Computed
-   * here from the book slice already loaded — no extra request, no provider
-   * call. Null whenever there is nothing to compare (one side has no cached
-   * rate, a typed nightly rate has replaced both, or the search wasn't
-   * comparing in the first place). */
-  let stayCompare: TripPrice["stayCompare"] = null;
-  if (params.stay === "both" && stay === "both" && ov.nightly === undefined) {
-    const on = cheapestStay(book, resort.id, start, params.nights, "on", params.tier);
-    const off = cheapestStay(book, resort.id, start, params.nights, "off", params.tier);
-    if (on && off) {
-      const onTotal = on.rooms + transportPerDay(book, resort, true) * params.nights;
-      const offTotal = off.rooms + transportPerDay(book, resort, false) * params.nights;
-      stayCompare = {
-        on: { name: on.hotel.name, nightly: on.rooms / params.nights, total: onTotal },
-        off: { name: off.hotel.name, nightly: off.rooms / params.nights, total: offTotal },
-        cheaper: onTotal <= offTotal ? "on" : "off",
-        savesPerNight: Math.abs(onTotal - offTotal) / params.nights,
-        savesTotal: Math.abs(onTotal - offTotal),
-      };
-    }
   }
 
   // --- promos: a curated guess (looked up server-side, never trusted from --
@@ -961,7 +921,7 @@ export function priceTrip(
     price: {
       start, destination, total, flights, tickets, hotel, rooms, transport, food,
       perSeatFare, flightPick, fareBelowFloor,
-      hotelPick, hotelTier, stayCompare, foodPlan, partySize: ages.length,
+      hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd,
       rentalCarUsd, rentalCarPick, membership,

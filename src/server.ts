@@ -117,7 +117,7 @@ function paramsFrom(q: URLSearchParams): TripParams {
     childAges: ages.filter((a) => Number.isFinite(a) && a >= 0 && a <= 17).slice(0, 8),
     nights,
     parkDays: clamp(Number(q.get("parkDays") ?? 4), 1, nights + 1),
-    stay: (["on", "off", "both", "none"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
+    stay: (["on", "off", "none"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
@@ -839,7 +839,7 @@ const server = createServer(async (req, res) => {
     // identity to key on.
     if (url.pathname === "/api/exact-fare" && req.method === "POST") {
       const user = await currentUser(db, req);
-      if (!user) return send(401, { error: "sign_in_required", message: "Sign in to check exact fares." });
+      if (!user) return send(401, { error: "sign_in_required", message: "Sign in to check live fares." });
       const b = await readBody(req);
       const origin = String(b.origin ?? "").toUpperCase();
       const departDate = String(b.date ?? "");

@@ -90,6 +90,14 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
     blocking: false,
     done: false,
   },
+  {
+    id: "food-examples",
+    title: "Check the sample-restaurant names and $ tiers under each resort's Food card",
+    why: "`foodExamples` in config.ts (2026-09-25) names a couple of real, well-known restaurants per dining style at each resort, so 'table service' isn't just a per-day number. It's Claude's own list — real names, not verified against a current menu or lineup — and restaurants close/reopen/rename more often than attractions do, so it's worth a periodic check, not just a one-time correction.",
+    side: "free",
+    blocking: false,
+    done: false,
+  },
 ];
 
 /** How old a resort's ticket rows may get before it is worth a nudge. */
