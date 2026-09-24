@@ -12,14 +12,81 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-23
+## START HERE — state as of 2026-09-25
 
-**Live at https://pricingthemagic.com.** `master` is at `86935ed`.
-**Ask whether Render has been redeployed before trusting what the live site
-shows** — the owner clicks that by hand and it has lagged `master` for days
-at a time.
+**Live at https://pricingthemagic.com.** `master` is at `deebf34` (PR #68,
+merged). **Ask whether Render has been redeployed before trusting what the
+live site shows** — the owner clicks that by hand and it has lagged `master`
+for days at a time.
 
-Run `npm test` and `npm run typecheck` before you believe anything. 537 tests.
+Run `npm test` and `npm run typecheck` before you believe anything. 566
+tests, typecheck clean, `npm run smoke` unchanged.
+
+### What happened in the 2026-09-25 session — read this before anything else
+
+Five pieces of real work, each merged (PR #67 then PR #68) as its own
+commit — see the dated entries under "Decisions already made" below for the
+full reasoning on each, this is just the map:
+
+1. **Finished the free/Plus launch regating.** The owner's call, mid-session:
+   "at launch, the only thing on plus is the PDF print out." Every other
+   Plus gate (saved trips/alerts, custom expenses, exact fares, the 22
+   smaller airports, attraction picks, applying promos) came out of both
+   `server.ts` and `prototype.html` — see "Free/Plus split, settled
+   2026-09-24" below for the full list of what changed. **This is the single
+   biggest thing to understand about the current state of the app**: almost
+   nothing is paywalled any more.
+2. **Real promos for WDW, Disneyland and Disneyland Paris** — found by web
+   search of each resort's own official offers page, replacing the three
+   illustrative rows. Tokyo, Hong Kong and Shanghai still have none (nothing
+   official turned up, only third-party reseller codes that don't fit the
+   model) — see "Next work" below, this is now the top item.
+3. **Fixed a real bug the owner found from a screenshot**: Shanghai's "every
+   category, same N nights" comparison showed Value and Moderate at the
+   identical price, because Shanghai has no on-property Value hotel at all —
+   the app was silently substituting Moderate's price under the Value label.
+   Now says "Not offered at Shanghai Disney Resort" instead of faking a
+   price. Same underlying `poolFor()`/`hotelTier.swapped` mechanism the main
+   hotel card already used correctly; only the "every category" list hadn't
+   been taught to check it.
+4. **Fixed a real "crisis of confidence" bug the owner reported**: the same
+   trip searched a few weeks apart could show wildly different flight
+   prices, for no reason a traveller could see. Root cause: ONE real bought
+   fare fully overrode a whole route's estimate for the entire quarter, no
+   matter how small a sample of one thing is. Now blended by sample size
+   (`ROUTE_CORRECTION_MIN_SAMPLES`, default 3) — one fare nudges a third of
+   the way, three or more moves the whole way, same as before once there's
+   real evidence.
+5. **Replaced "pin exact dates" with named holiday weeks.** The owner's
+   framing: "Paris doesn't move during Thanksgiving. That's the point." One
+   canonical week (December's Before/Around Christmas split, a real
+   calendar-computed Thanksgiving week) is priced identically at all six
+   resorts, and each resort's own real season data decides whether it's
+   actually pricier there — verified live, Paris's Thanksgiving total came
+   back byte-for-byte identical to its whole-month scan while WDW's moved.
+   Flights also got a real, sourced holiday premium (+55%/+58%,
+   Thanksgiving/Christmas) from a third-party fare study, since BTS itself
+   is quarterly-only and structurally can't measure this.
+
+**What's mid-thought, not yet built — pick up here:**
+
+- **Food.** The owner explicitly wants something better than a random
+  range: "Eating at Hoopty Doo Review is a lot more than Casey's Corner and
+  we can help the user estimate that if we are clear rather than just
+  giving them a box." They have a more specific idea for how and ran out of
+  tokens mid-message describing it. **Ask them to finish that thought before
+  building anything** — don't guess at what "help the user estimate that"
+  means. The four existing dining styles (grocery/QS/mix/table-service) are
+  the likely raw material, but the actual design is still theirs to finish.
+- **Cruises.** Explicitly on hold — "don't worry about cruises yet, we'll
+  get there." The agreed shape so far (from earlier sessions, still valid):
+  a free-side teaser line ("We estimate a Disney Cruise could run about
+  $X-$Y — see the real per-cabin range with Plus") with the real detail
+  built later. No code exists for this yet.
+- **Spring break** was deliberately left out of the holiday-windows work
+  (real, but shaped completely differently per resort and spans two
+  calendar months) — a natural next addition to `holidayWindows.ts` using
+  the same mechanism, not urgent.
 
 ### What is REAL data and what is still a guess
 
@@ -39,7 +106,7 @@ that every number is either real or labelled a guess.
 | **Hotels — Tokyo** | Mostly guesses. Only Disney Ambassador Hotel is real. |
 | **Hotels — Paris** | Claude draft. |
 | **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. |
-| **Promos** | Three ILLUSTRATIVE rows. A Plus user applying one today gets a discount that does not exist. |
+| **Promos** | **REAL for WDW, Disneyland, Disneyland Paris** (`seedPromos.ts`, found by web search of each resort's own official offers page, 2026-09-25). **Still illustrative-gap for Tokyo, Hong Kong, Shanghai** — nothing official found, see "Next work". Applying one is free for anyone signed in, not Plus. |
 | **Attractions** | Starter set, ~10 rows. |
 | `parkList` lands, `QUEUE_TIMES_PARKS` | Claude drafts. |
 
@@ -78,16 +145,28 @@ that every number is either real or labelled a guess.
 
 ### Next work, in the owner's priority order
 
-1. **Real promos** with real dates.
-2. **Food rates** — send the 24 numbers, and add them to `settings.ts` at the
-   same time so the owner can edit them.
+1. **Food** — the owner has a specific idea for a real per-dining-style
+   breakdown rather than a random range, cut off mid-message by running out
+   of tokens (2026-09-25). Ask them to finish describing it before building
+   anything; don't guess. See the session recap above.
+2. **Tokyo, Hong Kong, Shanghai promos** — WDW/Disneyland/Paris are done
+   (2026-09-25); nothing official has turned up for the other three, only
+   third-party reseller codes that don't fit the model. Their official offer
+   pages exist but can't be fetched from this sandbox — paste-the-page, same
+   pattern as the ticket tables.
 3. **The attraction list** — paste-and-structure, 40-80 headline rows, every
    cross-resort clone FLAGGED for the owner rather than asserted.
-4. **Disney Cruise pricing** — agreed as the Plus anchor. No API exists, so it
-   is a fourth hand-maintained table and sailings are dated, which means it
-   goes stale faster than anything else here. Add it to `REVIEWABLE` the day
-   it ships.
+4. **Disney Cruise pricing** — explicitly on hold ("don't worry about cruises
+   yet, we'll get there", 2026-09-25). Its monetization is an OPEN QUESTION,
+   not settled (see the free/Plus section below) — no longer assumed to be
+   "the Plus anchor". No API exists, so it will be a hand-maintained table
+   and sailings are dated, which means it goes stale faster than anything
+   else here. Add it to `REVIEWABLE` the day it ships.
 5. **Paris tickets**, still on the curve.
+6. **Spring break window** — real, but deliberately left out of the
+   2026-09-25 holiday-windows work (shaped differently per resort, spans two
+   calendar months). Natural follow-up to `holidayWindows.ts` using the same
+   mechanism, once there's a clean way to handle the two-month span.
 
 ### Free/Plus split, settled 2026-09-24 — at launch, Plus is the PDF, full stop
 
