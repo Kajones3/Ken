@@ -35,6 +35,10 @@ import type { Db } from "./db.js";
 import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
+import {
+  THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
+  CHRISTMAS_PREMIUM_KEY, DEFAULT_CHRISTMAS_PREMIUM_PCT,
+} from "./holidayWindows.js";
 
 export type SettingKind = "money" | "number" | "percent";
 
@@ -126,6 +130,31 @@ export const SETTINGS: SettingDef[] = [
     min: 0,
     max: 45,
     help: "A month's cheapest days are cheap because nobody wants them (a 4am flight on Halloween) and its dearest days are the week everybody travels. Both ends describe trips people do not take, so this share of each end is dropped before averaging. 0 uses every day, which pulls the quote toward whichever end is more extreme.",
+  },
+  {
+    key: THANKSGIVING_PREMIUM_KEY,
+    label: "Flight estimate — Thanksgiving week premium",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_THANKSGIVING_PREMIUM_PCT,
+    min: 0,
+    max: 200,
+    help: "Added to the FLIGHT ESTIMATE only (never a real cached fare) for a date in Thanksgiving week. "
+      + "BTS's own data can't measure this — it's reported by quarter, with no month or day at all — so this "
+      + "comes from a real, cited third-party fare study instead (Upgraded Points, 2025 season: real Google "
+      + "Flights data across the 10 busiest US routes) and is a judgement call about how much to trust a "
+      + "national average against any one route, same standing as the IRS mileage rate.",
+  },
+  {
+    key: CHRISTMAS_PREMIUM_KEY,
+    label: "Flight estimate — Christmas week premium",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_CHRISTMAS_PREMIUM_PCT,
+    min: 0,
+    max: 200,
+    help: "Added to the FLIGHT ESTIMATE only (never a real cached fare) for a date in the Dec 24-31 window. "
+      + "Same sourcing and same caveat as the Thanksgiving premium above.",
   },
   // Two per year, because the IRS sets a January-June rate and a July-December
   // one and has changed it mid-year before. Adding a new year is still a code

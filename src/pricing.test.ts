@@ -431,6 +431,61 @@ test("flight estimate: with the lean hook absent, pricing still works and leans 
   assert.equal(r.price.perSeatFare, estimate.high);
 });
 
+test("flight estimate: a Thanksgiving-week date gets the holiday premium, an ordinary date doesn't", () => {
+  // 2027's Thanksgiving is Nov 25 (the 4th Thursday) -- see holidayWindows.test.ts.
+  // Thanksgiving Day itself sits inside that window.
+  const wdw = resortById("wdw");
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2027Q4" };
+  const holidayBook = fullBook("wdw", "MCO", { days: 6, startISO: "2027-11-25" });
+  const withEstimate = { ...holidayBook, flight: () => undefined, flightEstimate: () => estimate };
+  const r = priceTrip(withEstimate, wdw, base, {}, "2027-11-25");
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  // Default lean is 100 (the dear end), so the shown figure is the HIGH band
+  // -- but moved by the +55% default Thanksgiving premium first: 800 * 1.55.
+  assert.equal(r.price.perSeatFare, 1240);
+  assert.equal(r.price.flightPick?.estimate?.holidayPremiumPct, 55);
+  assert.equal(r.price.flightPick?.estimate?.holidayLabel, "Thanksgiving travel week");
+
+  // A date one day outside the window gets no premium at all -- same estimate, unmoved.
+  const ordinaryBook = fullBook("wdw", "MCO", { days: 6, startISO: "2027-11-22" });
+  const withOrdinary = { ...ordinaryBook, flight: () => undefined, flightEstimate: () => estimate };
+  const r2 = priceTrip(withOrdinary, wdw, base, {}, "2027-11-22");
+  assert.ok(r2.ok);
+  if (!r2.ok) return;
+  assert.equal(r2.price.perSeatFare, 800);
+  assert.equal(r2.price.flightPick?.estimate?.holidayPremiumPct, undefined);
+});
+
+test("flight estimate: the holiday premium never touches a REAL cached fare", () => {
+  // A real per-date fare already reflects whatever the market actually
+  // charges for Thanksgiving -- adding a synthetic premium on top of it
+  // would double-count.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 400, days: 6, startISO: "2027-11-25" });
+  const r = priceTrip(book, wdw, base, {}, "2027-11-25");
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 400, "the real fare stands, unmoved");
+  assert.equal(r.price.flightPick?.price, 400);
+  assert.equal(r.price.flightPick?.estimate, undefined, "a real row carries no estimate at all");
+});
+
+test("flight estimate: the holiday premium is an owner setting", () => {
+  const wdw = resortById("wdw");
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2026Q4" };
+  const christmasBook = fullBook("wdw", "MCO", { days: 6, startISO: "2026-12-26" });
+  const withSetting = {
+    ...christmasBook, flight: () => undefined, flightEstimate: () => estimate,
+    setting: (key: string) => (key === "flight.christmasPremiumPct" ? 10 : undefined),
+  };
+  const r = priceTrip(withSetting, wdw, base, {}, "2026-12-26");
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 880, "800 x 1.10, the owner's own figure, not the shipped 58%");
+  assert.equal(r.price.flightPick?.estimate?.holidayPremiumPct, 10);
+});
+
 test("flight estimate: a route with no BTS baseline still fails cleanly, not with a fabricated number", () => {
   const wdw = resortById("wdw");
   const noFlights = fullBook("wdw", "MCO", { days: 6 });

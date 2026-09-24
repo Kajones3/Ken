@@ -22,6 +22,7 @@ import {
   validateAttraction,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
+import { holidayWindowsFor } from "./holidayWindows.js";
 import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
@@ -226,7 +227,17 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
   const month = q.get("month") ?? todayISO().slice(0, 7);
-  const [from, to] = monthBounds(month);
+  // A named holiday window (2026-09-25) narrows the scan to a real week
+  // within the month instead of the whole thing — resolved server-side from
+  // just an id, the same rule a curated promo's effect follows: the client
+  // picks which one, the actual dates never come from it. One canonical
+  // range, priced identically at all six resorts — the owner's call: "Paris
+  // doesn't move during Thanksgiving. That's the point." Each resort's own
+  // real season data decides whether the week is actually pricier for it,
+  // rather than every resort being faked into agreeing that it is.
+  const windowId = q.get("window");
+  const holidayWindow = windowId ? holidayWindowsFor(month).find((w) => w.id === windowId) : undefined;
+  const [from, to] = holidayWindow ? [holidayWindow.from, holidayWindow.to] : monthBounds(month);
   // An explicit date prices exactly that day instead of scanning the month for
   // the cheapest one — how a calendar-cell click asks for that date's full
   // breakdown, and how a traveller pins real travel dates instead of a month.
@@ -333,6 +344,11 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     month, pricesAsOf: book.oldestFetchedAt,
     params: { ...params, gettingThere },
     exactDate: explicitDate ?? undefined,
+    // Which named holiday window (if any) actually narrowed the scan — echoed
+    // back so the client can label the board honestly and a saved trip can
+    // reconstruct the same range later without re-sending raw dates.
+    window: holidayWindow?.id,
+    windowLabel: holidayWindow?.label,
     /** How many picks the matches above were measured against, so the UI can
      *  say "3 of your 5" without a second request. */
     attractionPicks: picks.length,
@@ -363,9 +379,20 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
     origin: params.origin, destinations: [params.destination], resortIds: [resort.id],
     from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
   });
+  // hotelTier only carried for a single-day request (from === to) — that is
+  // the exact shape hotelAtTier() sends for the "every category, same
+  // N nights" comparison, and the only caller that needs to know whether the
+  // tier it asked for actually resolved to a different one. Adding it to
+  // every day of a normal 365-day calendar fetch would be dead weight nobody
+  // reads.
+  const singleDay = from === to;
   const days = range(from, to).map((d) => {
     const r = priceTrip(book, resort, params, overrides, d);
-    return r.ok ? { date: d, total: Math.round(r.price.total) } : { date: d, total: null };
+    if (!r.ok) return { date: d, total: null };
+    return {
+      date: d, total: Math.round(r.price.total),
+      ...(singleDay ? { hotelTier: r.price.hotelTier } : {}),
+    };
   });
   return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };
 }
@@ -512,6 +539,20 @@ const server = createServer(async (req, res) => {
       // and the browser never carries its own copy of a price.
       passPrograms: PASS_RESORTS,
       dvcTakeHomePerPoint: dvcDefault,
+      // Named holiday sub-weeks (December, Thanksgiving) for every month the
+      // month picker offers, keyed by "YYYY-MM" — empty for a month with
+      // none. Computed here, once, so the picker's labels can never drift
+      // from what compare() actually resolves an id to; the browser only
+      // renders what it's handed. See holidayWindows.ts for which months
+      // have one and why (and which were deliberately left out).
+      holidayWindows: Object.fromEntries(
+        Array.from({ length: 14 }, (_, i): [string, ReturnType<typeof holidayWindowsFor>] => {
+          const now = new Date();
+          const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + i, 1));
+          const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+          return [ym, holidayWindowsFor(ym)];
+        }).filter(([, windows]) => windows.length > 0),
+      ),
       }, { cache: "public, max-age=300" });
     }
 
