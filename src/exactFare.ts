@@ -1,15 +1,17 @@
 /**
- * Exact live fares — the Plus half of the flight model.
+ * Exact live fares — free at launch (2026-09-24), but the one route in the
+ * app that spends metered provider money per click, so it stays capped
+ * rather than unlimited.
  *
- * Free users get an estimate: this route's real median (BTS for domestic, a
- * monthly sample for international) moved by a measured trend, shown with a
- * low–high range and an `est.` chip. That costs nothing per user because it
- * reads a cache someone already paid to fill.
+ * Everyone gets an estimate for free, always: this route's real median (BTS
+ * for domestic, a monthly sample for international) moved by a measured
+ * trend, shown with a low–high range and an `est.` chip. That costs nothing
+ * per user because it reads a cache someone already paid to fill.
  *
- * Plus users can ask for the real fare on a specific date. That call is
- * metered, so it is the one place in the app where a user's click spends
- * money — which is exactly why it sits behind the paywall: the people who
- * cost money are the people paying.
+ * Anyone signed in can also ask for the real fare on a specific date. That
+ * call is metered, which is why it is capped rather than free-and-unlimited
+ * like everything else — not because of who is asking, but because of what
+ * asking costs.
  *
  * Four things keep it from running away, in the order they are checked:
  *
@@ -17,14 +19,10 @@
  *      and still fresh is returned without spending anything. This is the
  *      big one: the second person to ask the same question is free, and the
  *      answer also lands in the shared cache that free estimates and the
- *      trend are built from. A Plus user's spend improves the free product.
+ *      trend are built from. Every real lookup improves the free product.
  *   2. PER-USER DAILY CAP. One curious person cannot drain the month.
  *   3. SITE-WIDE DAILY CAP. Neither can a hundred of them.
  *   4. PROVIDER BUDGET. A hard ceiling inside the adapter itself.
- *
- * Never call this without having resolved Plus from the session cookie
- * against the database first — see the route in server.ts. A client-supplied
- * "I am Plus" flag would be a way to spend the owner's money.
  */
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
@@ -66,10 +64,8 @@ export function limitsFromEnv(): ExactFareLimits {
     // 1,000/month Starter plan: the nightly flight rotation takes ~300 and
     // hotels ~240, so ~180/month is what is left to reserve for on-demand
     // lookups — about 6 a day. This is insurance against an unbounded
-    // worst case more than an expected cost: exact-fare only spends when a
-    // Plus user clicks, and a handful of comped friends will not come near
-    // it. Raise both only after checking what the nightly jobs actually
-    // use — `npm run coverage` reports it.
+    // worst case more than an expected cost. Raise both only after checking
+    // what the nightly jobs actually use — `npm run coverage` reports it.
     globalPerDay: Number(process.env.EXACT_FARE_GLOBAL_PER_DAY ?? 6),
     freshHours: Number(process.env.EXACT_FARE_FRESH_HOURS ?? DEFAULT_FRESH_HOURS),
   };

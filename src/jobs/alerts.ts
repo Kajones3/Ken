@@ -70,23 +70,23 @@ function describePromoEffectForEmail(kind: string, value: number): string {
 }
 
 /**
- * Two conditions, and the second is newer: real current Plus, AND a
+ * Saved trips and their alerts are free as of the 2026-09-24 launch decision
+ * (Plus buys only the shareable PDF now) — the one real condition left is a
  * confirmed email address.
  *
  * Emailing an unconfirmed address is the concrete harm an unverified
  * account does — mail to a stranger, in their name, about a trip they never
- * saved. A wrong `plus_until` check once made every brand-new account
- * alert-eligible; this is the same class of mistake one column over, so it
- * is pinned by a test too.
+ * saved. This used to also require a real current `plus_until`, and a bug in
+ * that check once made every brand-new account alert-eligible; the check is
+ * gone now, not just fixed, but the lesson (verify a nullable date column
+ * against today, don't just test it for non-null) still applies elsewhere.
  */
-export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidates: Candidate[]; checked: number }> {
+export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; checked: number }> {
   const { rows } = await db.query(
     `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct, t.created_at
        from saved_trips t
        join users u on u.id = t.user_id
-      where t.active and u.plus_until is not null and u.plus_until >= $1
-        and u.email_verified_at is not null`,
-    [today],
+      where t.active and u.email_verified_at is not null`,
   );
 
   const candidates: Candidate[] = [];
@@ -123,8 +123,6 @@ export async function findAlerts(db: Db, today = todayISO()): Promise<{ candidat
     // Gas monitoring — the one alert here that isn't "it got cheaper": a
     // driving trip's gas cost moves on its own, unlike a hotel rate the
     // user typed themselves, so it's worth flagging either direction.
-    // findAlerts() already filters to Plus users; the free driving estimate
-    // itself isn't gated, only this "tell me when it moves" alert is.
     if (params.transportMode === "drive" && typeof params.gasPriceAtSaveUsd === "number" && params.gasPriceAtSaveUsd > 0) {
       const gas = book.gasPrice();
       if (gas) {

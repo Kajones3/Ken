@@ -40,7 +40,7 @@ test("a real lookup is fetched, stored, and tagged as a real fare", async () => 
   assert.equal(p.calls, 1);
 
   // It lands in the shared cache, tagged, so the trend and everyone else's
-  // estimates benefit from a Plus user's spend.
+  // estimates benefit from a user's spend.
   const { rows } = await db.query(
     `select price_usd, source from flight_prices where origin='ATL' and destination='MCO'`,
   );
@@ -205,7 +205,7 @@ test("with no provider configured it says so instead of throwing", async () => {
 });
 
 test("a bought fare takes over pricing, so the trip total stops using the estimate", async () => {
-  // The feedback loop that makes this worth paying for. A Plus user's lookup
+  // The feedback loop this is built on. A user's lookup
   // is written into the shared cache, so the very next re-price reads it as
   // a REAL fare and drops the estimate entirely — the total updates rather
   // than the exact number sitting in a box disagreeing with it.
@@ -301,7 +301,7 @@ test("a correction only counts fares NEWER than the baseline it corrects", async
 });
 
 test("the shipped default caps are sized for the SerpApi plan actually bought", async () => {
-  // These defaults are the only thing standing between a Plus user's clicks
+  // These defaults are the only thing standing between a user's clicks
   // and the month's search allowance, and they were originally sized for the
   // 5,000/month Developer plan (25/user, 90/day site-wide) while the project
   // runs on Starter's 1,000. Pinned so they can't drift back up silently:
