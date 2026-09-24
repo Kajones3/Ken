@@ -1187,6 +1187,65 @@ prevent, and showing high and finding it cheaper costs nobody a booking.
   would have got a different answer from the board. Two places holding the same
   number is how that happens; there is a test across every lean now.
 
+**A single bought fare no longer fully overrides a route's estimate — it's
+blended, weighted by how much evidence backs it** (2026-09-25). The owner's
+report was a crisis of confidence, not a bug report: "someone searching in
+December or November can have wildly different pricing. I have no idea why
+someone would use this tool anymore." Tracing it down, `book.ts`'s
+`flightEstimate()` had exactly the mechanism to cause that, already half-
+documented in its own comment ("one bought date could be a peak date that
+doesn't represent its quarter") — but the comment only labelled the risk,
+it didn't stop it: ONE real fare bought for a route+quarter (by the nightly
+rotation or an exact-fare click) fully replaced that route's multiplier for
+EVERY date in the quarter, no matter how small a sample of one thing is.
+A single unlucky or genuinely-peak sample could swing a route 30-50% with
+no real price change behind it, and since which routes get bought rotates
+night to night, the same route's number could look wildly different a few
+weeks apart for no reason a traveller could see.
+
+- *The fix is the same one `INTL_BASELINE_MIN_SAMPLES` already made for
+  international baselines* — one data point isn't evidence — just not
+  applied to this domestic route-correction path until now.
+  `ROUTE_CORRECTION_MIN_SAMPLES` (default 3, matching that precedent) is how
+  many real fares a route+quarter needs before its own evidence is trusted
+  at full weight.
+- *Below that, the correction is BLENDED toward the global trend, not gated
+  off entirely.* The owner explicitly wanted both: a floor below which one
+  sample doesn't fully swing things, AND for that one sample to still nudge
+  the number a little rather than being ignored outright until three arrive.
+  `routeM = baseM + (rawRouteM - baseM) × min(n / ROUTE_CORRECTION_MIN_SAMPLES, 1)`
+  — one sample moves a third of the way, three or more moves the whole way,
+  exactly matching the old (buggy) full-override behavior once there's
+  enough evidence to trust it.
+- *`baseM` is what the route would show with NO route-specific evidence at
+  all* — the global trend, or 1 for a baseline the trend must never touch
+  (a live-sampled international baseline, per the existing "must never be
+  moved by the trend" rule). Computing it explicitly, rather than repeating
+  `h.applyTrend ? trend!.m : 1` inline with a non-null assertion, also
+  closed a latent crash: that assertion could fire if `applyTrend` were true
+  with no trend row loaded but an owner correction present for `low`/`high`
+  only (not `typical`) — a real path through the code, never previously
+  exercised by a test.
+- *`ROUTE_CORRECTION_DAYS` (the 45-day lookback for what counts as a real
+  fare) is UNCHANGED.* The owner considered widening it too and rejected
+  that specifically: "the lookback window will drag us down" — a longer
+  window smooths swings by making stale evidence linger, which trades one
+  kind of wrongness (a fare too fresh to be enough evidence) for another
+  (a fare too old to still be true). The sample-size fix doesn't have that
+  trade-off: it only changes how much a real observation moves things,
+  never how recent it has to be.
+- *Not a cosmetic change to the number shown — this sits on top of the
+  actual comparison.* Flights are the largest single line for four of the
+  six resorts (Tokyo/Shanghai/Hong Kong routinely price $5,000+/person in
+  the smoke fixture), so a single-sample swing large enough could flip
+  which resort the board ranks cheapest — not just make one number look
+  wrong, but make the comparison itself untrustworthy, which is the one
+  thing this app exists to get right.
+- Two tests in `exactFare.test.ts` pin both halves: one bought fare moves
+  the estimate a third of the way (not all the way), and three bought fares
+  (matching `ROUTE_CORRECTION_MIN_SAMPLES`) restore the old full-trust
+  behavior exactly.
+
 **The exact-fare caps bound ONE BUTTON, not searching** (2026-09-22, the owner:
 "I don't want the entire site limited to six exact searches"). Worth stating
 plainly because the names do not say it. Comparing six resorts, twelve months

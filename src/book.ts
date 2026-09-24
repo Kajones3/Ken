@@ -18,6 +18,23 @@ import { RESORTS, type Tier } from "./config.js";
 const TREND_APPLIES_TO = new Set(["bts_db1b"]);
 
 /**
+ * How many real fares a route+quarter needs before its own evidence is
+ * trusted at full weight (2026-09-25). Below this, the correction is BLENDED
+ * toward the global trend rather than fully overriding it — see
+ * `flightEstimate` below.
+ *
+ * Found from a real symptom: with no floor at all, ONE bought fare fully
+ * replaced a route's multiplier, so a single unlucky sample (or a
+ * legitimately peak date) could swing a route's whole quarter 30-50% with
+ * no real price change behind it — someone comparing the board a few weeks
+ * apart could see wildly different numbers for the same trip, for no reason
+ * a traveller could see or trust. Same "one data point isn't evidence"
+ * problem `INTL_BASELINE_MIN_SAMPLES` already solved once, just not applied
+ * here. 3 matches that precedent rather than inventing a new number.
+ */
+export const ROUTE_CORRECTION_MIN_SAMPLES = Number(process.env.ROUTE_CORRECTION_MIN_SAMPLES ?? 3);
+
+/**
  * Alt arrival airport -> that resort's primary airport (e.g. SHA -> PVG).
  * BTS DB1B is US-carrier-reported data, so a secondary/domestic-leaning alt
  * airport (Shanghai's Hongqiao, "mostly domestic/regional China routes")
@@ -316,15 +333,29 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       if (!h) return undefined;
 
       // Route-specific evidence first. If real fares have been bought on
-      // this exact route and quarter — by the nightly jobs, or by a Plus
-      // user paying to check one — measure the correction from those rather
-      // than from a global average of other routes. This is what makes an
-      // exact fare teach the estimate: buy one $511 fare on a route the
-      // model thought was $382, and every other date in that quarter moves
-      // to match.
+      // this exact route and quarter — by the nightly jobs, or by someone
+      // paying to check one — measure the correction from those rather than
+      // from a global average of other routes. This is what makes an exact
+      // fare teach the estimate: buy one $511 fare on a route the model
+      // thought was $382, and every other date in that quarter moves toward
+      // it — BLENDED by how much evidence backs it, not a full override on
+      // the strength of one fare. `baseM` is what the route would show with
+      // no route-specific evidence at all (the global trend, or 1 for a
+      // baseline the trend must not touch — see TREND_APPLIES_TO); a route
+      // correction moves the multiplier FROM baseM TOWARD its own observed
+      // ratio, reaching full weight only at ROUTE_CORRECTION_MIN_SAMPLES.
+      // One sample nudges it a third of the way there; three or more is full
+      // weight, same as before this existed. `routeM` stays undefined
+      // exactly when there is no observation at all, so every caller of it
+      // below (the "no evidence anywhere" guard included) is unaffected by
+      // blending — it only changes HOW MUCH a real observation moves things,
+      // never WHETHER one exists.
+      const baseM = h.applyTrend ? (trend?.m ?? 1) : 1;
       const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
         ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
-      const routeM = obs && h.med > 0 ? obs.med / h.med : undefined;
+      const rawRouteM = obs && h.med > 0 ? obs.med / h.med : undefined;
+      const routeWeight = obs ? Math.min(obs.n / ROUTE_CORRECTION_MIN_SAMPLES, 1) : 0;
+      const routeM = rawRouteM !== undefined ? baseM + (rawRouteM - baseM) * routeWeight : undefined;
 
       /**
        * The owner's corrections, per band.
@@ -355,7 +386,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
       // route than the one after it. A correction they typed is a fare they
       // actually saw on the route in question.
       const m = (ownerMed !== undefined && h.med > 0 ? ownerMed / h.med : undefined)
-        ?? routeM ?? (h.applyTrend ? trend!.m : 1);
+        ?? routeM ?? baseM;
       // The shown number is the MEDIAN, moved by the trend the real-fare
       // lookups measured (or left as-is when it is already current).
       // Low/High are that route's own p25/p75 spread moved the same way — a

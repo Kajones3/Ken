@@ -238,11 +238,16 @@ test("a bought fare takes over pricing, so the trip total stops using the estima
   await db.close();
 });
 
-test("an exact fare corrects the estimate for OTHER dates on that route", async () => {
+test("one bought fare nudges the estimate toward it, but does not fully override it (2026-09-25)", async () => {
   // The owner's ask, verbatim: "the estimate said $382 and the exact fare came
   // back $511 — when this happens I want to make sure we update our estimate."
-  // Evidence from this route beats an average measured across other routes, so
-  // buying one real fare moves every other date in that quarter.
+  // Evidence from this route beats an average measured across other routes —
+  // but ONE fare used to fully replace the route's multiplier, so a single
+  // unlucky sample (or a genuinely peak date) could swing a whole quarter's
+  // estimate 30-50% with no real price change behind it. Now it's blended,
+  // weighted by how many samples back it (ROUTE_CORRECTION_MIN_SAMPLES),
+  // same "one data point isn't evidence" fix INTL_BASELINE_MIN_SAMPLES
+  // already made once for international baselines.
   const { loadBook } = await import("./book.js");
   const db = await memoryDb();
   await db.query(
@@ -268,9 +273,45 @@ test("an exact fare corrects the estimate for OTHER dates on that route", async 
     { provider: stubProvider({ price: 511 }), limits: LIMITS, today: TODAY });
 
   const after = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
-  assert.equal(after.med, 511, "the route's own evidence now sets the estimate");
+  // 342 x [1.117 + (511/342 - 1.117) x (1/3)] — one sample out of the three
+  // ROUTE_CORRECTION_MIN_SAMPLES needs, so it moves a THIRD of the way from
+  // the trend (382.01) toward the raw ratio (511), not all the way to 511.
+  assert.equal(after.med, 425.01, "moves toward the bought fare, not all the way to it");
+  assert.ok(after.med > before.med && after.med < 511, "between the old estimate and the raw fare, not past either end");
   assert.equal(after.routeSamples, 1, "and the UI can say it rests on one fare");
   assert.ok(after.low < after.med && after.med < after.high, "the band moves with it");
+  await db.close();
+});
+
+test("enough bought fares (ROUTE_CORRECTION_MIN_SAMPLES) trust the route fully", async () => {
+  // The other half of the same fix: evidence isn't ignored forever, just
+  // discounted until there's enough of it. Three real fares on this route
+  // (matching the default ROUTE_CORRECTION_MIN_SAMPLES) should move the
+  // estimate the whole way, exactly like a single fare used to.
+  const { loadBook } = await import("./book.js");
+  const db = await memoryDb();
+  await db.query(
+    `insert into historical_fares
+       (origin,destination,year,quarter,avg_fare_usd,p25_fare_usd,median_fare_usd,p75_fare_usd,source)
+     values ('ATL','MCO',2026,1,290,268,342,431,'bts_db1b')`,
+  );
+  await db.query(
+    `insert into fare_trend (id,multiplier,low_multiplier,high_multiplier,sample_routes,basis_quarter)
+     values (gen_random_uuid(), 1.117, 1.02, 1.24, 9, '2026Q1')`,
+  );
+  const otherDate = {
+    origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
+    from: "2027-03-20", to: "2027-03-27", tripLength: 7,
+  };
+
+  for (const departDate of ["2027-03-04", "2027-03-11", "2027-03-18"]) {
+    await fetchExactFare(db, { ...req, departDate },
+      { provider: stubProvider({ price: 511 }), limits: LIMITS, today: TODAY });
+  }
+
+  const after = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
+  assert.equal(after.med, 511, "three matching fares are full evidence, same as the old one-fare behavior");
+  assert.equal(after.routeSamples, 3, "and the UI reports the real sample count behind it");
   await db.close();
 });
 
