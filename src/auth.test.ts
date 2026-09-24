@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   hashPassword, verifyPassword, hasPassword, isPlus, setHomeAirport, currentUser,
   signUp, signIn, AuthError, MIN_PASSWORD_LENGTH,
-  createSession, sessionCookieHeader, HomeAirportError,
+  createSession, sessionCookieHeader,
 } from "./auth.js";
 import { memoryDb, type Db } from "./db.js";
 import { setPassword } from "./setPassword.js";
@@ -159,63 +159,27 @@ test("a home airport can be cleared again", async () => {
   await db.close();
 });
 
-test("a free account cannot save a Plus airport", async () => {
-  // Owner's call, and the consistent one: the 22 smaller airports are what
-  // Plus buys, so a free account quietly holding one forever would hollow
-  // out the split. The board will still PRICE a trip from one (downgraded,
-  // and it says so) — it just won't be remembered.
+test("a free account can save one of the 22 smaller airports (2026-09-24 launch decision)", async () => {
+  // The Plus/free airport split used to gate which one you could KEEP —
+  // reversed at launch, when Plus stopped being anything but the PDF. A
+  // free account saves RDU exactly as it would save any other airport, and
+  // nothing about the write depends on plus_until any more.
   const db = await memoryDb();
   const id = await makeUser(db);
-  await assert.rejects(
-    () => setHomeAirport(db, id, "RDU"),
-    (e: HomeAirportError) => e.reason === "plus_required",
-  );
-  assert.equal((await sessionUser(db, id))?.homeAirport, null, "nothing was written");
-  await db.close();
-});
-
-test("a Plus account can save a Plus airport", async () => {
-  const db = await memoryDb();
-  const id = await makeUser(db);
-  await db.query(`update users set plus_until = $2 where id = $1`, [id, "2099-01-01"]);
   assert.equal(await setHomeAirport(db, id, "RDU"), "RDU");
   assert.equal((await sessionUser(db, id))?.homeAirport, "RDU");
   await db.close();
 });
 
-test("Plus is read from the database, never taken on trust", async () => {
-  // The same rule exact-fare follows: setHomeAirport takes no "they're Plus"
-  // argument, so there is no parameter a caller could use to grant the tier.
-  // Its only source is plus_until on the row it is about to write.
+test("Plus lapsing does not touch a saved home airport", async () => {
   const db = await memoryDb();
   const id = await makeUser(db);
   await db.query(`update users set plus_until = $2 where id = $1`, [id, "2099-01-01"]);
   await setHomeAirport(db, id, "RDU");
   // Plus lapses...
   await db.query(`update users set plus_until = $2 where id = $1`, [id, "2020-01-01"]);
-  await assert.rejects(
-    () => setHomeAirport(db, id, "SJC"),
-    (e: HomeAirportError) => e.reason === "plus_required",
-    "the same call that worked while Plus was current is refused after it lapses",
-  );
-  await db.close();
-});
-
-test("a lapsed account keeps the Plus airport it saved, and can still leave", async () => {
-  // Deleting someone's setting because a subscription ran out is a punishment
-  // nobody asked for, and the trip still prices (resolveOrigin downgrades it
-  // and the board says which airport it used). But they must not be stuck:
-  // moving to a free airport, or clearing it, has to keep working.
-  const db = await memoryDb();
-  const id = await makeUser(db);
-  await db.query(`update users set plus_until = $2 where id = $1`, [id, "2099-01-01"]);
-  await setHomeAirport(db, id, "RDU");
-  await db.query(`update users set plus_until = $2 where id = $1`, [id, "2020-01-01"]);
-
-  assert.equal((await sessionUser(db, id))?.homeAirport, "RDU", "kept, not deleted");
-  assert.equal(await setHomeAirport(db, id, "CLT"), "CLT", "can move to a free airport");
-  await setHomeAirport(db, id, null);
-  assert.equal((await sessionUser(db, id))?.homeAirport, null, "and can clear it");
+  // ...and the same call still works, since it never depended on Plus.
+  assert.equal(await setHomeAirport(db, id, "SJC"), "SJC");
   await db.close();
 });
 

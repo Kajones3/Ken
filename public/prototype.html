@@ -685,6 +685,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div>
         <h1>Parkfare</h1>
         <p class="tag">Six Disney resorts, priced side by side.</p>
+        <p class="tag">Best for deciding when to go — not for locking in today's price.</p>
       </div>
     </div>
     <div class="acct">
@@ -759,8 +760,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div class="f" id="exactDatesField" style="margin-top:10px">
         <div class="labelrow">
           <label for="exactDate">Or pin real travel dates</label>
-          <button type="button" class="pluspill openpw" id="exactDatesPill"
-                  title="See what Plus includes">Plus</button>
         </div>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
           <input type="date" id="exactDate" aria-label="Departure date">
@@ -769,7 +768,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <button class="btn btn-sm" id="clearExactDates" type="button" hidden>Clear</button>
         </div>
         <small id="exactDatesHint" style="color:var(--muted)">
-          Free searches scan a whole month for the cheapest arrival. Plus prices the exact
+          Leave this blank to scan a whole month for the cheapest arrival, or pin the exact
           days you're actually travelling.</small>
       </div>
     </div>
@@ -1002,6 +1001,21 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
   </div>
 
+  <details class="why" id="volatilityNote">
+    <summary>Why might the real price be different from this?</summary>
+    <div class="whybody">
+      <p>Crowd levels and how these six resorts compare to each other stay pretty stable for
+        months — that part of this board doesn't move much once it's set. Exact dollar prices
+        for flights, hotels and cruises are a different kind of number: an airline, a hotel and
+        a cruise line all adjust what they charge in real time based on how full a plane, room
+        or ship already is, which is closer to how a stock price moves than to a fixed rate.
+        Nobody can promise what a specific flight or room will cost on a specific day, especially
+        close to your trip.</p>
+      <p>Treat every number here as a well-informed starting point for deciding when and where to
+        go — not a quote you can book against sight unseen.</p>
+    </div>
+  </details>
+
   <ol class="board" id="board"></ol>
   <div class="tablewrap" id="tablewrap" hidden></div>
 
@@ -1133,7 +1147,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
           <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
-          <small id="homeAirportLapsed" class="downgrade" hidden>Saved while you had Plus. It's kept, and trips still price from the nearest free airport — renew Plus to change it to another Plus airport.</small>
+          <small id="homeAirportLapsed" class="downgrade" hidden></small>
           <small id="homeAirportSaved" class="downgrade" hidden></small>
         </div>
         <div class="authfield" style="margin:16px 0 4px">
@@ -1156,14 +1170,11 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
-      <h3 id="pwTitle">Plan your specific trip</h3>
-      <p>Comparing all six resorts, twelve months of fare calendars and your own rates are all free, and always will be —
-      you should never have to pay to see what a trip costs. Flight numbers on the free plan are real estimates, built
-      from what people actually paid on that route, and shown with the range they sit in. Plus gives you more control
-      and accuracy. Swap the estimate for the exact live fare on the dates you're actually traveling and then we'll
-      email you when prices change. Disney is magical. Planning should be too.</p>
-      <p class="pwhonest"><b>The exact fare may well come back higher than the estimate</b> — that is the feature
-      working, not failing. A real number you can book against beats a cheerful one you can't.</p>
+      <h3 id="pwTitle">Take it with you</h3>
+      <p>Comparing all six resorts, exact live fares, saved searches, price-drop and deal alerts, custom planning
+      expenses, picking your attractions and applying promos are all free, and always will be —
+      you should never have to pay to plan a trip here. Plus buys exactly one thing: a shareable PDF you can send
+      to whoever you're travelling with, written up per resort rather than a screenshot of the app.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -1178,13 +1189,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </button>
     </div>
     <ul class="feat">
-      <li><span class="tick">✓</span><span><b>Exact live fares</b> — look up the real round-trip price for a specific date, instead of the estimated range everyone gets free</span></li>
-      <li><span class="tick">✓</span><span><b>Price-drop alerts</b> — told when a fare or rate falls below what you saw</span></li>
-      <li><span class="tick">✓</span><span><b>Your trips saved</b> with the hotel rates and fares you set yourself</span></li>
-      <li><span class="tick">✓</span><span><b>Deal alerts</b> — told the next time we add a new Disney promo for a resort you're watching</span></li>
-      <li><span class="tick">✓</span><span><b>Driving-trip gas-price alerts</b> — told if the price at the pump moves after you save a road-trip estimate</span></li>
-      <li><span class="tick">✓</span><span><b>Custom planning expenses</b> — add your own line items (a VIP tour, PhotoPass, anything not modeled here) to a saved trip's total</span></li>
-      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, estimated flight prices with their range, driving-cost estimates, park hopper, promos browsing — stays free and unlimited</span></li>
+      <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort (cost, getting there, where to stay, weather, what to know), not a screenshot of the board</span></li>
+      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, exact live fares, saved searches, price/deal/gas alerts, custom planning expenses, attraction picks and applying promos — stays free and unlimited</span></li>
     </ul>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
@@ -1226,10 +1232,9 @@ async function apiGet(path, params){
 
 /* ============================ reference data (loaded from /api/meta) ============================ */
 
-let ORIGINS = [];        // [{iata,name,lat,lon}] — free, pre-cached metros
-let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — smaller airports, Plus only
-let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, free and Plus interleaved
-let originDowngrade = null;  // set when a free request asked for a Plus airport
+let ORIGINS = [];        // [{iata,name,lat,lon}] — the 19 nightly pre-cached metros
+let PLUS_ORIGINS = [];   // [{iata,name,lat,lon}] — 22 more, priced from the BTS baseline only
+let ORIGIN_ORDER = [];   // IATA codes, city-alphabetical, both lists interleaved
 let RESORTS = [];        // the six resorts, same shape as src/config.ts
 // The six resorts ranked quietest-first for the month being priced. A fact
 // about the whole comparison rather than about any one row, so it lives here
@@ -1389,29 +1394,15 @@ const CAL_TO = (()=>{
 })();
 
 /**
- * The departure-airport picker. Free users see the 19 pre-cached metros;
- * Plus adds the smaller airports people actually live near — "nearest big
- * airport" is a real compromise (Raleigh is offered Charlotte, three hours
- * away) and removing it is worth paying for.
- *
- * Plus airports stay VISIBLE to a free user, labelled, rather than hidden.
- * Same rule the rest of the paywall follows: show what Plus unlocks instead
- * of pretending it doesn't exist. Picking one as a free user is handled
- * server-side — it prices the nearest free metro and says so.
- */
-
-/**
- * Every airport as [value, label], in one city-alphabetical run rather than
- * a free block followed by a Plus block.
+ * Every airport as [value, label], in one city-alphabetical run.
  *
  * The order comes from the server (`originOrder`), so the rule has one home
- * in config.ts. Somebody hunting for Tampa shouldn't have to know which side
- * of the paywall Tampa is on before they know where to look — the label on
- * the row says that, and `plusSuffix` is how each caller words it.
+ * in config.ts. All origins price for free as of the 2026-09-24 launch
+ * decision — ORIGINS/PLUS_ORIGINS still exist server-side only to decide
+ * which 19 airports the nightly refresh pre-caches, which is invisible here.
  */
-function originOptions(plusSuffix){
+function originOptions(){
   const byIata = new Map(ORIGINS.concat(PLUS_ORIGINS).map(o=>[o.iata, o]));
-  const plusCodes = new Set(PLUS_ORIGINS.map(o=>o.iata));
   // Fall back to whatever order we were given if the server is older than
   // this page — a stale-but-present dropdown beats an empty one.
   const order = ORIGIN_ORDER.length ? ORIGIN_ORDER
@@ -1420,15 +1411,14 @@ function originOptions(plusSuffix){
   for(const code of order){
     const o = byIata.get(code);
     if(!o) continue;
-    const needsPlus = plusCodes.has(code) && !session.plus;
-    out.push([o.iata, o.name+" — "+o.iata+(needsPlus ? plusSuffix : "")]);
+    out.push([o.iata, o.name+" — "+o.iata]);
   }
   return out;
 }
 
 function fillOriginOptions(){
   const keep = $("#origin").value;
-  fillSelect($("#origin"), originOptions(" (Plus)"));
+  fillSelect($("#origin"), originOptions());
   if(keep) $("#origin").value = keep;
 }
 
@@ -1541,9 +1531,9 @@ function readParams(){
     dvcPoints: +$("#dvcPoints").value || 0,
     dvcPerPoint: +$("#dvcPerPoint").value || 0,
     month: $("#month").value,
-    // Plus only. When both are set, the search prices those exact days
-    // instead of scanning the month — nights is derived from the gap, so the
-    // trip length matches the dates rather than the separate nights picker.
+    // Free. When both are set, the search prices those exact days instead
+    // of scanning the month — nights is derived from the gap, so the trip
+    // length matches the dates rather than the separate nights picker.
     exactDate,
     exactReturn,
     gettingThere,
@@ -1741,7 +1731,6 @@ function dateUsable(v){
 }
 
 function exactDatesActive(){
-  if(!session.plus) return false;
   const a = $("#exactDate").value, b = $("#exactReturn").value;
   if(!dateUsable(a) || !dateUsable(b)) return false;
   return nightsBetween(a, b) > 0;
@@ -1751,7 +1740,6 @@ function exactDatesActive(){
  *  version priced somebody's February trip in March and then handed them a
  *  Booking.com link carrying the March dates. */
 function halfExactDates(){
-  if(!session.plus) return false;
   const a = dateUsable($("#exactDate").value), b = dateUsable($("#exactReturn").value);
   return a !== b;
 }
@@ -1839,7 +1827,7 @@ $("#useMyLocation").addEventListener("click", async ()=>{
   }
 });
 
-let promosByResort = {};   // "resortId|date" -> PromoRow[] — public/free to browse, applying is Plus
+let promosByResort = {};   // "resortId|date" -> PromoRow[] — browsing and applying are both free
 async function fetchPromosFor(resortId, on){
   const key = resortId+"|"+(on||"");
   if(promosByResort[key]) return promosByResort[key];
@@ -1918,9 +1906,6 @@ async function runSearch(keepId){
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
     crowdRanking = compareData.crowdRanking || null;
-    // A free user who picked a Plus airport gets the nearest free one priced
-    // instead. Say which, rather than silently showing someone else's airport.
-    originDowngrade = compareData.originDowngrade || null;
     await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
     if(token !== searchToken) return;
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
@@ -1953,7 +1938,7 @@ async function recompute(changedResortId){
 
 /* ============================ render: board ============================ */
 
-function unlocked(){ return true; }   // the tool is free; Plus buys memory and watching
+function unlocked(){ return true; }   // the tool is free; Plus buys only the shareable PDF
 
 function sparkSVG(pts){
   const known = pts.map((p,i)=>({v:p.v, i})).filter(p=>p.v!==null);
@@ -1981,9 +1966,9 @@ function sparkSVG(pts){
  * thing you came for" is a decision people want to make knowingly, not a
  * reason to quietly reorder their results.
  *
- * Nothing renders at all without picks, so a free user sees no teaser and
- * no empty space. Server-side, a non-Plus request never carries matches in
- * the first place. */
+ * Nothing renders at all without picks, so a user with none sees no teaser
+ * and no empty space. Server-side, a signed-out request never carries
+ * matches in the first place — picking attractions needs an account. */
 function attractionChip(item){
   const a = item.attractions;
   if(!a || !a.summary) return "";
@@ -2080,9 +2065,9 @@ function renderBoard(){
     // decide, and an unmarked estimate reads as a quote.
     const est = x.flightPick && x.flightPick.estimate;
     // A priced fare with no estimate attached is a real one somebody bought —
-    // the nightly job, or a Plus user checking this date. Say so on the board,
-    // not only inside Details: this is what a Plus user paid for and it should
-    // be visible where they actually compare.
+    // the nightly job, or a traveller checking the exact fare for this date.
+    // Say so on the board, not only inside Details: it's the more expensive
+    // thing to get and should be visible where people actually compare.
     const exact = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
     const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
@@ -2295,12 +2280,10 @@ function promosCard(item, x, promoList){
     return `<div class="li"><div class="l"><b>${promo.label}</b>
       <small>${describePromoEffect(promo.effectKind, promo.effectValue)} · ${promo.startsOn} to ${promo.endsOn}
       ${promo.historical?" · historical pattern, not confirmed for your dates":""}</small></div>
-      <div class="p">${session.plus
-        ? `<button class="btn btn-sm" data-applypromo="${applied?"":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button>`
-        : `<button class="btn btn-sm openpw">Apply · Plus</button>`}</div></div>`;
+      <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
 
-  const personalForm = session.plus ? `
+  const personalForm = `
     <div class="li"><div class="l" style="width:100%">
       <b>Have your own discount?</b>
       <small>Annual Passholder, DVC, military, Florida resident, or your own code — your claim, not verified</small>
@@ -2309,9 +2292,7 @@ function promosCard(item, x, promoList){
         <input type="number" id="ppValue" min="0" step="1" placeholder="amount" style="width:76px">
         <button class="btn btn-sm" id="ppApply" data-resort="${item.resortId}">Apply</button>
       </div>
-    </div></div>`
-    : `<div class="li"><div class="l"><b>Have your own discount?</b><small>Annual Passholder, DVC, military, and more</small></div>
-      <div class="p"><button class="btn btn-sm openpw">Plus</button></div></div>`;
+    </div></div>`;
 
   const appliedNote = x.appliedPromos.length
     ? x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label}: ${usd(a.amountUsd)} off${a.historical?" (historical, not confirmed)":""}`).join(" · ")
@@ -2479,18 +2460,13 @@ async function renderDetail(){
     // excluded (nothing to look up) or when a real fare is already in hand
     // (nothing to buy).
     + (!excludeFlights && (!fp || fp.estimate)
-      ? (session.plus
-        ? `<div class="li exactrow"><div class="l"><b>Check the exact fare</b>
+      ? `<div class="li exactrow"><div class="l"><b>Check the exact fare</b>
             <small>${fp ? "" : "Nothing is cached for this route, so this is the only way to get a real number. "}Look up the real round-trip price for ${fmtDate(x.start)} right now.${
               session.exactFare ? ` ${session.exactFare.remainingToday} of ${session.exactFare.perDay} checks left today.` : ""}</small></div>
             <div class="p"><button class="btn btn-sm" id="exactBtn"
               data-resort="${r.id}" data-dest="${item.iata}" data-date="${x.start}"
               data-nights="${p.nights}">Check now</button></div></div>
            <div class="li exactout" id="exactOut" hidden></div>`
-        : `<div class="li"><div class="l"><b>Want the exact fare?</b>
-            <small>${fp ? "The estimate above is free and unlimited." : "We have no cached fare for this route."} Plus adds a live lookup of the
-            real round-trip price for a date you're serious about.</small></div>
-            <div class="p"><button class="btn btn-sm openpw">Get Plus</button></div></div>`)
       : "");
   /**
    * Where "Check live fares" sends you when the cache has no real booking
@@ -2665,7 +2641,7 @@ async function renderDetail(){
       <div class="p">${BANDNAME[b]}</div></div>`;
   }).join("");
 
-  // ---- your numbers: free to set and use, Plus to save and watch ----
+  // ---- your numbers: free to set, use, save and watch ----
   const ovR = ovOf(r.id);
   // No longer raised to the floor. The owner's call: a box that silently
   // overrules what you typed is worse than one that takes your number and
@@ -2809,7 +2785,7 @@ async function renderDetail(){
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
-        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Get Plus to save this search & watch for price drops"}</button>
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.email ? "Save this search, leading with " + esc(item.resort.name) : "Sign in to save this search & watch for price drops"}</button>
       </div>
     </div>
     ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
@@ -3017,7 +2993,7 @@ async function renderDetail(){
             <div class="kpi">
               <div class="kpitile"><div class="k"><span aria-hidden="true">👥</span>Typical crowds</div>
                 <div class="v">${esc(cr.label)}</div>
-                <div class="s">${cr.basis === "dvcPoints" ? "from DVC points pricing" : "estimated"}</div></div>
+                <div class="s">${cr.basis === "dvcPoints" ? "from real demand data" : "estimated"}</div></div>
               <div class="kpitile"><div class="k"><span aria-hidden="true">📊</span>Against the year</div>
                 <div class="v"><span class="crowdbar"><span style="width:${pct}%;background:${tone}"></span></span></div>
                 <div class="s">${cr.rank + 1} of 5</div></div>
@@ -3028,7 +3004,7 @@ async function renderDetail(){
               <small>Same resort, a different time of year</small></div>
               <div class="p">${warn.alternatives.map(a=>MONTHSFULL[a.month-1]).join(", ")}</div></div>` : ""}
             ${CROWDS_PLACEHOLDER ? `<div class="li"><div class="l"><b>Not yet checked</b>
-              <small>These bands are a first pass, not yet set against a current points chart</small></div>
+              <small>These bands are a first pass, not yet checked against real demand data</small></div>
               <div class="p">—</div></div>` : ""}
             <div class="foot"><details class="why"><summary>Where this comes from</summary>
               <div class="whybody">${esc(cr.basisNote)} It does not change the price or the order of the board —
@@ -3042,12 +3018,12 @@ async function renderDetail(){
         if(min===null) return "";
         const save = x.total - min;
         if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
-          <span>Plus keeps watching, and tells you if it drops below ${usd(min)}.</span></div>
-          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+          <span>Save this search and we'll keep watching, and tell you if it drops below ${usd(min)}.</span></div>
+          <button class="btn btn-sm ${session.email?"":"openauth"}">${session.email?"Save & watch":"Sign in to watch"}</button></div>`;
         const best = bestDay ? new Date(bestDay.date+"T00:00:00Z") : null;
         return `<div class="upsell"><div><b>Want to make it cheaper? Choose a different time:${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
-          <span>Plus saves this trip with your own rates and tells you when it drops further.</span></div>
-          <button class="btn btn-sm ${session.plus?"":"openpw"}">${session.plus?"Alerts on":"Ask for Plus"}</button></div>`;
+          <span>Save this trip with your own rates and we'll tell you when it drops further.</span></div>
+          <button class="btn btn-sm ${session.email?"":"openauth"}">${session.email?"Save & watch":"Sign in to watch"}</button></div>`;
       })()}
       <div class="cols">
         ${whyCheaperCard(item, results)}
@@ -3093,24 +3069,13 @@ function render(){
   $("#planChip").className = "chip" + (session.plus?" plus":"");
   syncExactDatesUi();
   $("#searchChip").hidden = true;
-  const dn = $("#originNote");
-  if(dn){
-    // Belt and braces: the server only sets originDowngrade for a non-Plus
-    // request, but a note left over from a search run before signing in has
-    // no business telling a paying member to "get Plus".
-    dn.hidden = !originDowngrade || !!session.plus;
-    if(originDowngrade && !session.plus){
-      dn.innerHTML = `<span class="nbody"><b>${esc(originDowngrade.requested)}</b> is a Plus airport,
-        so this is priced from <b>${esc(originDowngrade.priced)}</b> — the nearest one on the free plan.</span>
-        <button class="btn btn-sm openpw">Get Plus to price ${esc(originDowngrade.requested)}</button>`;
-    }
-  }
   // Only once there is something to save. A button that refuses every click
-  // is the dead-handler problem in another costume.
+  // is the dead-handler problem in another costume. Saved trips are free at
+  // launch — signing in is the only requirement.
   const sv = $("#saveSearchBtn");
   if(sv){
     sv.hidden = !results.some(r=>r.ok);
-    sv.textContent = session.plus ? "Save this search" : "Get Plus to save this search";
+    sv.textContent = session.email ? "Save this search" : "Sign in to save this search";
   }
   $("#upgradeTop").hidden = session.plus;
   syncAccountUi();
@@ -3120,16 +3085,12 @@ function render(){
 }
 
 /**
- * Keeps the exact-dates control honest about who can use it, and stops a
- * stale pinned range silently narrowing a free user's search if their Plus
- * lapses. Also bounds the inputs to dates that can actually be booked.
+ * Bounds the exact-date inputs to dates that can actually be booked. Free
+ * at launch — every account can pin real travel dates.
  */
 function syncExactDatesUi(){
-  const on = !!session.plus;
   const d = $("#exactDate"), r = $("#exactReturn");
   if(!d || !r) return;
-  d.disabled = !on; r.disabled = !on;
-  $("#exactDatesPill").hidden = on;
   const todayISO = new Date().toISOString().slice(0,10);
   // Disney sells about 13 months ahead, and CAL_TO is exactly the window this
   // app prices. Offering 2031 offers a date nobody can book and we could
@@ -3166,8 +3127,6 @@ function syncExactDatesUi(){
   $("#monthField").classList.toggle("stooddown", active || half);
   $("#exactDatesHint").classList.toggle("needsend", half || !!exactDatesMsg);
   $("#exactDatesHint").textContent = exactDatesMsg ? exactDatesMsg
-    : !on
-    ? "Free searches scan a whole month for the cheapest arrival. Plus prices the exact days you're actually travelling."
     : half
     ? (d.value
         ? "Now pick the day you come home. A start date on its own can't price a trip, so the search won't run until both are set."
@@ -3183,7 +3142,6 @@ function syncExactDatesUi(){
  * set earlier than the departure on a phone but not on a laptop. */
 ["change","input"].forEach(evt => document.addEventListener(evt, (e) => {
   if(!e.target.closest("#exactDate, #exactReturn")) return;
-  if(!session.plus){ openPw(); syncExactDatesUi(); return; }
   exactDatesMsg = "";
   syncExactDatesUi();
 }));
@@ -3203,7 +3161,6 @@ function syncExactDatesUi(){
  */
 document.addEventListener("focusout", (e) => {
   if(!e.target.closest("#exactDate, #exactReturn")) return;
-  if(!session.plus) return;
   const d = $("#exactDate"), r = $("#exactReturn");
   const todayISO = new Date().toISOString().slice(0,10);
   exactDatesMsg = "";
@@ -3259,6 +3216,7 @@ document.addEventListener("click", e=>{
     return;
   }
   if(e.target.closest(".openpw") || e.target.closest(".lockover")){ openPw(); }
+  if(e.target.closest(".openauth")){ openAuth("signin"); }
 });
 
 $("#vBoard").addEventListener("click", ()=>{ view="board"; syncView(); });
@@ -3394,12 +3352,10 @@ function openAuth(mode){
     $("#acctVerified").textContent = session.emailVerified ? "Confirmed" : "Not confirmed";
     $("#verifyRow").hidden = session.emailVerified;
     $("#resendMsg").textContent = "";
-    $("#acctTrips").textContent = session.plus
-      ? String(savedTripCount)
-      : "Plus only";
+    $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts, the fare calendars and your own rates are free and unlimited. Plus adds saving, watching and exact fares.";
+      : "Comparing all six resorts, saving searches, price alerts and exact fares are all free. Plus adds the shareable PDF.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -3448,10 +3404,9 @@ $("#resendVerify").addEventListener("click", async ()=>{
  * compare six totals.
  *
  * The LIST is public — facts about what each resort has, the same way a
- * curated promo is public to browse. What Plus buys is the personalisation:
- * ticking yours and having the board answer. That split is the house
- * pattern, and the server enforces it (402 on PUT without Plus); this is
- * only the part that saves a wasted click.
+ * curated promo is public to browse. Ticking yours and having the board
+ * answer needs an account (free), and the server enforces that (401 on PUT
+ * while signed out); this is only the part that saves a wasted click.
  *
  * "Only here" is never written down. It arrives derived from how many
  * resorts an attraction lists, so a clone opening elsewhere can't leave a
@@ -3464,7 +3419,7 @@ async function loadAttractions(){
   if(!allAttractions.length){
     allAttractions = await apiGet("/api/attractions", {}).catch(()=>[]);
   }
-  if(session.plus){
+  if(session.email){
     const r = await apiGet("/api/profile/attractions", {}).catch(()=>null);
     attractionPicks = (r && Array.isArray(r.picks)) ? r.picks : [];
   } else {
@@ -3481,18 +3436,18 @@ function renderAttractionPicker(){
       ? "Only at " + ((RESORT_BY_ID.get(a.onlyAt)||{}).name || a.onlyAt)
       : a.resortIds.map(id=>(RESORT_BY_ID.get(id)||{}).name || id).join(" · ");
     return `<label><input type="checkbox" data-attr="${esc(a.id)}"
-      ${picked.has(a.id)?"checked":""} ${session.plus?"":"disabled"}>
+      ${picked.has(a.id)?"checked":""} ${session.email?"":"disabled"}>
       <span>${esc(a.name)}<span class="who">${esc(where)}${a.note?" — "+esc(a.note):""}</span></span></label>`;
   }).join("") || `<small style="color:var(--muted)">No attractions listed yet.</small>`;
-  note.textContent = session.plus
+  note.textContent = session.email
     ? "Ticked attractions show on the board — which resorts have them, and which are the only place you can ride them. It never changes the price order."
-    : "Browsing what each resort has is free. Plus is what lets you tick yours and have the board answer.";
+    : "Browsing what each resort has is free. Sign in to tick yours and have the board answer.";
 }
 
 document.addEventListener("change", async (e)=>{
   const box = e.target.closest("[data-attr]");
   if(!box) return;
-  if(!session.plus){ box.checked = false; return; }
+  if(!session.email){ box.checked = false; return; }
   const id = box.dataset.attr;
   attractionPicks = box.checked
     ? attractionPicks.concat([id])
@@ -3523,8 +3478,8 @@ document.addEventListener("change", async (e)=>{
  * drive/fly preset, and it is the same answer every time — so asking for it
  * on every visit was pure friction.
  *
- * Free, not Plus. An account is free, saving a TRIP is Plus, and a
- * remembered dropdown is neither.
+ * Free. An account is free, and a remembered dropdown is neither a saved
+ * trip nor a Plus feature.
  *
  * "Not set" is a real, reachable state, not just the starting one — picking
  * the blank option clears it server-side. A first save that could never be
@@ -3532,25 +3487,10 @@ document.addEventListener("change", async (e)=>{
 function fillHomeAirportOptions(){
   const sel = $("#homeAirport");
   const opts = [["", "Not set — ask me each time"]]
-    .concat(originOptions(" (needs Plus)"));
+    .concat(originOptions());
   fillSelect(sel, opts);
-  // Which airports you may KEEP follows the same free/Plus split as picking
-  // one. Disabled rather than hidden, on the same reasoning as the rest of
-  // the paywall: show what Plus unlocks instead of pretending it isn't there.
-  // The server refuses it too — this is only the half that saves a wasted
-  // click.
-  if(!session.plus){
-    const plusCodes = new Set(PLUS_ORIGINS.map(o=>o.iata));
-    for(const opt of sel.options) if(plusCodes.has(opt.value)) opt.disabled = true;
-  }
   sel.value = session.homeAirport || "";
-  // An airport saved while Plus was active stays saved after it lapses — the
-  // board still prices it, downgraded to the nearest free airport, and says
-  // so. Say it here too rather than letting a disabled-looking selection sit
-  // there unexplained.
-  const lapsed = !session.plus && session.homeAirport
-    && PLUS_ORIGINS.some(o=>o.iata === session.homeAirport);
-  $("#homeAirportLapsed").hidden = !lapsed;
+  $("#homeAirportLapsed").hidden = true;
 }
 
 $("#homeAirport").addEventListener("change", async (e)=>{
@@ -3692,9 +3632,9 @@ $("#signinBtn").addEventListener("click", async ()=>{
   // the account button in the masthead now carries the state.
   closeAuth();
   syncAccountUi();
-  // Plus status changes whether a promoId override actually applies
-  // server-side, so the already-fetched results are stale — re-run the
-  // search, don't just re-render.
+  // Signing in changes what the server will resolve (attraction picks, a
+  // saved home airport), so the already-fetched results are stale — re-run
+  // the search, don't just re-render.
   await runSearch(results[selected] && results[selected].resortId);
   await loadSavedTrips();
 });
@@ -3746,7 +3686,7 @@ let savedTripCount = 0;
 let openTrip = null;
 
 async function loadSavedTrips(){
-  if(!session.plus){
+  if(!session.email){
     savedTripCount = 0; savedTrips = []; openTrip = null;
     $("#tripExtras").hidden = true;
     renderTripsMenu();
@@ -3768,7 +3708,7 @@ async function loadSavedTrips(){
  *  yet, and a box you cannot use is what made the old panel read as dead. */
 async function renderTripExtras(){
   const box = $("#tripExtras");
-  if(!openTrip || !session.plus){ box.hidden = true; return; }
+  if(!openTrip || !session.email){ box.hidden = true; return; }
   box.hidden = false;
   const expenses = await apiGet(`/api/trips/${openTrip.id}/expenses`, {}).catch(()=>[]);
   const list = Array.isArray(expenses) ? expenses : [];
@@ -3819,7 +3759,7 @@ document.addEventListener("click", async e=>{
 document.addEventListener("click", async e=>{
   const s2 = e.target.closest("#saveSearchBtn, #saveTripBtn");
   if(!s2) return;
-  if(!session.plus){ openPw(); return; }
+  if(!session.email){ openAuth("signin"); return; }
   if(!results.some(r=>r.ok)) return;
   // A detail card's button preselects the resort you were looking at; the
   // board's button preselects whichever came out cheapest.
@@ -3894,7 +3834,7 @@ $("#nameSave").addEventListener("click", async ()=>{
     method:"POST", headers:{"content-type":"application/json"},
     body: JSON.stringify({
       label,
-      // exactDate/exactReturn ride along so reopening a Plus trip comes back
+      // exactDate/exactReturn ride along so reopening a saved trip comes back
       // on the real travel dates it was priced for, not just its month.
       params: { ...tripQuery(), month: params.month, resortId,
                 highlightResortId: resortId,
@@ -4027,7 +3967,7 @@ function closeTripsDrop(){
   $("#tripsTop").setAttribute("aria-expanded", "false");
 }
 function renderTripsMenu(){
-  $("#tripsMenu").hidden = !session.plus;
+  $("#tripsMenu").hidden = !session.email;
   $("#tripsTop").textContent = savedTrips.length ? `My searches (${savedTrips.length})` : "My searches";
   $("#tripsDrop").innerHTML = savedTrips.length
     ? savedTrips.map((t,i)=>{
@@ -4605,12 +4545,12 @@ $("#pdfPickGo").addEventListener("click", ()=>{
 // this work, one layer down.
 window.addEventListener("beforeprint", buildPrintDoc);
 
-/* exact live fare — the one control that spends metered provider money, so
-   it is Plus-only, server-gated, and reports the real remaining allowance. */
+/* exact live fare — free at launch, but the one control that spends metered
+   provider money, so it is capped per-user and site-wide and reports the
+   real remaining allowance rather than being unlimited. */
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("#exactBtn");
   if(!b) return;
-  if(!session.plus){ openPw(); return; }
   const out = $("#exactOut");
   b.disabled = true;
   const label = b.textContent;

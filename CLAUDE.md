@@ -45,20 +45,36 @@ that every number is either real or labelled a guess.
 
 ### Open questions for the owner — do not decide these alone
 
-1. **WDW hotel medians.** CLAUDE.md records Value/Moderate/Deluxe as
-   270/450/1090, researched by the OWNER against 2026 published ranges. A
-   Gemini-generated sheet they supplied says 225/327/727 — a 25-33% gap on
-   the two lines that decide which resort wins the board. **An AI draft does
-   not silently overwrite the owner's own research.** Unresolved.
-2. **Shanghai's `dataConfidence` badge** claims children are priced by height
-   (1.0-1.4m, unmodelled). The owner's own screenshot of Shanghai's purchase
-   flow shows AGE bands — Standard 12-59, Child 3-11 — which is exactly what
-   is modelled. The badge is probably removable; it has not been removed on
-   the strength of one screenshot.
-3. **Weekly rather than monthly crowd bands.** WDW December reads "moderate"
-   because 1-23 December is one of the cheapest periods of the year and 24-31
-   the most expensive. Thanksgiving is the same shape. The monthly average is
-   honest but blunt, and the charts support weekly. Owner's call.
+1. ~~**WDW hotel medians.**~~ **RESOLVED 2026-09-23.** CLAUDE.md had recorded
+   Value/Moderate/Deluxe as 270/450/1090, researched by the OWNER against 2026
+   published ranges; a Gemini-generated sheet said 225/327/727. A web-search
+   cross-check this session (third-party rate write-ups, not Disney's own
+   booking flow — its rate pages have no static price, only an interactive
+   date-driven search a fetch can't run) landed closer to the Gemini figures
+   for Moderate. The owner's call: **305/700** (Value's 270 was never in
+   dispute). See `config.ts`'s comment on WDW's hotels array for the real
+   per-hotel bands this was checked against.
+2. ~~**Shanghai's `dataConfidence` badge**~~ **RESOLVED 2026-09-23.** It claimed
+   children are priced by height (1.0-1.4m, unmodelled), on model knowledge
+   with no source. The owner confirmed via Shanghai's real purchase flow that
+   it uses AGE bands — Standard 12-59, Child 3-11 — exactly what `bands`
+   already modelled. The old claim was simply wrong, not a real cost-model
+   gap, so the badge is gone (`config.ts`, `shdr`), not reworded. Pinned by a
+   test named for the correction rather than the old claim.
+3. ~~**Weekly rather than monthly crowd bands.**~~ **BUILT 2026-09-23**, for WDW
+   (the resort with a real period-banded chart). `CrowdYear.windows` in
+   `config.ts` holds 14 real "MM-DD" date ranges off the same Animal Kingdom
+   Villas chart `months` already summarizes; `crowdFor()` takes an optional
+   `day` and checks these first, falling back to the whole-month band when no
+   day is given or no window matches — so every existing month-only caller is
+   unaffected. `server.ts` now derives that day from the trip's own priced
+   date (`best.start`), not just the search month. December: 1-23 is `low`,
+   24-31 is `peak`. Thanksgiving: 24-26 Nov (flying in) is `high`, 27-30 (the
+   weekend after) is `moderate` — genuinely the opposite of what most people
+   would guess, and now the card says so instead of averaging it away.
+   The other five resorts have no period-banded chart, so they still read
+   whole-month bands exactly as before; extend `windows` to any of them the
+   day a matching chart turns up.
 
 ### Next work, in the owner's priority order
 
@@ -73,22 +89,77 @@ that every number is either real or labelled a guess.
    it ships.
 5. **Paris tickets**, still on the curve.
 
-### Free/Plus split, settled 2026-09-22
+### Free/Plus split, settled 2026-09-24 — at launch, Plus is the PDF, full stop
 
-The rule that decides every row: **free is anything that makes a booking
-click more likely** (affiliate pays ~$90-165 a trip against $9 for Plus);
-**Plus is a separate product, or something that spends metered money.**
+**SUPERSEDES the 2026-09-22 decision** (which had already reversed an even
+earlier one — see the "SUPERSEDED 2026-09-22" note under "Attractions: what a
+resort HAS" further down for that history). The owner's own words: "I just
+want to make sure that at launch, the only thing on plus is the PDF print
+out." Every other feature that was ever Plus-gated is now free:
 
 - **Free:** the six-resort comparison, calendars, crowd bands, weather, every
-  override, booking links, **attraction picks** and **applying promos**.
-- **Plus:** **Disney Cruise pricing** (the anchor), the shareable PDF, saved
-  searches and alerts, the 22 Plus airports, custom expenses, exact live
-  fares (gated because it spends real SerpApi money, NOT as a selling point —
-  the free Kayak link now shows live fares too).
+  override, booking links, attraction picks, applying promos, **saved
+  searches and price/deal/gas alerts, custom planning expenses, exact live
+  fares, and all 41 origin airports** (the free/Plus airport split still
+  exists in `config.ts` — `ORIGINS` vs. `PLUS_ORIGINS` — but it now governs
+  only which 19 the nightly refresh pre-caches, not which a traveller may
+  pick or save; every origin still prices, either from the nightly cache or
+  the BTS-baseline estimate).
+- **Plus:** the shareable PDF. That's the whole list.
 
-**Attractions and promos moving to free is a REVERSAL** of earlier decisions
-still written below. Gating them protected $9 while costing a shot at
-$90-165. Not yet built — see the work list above.
+Exact live fares stay CAPPED, not unlimited, but the cap is no longer a
+paywall — it exists because the lookup spends real SerpApi money per click,
+so it is bounded by the same per-user/site-wide daily limits regardless of
+who is asking (see `exactFare.ts`). Signing in is still required (the cap
+needs an identity to key on), which is different from requiring Plus.
+
+**What changed, concretely, so the reasoning isn't re-derived:**
+- `src/server.ts`: every `isPlus`/402 check on `/api/exact-fare`,
+  `/api/trips*`, `/api/profile/attractions`, and promo application was
+  removed; each of those routes now checks only sign-in (401). `resolveOrigin()`
+  and `overridesFrom()` dropped their Plus-branching parameter entirely —
+  every origin resolves to itself, with no free-metro downgrade path left to
+  exercise. `/api/auth/me`'s `exactFare` allowance is reported for any
+  signed-in account, not just a Plus one.
+- `src/auth.ts`: `setHomeAirport()` dropped its `plus_required` throw
+  entirely; `HomeAirportError`'s `reason` is just `"unknown_airport"` now.
+- `src/jobs/alerts.ts`: `findAlerts()` dropped the `plus_until` clause from
+  its eligibility query — a confirmed email is the only condition left.
+- `public/prototype.html`: every `session.plus` check gating a UI control
+  for one of these features was removed or changed to gate on `session.email`
+  (sign-in) instead — the airport dropdown's "(Plus)"/"(needs Plus)" labels,
+  the exact-dates pill and its disabled inputs, the promo apply button and
+  personal-discount form, the exact-fare "Get Plus" upsell, the save-search/
+  save-trip button text, the alerts-toggle upsell, the attraction-picker
+  checkboxes, the home-airport Plus-airport disabling and lapsed-Plus
+  messaging, the custom-expenses box, and the "My searches" menu visibility.
+  The paywall dialog itself was rewritten top to bottom: it now offers
+  exactly one thing (the PDF) instead of a feature list most of which is now
+  free.
+- `src/ownerTasks.ts`: the `attraction-list` and `real-promos` standing tasks
+  were relabelled `side: "free"` — neither is Plus-gated data anymore, so
+  calling them Plus tasks would misprioritize the nightly digest.
+
+**Disney Cruise pricing's monetization is now an OPEN QUESTION, not
+settled.** It was called "the Plus anchor" in the 2026-09-22 decision this
+one supersedes, but it was never built (still just research and a sketched
+schema — see
+"Next work" above), so nothing about it actually changed here. Whether it
+ships free, Plus, or as some third thing needs a real decision when it
+actually gets built, informed by whatever this simplified free/Plus split
+has taught the owner about what people actually pay for by then. Don't
+assume it inherits either the old "Plus anchor" framing or the new
+PDF-only framing without asking.
+
+**Why simplify this far, when the earlier entries below spent real effort
+building a nuanced split?** The owner's own reasoning, paraphrased: a
+$9-90-day trip pass is a small ask, and every feature gated behind it was
+also a feature that could have made someone finish planning and click a
+booking link — which is worth far more per trip than the subscription. The
+PDF is different: it's a real deliverable (a written document, not a
+metered API call or a monitoring job), so it is the one thing left worth
+asking money for at launch. If usage data later says otherwise, that is a
+new decision, not a reason to silently re-add gates this entry removed.
 
 ### Known environment limits — do not rediscover these
 
@@ -125,7 +196,7 @@ $90-165. Not yet built — see the work list above.
 |---|---|
 | Backend (`src/`, `db/`) | **Working.** 537 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). Plus-only add-on unchanged: an alert when the cached gas price has moved since a driving trip was saved. |
+| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). The gas-price alert (told if the cached price has moved since a driving trip was saved) is now free too, same as every other alert — see the 2026-09-24 free/Plus decision at the top of this file. |
 | Park Hopper | **Wired, free, and now real where it exists.** An add-on that SCALES WITH TICKET LENGTH at WDW ($70-95) and Disneyland ($70-135) from published figures; a flat guess still at Paris. **Tokyo sells no hopper at all** (owner-confirmed) and neither do Hong Kong or Shanghai, which each have one park — asking for one there costs $0. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
@@ -145,9 +216,9 @@ $90-165. Not yet built — see the work list above.
 | Average wait times | **Recorded, shown to nobody.** `wait_time_samples` + a two-hourly Actions job reading Queue-Times, keeping only 9am-7pm local. No card, no API wiring, no aggregation — the card was dropped because every automated source records POSTED waits and that bias is not uniform across six operators. This exists so there is an archive to decide with in a year. Park ids are a draft until the probe runs. See the decision note. |
 | Flight estimate lean | **Wired, owner-editable.** `flight.estimateLean` picks a point between a route's own p25 / median / p75; ships at 100, the dear end. A BTS median is the median fare *paid* over a quarter and runs structurally below what you are quoted today. See the decision note, including the halving bug that was diagnosed, written, and turned out to be wrong. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
-| Saved searches | **Wired, Plus-only.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
-| Promos, custom expenses | **Wired, Plus-only.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side. `custom_expenses` lets a Plus user attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
-| Exact live fares | **Wired, Plus-only.** Free = a labelled estimate with its range, unlimited. Plus = the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide. The one route where a user's click spends metered money. |
+| Saved searches | **Wired, free (2026-09-24) — signed in, not Plus.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
+| Promos, custom expenses | **Wired, free (2026-09-24) — signed in, not Plus.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side on sign-in only. `custom_expenses` lets a signed-in traveller attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
+| Exact live fares | **Wired, free (2026-09-24) but capped, not Plus.** Free = a labelled estimate with its range, unlimited, no sign-in needed. Any signed-in account can also get the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide — the cap exists because the lookup spends metered provider money per click, not because of who is asking. The one route where a user's click spends real money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
 | Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + three GitHub Actions cron workflows (`refresh`, `alerts`, `news-digest`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
 
@@ -336,14 +407,20 @@ have the airports in alphabetical order by their city").
   `prototype.html` just obeys it. Verified in a real browser: 41 options,
   city-ordered, Austin sitting between Atlanta and Baltimore.
 
-**A profile is free; saved trips stay Plus** (2026-09-18). The first field is
-`users.home_airport` — the airport you depart from, remembered per account
-(`setHomeAirport()` in `auth.ts`, `PUT /api/profile`, shown in the account
-panel). Free, deliberately: an account is free, saving and watching a *trip*
-is Plus, and a remembered dropdown is neither. Paywalling it would be the
-already-rejected search-quota idea wearing a different hat.
+**A profile is free; saved trips stay Plus** (2026-09-18). **>> SUPERSEDED
+2026-09-24: saved trips are free too now (Plus is the PDF, full stop — see
+the top of this file), and the "which airports you may KEEP" rule two bullets
+down no longer exists at all — `setHomeAirport` never throws `plus_required`
+any more, because there is no free/Plus split left for it to enforce.** The
+rest of this note is kept for the reasoning that is still true: the first
+field is `users.home_airport` — the airport you depart from, remembered per
+account (`setHomeAirport()` in `auth.ts`, `PUT /api/profile`, shown in the
+account panel). Free, deliberately: an account is free, and a remembered
+dropdown is not monitoring. Paywalling it would be the already-rejected
+search-quota idea wearing a different hat.
 
-Three things that are decisions, not defaults:
+Three things that were decisions, not defaults (the second no longer applies
+— see the supersession note above):
 
 - *Null is a real value.* "I haven't said" and "I fly from Atlanta" are
   different facts, so the column is nullable with no default and the form
@@ -1110,14 +1187,75 @@ prevent, and showing high and finding it cheaper costs nobody a booking.
   would have got a different answer from the board. Two places holding the same
   number is how that happens; there is a test across every lean now.
 
+**A single bought fare no longer fully overrides a route's estimate — it's
+blended, weighted by how much evidence backs it** (2026-09-25). The owner's
+report was a crisis of confidence, not a bug report: "someone searching in
+December or November can have wildly different pricing. I have no idea why
+someone would use this tool anymore." Tracing it down, `book.ts`'s
+`flightEstimate()` had exactly the mechanism to cause that, already half-
+documented in its own comment ("one bought date could be a peak date that
+doesn't represent its quarter") — but the comment only labelled the risk,
+it didn't stop it: ONE real fare bought for a route+quarter (by the nightly
+rotation or an exact-fare click) fully replaced that route's multiplier for
+EVERY date in the quarter, no matter how small a sample of one thing is.
+A single unlucky or genuinely-peak sample could swing a route 30-50% with
+no real price change behind it, and since which routes get bought rotates
+night to night, the same route's number could look wildly different a few
+weeks apart for no reason a traveller could see.
+
+- *The fix is the same one `INTL_BASELINE_MIN_SAMPLES` already made for
+  international baselines* — one data point isn't evidence — just not
+  applied to this domestic route-correction path until now.
+  `ROUTE_CORRECTION_MIN_SAMPLES` (default 3, matching that precedent) is how
+  many real fares a route+quarter needs before its own evidence is trusted
+  at full weight.
+- *Below that, the correction is BLENDED toward the global trend, not gated
+  off entirely.* The owner explicitly wanted both: a floor below which one
+  sample doesn't fully swing things, AND for that one sample to still nudge
+  the number a little rather than being ignored outright until three arrive.
+  `routeM = baseM + (rawRouteM - baseM) × min(n / ROUTE_CORRECTION_MIN_SAMPLES, 1)`
+  — one sample moves a third of the way, three or more moves the whole way,
+  exactly matching the old (buggy) full-override behavior once there's
+  enough evidence to trust it.
+- *`baseM` is what the route would show with NO route-specific evidence at
+  all* — the global trend, or 1 for a baseline the trend must never touch
+  (a live-sampled international baseline, per the existing "must never be
+  moved by the trend" rule). Computing it explicitly, rather than repeating
+  `h.applyTrend ? trend!.m : 1` inline with a non-null assertion, also
+  closed a latent crash: that assertion could fire if `applyTrend` were true
+  with no trend row loaded but an owner correction present for `low`/`high`
+  only (not `typical`) — a real path through the code, never previously
+  exercised by a test.
+- *`ROUTE_CORRECTION_DAYS` (the 45-day lookback for what counts as a real
+  fare) is UNCHANGED.* The owner considered widening it too and rejected
+  that specifically: "the lookback window will drag us down" — a longer
+  window smooths swings by making stale evidence linger, which trades one
+  kind of wrongness (a fare too fresh to be enough evidence) for another
+  (a fare too old to still be true). The sample-size fix doesn't have that
+  trade-off: it only changes how much a real observation moves things,
+  never how recent it has to be.
+- *Not a cosmetic change to the number shown — this sits on top of the
+  actual comparison.* Flights are the largest single line for four of the
+  six resorts (Tokyo/Shanghai/Hong Kong routinely price $5,000+/person in
+  the smoke fixture), so a single-sample swing large enough could flip
+  which resort the board ranks cheapest — not just make one number look
+  wrong, but make the comparison itself untrustworthy, which is the one
+  thing this app exists to get right.
+- Two tests in `exactFare.test.ts` pin both halves: one bought fare moves
+  the estimate a third of the way (not all the way), and three bought fares
+  (matching `ROUTE_CORRECTION_MIN_SAMPLES`) restore the old full-trust
+  behavior exactly.
+
 **The exact-fare caps bound ONE BUTTON, not searching** (2026-09-22, the owner:
 "I don't want the entire site limited to six exact searches"). Worth stating
 plainly because the names do not say it. Comparing six resorts, twelve months
 of fare calendars, cheapest dates and every override are unlimited and free
 forever — they read a cache already paid for. `EXACT_FARE_PER_USER_PER_DAY`
-and `EXACT_FARE_GLOBAL_PER_DAY` apply only to the Plus-only "exact fare"
-button, which spends one real SerpApi search per press. At 3 and 6 two friends
-exhaust the site for the day.
+and `EXACT_FARE_GLOBAL_PER_DAY` apply only to the "exact fare" button, which
+spends one real SerpApi search per press — free for any signed-in account
+since the 2026-09-24 launch decision, but still capped for the same reason
+it always was: the spend, not the plan. At 3 and 6 two friends exhaust the
+site for the day.
 
 **The Developer month: one sweep, international, then back to Starter**
 (2026-09-22, the owner's plan — "one or two total runs a month ... leave the
@@ -1469,9 +1607,12 @@ than it is — this is the comparison people get wrong.
   announcement — not fetched from Disney's own site directly (blocked from this
   environment's network). Re-check closer to booking; multi-year construction projects
   slip.
-- **Shanghai and Hong Kong age bands** come from model knowledge, not a source. Both are
-  configured as free under 3 / child 3–11 / adult 12+. Shanghai actually bands by *height*
-  (1.0–1.4m), which is not modelled at all.
+- **Hong Kong's age bands** come from model knowledge, not a source. Configured as free
+  under 3 / child 3–11 / adult 12+ — still unverified against Hong Kong Disneyland's own
+  ticket page, hence its own `dataConfidence` badge. **Shanghai's are no longer in this
+  category** (resolved 2026-09-23): the owner confirmed the same 3–11/12+ split against
+  Shanghai's real purchase flow, which also settled that Shanghai bands by *age*, not
+  *height* as an earlier, unsourced assumption here claimed.
 - **Ticket affiliate commission rates** (used ~3–6% in the revenue estimate). This is the
   largest commission line and the least certain number in the business case.
 - **Travelpayouts response shapes.** `providers/travelpayouts.ts` was written to the
@@ -1601,17 +1742,20 @@ Three parts, each decided rather than defaulted:
 **Never hardcode a future year's rate.** An unpublished figure is exactly what
 the warning exists to tell you about.
 
-**Airports are tiered: 19 free metros, 22 more with Plus.** Every origin
-multiplies the pre-caching bill, so the free list stays at the big metros — but
-"nearest big airport" is a real compromise (Raleigh gets offered Charlotte, three
-hours away; against the same data CLT→MCO prices $387/seat and RDU→MCO $350).
-A free user picking a Plus airport is NOT an error: `resolveOrigin()` prices the
-nearest free metro and returns `originDowngrade` so the page says which airport it
-used. BTS ingests baselines for BOTH lists — the survey is one file covering every
-US airport, so withholding data would cost nothing and buy nothing. The split
-governs which airports can be *picked*, not which have data. **Plus also pins real
-travel dates** (Mar 18-24, not "sometime in March") via the `date` param compare()
-already had, with nights derived from the gap.
+**Airports are tiered: 19 free metros, 22 more `PLUS_ORIGINS` — but as of the
+2026-09-24 launch decision, that tier no longer governs picking, only
+pre-caching.** Every origin multiplies the pre-caching bill, so the nightly
+refresh's free list stays at the big metros — but "nearest big airport" was a
+real compromise (Raleigh only offered Charlotte, three hours away; against the
+same data CLT→MCO prices $387/seat and RDU→MCO $350), which is exactly why
+picking one of the 22 smaller airports is no longer gated at all: `resolveOrigin()`
+now just resolves any known origin to itself, with no free-metro downgrade
+path. BTS ingests baselines for BOTH lists — the survey is one file covering
+every US airport, so withholding data would cost nothing and buy nothing — so
+an unpre-cached origin still prices fine from its own BTS-baseline estimate,
+just without the nightly cache's freshness. **Real travel dates** (Mar 18-24,
+not "sometime in March") are free for everyone too now, via the `date` param
+compare() already had, with nights derived from the gap.
 
 **Timestamps: never `String(aDate)` to compare them.** Postgres returns
 timestamptz as JS Date objects and `String()` formats to WHOLE SECONDS, silently
@@ -1887,19 +2031,17 @@ Four decisions worth not re-deriving:
   their results. Verified live: with Zootopia and Ratatouille picked, the
   board still ran WDW-first on price while Shanghai (5th) carried "Only
   place with Zootopia".
-- **The list is free to browse; picking yours is Plus.**
-  **>> SUPERSEDED 2026-09-22: BOTH attraction picks AND applying a promo are
-  moving to FREE.** See the free/Plus split at the top of this file. Gating
-  them protects a $9 subscription while costing a shot at $90-165 of
-  affiliate commission, because both make a booking click MORE likely. The
-  reasoning below is kept because it was sound for the question it answered —
-  which side of a paywall a curated list belongs on — and only the economics
-  changed. Not yet built.
-  Exactly the promos
-  precedent — a curated promo is public to browse and Plus to apply — and
-  the owner's "keep it on the Plus side". `GET /api/attractions` is public;
-  `PUT /api/profile/attractions` answers 402 without Plus, and `compare()`
-  reads the picks from the user's own row so a free request never carries
+- **The list is free to browse; picking yours used to be Plus.**
+  **>> SUPERSEDED 2026-09-22, then again 2026-09-24: attraction picks AND
+  applying a promo are FREE**, and as of the 2026-09-24 launch decision
+  (Plus is the PDF, full stop — see the top of this file) that is no longer
+  even a Plus-adjacent feature, just an ordinary free one gated on being
+  signed in. The reasoning immediately below is kept because it was sound
+  for the question it originally answered — which side of a paywall a
+  curated list belongs on — and only the economics changed. **This IS now
+  built**: `GET /api/attractions` is public; `PUT /api/profile/attractions`
+  answers 401 (sign-in required) rather than 402, and `compare()` reads the
+  picks from the user's own row so a signed-out request never carries
   matches at all. Verified by PUTting straight to the API past the disabled
   checkboxes.
 - **An unknown pick id is dropped, not thrown.** Saved picks outlive edits

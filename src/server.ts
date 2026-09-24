@@ -13,7 +13,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
          KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, originNeedsPlus, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
@@ -140,47 +140,25 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * Which departure airport a request actually gets, and why.
+ * Which departure airport a request actually gets.
  *
- * The free list is the 19 big metros the cache is pre-filled for. Plus adds
- * the smaller airports people actually live near — someone in Raleigh is
- * offered Charlotte three hours away, and the fare they'd really pay is a
- * different number.
- *
- * A free user asking for a Plus airport is NOT an error: they are quietly
- * given the nearest free one and told, so the board still prices and the
- * paywall has something concrete to point at. Server-side, because the
- * airport list in the UI is only the cosmetic half.
+ * Launch decision 2026-09-24: every airport in `ALL_ORIGINS` (the 19 big
+ * metros plus the 22 smaller ones once reserved for Plus) is available to
+ * everyone — see CLAUDE.md's Free/Plus split. `ORIGINS`/`PLUS_ORIGINS` stay
+ * two separate lists in config.ts because the nightly refresh still only
+ * pre-caches the first 19; a smaller airport still prices, off a BTS-derived
+ * estimate rather than a real per-date lookup, exactly like any other
+ * unswept domestic route.
  */
-function resolveOrigin(requested: string, plus: boolean): { origin: string; downgradedFrom?: string; downgradedTo?: string } {
+function resolveOrigin(requested: string): { origin: string } {
   const iata = (requested || "ATL").toUpperCase().slice(0, 3);
-  if (!originNeedsPlus(iata) || plus) {
-    return { origin: ORIGIN_BY_IATA.has(iata) ? iata : "ATL" };
-  }
-  const wanted = ORIGIN_BY_IATA.get(iata);
-  if (!wanted) return { origin: "ATL" };
-  // Nearest free metro by great-circle distance — the airport they'd have
-  // picked themselves if the Plus one weren't offered.
-  const nearest = ORIGINS.reduce((best, o) =>
-    haversineMiles(wanted.lat, wanted.lon, o.lat, o.lon) <
-    haversineMiles(wanted.lat, wanted.lon, best.lat, best.lon) ? o : best);
-  return { origin: nearest.iata, downgradedFrom: iata, downgradedTo: nearest.iata };
+  return { origin: ORIGIN_BY_IATA.has(iata) ? iata : "ATL" };
 }
-/** Strips promo fields for anyone not Plus — the server-side gate; hiding the UI control is only the cosmetic half. */
-function overridesFrom(q: URLSearchParams, allowPromos: boolean): Overrides {
-  let overrides: Overrides;
+function overridesFrom(q: URLSearchParams): Overrides {
   try {
     const raw = q.get("overrides");
-    overrides = raw ? (JSON.parse(raw) as Overrides) : {};
+    return raw ? (JSON.parse(raw) as Overrides) : {};
   } catch { return {}; }
-  if (allowPromos) return overrides;
-  const stripped: Overrides = {};
-  for (const [resortId, ov] of Object.entries(overrides)) {
-    if (!ov) continue;
-    const { promoId, personalPromo, ...rest } = ov;
-    stripped[resortId] = rest;
-  }
-  return stripped;
 }
 
 /**
@@ -240,21 +218,20 @@ async function readForm(req: IncomingMessage): Promise<Record<string, string>> {
 }
 
 async function compare(q: URLSearchParams, user: SessionUser | null) {
-  const plus = isPlus(user?.plusUntil ?? null);
+  // Launch decision 2026-09-24: the only Plus feature is the shareable PDF.
+  // Nothing in this function gates behavior on plan any more — a signed-in
+  // user's own account (email, plan) is what /api/session reports, not this
+  // endpoint. See CLAUDE.md's Free/Plus split for what that superseded.
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
-  // Server-side gate, not just a hidden UI control: a non-Plus request never
-  // gets promo effects, whatever the query string asks for.
-  const overrides = overridesFrom(q, plus);
+  const overrides = overridesFrom(q);
   const month = q.get("month") ?? todayISO().slice(0, 7);
   const [from, to] = monthBounds(month);
   // An explicit date prices exactly that day instead of scanning the month for
   // the cheapest one — how a calendar-cell click asks for that date's full
-  // breakdown, and how a Plus user pins real travel dates instead of a month.
+  // breakdown, and how a traveller pins real travel dates instead of a month.
   const explicitDate = q.get("date");
-  // Free users get the 19 pre-cached metros; Plus can depart from a smaller
-  // airport they actually live near. Enforced here, not in the UI.
-  const originPick = resolveOrigin(params.origin, plus);
+  const originPick = resolveOrigin(params.origin);
   params.origin = originPick.origin;
   // Per-resort arrival-airport picks — only ever affects the resort they're
   // paired with (resolveDestination re-validates against that resort's own
@@ -274,12 +251,12 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // its own errors, and nothing below reads the result.
   void recordSearch(db, params.origin, [...destinationByResort.values()], month);
 
-  // A Plus traveller's attraction picks, read from their own row — never
-  // from the query string. Same rule as promos: the client may say which
-  // account it is (via the cookie), never what that account is entitled to.
-  // A free request gets an empty list, so every resort's `attractions` comes
-  // back absent and the board shows nothing rather than a teaser.
-  const picks = plus && user ? await picksFor(db, user.id) : [];
+  // A signed-in traveller's attraction picks, read from their own row —
+  // never from the query string, so the client can say which account it is
+  // (via the cookie) but never what it has picked. A signed-out request gets
+  // an empty list, so every resort's `attractions` comes back absent and the
+  // board shows nothing rather than a teaser.
+  const picks = user ? await picksFor(db, user.id) : [];
   // The owner's list overlaid on the shipped one, loaded once for the whole
   // board rather than per resort. Skipped entirely when nobody has picked
   // anything, since the matching never runs then and this would be a query
@@ -321,6 +298,12 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // resort's best day against another's typical day would not be comparing
     // anything, which is the one thing this app exists to do.
     const best = priceBasis === "cheapest" ? cheapest : typical;
+    // The real priced day, when there is one, drives the crowd lookup —
+    // finer than crowdMonth alone for resorts whose chart is itself
+    // period-banded rather than monthly (see CrowdYear.windows). Falls back
+    // to the month-only lookup for a resort typicalIn couldn't price at all.
+    const crowdMonthForRow = best ? Number(best.start.slice(5, 7)) : crowdMonth;
+    const crowdDay = best ? Number(best.start.slice(8, 10)) : undefined;
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
@@ -332,8 +315,8 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // for ordering. "The cheapest week is also the busiest" is a trade-off a
     // traveller should make knowingly; quietly reordering the board because
     // we guessed they would mind is the app deciding for them.
-    const crowd = crowdFor(resort.id, crowdMonth) ?? undefined;
-    const crowdWarning = crowdFlag(resort.id, crowdMonth, crowdCare) ?? undefined;
+    const crowd = crowdFor(resort.id, crowdMonthForRow, crowdDay) ?? undefined;
+    const crowdWarning = crowdFlag(resort.id, crowdMonthForRow, crowdCare, crowdDay) ?? undefined;
     return best
       ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
           /** What the rest of the month looks like around the quoted day, so
@@ -349,11 +332,6 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   return {
     month, pricesAsOf: book.oldestFetchedAt,
     params: { ...params, gettingThere },
-    // Present only when a free request asked for a Plus airport, so the UI can
-    // say which airport it actually priced rather than silently substituting.
-    originDowngrade: originPick.downgradedFrom
-      ? { requested: originPick.downgradedFrom, priced: originPick.downgradedTo }
-      : undefined,
     exactDate: explicitDate ?? undefined,
     /** How many picks the matches above were measured against, so the UI can
      *  say "3 of your 5" without a second request. */
@@ -371,10 +349,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
 }
 
 async function calendar(q: URLSearchParams, user: SessionUser | null) {
-  const plus = isPlus(user?.plusUntil ?? null);
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
-  const overrides = overridesFrom(q, plus);
+  const overrides = overridesFrom(q);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
   const mode = resortTransportMode(gettingThere, resort);
@@ -698,9 +675,9 @@ const server = createServer(async (req, res) => {
       const plus = isPlus(user.plusUntil);
       // Exact-fare allowance travels with the identity, so the UI can show a
       // real remaining count instead of only finding out by hitting the cap.
-      const exactFare = plus
-        ? { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) }
-        : null;
+      // Free for any signed-in account since the 2026-09-24 launch decision —
+      // not conditioned on `plus`, which now gates only the PDF.
+      const exactFare = { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) };
       return send(200, {
         authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
@@ -726,12 +703,8 @@ const server = createServer(async (req, res) => {
         const homeAirport = await setHomeAirport(db, user.id, raw ? String(raw) : null);
         return send(200, { ok: true, homeAirport }, { cache: "no-store" });
       } catch (e) {
-        // 402 for the Plus case so it reads the same as every other paywalled
-        // route, 400 for a code we simply don't know. Disabling the option in
-        // the form is only the cosmetic half — this is the half that counts.
         if (e instanceof HomeAirportError) {
-          return send(e.reason === "plus_required" ? 402 : 400,
-            { error: e.reason, message: e.message });
+          return send(400, { error: e.reason, message: e.message });
         }
         throw e;
       }
@@ -753,12 +726,6 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/profile/attractions") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) {
-        return send(402, {
-          error: "plus_required",
-          message: "Choosing the attractions you care about is a Plus feature. Browsing what each resort has is free.",
-        });
-      }
       if (req.method === "GET") {
         return send(200, { picks: await picksFor(db, user.id) }, { cache: "no-store" });
       }
@@ -823,19 +790,15 @@ const server = createServer(async (req, res) => {
       const result = await provider.locate(clientIp(req)).catch(() => null);
       return send(200, result ?? { error: "unavailable" }, { cache: "no-store" });
     }
-    // --- exact live fare: signed in and Plus. The one route where a user's
-    // click spends metered provider money, which is exactly why it is
-    // paywalled. Plus is resolved from the session cookie against the
-    // database here — never from anything the client sends.
+    // --- exact live fare: signed in, free. The one route where a user's
+    // click spends metered provider money — no longer paywalled at launch,
+    // but still bounded by the per-user and site-wide daily caps below, so
+    // the spend stays capped even though it is no longer offset by Plus
+    // revenue. Sign-in stays required because the per-user cap needs an
+    // identity to key on.
     if (url.pathname === "/api/exact-fare" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required", message: "Sign in to check exact fares." });
-      if (!isPlus(user.plusUntil)) {
-        return send(402, {
-          error: "plus_required",
-          message: "Exact live fares are a Plus feature. The estimate is free and unlimited.",
-        });
-      }
       const b = await readBody(req);
       const origin = String(b.origin ?? "").toUpperCase();
       const departDate = String(b.date ?? "");
@@ -850,9 +813,7 @@ const server = createServer(async (req, res) => {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate)) return send(400, { error: "bad_date" });
       if (departDate < todayISO()) return send(400, { error: "past_date", message: "That date has already been and gone." });
 
-      // Same free/Plus airport rule as compare(). A Plus user is by
-      // definition allowed any of them, so this only ever normalises.
-      const { origin: pricedOrigin } = resolveOrigin(origin, true);
+      const { origin: pricedOrigin } = resolveOrigin(origin);
       const result = await fetchExactFare(db, {
         userId: user.id, origin: pricedOrigin, destination, departDate, tripLength: bucketFor(nights),
       });
@@ -861,11 +822,10 @@ const server = createServer(async (req, res) => {
       return send(200, result, { cache: "no-store" });
     }
 
-    // --- saved trips: signed in and Plus, always the caller's own rows. ---
+    // --- saved trips: signed in, free at launch, always the caller's own rows. ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required", message: "Saved trips and alerts are a Plus feature." });
       const t = await readBody(req);
       const id = randomUUID();
       const params = { ...(t.params ?? {}) };
@@ -920,14 +880,13 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/trips" && req.method === "GET") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const { rows } = await db.query(
         `select id, label, params, overrides, baseline_total, active, created_at from saved_trips
           where user_id = $1 order by created_at desc`, [user.id]);
       // params/overrides are returned so a saved trip can be REOPENED, not
       // just listed — without them the list was a read-only receipt and the
       // only way back to a trip you had saved was to key it in again.
-      // They are the user's own row, already Plus-gated above.
+      // They are the user's own row, already scoped to their own id above.
       return send(200, rows.map((r) => ({
         id: r.id, label: r.label, resortId: r.params?.resortId ?? null,
         params: r.params ?? {}, overrides: r.overrides ?? {},
@@ -938,12 +897,11 @@ const server = createServer(async (req, res) => {
     if (tripMatch && req.method === "DELETE") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       await db.query(`delete from saved_trips where id = $1 and user_id = $2`, [tripMatch[1], user.id]);
       return send(200, { ok: true });
     }
 
-    // --- custom planning expenses: free-form Plus line items (VIP tours, ---
+    // --- custom planning expenses: free-form line items (VIP tours, ---
     // --- PhotoPass, anything not modeled elsewhere) attached to a saved  ---
     // --- trip — the user's own claim about their own price, same trust  ---
     // --- model as a personal promo. Always scoped to a trip the caller  ---
@@ -952,7 +910,6 @@ const server = createServer(async (req, res) => {
     if (expensesMatch && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
       if (!owns.rows[0]) return send(404, { error: "not found" });
       const body = await readBody(req);
@@ -967,7 +924,6 @@ const server = createServer(async (req, res) => {
     if (expensesMatch && req.method === "GET") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
       if (!owns.rows[0]) return send(404, { error: "not found" });
       const { rows } = await db.query(
@@ -978,7 +934,6 @@ const server = createServer(async (req, res) => {
     if (expenseMatch && req.method === "DELETE") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expenseMatch[1], user.id]);
       if (!owns.rows[0]) return send(404, { error: "not found" });
       await db.query(`delete from custom_expenses where id = $1 and trip_id = $2`, [expenseMatch[2], expenseMatch[1]]);

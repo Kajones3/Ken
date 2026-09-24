@@ -113,11 +113,13 @@ test("a failed send leaves the alert for next run to retry — it is not lost", 
   await db.close();
 });
 
-test("a user who has never been Plus gets no alerts, however far the price drops", async () => {
+test("a user who has never been Plus still gets alerts — Plus buys only the PDF now", async () => {
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
-  // No plus_until at all — a brand-new user, never granted Plus.
-  await db.query(`insert into users (id, email) values ($1,$2)`, [userId, "free@example.com"]);
+  // No plus_until at all, but a confirmed email — a free account is exactly
+  // as alert-eligible as a Plus one since the 2026-09-24 launch decision.
+  await db.query(`insert into users (id, email, email_verified_at) values ($1,$2,now())`,
+    [userId, "free@example.com"]);
   await db.query(
     `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops)
      values ('ATL','MCO','2027-03-01',4,100,0)`);
@@ -131,15 +133,28 @@ test("a user who has never been Plus gets no alerts, however far the price drops
     origin: "ATL", adults: 2, childAges: [], nights: 1, parkDays: 1,
     stay: "on", tier: 0, food: "qs",
   };
+  // A 10% baseline bump guarantees a real drop without tripping anomaly
+  // suppression (>=25% is treated as bad data, not a sale) — same reasoning
+  // as the "failed send" fixture above: compute the actual cached total the
+  // same way findAlerts will, rather than guess a round number.
+  const resort = RESORT_BY_ID.get("wdw")!;
+  const book = await loadBook(db, {
+    origin: params.origin, destinations: [resort.iata], resortIds: [resort.id],
+    from: "2027-03-01", to: "2027-03-02", tripLength: bucketFor(params.nights),
+  });
+  const { best } = cheapestIn(book, resort, params, {}, range("2027-03-01", "2027-03-01"));
+  assert.ok(best, "fixture data must actually be priceable");
+  const baseline = best!.total * 1.10;
+
   await db.query(
     `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
-     values ($1,$2,$3,'{}',100000,0)`,   // a baseline this high guarantees a huge drop, if it were even checked
-    [tripId, userId, JSON.stringify({ ...params, month: "2027-03", resortId: "wdw" })],
+     values ($1,$2,$3,'{}',$4,0)`,
+    [tripId, userId, JSON.stringify({ ...params, month: "2027-03", resortId: "wdw" }), baseline],
   );
 
   const result = await runAlerts(db, { sender: { name: "unused", async send() {} } });
-  assert.equal(result.checked, 0, "a never-Plus user's trip is not even considered");
-  assert.equal(result.fired, 0);
+  assert.equal(result.checked, 1, "a free account's trip is considered just like a Plus one");
+  assert.equal(result.fired, 1);
 
   await db.close();
 });
@@ -291,8 +306,8 @@ test("a driving trip gets no gas-price alert when the price has barely moved", a
 
 test("an unconfirmed email address gets no alerts, even with real Plus", async () => {
   // The concrete harm an unverified address does: mail to a stranger, in
-  // their name, about a trip they never saved. Same class of mistake as the
-  // `plus_until is null` bug one column over, so it is pinned the same way.
+  // their name, about a trip they never saved. This is the one eligibility
+  // condition left since Plus stopped gating alerts (2026-09-24).
   const db = await memoryDb();
   const userId = randomUUID(), tripId = randomUUID();
   await db.query(

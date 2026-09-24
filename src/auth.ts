@@ -20,7 +20,7 @@ import type { IncomingMessage } from "node:http";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { todayISO, type ISODate } from "./dates.js";
-import { ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
+import { ORIGIN_BY_IATA } from "./config.js";
 import { requireVerifiedEmail } from "./verifyEmail.js";
 
 const COOKIE_NAME = "pf_session";
@@ -142,7 +142,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
  * renew.
  */
 export class HomeAirportError extends Error {
-  constructor(message: string, readonly reason: "unknown_airport" | "plus_required") {
+  constructor(message: string, readonly reason: "unknown_airport") {
     super(message);
   }
 }
@@ -153,18 +153,6 @@ export async function setHomeAirport(
   const clean = iata ? iata.trim().toUpperCase() : null;
   if (clean && !ORIGIN_BY_IATA.has(clean)) {
     throw new HomeAirportError(`unknown airport ${clean}`, "unknown_airport");
-  }
-  if (clean && originNeedsPlus(clean)) {
-    const { rows } = await db.query<{ plus_until: unknown }>(
-      `select plus_until from users where id = $1`, [userId],
-    );
-    const plusUntil = rows[0]?.plus_until ? dateStr(rows[0].plus_until as never) : null;
-    if (!isPlus(plusUntil)) {
-      throw new HomeAirportError(
-        `${clean} is a Plus airport — a free account can't save it as a home airport.`,
-        "plus_required",
-      );
-    }
   }
   await db.query(`update users set home_airport = $2 where id = $1`, [userId, clean]);
   return clean;

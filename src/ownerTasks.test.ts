@@ -62,12 +62,19 @@ test("every task says which side of the paywall it affects", async () => {
   await db.close();
 });
 
-test("the Plus-side jobs are present and labelled", async () => {
+test("no task is Plus-only any more — Plus buys only the PDF (2026-09-24)", async () => {
+  // Attraction picks and applying a promo both moved to free at launch, and
+  // nothing else here is Plus-gated data (the PDF has no hand-maintained
+  // table of its own) — so "plus" should be an empty side, not a stale label
+  // left over from before the regating.
   const db = await memoryDb();
   const tasks = await ownerTasks(db, { env: ALL_SET, today: SETTLED });
   const plus = tasks.filter((t) => t.side === "plus").map((t) => t.id);
-  assert.ok(plus.includes("attraction-list"), "the attraction list is a Plus feature's data");
-  assert.ok(plus.includes("real-promos"), "applying a promo is Plus");
+  assert.deepEqual(plus, []);
+  const attractionTask = tasks.find((t) => t.id === "attraction-list");
+  const promoTask = tasks.find((t) => t.id === "real-promos");
+  assert.equal(attractionTask?.side, "free", "the attraction list is free data now");
+  assert.equal(promoTask?.side, "free", "applying a promo is free now");
   await db.close();
 });
 
@@ -162,7 +169,9 @@ test("the rendered list labels each job free, Plus or both", async () => {
   const text = renderOwnerTasks(await ownerTasks(db, { env: {} as NodeJS.ProcessEnv, today: SETTLED }));
   assert.match(text, /Your manual jobs \(\d+\)/);
   assert.match(text, /\[FREE\+PLUS\] \[BLOCKING\]/);
-  assert.match(text, /\[PLUS\]/);
+  // No task is Plus-only any more (2026-09-24 — Plus buys only the PDF), so
+  // a bare [PLUS] label should never appear, only [FREE] and [FREE+PLUS].
+  assert.doesNotMatch(text, /\[PLUS\]/);
   assert.match(text, /\[FREE\]/);
   assert.match(text, /checked against real state just now/);
   assert.match(text, /always shown until marked done/);
