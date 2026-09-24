@@ -155,12 +155,18 @@ export interface CrowdFlag {
  * said crowds matter.
  *
  * The thresholds are the whole design, so they are stated rather than tuned by
- * feel:
+ * feel. REVISED 2026-09-25 (owner's report): "somewhat" used to flag only
+ * `peak`, which meant a real Thanksgiving-week trip to Walt Disney World —
+ * banded `high`, deliberately one notch under Christmas's `peak` — never
+ * flagged at the DEFAULT sensitivity. A traveller who said crowds matter
+ * "somewhat" and searched November got no warning at all. `high` is a
+ * genuinely busy week, not a normal one, so it belongs in the default flag:
  *   none — never flag. They told us not to; showing it anyway is nagging.
- *   some — flag only `peak`. A "high" month is a normal busy week and
- *          everything is busy somewhere; flagging four resorts out of six
- *          teaches people the flag means nothing.
- *   high — flag `high` and `peak`, and offer quieter months at this resort.
+ *   some — flag `high` and `peak` (the default). A moderate month is a normal
+ *          week and everything is moderate somewhere; flagging that teaches
+ *          people the flag means nothing.
+ *   high — flag `moderate`, `high` and `peak`, and offer quieter months at
+ *          this resort.
  *
  * Returns null when there is nothing to say, so a caller can render nothing
  * without checking three conditions itself.
@@ -175,7 +181,7 @@ export function crowdFlag(
   const c = crowdFor(resortId, month1, day);
   if (!c) return null;
 
-  const threshold = sensitivity === "high" ? crowdRank("high") : crowdRank("peak");
+  const threshold = sensitivity === "high" ? crowdRank("moderate") : crowdRank("high");
   if (c.rank < threshold) return null;
 
   // Only offer a month that is genuinely quieter, not merely different. Two

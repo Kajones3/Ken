@@ -88,6 +88,71 @@ full reasoning on each, this is just the map:
   calendar months) — a natural next addition to `holidayWindows.ts` using
   the same mechanism, not urgent.
 
+### A second 2026-09-25 pass — six owner-reported fixes
+
+The owner came back with a screenshot and a punch list. All six shipped in
+one session; the reasoning for each is worth not re-deriving:
+
+1. **Dropped the "not yet checked against real demand data" banner from the
+   crowd card.** The owner's call: "We have the hotel demand data and that
+   is enough here." `CROWDS_ARE_PLACEHOLDER` (config.ts) is now `false` — the
+   per-month "estimated" vs. "real demand data" chip on the crowd card still
+   says which basis a given month has, that per-month honesty didn't change,
+   only the blanket first-pass disclaimer sitting on top of it.
+2. **Fixed crowd flagging so a real Thanksgiving-week trip to WDW actually
+   flags at the default sensitivity.** "Somewhat" used to flag only `peak`,
+   and Thanksgiving at WDW is deliberately banded `high` (one notch under
+   Christmas's `peak` — see the windows decision above), so it silently never
+   flagged for anyone who hadn't cranked sensitivity to "a lot." Now
+   `some` flags `high`+`peak` and `high` also flags `moderate` (`crowds.ts`,
+   `crowdFlag()`). Verified live: pricing WDW for a date inside the Nov 24-26
+   window now flags "Busy" at "somewhat," and the same check for Disneyland
+   Paris in November (banded `low`) does not — the owner's own example.
+3. **Sample restaurants under the Food card.** The owner's ask: "if I want
+   to do table service, I need to know that Sanaa is $XX per person." Added
+   `foodExamples` per resort (config.ts) — a couple of named, real restaurants
+   per dining style, priced by $ TIER the way Disney's own dining guide does
+   ($ / $$ / $$$ / $$$$), not a claimed dollar figure a real menu would
+   contradict. Rendered under the food line items in `prototype.html`.
+   Same standing as the starter attraction rows: Claude's own list, not
+   verified against a current menu or lineup — flagged with a new standing
+   task (`food-examples` in `ownerTasks.ts`) since restaurants close and
+   rename more often than rides do.
+4. **Removed "Compare both" (on-property vs. off-property) entirely.** The
+   owner's report: "that isn't working right." Rather than debug a feature
+   whose own reasoning (silently picking the cheaper side, see the
+   2026-09-19 decision above) the owner had already found confusing in
+   practice, it's gone — `Stay` is now just `"on" | "off" | "none"`, and
+   `stayCompare` (the whole comparison block, the pricing.ts logic behind it,
+   and its board/PDF rendering) is deleted rather than left dead. The
+   dining-plan-forces-on-property special case that existed only to handle
+   `"both"` is gone too; `planFor()` already refuses a plan for `"off"`/
+   `"none"` on its own, so nothing had to replace it.
+5. **Stopped calling anything "exact."** The owner's reasoning: "Even
+   though we have good data, we are setting ourselves up for failure." A
+   real fare found right now can still move by the time somebody actually
+   books, so claiming "exact" was a promise the site couldn't keep. The
+   on-demand fare lookup (`/api/exact-fare` — the route name and internal
+   plumbing are unchanged, only what's shown) is now labelled "Check a live
+   price" / "Live fare $X" / "live" chip, each with a line making clear it's
+   still an estimate, not a guaranteed checkout price. Marketing copy that
+   listed "exact live fares" as a free feature now says "live fare checks."
+6. **Fixed a real off-property pricing bug — this is the screenshot.**
+   Budget was pricing at $377/night against Mid-range's $141 and Upscale's
+   $178 — backwards. Root cause: off-property hotels were tiered by Google's
+   `extracted_hotel_class` (star rating) alone (`providers/serpapi.ts`,
+   `tierFromClass`), which is a weak, sparse signal for what a single
+   sampled night actually costs — a generic "hotels near <resort>" search
+   often returns only one or two lower-star properties, so one outlier owned
+   the whole "budget" bucket with nothing to average it against. Replaced
+   with `tiersByPrice()`: rank what SerpApi actually returned BY PRICE and
+   assign tiers from that ranking, which guarantees budget <= mid <= upscale
+   for these anchors by construction — the same "category median with real
+   spread" treatment every other tier already gets. Verified with a
+   reproduction of the exact screenshot numbers (a $377 low-star outlier
+   among cheaper unclassified properties): it now lands in "upscale," where
+   its price actually puts it.
+
 ### What is REAL data and what is still a guess
 
 This is the question that matters most, because the product's whole claim is
@@ -606,7 +671,11 @@ starter attraction rows; Hong Kong is the weakest, since the only figures
 found were "starts at" rates during an active 40%-off promotion, which is
 neither a median nor a rack rate.
 
-**"Compare both" now says what it found.** It always widened the hotel pool
+**"Compare both" now says what it found.** >> REMOVED ENTIRELY 2026-09-25 —
+see "A second 2026-09-25 pass" above. The owner found it "isn't working
+right" in practice, so rather than debug it further it and `stayCompare`
+were deleted outright. Kept below for the original reasoning. It always
+widened the hotel pool
 to on- and off-property and picked the cheaper — correctly and completely
 silently, so the owner's read that the control did nothing was fair. Each
 board row carries the gap per night and over the trip, **parking and

@@ -87,7 +87,10 @@ function monthAt(resortId: string, band: CrowdBand): number | null {
   return i === -1 ? null : i + 1;
 }
 
-test("'somewhat' flags only peak; 'a lot' also flags high", () => {
+test("'somewhat' flags high and peak; 'a lot' also flags moderate", () => {
+  // REVISED 2026-09-25: 'somewhat' used to flag only peak, so a real
+  // Thanksgiving-week trip to WDW (banded 'high', one notch under
+  // Christmas's 'peak') never flagged at the default sensitivity.
   const peak = monthAt("wdw", "peak")!;
   assert.ok(peak, "wdw should have a peak month");
   assert.ok(crowdFlag("wdw", peak, "some"), "peak should flag at 'somewhat'");
@@ -96,8 +99,12 @@ test("'somewhat' flags only peak; 'a lot' also flags high", () => {
   // itself worth not hard-coding either way.
   const high = monthAt("dlr", "high")!;
   assert.ok(high, "dlr should have a high month");
-  assert.equal(crowdFlag("dlr", high, "some"), null, "a high month should not flag at 'somewhat'");
-  assert.ok(crowdFlag("dlr", high, "high"), "a high month should flag at 'a lot'");
+  assert.ok(crowdFlag("dlr", high, "some"), "a high month should flag at 'somewhat'");
+
+  const moderate = monthAt("dlr", "moderate")!;
+  assert.ok(moderate, "dlr should have a moderate month");
+  assert.equal(crowdFlag("dlr", moderate, "some"), null, "a moderate month should not flag at 'somewhat'");
+  assert.ok(crowdFlag("dlr", moderate, "high"), "a moderate month should flag at 'a lot'");
 
   const quiet = monthAt("wdw", "veryLow")!;
   assert.equal(crowdFlag("wdw", quiet, "high"), null, "a quiet month should never flag");

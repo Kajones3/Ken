@@ -241,7 +241,7 @@ test("excludeHotel: prices $0 hotel with no pick, same shape as stay: none", () 
 test("excludeHotel skips a dining plan too, even though params.stay wants one", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
-  const r = priceTrip(book, wdw, { ...base, stay: "both", food: "plan" }, { wdw: { excludeHotel: true } }, START);
+  const r = priceTrip(book, wdw, { ...base, stay: "on", food: "plan" }, { wdw: { excludeHotel: true } }, START);
   assert.ok(r.ok);
   if (!r.ok) return;
   assert.equal(r.price.foodPlan, null);
@@ -357,13 +357,22 @@ test("ticket base no longer inverts WDW vs. Disneyland at the off-peak floor", (
   assert.equal(dlr.ticket.multiDayAdultUsd?.[0], dlr.ticket.base);
 });
 
-test("a dining plan forces an on-property stay", () => {
+test("a dining plan is only available on-property; off-property falls back to counter service", () => {
+  // "Compare both" is gone (2026-09-25) — this used to test that stay:"both"
+  // forced a dining plan onto an on-property room. With only "on"/"off"/
+  // "none" left, planFor() itself already refuses a plan for "off"/"none";
+  // this pins that off-property never quietly gets one.
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
-  const r = priceTrip(book, wdw, { ...base, food: "plan", stay: "both" }, {}, START);
-  assert.ok(r.ok);
-  assert.ok(r.price.foodPlan, "plan applied");
-  assert.equal(r.price.hotelPick.onProperty, true);
+  const on = priceTrip(book, wdw, { ...base, food: "plan", stay: "on" }, {}, START);
+  assert.ok(on.ok);
+  assert.ok(on.price.foodPlan, "plan applied on-property");
+  assert.equal(on.price.hotelPick.onProperty, true);
+
+  const off = priceTrip(book, wdw, { ...base, food: "plan", stay: "off" }, {}, START);
+  assert.ok(off.ok);
+  assert.equal(off.price.foodPlan, null, "no dining plan off-property");
+  assert.equal(off.price.hotelPick.onProperty, false);
 });
 
 test("resorts without a dining plan fall back to counter service", () => {
@@ -601,7 +610,6 @@ test("off-property and on-property pools do not bleed into each other", () => {
   ];
   assert.deepEqual(poolFor(nights, "on", 0).pool.map((h) => h.hotelId), ["v"]);
   assert.deepEqual(poolFor(nights, "off", 0).pool.map((h) => h.hotelId), ["b"]);
-  assert.equal(poolFor(nights, "both", 0).pool.length, 2);
 });
 
 test("promos: a curated room discount applies to the cache-derived rate", () => {

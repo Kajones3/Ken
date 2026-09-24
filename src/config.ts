@@ -7,7 +7,7 @@ export type OffTier = "budget" | "mid" | "upscale";
 export type Tier = OnTier | OffTier;
 export type Band = "infant" | "child" | "junior" | "adult";
 export type FoodStyle = "grocery" | "qs" | "mix" | "ts" | "plan";
-export type Stay = "on" | "off" | "both" | "none";
+export type Stay = "on" | "off" | "none";
 export type TierIndex = 0 | 1 | 2;
 
 export const ON_TIERS: readonly OnTier[] = ["value", "moderate", "deluxe"];
@@ -136,6 +136,22 @@ export interface Resort {
     hopperAdultUsd?: number; hopperChildUsd?: number;
   };
   food: { grocery: number; qs: number; mix: number; ts: number };
+  /**
+   * A few named restaurants per dining style, so "table service" is not just
+   * a number — the owner's ask (2026-09-25): "if I want to do table service,
+   * I need to know that Sanaa is $XX per person." Priced the way Disney
+   * prices its own dining guide, by $ tier rather than a claimed dollar
+   * figure ($ under ~$15/person, $$ ~$15-35, $$$ ~$35-60, $$$$ over ~$60) —
+   * a real menu varies by what you order far more than this model can, so a
+   * tier is the honest amount of precision to claim.
+   *
+   * CLAUDE'S OWN LIST, same standing as the starter attraction rows and the
+   * illustrative promo rows: real, well-known restaurant names, not
+   * hand-verified against a current menu or a resort's current lineup
+   * (restaurants close and reopen more often than attractions do). Replace
+   * or correct before relying on a specific name being open.
+   */
+  foodExamples?: { qs?: { name: string; tier: string }[]; ts?: { name: string; tier: string }[] };
   /** Only Walt Disney World and Disneyland Paris sell dining plans. */
   plans: { label: string; adult: number; child: number }[];
   /** Per day. Off-property means paying to park at the parks. */
@@ -190,6 +206,10 @@ export const RESORTS: Resort[] = [
       hopperAdultUsd: 85, hopperChildUsd: 85,
     },
     food: { grocery: 38, qs: 62, mix: 96, ts: 158 },
+    foodExamples: {
+      qs: [{ name: "Satu'li Canteen", tier: "$$" }, { name: "Docking Bay 7", tier: "$$" }],
+      ts: [{ name: "'Ohana", tier: "$$$" }, { name: "Topolino's Terrace", tier: "$$$$" }, { name: "Sanaa", tier: "$$$" }],
+    },
     plans: [
       { label: "Disney Dining Plan · Quick Service", adult: 62.78, child: 25.82 },
       { label: "Disney Dining Plan · Table Service", adult: 99.87, child: 31.94 },
@@ -269,6 +289,10 @@ export const RESORTS: Resort[] = [
       hopperAdultUsd: 110, hopperChildUsd: 110,
     },
     food: { grocery: 40, qs: 66, mix: 100, ts: 162 },
+    foodExamples: {
+      qs: [{ name: "Galactic Grill", tier: "$" }, { name: "Alien Pizza Planet", tier: "$" }],
+      ts: [{ name: "Blue Bayou", tier: "$$$" }, { name: "Carthay Circle", tier: "$$$$" }],
+    },
     plans: [],
     transport: { on: 0, off: 40 },
     hotels: [
@@ -325,6 +349,10 @@ export const RESORTS: Resort[] = [
     // actual 2026 price check. Refine before relying on this one.
     ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
     food: { grocery: 30, qs: 49, mix: 80, ts: 128 },
+    foodExamples: {
+      qs: [{ name: "Cowboy Cookout Barbecue", tier: "$" }, { name: "Colonel Hathi's Pizza Outpost", tier: "$" }],
+      ts: [{ name: "Auberge de Cendrillon", tier: "$$$$" }, { name: "Walt's — an American Restaurant", tier: "$$$" }],
+    },
     plans: [
       { label: "Half Board Plus meal plan", adult: 46, child: 26 },
       { label: "Full Board Plus meal plan", adult: 70, child: 39 },
@@ -389,6 +417,10 @@ export const RESORTS: Resort[] = [
        child ratios come out at 0.83 and 0.55 against 0.83 and 0.55 here. */
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
     food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
+    foodExamples: {
+      qs: [{ name: "Pan Galactic Pizza Port", tier: "$" }, { name: "Sunshine Terrace", tier: "$" }],
+      ts: [{ name: "Queen of Hearts Banquet Hall", tier: "$$$" }, { name: "Magellan's", tier: "$$$$" }],
+    },
     plans: [],
     transport: { on: 0, off: 14 },
     // On-property bases recalibrated 2026-09-15 against real 2026 nightly
@@ -464,6 +496,10 @@ export const RESORTS: Resort[] = [
        539, which is 0.75. */
     ticket: { base: 86, child: 0.75, slope: 0.04, floor: 0.7 },
     food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
+    foodExamples: {
+      qs: [{ name: "Wandering Moon Teahouse", tier: "$" }, { name: "L'Chef Pastry", tier: "$" }],
+      ts: [{ name: "Royal Banquet Hall", tier: "$$$" }, { name: "Barbossa's Bounty", tier: "$$" }],
+    },
     plans: [],
     transport: { on: 0, off: 10 },
     // On-property bases recalibrated 2026-09-15 against real 2026 nightly
@@ -525,6 +561,10 @@ export const RESORTS: Resort[] = [
        only, so 0.72 is unchanged and unverified. */
     ticket: { base: 92, child: 0.72, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87 },
+    foodExamples: {
+      qs: [{ name: "Tomorrowland Terrace", tier: "$" }, { name: "Market Place Kitchen", tier: "$" }],
+      ts: [{ name: "Explorer's Club Restaurant", tier: "$$$" }, { name: "Plaza Inn", tier: "$$$" }],
+    },
     plans: [],
     transport: { on: 0, off: 12 },
     hotels: [
@@ -1474,9 +1514,14 @@ export const CROWDS: Record<string, CrowdYear> = {
 };
 
 /**
- * True while CROWDS holds Claude's placeholder bands rather than the owner's
- * own reading of a points chart. Set to false in the same commit that replaces
- * the rows — the UI and the shared PDF both read this, so a forgotten flag
- * means the app presents a guess as researched.
+ * FLIPPED FALSE 2026-09-25, the owner's call: the crowd bands are backed by
+ * real DVC/Disney Collection Exchange points charts at Walt Disney World,
+ * Disneyland and (April-December) Hong Kong Disneyland, and the remaining
+ * months/resorts are judgement that already says so per-month via `basis`
+ * ("estimated" vs. "real demand data" on the crowd card). The owner's read:
+ * "we have the hotel demand data and that is enough here" — a blanket
+ * "not yet checked" banner on top of that per-month disclosure was
+ * over-hedging, not honesty. Used to be true while CROWDS held Claude's
+ * placeholder bands rather than the owner's own chart reading.
  */
-export const CROWDS_ARE_PLACEHOLDER = true;
+export const CROWDS_ARE_PLACEHOLDER = false;

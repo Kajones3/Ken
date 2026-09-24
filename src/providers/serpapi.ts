@@ -83,11 +83,39 @@ class HourlyLimiter {
   }
 }
 
-function tierFromClass(hotelClass: number | undefined): "budget" | "mid" | "upscale" {
-  if (hotelClass === undefined) return "mid";
-  if (hotelClass <= 2) return "budget";
-  if (hotelClass === 3) return "mid";
-  return "upscale";
+/**
+ * FIXED 2026-09-25 (owner's report, with a real screenshot): off-property
+ * "Budget" was coming back pricier than "Mid-range" and "Upscale" — $377/night
+ * for Budget against $141 for Mid-range on the same six nights, which is
+ * backwards on its face.
+ *
+ * The old rule assigned a tier from Google's `extracted_hotel_class` (star
+ * rating, 1-5) alone: class <=2 -> budget, 3 -> mid, undefined -> mid,
+ * everything else -> upscale. Star class is a weak, sparse signal for what a
+ * property actually costs on one sampled night — a small independent motel
+ * with no class rating at all can spike on a busy weekend, while a plain
+ * business hotel with a "3-star" rating sits at a normal rate, and a
+ * generic "hotels near <resort>" search often returns only one or two
+ * lower-class properties among ten, so a single outlier owned the whole
+ * "budget" bucket with nothing to average it against.
+ *
+ * The fix: rank what SerpApi actually returned BY PRICE and assign tiers
+ * from that ranking, same as the model already treats every other tier
+ * (a category median with real per-hotel spread around it — see CLAUDE.md).
+ * This guarantees budget <= mid <= upscale for these anchors by
+ * construction, which star class never did, and it is the more honest
+ * signal anyway: what a property actually costs, not an unrelated rating.
+ */
+function tiersByPrice<T extends { anchorNightly: number }>(
+  anchors: T[],
+): (T & { tier: "budget" | "mid" | "upscale" })[] {
+  const sorted = [...anchors].sort((a, b) => a.anchorNightly - b.anchorNightly);
+  const n = sorted.length;
+  return sorted.map((a, i) => {
+    const third = Math.floor((i * 3) / n);
+    const tier = third <= 0 ? "budget" : third === 1 ? "mid" : "upscale";
+    return { ...a, tier };
+  });
 }
 
 export class SerpApiHotelProvider {
@@ -202,7 +230,7 @@ export class SerpApiHotelProvider {
     const json = (await res.json()) as { properties?: SerpApiProperty[] };
     const properties = json?.properties ?? [];
 
-    const anchors = properties.slice(0, 10)
+    const rawAnchors = properties.slice(0, 10)
       .map((p) => {
         const nightly = p.rate_per_night?.extracted_before_taxes_fees
           ?? p.rate_per_night?.extracted_lowest
@@ -212,12 +240,14 @@ export class SerpApiHotelProvider {
           hotelId: `serp-${p.property_token ?? p.name}`,
           hotelName: p.name,
           descriptor: "Off property",
-          tier: tierFromClass(p.extracted_hotel_class),
           deepLink: p.link,
           anchorNightly: nightly,
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
+    // Tiered by price, not star class — see tiersByPrice()'s doc comment for
+    // why: it guarantees budget <= mid <= upscale, which star class did not.
+    const anchors = tiersByPrice(rawAnchors);
 
     const anchorFactor = hotelSeasonFactor(resortId, checkIn);
     const [monthFrom, monthTo] = monthBounds(month);
