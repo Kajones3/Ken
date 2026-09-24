@@ -363,9 +363,20 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
     origin: params.origin, destinations: [params.destination], resortIds: [resort.id],
     from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
   });
+  // hotelTier only carried for a single-day request (from === to) — that is
+  // the exact shape hotelAtTier() sends for the "every category, same
+  // N nights" comparison, and the only caller that needs to know whether the
+  // tier it asked for actually resolved to a different one. Adding it to
+  // every day of a normal 365-day calendar fetch would be dead weight nobody
+  // reads.
+  const singleDay = from === to;
   const days = range(from, to).map((d) => {
     const r = priceTrip(book, resort, params, overrides, d);
-    return r.ok ? { date: d, total: Math.round(r.price.total) } : { date: d, total: null };
+    if (!r.ok) return { date: d, total: null };
+    return {
+      date: d, total: Math.round(r.price.total),
+      ...(singleDay ? { hotelTier: r.price.hotelTier } : {}),
+    };
   });
   return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };
 }

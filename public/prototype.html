@@ -1866,15 +1866,24 @@ function monthlyMinima(cal){
 /** Same-day hotel cost at a different category, without re-running the whole search:
  *  flights/tickets/food don't change with hotel tier, so the delta comes straight
  *  from one calendar read on the trip's own start date. */
+/** Not every resort offers every category — Shanghai has no on-property
+ *  Value hotel at all, Tokyo has no on-property Moderate. `poolFor()` on the
+ *  server steps outward to the nearest tier it actually has rather than
+ *  fail, and reports that it did (`hotelTier.swapped`). Silently showing that
+ *  substituted price under the ORIGINAL tier's label — "Value: $1,595" when
+ *  $1,595 is really the Moderate rate — reads as a real, distinct Value
+ *  price that happens to be identical to Moderate, which it isn't: this
+ *  resort simply doesn't have one. Returns `{cost, swapped}` so the caller
+ *  can say so instead of pricing a category that doesn't exist. */
 async function hotelAtTier(item, t){
-  if(t === +params.tier) return item.price.hotel;
+  if(t === +params.tier) return { cost: item.price.hotel, swapped: item.price.hotelTier.swapped };
   // stripNightly=true: this is "what would a DIFFERENT tier cost", so your
   // own nightly-rate override (which only claims to know the tier you
   // actually searched) must not apply here — see calendarQuery().
   const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t, true));
   const day = data.days[0];
-  if(!day || day.total === null) return null;
-  return day.total - item.price.total + item.price.hotel;
+  if(!day || day.total === null) return { cost: null, swapped: false };
+  return { cost: day.total - item.price.total + item.price.hotel, swapped: !!(day.hotelTier && day.hotelTier.swapped) };
 }
 
 function setSearchBusy(busy){
@@ -2592,11 +2601,16 @@ async function renderDetail(){
       // parking row already names the part of it that isn't the room.
 
   const tierCompare = noHotel ? "" : [0,1,2].map(t=>{
-    const cost = tierRows[t];
+    const { cost, swapped } = tierRows[t];
     const label = TIER_LABEL[(stayNow ? ON_TIERS : OFF_TIERS)[t]];
+    // Say so rather than pricing a category that doesn't exist here — see
+    // hotelAtTier()'s doc comment.
+    const detail = swapped ? `Not offered at ${r.name}`
+      : cost===null ? "no cached rate for this date"
+      : `${usd(cost/p.nights)} / night`;
     return `<div class="li"><div class="l"><b>${label}</b>
-      <small>${cost===null?"no cached rate for this date":usd(cost/p.nights)+" / night"}</small></div>
-      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${cost===null?"—":usd(cost)}</div></div>`;
+      <small>${detail}</small></div>
+      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${swapped || cost===null?"—":usd(cost)}</div></div>`;
   }).join("");
   const tierNote = !noHotel && x.hotelTier.swapped
     ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
