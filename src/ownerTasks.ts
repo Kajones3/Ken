@@ -76,8 +76,8 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
   },
   {
     id: "real-promos",
-    title: "Replace the three example promos with real, dated offers",
-    why: "seedPromos.ts ships illustrative rows. Applying a promo is free (2026-09-24), so any user who applies one today gets a discount that does not exist.",
+    title: "Cover Tokyo, Hong Kong and Shanghai's promos (WDW, Disneyland, Paris are done)",
+    why: "seedPromos.ts now has real, dated rows for WDW, Disneyland and Paris (2026-09-24, from web search of each resort's official offers page). Nothing official turned up for the three Asian resorts, only third-party reseller voucher codes that don't fit the model — their offer pages need pasting in, same as the ticket tables were. Applying a promo is free, so this gap is more visible than it was.",
     side: "free",
     blocking: false,
     done: false,
