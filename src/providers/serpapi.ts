@@ -136,7 +136,7 @@ export class SerpApiHotelProvider {
     private readonly budget = Number(process.env.SERPAPI_HOTELS_BUDGET ?? 200),
     /** `resortId|month` keys this run is allowed to pay for, from
      *  jobs/hotelRotation.ts. Null means no rotation — spend on anything,
-     *  up to the budget, which is the old behaviour. */
+     *  up to the budget, which is the old behavior. */
     private readonly paidSlots: ReadonlySet<string> | null = null,
     private readonly today: ISODate = todayISO(),
   ) {

@@ -20,28 +20,22 @@ import {
  */
 test("only the resorts with real cost-model gaps carry a confidence badge", () => {
   const flagged = RESORTS.filter((r) => r.dataConfidence).map((r) => r.id).sort();
-  assert.deepEqual(flagged, ["dlp", "hkdl"]);
+  assert.deepEqual(flagged, ["hkdl"]);
 });
 
-test("Paris's badge names the actual gap: we price room-only, Disney bundles", () => {
+test("Paris carries no badge — the bundling note lives in Good to know instead", () => {
+  // Owner's call, 2026-09-25: the chip repeated what goodToKnow already says.
+  // If the badge comes back, this fails first; the note must not go with it.
   const dlp = RESORT_BY_ID.get("dlp")!;
-  assert.ok(dlp.dataConfidence);
-  assert.match(dlp.dataConfidence!.note, /package|bundle/i);
-  // The badge is only true while hotel and tickets really are separate
-  // lines. If a package price is ever modelled, this is the reminder to
-  // drop the badge instead of leaving it contradicting the breakdown.
-  assert.equal(dlp.plans.length > 0, true, "meal plans are separate from ticket bundling");
-  assert.ok(
-    !("packageUsd" in (dlp.ticket as object)),
-    "package pricing appears to be modelled now — remove Paris's badge",
-  );
+  assert.equal(dlp.dataConfidence, undefined);
+  assert.ok(dlp.goodToKnow.some((n) => /ROOM WITHOUT TICKETS/.test(n)));
 });
 
 test("Shanghai carries no badge, now that its age bands are owner-verified", () => {
   // Corrected 2026-09-23: this used to claim Shanghai charges by height, not
   // age, with no source. The owner's own screenshot of Shanghai's purchase
   // flow showed age bands (Standard 12-59, Child 3-11) — exactly what `bands`
-  // already modelled — so the claim was wrong, not a real gap, and the badge
+  // already modeled — so the claim was wrong, not a real gap, and the badge
   // was removed rather than reworded. This pins the correction: if a badge
   // reappears here, it needs a real, sourced reason, not a reversion to the
   // unverified height claim.
@@ -211,7 +205,7 @@ test("real, regularly-flown routes are left alone", () => {
 });
 
 test("an unknown airport is never guessed at", () => {
-  // A code we don't recognise gets the benefit of the doubt: refusing to
+  // A code we don't recognize gets the benefit of the doubt: refusing to
   // price it would be a silent gap, and this rule is an optimisation, not a
   // validation step. Real validation happens at the API boundary.
   assert.equal(isLocalRoute("XXX", "MCO"), false);

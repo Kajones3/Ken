@@ -1,5 +1,5 @@
 /**
- * Matching a traveller's picks against the six resorts.
+ * Matching a traveler's picks against the six resorts.
  *
  * Pure and synchronous, no I/O, same discipline as `pricing.ts` and for the
  * same reason: this decides something a user acts on, so it has to be
@@ -54,11 +54,11 @@ export function resolvePicks(
    *  replacement; see ownerAttractions.ts. Passed in rather than read from a
    *  module-level cache so this stays pure and synchronous, the same rule
    *  pricing.ts follows. */
-  catalogue: readonly AttractionDef[] = ATTRACTIONS,
+  catalog: readonly AttractionDef[] = ATTRACTIONS,
 ): AttractionDef[] {
-  const byId = catalogue === ATTRACTIONS
+  const byId = catalog === ATTRACTIONS
     ? ATTRACTION_BY_ID
-    : new Map(catalogue.map((a) => [a.id, a]));
+    : new Map(catalog.map((a) => [a.id, a]));
   const seen = new Set<string>();
   const out: AttractionDef[] = [];
   for (const id of pickedIds) {
@@ -75,19 +75,19 @@ function toMatch(a: AttractionDef): AttractionMatch {
   return { id: a.id, name: a.name, onlyHere: isOnlyAt(a), note: a.note };
 }
 
-/** What one resort offers against one traveller's picks. */
+/** What one resort offers against one traveler's picks. */
 export function matchesForResort(
   resortId: string, pickedIds: readonly string[],
-  catalogue: readonly AttractionDef[] = ATTRACTIONS,
+  catalog: readonly AttractionDef[] = ATTRACTIONS,
 ): ResortAttractionMatches {
-  const picks = resolvePicks(pickedIds, catalogue);
+  const picks = resolvePicks(pickedIds, catalog);
   const matched: AttractionMatch[] = [];
   const missing: AttractionMatch[] = [];
   for (const a of picks) {
     (a.resortIds.includes(resortId) ? matched : missing).push(toMatch(a));
   }
   // Exclusives first, then alphabetical so the order never depends on the
-  // order the traveller happened to tick the boxes in.
+  // order the traveler happened to tick the boxes in.
   matched.sort((x, y) =>
     Number(y.onlyHere) - Number(x.onlyHere) || x.name.localeCompare(y.name));
   missing.sort((x, y) => x.name.localeCompare(y.name));
@@ -112,7 +112,7 @@ export function matchSummary(m: ResortAttractionMatches, totalPicks: number): st
 }
 
 /* ----------------------------- persistence -----------------------------
- * Reading and writing a traveller's picks. Separate from the pure matching
+ * Reading and writing a traveler's picks. Separate from the pure matching
  * above so the matching stays trivially testable with no database.
  * -------------------------------------------------------------------- */
 

@@ -155,7 +155,7 @@ test("computeFareTrend: fares from an untrusted source are not measured", async 
   await db.close();
 });
 
-test("computeFareTrend: unlabelled legacy rows are excluded too", async () => {
+test("computeFareTrend: unlabeled legacy rows are excluded too", async () => {
   const db = await memoryDb();
   for (const [origin, destination] of [["ATL", "MCO"], ["DEN", "MCO"], ["RDU", "SNA"]] as const) {
     await db.query(

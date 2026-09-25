@@ -12,7 +12,7 @@
  * "no cached price" gap — buying one date a month per route leaves ~99% of
  * international dates blank. With it, the same purchase anchors the whole
  * quarter: the median of what we actually paid becomes that route's
- * baseline, and every other date in the quarter is a labelled estimate off
+ * baseline, and every other date in the quarter is a labeled estimate off
  * it, exactly as domestic routes work off DB1B.
  *
  * THE ONE THING NOT TO GET WRONG: a baseline built from fares sampled today

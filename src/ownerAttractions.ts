@@ -3,7 +3,7 @@
  *
  * The owner's ask was short — "make sure I have a way to maintain the
  * attractions list" — and the shipped rows have always been a starter set
- * Claude was confident about rather than a researched catalogue. Until now
+ * Claude was confident about rather than a researched catalog. Until now
  * the only way to change one was to edit TypeScript and deploy, which is
  * exactly the dependence the settings registry was built to end: "I don't
  * want to depend on AI to update this site."
@@ -51,7 +51,7 @@ export interface OwnerAttractionRow {
   /** False when this row cannot be applied — every resort it names has
    *  stopped existing, say. Listed anyway, marked, for the same reason an
    *  expired fare correction is: "where did my row go?" is a worse question
-   *  than seeing it greyed out. */
+   *  than seeing it grayed out. */
   applied: boolean;
   /** Why it is not applied, for the admin page to print as written. */
   problem?: string;
@@ -106,7 +106,7 @@ export function validateAttraction(input: AttractionInput): ValidatedAttraction 
   if (hidden) return { ok: true, value: { id, name: "", resortIds: [], note: "", hidden: true } };
 
   const name = String(input.name ?? "").trim();
-  if (!name) return { ok: false, reason: `"${id}" needs a name — what a traveller would call it.` };
+  if (!name) return { ok: false, reason: `"${id}" needs a name — what a traveler would call it.` };
   if (name.length > MAX_NAME) return { ok: false, reason: `That name is ${name.length} characters; keep it under ${MAX_NAME}.` };
 
   const resortIds = parseResortIds(input.resortIds);
@@ -245,7 +245,7 @@ export async function saveAttraction(
  * Remove the owner's row for an id.
  *
  * On a SHIPPED attraction this restores the shipped version rather than
- * deleting the attraction — which is the behaviour the safety property
+ * deleting the attraction — which is the behavior the safety property
  * requires, and is why the admin page calls this button "Revert" there and
  * "Delete" on a row the owner added.
  */

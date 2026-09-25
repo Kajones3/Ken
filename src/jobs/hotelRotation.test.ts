@@ -57,8 +57,8 @@ test("once everything has been bought once, the stalest goes next", async () => 
 });
 
 test("the budget is a hard cap on how many slots are handed out", async () => {
-  // A slot is a licence to spend, so handing out more than the provider will
-  // pay for would just recreate the old "whoever got there first" behaviour
+  // A slot is a license to spend, so handing out more than the provider will
+  // pay for would just recreate the old "whoever got there first" behavior
   // inside the provider instead of the job.
   const db = await memoryDb();
   const all = await rotateHotelSlots(db, {

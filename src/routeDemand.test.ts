@@ -114,7 +114,7 @@ test("rotationRoutes ignores estimates and Travelpayouts rows — only real boug
   await db.close();
 });
 
-test("rotationRoutes honours the exclude set, so demand routes aren't bought twice", async () => {
+test("rotationRoutes honors the exclude set, so demand routes aren't bought twice", async () => {
   const db = await memoryDb();
   const first = await rotationRoutes(db, 1, "2027-03");
   const key = `${first[0]!.origin}|${first[0]!.destination}`;

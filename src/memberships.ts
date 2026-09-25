@@ -14,7 +14,7 @@
  * decides the answer. So this does neither. A pass you already hold zeroes
  * what you pay at the gate — which is simply true — and the pass's own price
  * is reported beside it, together with what these same days would have cost
- * without it. The traveller compares the two themselves. That is exactly the
+ * without it. The traveler compares the two themselves. That is exactly the
  * comparison the owner described: four passes at Walt Disney World against
  * the same money spent on tickets somewhere else.
  *
@@ -39,7 +39,7 @@ import { RESORTS } from "./config.js";
 
 export interface PassTier {
   id: string;
-  /** What the owner and the traveller both see. */
+  /** What the owner and the traveler both see. */
   label: string;
   /** Shipped price per pass per year, in USD. Overridable — see settings.ts. */
   priceUsd: number;
@@ -61,15 +61,15 @@ export interface PassTier {
 
 export interface PassProgram {
   resortId: string;
-  /** Disney's own name for the programme, because "annual pass" is not what
-   *  Disneyland calls it and a traveller looking for "Magic Key" should find
+  /** Disney's own name for the program, because "annual pass" is not what
+   *  Disneyland calls it and a traveler looking for "Magic Key" should find
    *  the word they know. */
   label: string;
   tiers: PassTier[];
 }
 
 /**
- * The two resorts with a pass programme this app can price.
+ * The two resorts with a pass program this app can price.
  *
  * The four international resorts sell annual passes too. They are deliberately
  * absent rather than guessed: the tiers, prices and perks are published in
@@ -122,7 +122,7 @@ export function findTier(resortId: string, tierId: string): PassTier | undefined
 
 /**
  * What an owner actually receives per point, before the owner of THIS site
- * changes it and before the traveller types their own figure over the top.
+ * changes it and before the traveler types their own figure over the top.
  *
  * Checked by web search 2026-09-21, not fetched — dvcrequest.com and the
  * other broker sites are refused by this sandbox's egress proxy. Renters pay
@@ -131,7 +131,7 @@ export function findTier(resortId: string, tierId: string): PassTier | undefined
  * depending on resort; DVC Rental Store advertises "up to $24"). The owner's
  * own research said $20 rented and $16 taken home, which was the market a
  * year or two ago and is now conservative — hence $18 here, and hence the
- * traveller's own box, because a member renting privately keeps more than one
+ * traveler's own box, because a member renting privately keeps more than one
  * going through a broker and only they know which they are doing.
  */
 export const DVC_TAKE_HOME_PER_POINT = 18;
@@ -150,7 +150,7 @@ export interface PassHolding {
  * Read pass holdings off whatever the client sent.
  *
  * Unknown resorts and tiers are DROPPED, never thrown — saved trips outlive
- * edits to the catalogue, and a pass tier Disney retires (the Enchant Key
+ * edits to the catalog, and a pass tier Disney retires (the Enchant Key
  * became the Explore Key in January) must not break the board of everyone who
  * had picked it. Same rule as an unknown attraction id.
  */
@@ -175,7 +175,7 @@ export function parsePassHoldings(raw: unknown): PassHolding[] {
   return out;
 }
 
-/** The traveller's DVC intent, or null when they did not say. */
+/** The traveler's DVC intent, or null when they did not say. */
 export interface DvcRental {
   points: number;
   takeHomePerPointUsd: number;
@@ -196,7 +196,7 @@ export function parseDvcRental(points: unknown, perPoint: unknown, fallbackPerPo
 export const dvcCredit = (d: DvcRental): number =>
   Math.round(d.points * d.takeHomePerPointUsd * 100) / 100;
 
-/** Every resort that has a pass programme, for the trip form. */
+/** Every resort that has a pass program, for the trip form. */
 export const PASS_RESORTS = PASS_PROGRAMS.map((p) => ({
   resortId: p.resortId,
   resortName: RESORTS.find((r) => r.id === p.resortId)?.name ?? p.resortId,

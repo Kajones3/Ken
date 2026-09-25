@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { memoryDb } from "../db.js";
 import {
-  ridesOf, summarise, localHour, withinSampleWindow, trackedParks, namesAgree, runWaitTimes,
+  ridesOf, summarize, localHour, withinSampleWindow, trackedParks, namesAgree, runWaitTimes,
 } from "./waitTimes.js";
 import { QUEUE_TIMES_PARKS, RESORTS, WAIT_SAMPLE_FROM_HOUR, WAIT_SAMPLE_TO_HOUR } from "../config.js";
 
@@ -42,7 +42,7 @@ test("a null wait on an OPEN ride stays null, never zero", () => {
     { name: "unreported", is_open: true, wait_time: null },
   ] }] })!;
   assert.equal(rides.find((r) => r.name === "unreported")!.waitMin, null);
-  assert.equal(summarise(rides).meanWait, 30, "averaging 30 and 0 would give 15");
+  assert.equal(summarize(rides).meanWait, 30, "averaging 30 and 0 would give 15");
 });
 
 test("both payload shapes are walked — nested under lands, and top level", () => {
@@ -51,7 +51,7 @@ test("both payload shapes are walked — nested under lands, and top level", () 
     lands: [{ rides: [{ name: "nested", is_open: true, wait_time: 30 }] }],
   })!;
   assert.equal(rides.length, 2);
-  assert.equal(summarise(rides).meanWait, 20);
+  assert.equal(summarize(rides).meanWait, 20);
 });
 
 test("a ride with no name is dropped, and a duplicate name is kept once", () => {

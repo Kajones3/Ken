@@ -49,7 +49,7 @@ test("pulls digest: reports a real provider pull, with the departures it covered
   await db.close();
 });
 
-test("pulls digest: mock and unlabelled rows are never counted as real pulls", async () => {
+test("pulls digest: mock and unlabeled rows are never counted as real pulls", async () => {
   const db = await memoryDb();
   await flight(db, "LAS", "MCO", "mock", 1);
   await flight(db, "BOS", "MCO", null, 1);
@@ -57,7 +57,7 @@ test("pulls digest: mock and unlabelled rows are never counted as real pulls", a
   await hotel(db, "art", "wdw", null, 1);
 
   assert.deepEqual(await routePulls(db, 15), [], "mock data is not a pull");
-  assert.deepEqual(await hotelPulls(db, 15), [], "an unlabelled row claims no vendor");
+  assert.deepEqual(await hotelPulls(db, 15), [], "an unlabeled row claims no vendor");
 
   await db.close();
 });

@@ -34,7 +34,7 @@ test("driveDomestic: both domestic resorts drive, every international resort fli
 });
 
 /* ---------------------------------------------------------------------------
- * defaultGettingThere — the preset offered before the traveller touches
+ * defaultGettingThere — the preset offered before the traveler touches
  * anything, decided by where they're departing from.
  * ------------------------------------------------------------------------ */
 
@@ -62,7 +62,7 @@ test("the local resort drives and the other five still fly", () => {
 
 test("everybody else still gets 'flying to all'", () => {
   // The default must stay the default for almost everyone — this is a narrow
-  // fix for people who live next to a resort, not a new general behaviour.
+  // fix for people who live next to a resort, not a new general behavior.
   for (const iata of ["ATL", "JFK", "DEN", "SEA", "ORD", "LAS", "MIA", "SFO"]) {
     assert.equal(defaultGettingThere(iata), "fly", `${iata} should still fly`);
   }

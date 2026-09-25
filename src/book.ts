@@ -28,7 +28,7 @@ const TREND_APPLIES_TO = new Set(["bts_db1b"]);
  * legitimately peak date) could swing a route's whole quarter 30-50% with
  * no real price change behind it — someone comparing the board a few weeks
  * apart could see wildly different numbers for the same trip, for no reason
- * a traveller could see or trust. Same "one data point isn't evidence"
+ * a traveler could see or trust. Same "one data point isn't evidence"
  * problem `INTL_BASELINE_MIN_SAMPLES` already solved once, just not applied
  * here. 3 matches that precedent rather than inventing a new number.
  */
@@ -57,7 +57,7 @@ export interface BookRequest {
 
 /**
  * Postgres returns `date` columns as JS Date objects (at local midnight), while
- * PGlite and JSON round-trips can hand back strings. Normalise both to
+ * PGlite and JSON round-trips can hand back strings. Normalize both to
  * YYYY-MM-DD without letting a timezone shift the day.
  */
 export function dateStr(v: unknown): string {
@@ -320,7 +320,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   // Owner overrides for the numbers this app runs on. Loaded once per book,
   // beside the prices, so pricing.ts can stay pure and synchronous — see
   // PriceBook.setting. An empty table leaves every lookup undefined and every
-  // caller on the value in config.ts, which is the shipped behaviour.
+  // caller on the value in config.ts, which is the shipped behavior.
   const settings = await settingsMap(db);
 
   return {
@@ -413,7 +413,7 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
         // confidence than one built on ten — and one bought date could be a
         // peak date that doesn't represent its quarter.
         routeSamples: obs?.n,
-        // Said out loud so the card can tell a traveller that a human has
+        // Said out loud so the card can tell a traveler that a human has
         // corrected this route, rather than quietly bending the number.
         ownerCorrected: anyCorrection !== undefined,
       };

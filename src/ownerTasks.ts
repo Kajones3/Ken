@@ -61,7 +61,7 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
   {
     id: "attraction-list",
     title: "Replace the starter attraction list with your own",
-    why: "ATTRACTIONS in config.ts ships ~10 rows Claude was confident about, not a researched catalogue. Attraction picks are free (2026-09-24), so every signed-in user is matching against a sample, not just a Plus one. Next step is not a scrape (Disney's list is client-rendered, covers only WDW, and cannot tell that Remy's Ratatouille Adventure and Ratatouille: L'Aventure Totalement Toquee are the same ride): paste WDW and Disneyland names in any rough form and have them structured into rows, with every cross-resort clone flagged for you to confirm. Aim for 40-80 headline attractions across all six resorts, not a complete inventory.",
+    why: "ATTRACTIONS in config.ts ships ~10 rows Claude was confident about, not a researched catalog. Attraction picks are free (2026-09-24), so every signed-in user is matching against a sample, not just a Plus one. Next step is not a scrape (Disney's list is client-rendered, covers only WDW, and cannot tell that Remy's Ratatouille Adventure and Ratatouille: L'Aventure Totalement Toquee are the same ride): paste WDW and Disneyland names in any rough form and have them structured into rows, with every cross-resort clone flagged for you to confirm. Aim for 40-80 headline attractions across all six resorts, not a complete inventory.",
     side: "free",
     blocking: false,
     done: false,
@@ -152,7 +152,7 @@ const REVIEWABLE: ReviewableData[] = [
   {
     id: "crowd-bands",
     title: "Re-check the crowd bands against the current DVC points charts",
-    why: "CROWDS in config.ts is how the app answers 'when should we go' — the free half of the product's promise. Walt Disney World and Disneyland are read off DVC points charts, which Disney republishes every year, and the four international resorts are judgement with no chart behind them at all. A band that is a year out is a confident recommendation to travel in a week that is no longer quiet. Bump CROWDS_REVIEWED in src/config.ts when you have looked.",
+    why: "CROWDS in config.ts is how the app answers 'when should we go' — the free half of the product's promise. Walt Disney World and Disneyland are read off DVC points charts, which Disney republishes every year, and the four international resorts are judgment with no chart behind them at all. A band that is a year out is a confident recommendation to travel in a week that is no longer quiet. Bump CROWDS_REVIEWED in src/config.ts when you have looked.",
     side: "free",
     reviewedOn: CROWDS_REVIEWED,
     everyDays: YEARLY,
@@ -195,7 +195,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   }
 
   // --- 1b. Hand-maintained tables that have aged out ---------------------
-  // A date comparison, not a judgement: the row appears when the clock says
+  // A date comparison, not a judgment: the row appears when the clock says
   // so and disappears the day the constant is bumped.
   for (const d of REVIEWABLE) {
     const age = daysBetween(d.reviewedOn, today);
@@ -310,7 +310,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
     checked({
       id: "hotel-coverage",
       title: `No real off-property hotel prices yet for ${never.map((r) => r.name).join(", ")}`,
-      why: "The nightly rotation fills these in stalest-first and needs about ten nights from empty, so this clears itself if the refresh job is running. If it is still here in a fortnight, the hotel budget is not being spent.",
+      why: "The nightly rotation fills these in stalest-first and needs about ten nights from empty, so this clears itself if the refresh job is running. If it is still here in a two weeks, the hotel budget is not being spent.",
       side: "free",
       blocking: false,
     });

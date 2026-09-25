@@ -14,7 +14,7 @@ export class ResendEmailSender implements EmailSender {
     // No default from-address. There used to be one — alerts@parkfare.app —
     // and a default here is worse than no default: Resend refuses to send
     // from a domain you have not verified, so an unset variable would fail
-    // at the provider with an error about a domain nobody recognises,
+    // at the provider with an error about a domain nobody recognizes,
     // instead of naming the setting that is actually missing.
     const from = process.env.ALERT_FROM_EMAIL;
     if (!from) {

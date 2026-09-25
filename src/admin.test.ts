@@ -73,7 +73,7 @@ test("a hotel key knows which resort it belongs to, and other keys don't pretend
   assert.equal(resortOfHotelSetting(`hotel.${dlp.hotels[0]!.id}.base`), "dlp");
 });
 
-test("saving a rate rewrites the cache travellers are actually quoted from", async () => {
+test("saving a rate rewrites the cache travelers are actually quoted from", async () => {
   const db = await memoryDb();
   clearSettingsCache();
   const key = `hotel.${moderate.id}.base`;

@@ -48,7 +48,7 @@ test("the quoted day is not the cheapest day, and the cheapest is still returned
   assert.ok(r.typical && r.cheapest && r.spread);
   assert.ok(r.typical.total > r.cheapest.total,
     "quoting the cheapest day is the whole bug this exists to fix");
-  // The old behaviour, still available and still agreeing with itself.
+  // The old behavior, still available and still agreeing with itself.
   const old = cheapestIn(book, resortById("wdw"), PARAMS, {}, dates(OCTOBER.length) as never[]);
   assert.equal(old.best!.total, r.cheapest.total);
 });
@@ -82,7 +82,7 @@ test("the quoted day is a REAL day in the set, never an average of days", () => 
   assert.ok(sum >= t.total - 0.5,
     "the quoted day's own lines must account for its own total");
   assert.ok(Math.abs(t.flights - t.flightPick!.price) < 0.5,
-    "one traveller, so the flight line IS the quoted fare");
+    "one traveler, so the flight line IS the quoted fare");
   assert.ok(OCTOBER.includes(Math.round(t.flightPick!.price)),
     "the quoted fare must be one of the month's real fares");
 });
@@ -103,7 +103,7 @@ test("too few days to trim honestly are not trimmed at all", () => {
   assert.equal(r.spread!.trimmedMean, r.spread!.mean);
 });
 
-test("the owner's trim setting is honoured, and a silly one cannot empty the set", () => {
+test("the owner's trim setting is honored, and a silly one cannot empty the set", () => {
   const at0 = typicalIn(octoberBook(OCTOBER, () => 0), resortById("wdw"), PARAMS, {}, dates(31) as never[]);
   assert.equal(at0.spread!.trimmedPerTail, 0);
   assert.equal(at0.spread!.trimmedMean, at0.spread!.mean, "no trim means the plain average");

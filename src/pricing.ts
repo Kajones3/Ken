@@ -78,20 +78,34 @@ export interface TripParams {
    *  car's depreciation as a cost of THIS trip — set false to drop it and
    *  price gas only. */
   includeWearAndTear?: boolean;
-  /** Annual passes the traveller already holds, one entry per resort. Only
+  /** Annual passes the traveler already holds, one entry per resort. Only
    *  the entry matching THIS resort does anything — a Magic Key does not get
    *  you into Magic Kingdom, and the board prices six resorts at once, so a
    *  holding has to name the resort it belongs to. */
   annualPasses?: PassHolding[];
-  /** DVC points the traveller intends to rent out, and what they expect to
+  /** DVC points the traveler intends to rent out, and what they expect to
    *  take home per point. A credit against the trip, not a discount on any
    *  one line — the money has nothing to do with what a room here costs. */
   dvcRental?: DvcRental | null;
   /** Which day of the month the board quoted: a typical one (the default) or
    *  the cheapest. It changes nothing about how a single date is priced —
    *  priceTrip never reads it — but it is saved with a trip so the alert job
-   *  re-prices on the same basis the traveller was shown. */
+   *  re-prices on the same basis the traveler was shown. */
   priceBasis?: "typical" | "cheapest";
+  /** How many hotel rooms the party books — more than one when several
+   *  families or couples travel together. Every room is priced at the same
+   *  rate (the pick, or the traveler's own nightly rate, which is per ROOM).
+   *  Undefined = 1, so every existing caller and saved trip is unaffected.
+   *  Parking/transfers are NOT multiplied: they are charged per day, not per
+   *  room, and guessing how many cars a group brings would be inventing it. */
+  hotelRooms?: number;
+}
+
+/** Rooms actually priced: a whole number from 1 to MAX_HOTEL_ROOMS. */
+export const MAX_HOTEL_ROOMS = 6;
+export function roomCountOf(params: Pick<TripParams, "hotelRooms">): number {
+  const n = Math.round(Number(params.hotelRooms ?? 1));
+  return Number.isFinite(n) ? Math.min(MAX_HOTEL_ROOMS, Math.max(1, n)) : 1;
 }
 
 export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
@@ -182,7 +196,7 @@ export interface FlightRow {
  * distribution, so it can only ever choose among numbers people actually
  * paid. It cannot invent one outside the spread.
  *
- * Owner-editable, because the right lean is a judgement about how travellers
+ * Owner-editable, because the right lean is a judgment about how travelers
  * react to a number and not something the code can know.
  */
 export const ESTIMATE_LEAN_KEY = "flight.estimateLean";
@@ -269,11 +283,13 @@ export interface TripPrice {
   flights: number;
   tickets: number;
   hotel: number;        // rooms + transport
-  rooms: number;
+  rooms: number;        // every room booked, all nights
+  /** How many rooms `rooms` covers — see TripParams.hotelRooms. */
+  roomCount: number;
   transport: number;
   food: number;
   perSeatFare: number;
-  /** Set when the traveller's own airfare number is below the cheapest fare
+  /** Set when the traveler's own airfare number is below the cheapest fare
    *  the cache knows about for this route and date. It used to be impossible
    *  to be here at all — the override was clamped up to that floor. It now
    *  stands, and this is what the detail card says so on. */
@@ -309,7 +325,7 @@ export interface TripPrice {
    *  show it as its own line rather than folding it silently into the base
    *  ticket number. */
   hopperUsd: number;
-  /** Annual passes and DVC point rental — null when the traveller said
+  /** Annual passes and DVC point rental — null when the traveler said
    *  nothing about either. See src/memberships.ts for why a pass is reported
    *  as a counterfactual rather than charged to this one trip. */
   membership: {
@@ -498,7 +514,7 @@ export function planFor(resort: Resort, p: TripParams, stay: Stay) {
  * they're the midpoint between the two styles they sit between (see
  * FoodStyle's doc comment in config.ts). Averaging is the honest amount of
  * precision to claim for "some of each": there is no real data on what
- * fraction of meals a traveller who picks this actually eats at each style,
+ * fraction of meals a traveler who picks this actually eats at each style,
  * so a straight midpoint is a starting point, not a measurement.
  *
  * "plan" falls back to "qs" — reached only when a dining plan was requested
@@ -574,7 +590,7 @@ export function priceTrip(
       // we have no published figure for reuses the newest one on file — flagged
       // as carried forward, which the owner-only news-digest email reports and
       // the UI deliberately does NOT show (owner's call: a stale-rate banner on
-      // a trip page is noise to a traveller, and the number barely moves). Once
+      // a trip page is noise to a traveler, and the number barely moves). Once
       // the newest rate is too old to stand behind, this refuses instead, rather
       // than quietly pricing on it.
       const rate = withMileageOverride(book, irsMileageRate(start), start);
@@ -618,7 +634,7 @@ export function priceTrip(
     }
     // The median wins when it's higher than the real row — a rock-bottom
     // deal-feed price gets corrected up to the honest median rather than
-    // quietly undercutting what most travellers will actually pay; a real
+    // quietly undercutting what most travelers will actually pay; a real
     // fare that's already representative (at or above the median) still
     // shows as real, plain, with its carrier and booking link.
     // Deliberately still the MEDIAN, not the leaned figure. This decides
@@ -686,7 +702,7 @@ export function priceTrip(
 
   // --- tickets -----------------------------------------------------------
   const multiDay = ticketMultiDay(resort, params.parkDays);
-  // Per traveller, not one running total, because an annual pass covers
+  // Per traveler, not one running total, because an annual pass covers
   // PEOPLE. Zeroing a share of one lump sum would be arithmetic that happens
   // to land near the right answer for a party that is all adults and be
   // wrong for every other party.
@@ -733,12 +749,12 @@ export function priceTrip(
 
   /* --- annual passes ----------------------------------------------------
    * A pass you already hold does not make this trip cheaper to Disney; it
-   * makes it cheaper to YOU, which is the number the traveller is asking
+   * makes it cheaper to YOU, which is the number the traveler is asking
    * about. So the gate cost for whoever holds one drops to zero here, and the
    * pass's own annual price is reported separately rather than charged to
    * this trip — see src/memberships.ts for why that is the honest shape.
    *
-   * Passes are applied to the DEAREST tickets first. Nothing here knows which
+   * Passes are applied to the MOST EXPENSIVE tickets first. Nothing here knows which
    * member of a family holds which pass, and this is the optimistic reading,
    * so `coversDearestFirst` rides along and the card says so. */
   const holding = (params.annualPasses ?? []).find((h) => h.resortId === resort.id);
@@ -813,7 +829,7 @@ export function priceTrip(
     hotelTier = { requested: params.tier, actual: params.tier, swapped: false, custom: false };
   } else if (ov.nightly !== undefined && ov.nightly > 0) {
     // A rate you found is a rate you found — it does not flex with the season.
-    rooms = ov.nightly * params.nights;
+    rooms = ov.nightly * params.nights * roomCountOf(params);
     hotelPick = { hotelId: "custom", name: "Your rate", nightly: ov.nightly, onProperty: stay !== "off" };
     hotelTier = { requested: params.tier, actual: params.tier, swapped: false, custom: true };
   } else {
@@ -821,7 +837,7 @@ export function priceTrip(
     if (!firstNight.length) return { ok: false, reason: `no cached hotel rates for ${resort.id} on ${start}` };
     const pick = cheapestStay(book, resort.id, start, params.nights, stay, params.tier);
     if (!pick) return { ok: false, reason: `no hotel matches stay=${stay} tier=${params.tier} for ${resort.id} from ${start}` };
-    rooms = pick.rooms;
+    rooms = pick.rooms * roomCountOf(params);
     hotelPick = pick.hotel;
     hotelTier = { requested: params.tier, actual: pick.actual, swapped: pick.swapped, custom: false };
   }
@@ -915,7 +931,7 @@ export function priceTrip(
   return {
     ok: true,
     price: {
-      start, destination, total, flights, tickets, hotel, rooms, transport, food,
+      start, destination, total, flights, tickets, hotel, rooms, roomCount: stay === "none" ? 0 : roomCountOf(params), transport, food,
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
@@ -934,12 +950,12 @@ export const DEFAULT_TYPICAL_TRIM = 10;
 export const MIN_DATES_TO_TRIM = 10;
 
 export interface MonthSpread {
-  /** Cheapest and dearest priced day in the window. */
+  /** Cheapest and most expensive priced day in the window. */
   low: number;
   high: number;
   /** The straight average of every priced day. */
   mean: number;
-  /** The average after the cheapest and dearest tails are dropped — the
+  /** The average after the cheapest and most expensive tails are dropped — the
    *  number the board quotes. */
   trimmedMean: number;
   /** How many days were priced, and how many were dropped from EACH tail. */
@@ -1003,7 +1019,7 @@ export function typicalIn(
 
   const byTotal = [...priced].sort((a, b) => a.price.total - b.price.total || (a.date < b.date ? -1 : 1));
   const cheapest = byTotal[0]!;
-  const dearest = byTotal[byTotal.length - 1]!;
+  const priciest = byTotal[byTotal.length - 1]!;
 
   const raw = book.setting?.(TYPICAL_TRIM_KEY) ?? DEFAULT_TYPICAL_TRIM;
   const trimPct = Number.isFinite(raw) ? Math.max(0, Math.min(45, raw)) : DEFAULT_TYPICAL_TRIM;
@@ -1030,7 +1046,7 @@ export function typicalIn(
     typical: typical.price,
     cheapest: cheapest.price,
     spread: {
-      low: cheapest.price.total, high: dearest.price.total,
+      low: cheapest.price.total, high: priciest.price.total,
       mean, trimmedMean, priced: byTotal.length, trimmedPerTail: perTail,
       lowDate: cheapest.date,
     },

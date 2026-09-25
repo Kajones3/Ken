@@ -40,7 +40,7 @@ const priced = (p: Partial<TripParams>, settings?: Map<string, number>) => {
   return r.price;
 };
 
-/* ------------------------------ the catalogue ---------------------------- */
+/* ------------------------------ the catalog ---------------------------- */
 
 test("every pass price is editable by the owner without a code change", () => {
   // The whole point of the settings registry. A pass price Disney raises
@@ -103,7 +103,7 @@ test("a fifth pass on a party of four is reported as unused, not as a saving", (
 test("the pass's own price is reported, never charged to this one trip", () => {
   // The decision this pins: an annual pass is not bought for one trip, and
   // charging it to whichever trip is on screen would make a short visit look
-  // absurd. The traveller gets both numbers and compares them.
+  // absurd. The traveler gets both numbers and compares them.
   const p = priced({ annualPasses: [{ resortId: "wdw", tierId: "incredi", count: 2 }] });
   const pass = p.membership!.pass!;
   assert.equal(pass.annualCostUsd, findTier("wdw", "incredi")!.priceUsd * 2);
@@ -130,7 +130,7 @@ test("a pass holder does not buy a park hopper they already have", () => {
   const hop = priced({ hopper: true });
   const hopWithPass = priced({ hopper: true, annualPasses: [{ resortId: "wdw", tierId: "incredi", count: 3 }] });
   assert.ok(hop.hopperUsd > 0);
-  assert.equal(hopWithPass.hopperUsd, 0, "every traveller is covered, so nobody buys hopping twice");
+  assert.equal(hopWithPass.hopperUsd, 0, "every traveler is covered, so nobody buys hopping twice");
 });
 
 test("the parking perk lands on parking, not on the ticket line", () => {

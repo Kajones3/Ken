@@ -2,8 +2,8 @@
  * How busy a resort typically is, and what to do about it.
  *
  * Pure and synchronous, no I/O — same shape as attractions.ts and pricing.ts.
- * Everything here is a lookup over CROWDS in config.ts plus one judgement:
- * how loudly to say something, given how much the traveller said they care.
+ * Everything here is a lookup over CROWDS in config.ts plus one judgment:
+ * how loudly to say something, given how much the traveler said they care.
  *
  * THE ONE RULE THIS MODULE MUST NOT BREAK: crowd sensitivity never touches the
  * board's order. The board is sorted by price and that is the app's single
@@ -17,7 +17,7 @@ import {
   type CrowdBand, type CrowdYear, type CrowdWindow,
 } from "./config.js";
 
-/** How much low crowds matter to this traveller. */
+/** How much low crowds matter to this traveler. */
 export type CrowdSensitivity = "none" | "some" | "high";
 
 export const CROWD_SENSITIVITY_LABELS: Record<CrowdSensitivity, string> = {
@@ -27,7 +27,7 @@ export const CROWD_SENSITIVITY_LABELS: Record<CrowdSensitivity, string> = {
 };
 
 /** Rank a band 0..4. Unknown bands sort as moderate rather than throwing — a
- *  band this build does not recognise must not break a board. */
+ *  band this build does not recognize must not break a board. */
 export function crowdRank(band: CrowdBand): number {
   const i = CROWD_BANDS.indexOf(band);
   return i === -1 ? 2 : i;
@@ -55,11 +55,13 @@ export interface CrowdMonth {
   datePrecise: boolean;
 }
 
+// Owner's wording (2026-09-25): say what the band is for, not a lecture on
+// where it came from. The dvcPoints line keeps the same shape.
 const BASIS_NOTES: Record<CrowdYear["basis"], string> = {
   dvcPoints:
-    "Inferred from how Disney prices its own room inventory across the year — a real forecast of demand, published months ahead. That is a price, not a measured wait time, so it carries none of the posted-wait bias. It is still a forecast, not a count of people.",
+    "An estimate from how Disney prices its own hotel rooms across the year — this tells you what we estimate you would be walking into.",
   estimate:
-    "An estimate from school holidays, national holidays and weather — there is no year-ahead demand data for this resort yet. Treat it as a starting point, not a researched figure.",
+    "An estimate from school holidays, national holidays and weather — this tells you what we estimate you would be walking into.",
 };
 
 /** The real-date window covering month1/day, or null. First match wins, per
@@ -94,7 +96,7 @@ export function crowdFor(resortId: string, month1: number, day?: number): CrowdM
   // Hong Kong's runs April to December — and a card that said "from DVC
   // points pricing" over a month nobody charted would be claiming a source
   // that does not exist for it. `chartMonths` is the list that actually has
-  // one; everything else falls back to judgement and says so. A date-window
+  // one; everything else falls back to judgment and says so. A date-window
   // match is real-chart-derived by construction (see `windows`'s doc
   // comment), so it counts as charted even on a month `chartMonths` doesn't
   // separately list.
@@ -146,19 +148,19 @@ export interface CrowdFlag {
   /** The fuller sentence for the detail card. */
   detail: string;
   /** Quieter months at THIS resort, when any are meaningfully quieter.
-   *  Empty when the traveller is already going at a good time. */
+   *  Empty when the traveler is already going at a good time. */
   alternatives: CrowdMonth[];
 }
 
 /**
- * Whether this resort/month is worth flagging, given how much the traveller
+ * Whether this resort/month is worth flagging, given how much the traveler
  * said crowds matter.
  *
  * The thresholds are the whole design, so they are stated rather than tuned by
  * feel. REVISED 2026-09-25 (owner's report): "somewhat" used to flag only
  * `peak`, which meant a real Thanksgiving-week trip to Walt Disney World —
  * banded `high`, deliberately one notch under Christmas's `peak` — never
- * flagged at the DEFAULT sensitivity. A traveller who said crowds matter
+ * flagged at the DEFAULT sensitivity. A traveler who said crowds matter
  * "somewhat" and searched November got no warning at all. `high` is a
  * genuinely busy week, not a normal one, so it belongs in the default flag:
  *   none — never flag. They told us not to; showing it anyway is nagging.

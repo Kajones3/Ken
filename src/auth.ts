@@ -30,7 +30,7 @@ export interface SessionUser {
   id: string;
   email: string;
   plusUntil: ISODate | null;
-  /** The airport this traveller flies out of, or null if they've never said.
+  /** The airport this traveler flies out of, or null if they've never said.
    *  Null and "ATL" are different facts — see setHomeAirport. */
   homeAirport: string | null;
   /** Whether this address has been confirmed. Never backfilled for accounts
@@ -117,7 +117,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
  * Validated against the app's own airport list rather than stored as typed:
  * a code we don't know would price nothing, and the value comes back out as
  * a pre-selected form field, so a junk code would be a permanently broken
- * form the traveller couldn't explain. `null` clears it — "I haven't said"
+ * form the traveler couldn't explain. `null` clears it — "I haven't said"
  * has to stay reachable, otherwise the first save is irreversible.
  *
  * Having one is free: an account is free, saving and watching a TRIP is Plus,

@@ -71,7 +71,7 @@ test("attractionsFor is consistent with the resort lists", () => {
  * Matching.
  * ------------------------------------------------------------------------ */
 
-test("matched and missing split a traveller's picks with nothing lost", () => {
+test("matched and missing split a traveler's picks with nothing lost", () => {
   const picks = ["zootopia", "ratatouille", "mystic-manor"];
   const m = matchesForResort("shdr", picks);
   assert.deepEqual(m.matched.map((x) => x.id), ["zootopia"]);

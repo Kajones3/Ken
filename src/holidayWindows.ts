@@ -76,7 +76,7 @@ export function holidayWindowsFor(yyyymm: string): HolidayWindow[] {
 }
 
 /** The whole-month bounds a search falls back to when no window (or an
- *  unrecognised one) is selected — same as monthBounds(), named for the
+ *  unrecognized one) is selected — same as monthBounds(), named for the
  *  call site's clarity. */
 export function wholeMonthWindow(yyyymm: string): { from: ISODate; to: ISODate } {
   const [from, to] = monthBounds(yyyymm);
@@ -98,7 +98,7 @@ export function wholeMonthWindow(yyyymm: string): { from: ISODate; to: ISODate }
  * comparing an early-November control week against the Thanksgiving and
  * Christmas travel windows) — the same standing as the IRS mileage rate or
  * the hopper differentials: a real, cited number, owner-editable because
- * it's a judgement call about how much to trust a national average against
+ * it's a judgment call about how much to trust a national average against
  * any one route, not something this app measured itself.
  * https://upgradedpoints.com/news/best-day-fly-during-holidays/
  */

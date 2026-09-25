@@ -28,7 +28,7 @@ import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
-import { cheapestIn, typicalIn, priceTrip, type Overrides, type TripParams } from "./pricing.js";
+import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
 import { parsePassHoldings, parseDvcRental, PASS_RESORTS, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
@@ -118,10 +118,11 @@ function paramsFrom(q: URLSearchParams): TripParams {
     food: (["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character", "plan"].includes(q.get("food") ?? "")
       ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
+    hotelRooms: clamp(Number(q.get("rooms") ?? 1), 1, MAX_HOTEL_ROOMS),
     transportMode: "fly",
-    // Free, like the overrides they most resemble: a traveller correcting the
+    // Free, like the overrides they most resemble: a traveler correcting the
     // app's picture of what THEY actually pay. Both are unverified claims
-    // about the traveller's own finances that never leave their own board,
+    // about the traveler's own finances that never leave their own board,
     // so there is nothing here to gate. `passes` is sent as
     // resort:tier:count triples so one query param carries a whole party's
     // holdings across the six-resort board.
@@ -237,7 +238,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const [from, to] = holidayWindow ? [holidayWindow.from, holidayWindow.to] : monthBounds(month);
   // An explicit date prices exactly that day instead of scanning the month for
   // the cheapest one — how a calendar-cell click asks for that date's full
-  // breakdown, and how a traveller pins real travel dates instead of a month.
+  // breakdown, and how a traveler pins real travel dates instead of a month.
   const explicitDate = q.get("date");
   const originPick = resolveOrigin(params.origin);
   params.origin = originPick.origin;
@@ -259,7 +260,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // its own errors, and nothing below reads the result.
   void recordSearch(db, params.origin, [...destinationByResort.values()], month);
 
-  // A signed-in traveller's attraction picks, read from their own row —
+  // A signed-in traveler's attraction picks, read from their own row —
   // never from the query string, so the client can say which account it is
   // (via the cookie) but never what it has picked. A signed-out request gets
   // an empty list, so every resort's `attractions` comes back absent and the
@@ -269,9 +270,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // board rather than per resort. Skipped entirely when nobody has picked
   // anything, since the matching never runs then and this would be a query
   // spent to answer a question nothing asks.
-  const catalogue = picks.length ? await effectiveAttractions(db) : [];
+  const catalog = picks.length ? await effectiveAttractions(db) : [];
 
-  // How much this traveller said crowds matter. Free, and read straight from
+  // How much this traveler said crowds matter. Free, and read straight from
   // the query string — unlike promos or attraction picks there is nothing to
   // entitle here: it changes what the board SAYS, never what it charges or
   // what order it is in.
@@ -296,8 +297,8 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // still computed and still shown — see typicalIn's header for why the
     // floor stays visible instead of being hidden behind a better headline.
     const { typical, cheapest, spread, skipped } = typicalIn(book, resort, resortParams, overrides, dates);
-    // Which day the traveller asked to be quoted. "typical" is the default and
-    // the honest answer; "cheapest" is the old behaviour, offered deliberately
+    // Which day the traveler asked to be quoted. "typical" is the default and
+    // the honest answer; "cheapest" is the old behavior, offered deliberately
     // because somebody with flexible dates is asking a real and different
     // question — what is the best this month can do — and answering it is not
     // the same as quoting it at somebody who cannot move their dates.
@@ -315,13 +316,13 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // Deliberately attached to the row and NOT used for ordering. The board
     // stays sorted by price — this is the app's one job — and the match is
     // context for what a cheaper total would cost you in attractions.
-    const m = picks.length ? matchesForResort(resort.id, picks, catalogue) : null;
+    const m = picks.length ? matchesForResort(resort.id, picks, catalog) : null;
     const attractions = m
       ? { ...m, summary: matchSummary(m, picks.length) }
       : undefined;
     // Same standing as the attraction match: attached to the row, never used
     // for ordering. "The cheapest week is also the busiest" is a trade-off a
-    // traveller should make knowingly; quietly reordering the board because
+    // traveler should make knowingly; quietly reordering the board because
     // we guessed they would mind is the app deciding for them.
     const crowd = crowdFor(resort.id, crowdMonthForRow, crowdDay) ?? undefined;
     const crowdWarning = crowdFlag(resort.id, crowdMonthForRow, crowdCare, crowdDay) ?? undefined;
@@ -362,6 +363,15 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
 }
 
 async function calendar(q: URLSearchParams, user: SessionUser | null) {
+  const from0 = q.get("from") ?? addDaysISO(todayISO(), 1);
+  const to0 = q.get("to") ?? addDaysISO(from0, 364);
+  // The trip price calendar — every arrival date's whole-trip total — is a
+  // Plus feature (owner's call, 2026-09-25: it is the easy way to "monitor" a
+  // trip, and nobody else prices flights+hotel+tickets+food per day). A
+  // single-day read stays free: that is how the hotel card's "every category,
+  // same N nights" comparison prices one date, and it reveals nothing the
+  // board did not already show. Resolved from the session, never the client.
+  if (from0 !== to0 && !(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
@@ -370,8 +380,7 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const mode = resortTransportMode(gettingThere, resort);
   Object.assign(params, mode === "drive" ? driveBase : flyBase);
   params.destination = resolveDestination(resort, q.get("destination"));
-  const from = q.get("from") ?? addDaysISO(todayISO(), 1);
-  const to = q.get("to") ?? addDaysISO(from, 364);
+  const from = from0, to = to0;
   const book = await loadBook(db, {
     origin: params.origin, destinations: [params.destination], resortIds: [resort.id],
     from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
@@ -441,7 +450,7 @@ function withSuggestedMode(origins: typeof ORIGINS) {
  *
  * It also requires a verified email, because an unverified address is one
  * nobody has proved they hold, and this is the account that can change what
- * every traveller is quoted.
+ * every traveler is quoted.
  */
 async function ownerOf(db: Db, req: IncomingMessage) {
   const owner = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
@@ -493,7 +502,7 @@ const server = createServer(async (req, res) => {
     // exactly one module. The client just reads the field.
     if (url.pathname === "/api/meta") {
       // Read live rather than from the module default: the owner can change
-      // the take-home figure, and the box travellers type into should start
+      // the take-home figure, and the box travelers type into should start
       // on their number, not the one this app shipped with.
       const dvcDefault = (await loadSettings(db)).find((v) => v.key === DVC_TAKE_HOME_KEY)?.value
         ?? DVC_TAKE_HOME_PER_POINT;
@@ -531,8 +540,8 @@ const server = createServer(async (req, res) => {
       // to carry its own hardcoded copy of these five numbers, which nothing
       // could ever update.
       exchange: { rates: EXCHANGE_RATES, asOf: EXCHANGE_AS_OF, placeholder: EXCHANGE_IS_PLACEHOLDER },
-      // Annual pass programmes, and the default DVC take-home figure the
-      // points box starts on. Sent from here so the catalogue has one home
+      // Annual pass programs, and the default DVC take-home figure the
+      // points box starts on. Sent from here so the catalog has one home
       // and the browser never carries its own copy of a price.
       passPrograms: PASS_RESORTS,
       dvcTakeHomePerPoint: dvcDefault,
@@ -750,7 +759,7 @@ const server = createServer(async (req, res) => {
 
     // The attraction list itself is public — facts about what each resort
     // has, the same way a curated promo is public to browse. What Plus buys
-    // is the personalisation: picking yours and having the board answer.
+    // is the personalization: picking yours and having the board answer.
     if (url.pathname === "/api/attractions") {
       // The owner's list, overlaid on the shipped one. No longer cacheable
       // for five minutes at the edge: the owner editing a row and not seeing
@@ -808,6 +817,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/compare" || url.pathname === "/api/calendar") {
       const user = await currentUser(db, req);
       const body = url.pathname === "/api/compare" ? await compare(url.searchParams, user) : await calendar(url.searchParams, user);
+      if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
       return send(200, body, { cache: "private, max-age=60" });
     }
     if (url.pathname === "/api/promos") {
@@ -860,10 +870,13 @@ const server = createServer(async (req, res) => {
       return send(200, result, { cache: "no-store" });
     }
 
-    // --- saved trips: signed in, free at launch, always the caller's own rows. ---
+    // --- saved trips: SAVING is Plus (owner's call, 2026-09-25), always the ---
+    // --- caller's own rows. Listing, reopening and deleting stay open to any ---
+    // --- signed-in account, so a lapsed member keeps what they saved.        ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const t = await readBody(req);
       const id = randomUUID();
       const params = { ...(t.params ?? {}) };
@@ -883,15 +896,15 @@ const server = createServer(async (req, res) => {
         const mode = resortTransportMode(gettingThere, savedResort);
         Object.assign(params, mode === "drive" ? driveBase : flyBase);
       }
-      // Passes and DVC points are normalised HERE, not trusted as saved. The
+      // Passes and DVC points are normalized HERE, not trusted as saved. The
       // alert job re-prices straight from this row months later, and a tier
       // Disney has since retired (or a number somebody hand-edited) must not
-      // reach pricing — parsePassHoldings drops what it does not recognise,
+      // reach pricing — parsePassHoldings drops what it does not recognize,
       // the same rule saved attraction picks follow.
-      // Which day the board quoted when this was saved. Normalised here and
+      // Which day the board quoted when this was saved. Normalized here and
       // stored, because the alert job compares a fresh re-price against
       // baseline_total months later: a trip saved on its cheapest day and
-      // re-priced on a typical one comes back dearer for no reason, and the
+      // re-priced on a typical one comes back pricier for no reason, and the
       // reverse fires "the price dropped" about a drop that never happened.
       // The basis is part of what was promised, so it is saved with it.
       params.priceBasis = params.priceBasis === "cheapest" ? "cheapest" : "typical";
@@ -948,6 +961,7 @@ const server = createServer(async (req, res) => {
     if (expensesMatch && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
       const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
       if (!owns.rows[0]) return send(404, { error: "not found" });
       const body = await readBody(req);

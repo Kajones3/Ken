@@ -25,8 +25,8 @@
  * PRICE SEMANTICS, which are easy to get backwards and expensive if you
  * do: this adapter always queries `adults=1`, so the number it returns is
  * a ONE-ADULT round-trip fare. pricing.ts multiplies a per-seat fare by
- * the traveller count itself, so passing a party-of-N total through here
- * would multiply the party size in twice. Do not "optimise" this by
+ * the traveler count itself, so passing a party-of-N total through here
+ * would multiply the party size in twice. Do not "optimize" this by
  * asking for the real party size.
  */
 import type { FlightQuote } from "./types.js";
@@ -128,7 +128,7 @@ export class SerpApiFlightProvider {
     // The MEDIAN genuinely round-trip itinerary, not the cheapest. Google
     // Flights routinely returns a few dozen itineraries per search spanning
     // every airline/time/stop combination; picking the absolute floor of
-    // that whole list is a real fare, but not one most travellers searching
+    // that whole list is a real fare, but not one most travelers searching
     // this route on this date will actually see or book — the floor is
     // whichever single itinerary happened to be cheapest, not what's
     // typically available. Found 2026-09-15 from a real report that even

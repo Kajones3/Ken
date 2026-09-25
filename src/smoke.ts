@@ -53,28 +53,29 @@ for (const [i, row] of ranked.entries()) {
   );
 }
 
-console.log("\n3. save a trip and run the alert job");
+console.log("\n3. save a trip and run the deal-alert job");
 const userId = randomUUID(), tripId = randomUUID();
-// Saved trips and alerts are free (Plus buys only the shareable PDF, as of
-// the 2026-09-24 launch decision) — the one real condition left is a
-// confirmed email address, same as a real account needs.
-await db.query(`insert into users (id,email,email_verified_at) values ($1,$2,now())`,
+// Saving a search and hearing about new deals are Plus (owner's call,
+// 2026-09-25); price-drop monitoring was removed. A deal email also needs a
+// confirmed address, same as a real account.
+await db.query(
+  `insert into users (id,email,email_verified_at,plus_until,created_at)
+   values ($1,$2,now(),current_date + 90, now() - interval '1 day')`,
   [userId, "you@example.com"]);
 const top = ranked[0]!;
 if (!top.best) { console.error("nothing priceable:", top.skipped.slice(0, 3)); process.exit(1); }
-const baseline = top.best.total * 1.12;   // pretend prices were 12% higher when saved
 await db.query(
   `insert into saved_trips (id,user_id,params,overrides,baseline_total,threshold_pct)
-   values ($1,$2,$3,$4,$5,5)`,
-  // A modest, believable "your number" — a wild one would (correctly) trip the
-  // anomaly rail below: with only one trip in the sample, one huge swing looks
-  // exactly like bad data, so runAlerts sends nothing rather than guess.
-  [tripId, userId, JSON.stringify({ ...params, month: MONTH, resortId: top.resort.id }),
-   JSON.stringify({ [top.resort.id]: { nightly: 310 } }), baseline],
+   values ($1,$2,$3,'{}',$4,5)`,
+  [tripId, userId, JSON.stringify({ ...params, month: MONTH, resortId: top.resort.id }), top.best.total],
 );
+await db.query(
+  `insert into promos (id,resort_id,label,effect_kind,effect_value,starts_on,ends_on,active)
+   values ($1,$2,'Smoke-test room offer','room_pct_off',15,current_date,current_date + 60,true)`,
+  [randomUUID(), top.resort.id]);
 const alertResult = await runAlerts(db);
-console.log(`   ${alertResult.checked} trip checked, ${alertResult.fired} alert(s), ${alertResult.sent} emailed, 0 provider calls`);
-for (const c of alertResult.candidates) console.log(`   -> [${c.kind}] ${c.detail} (${c.dropPct.toFixed(1)}% better)`);
+console.log(`   ${alertResult.checked} Plus member checked, ${alertResult.fired} deal alert(s), ${alertResult.sent} emailed, 0 provider calls`);
+for (const c of alertResult.candidates) console.log(`   -> [${c.kind}] ${c.detail}`);
 
 const runs = await db.query(`select job, calls, rows_written, errors from fetch_runs order by started_at`);
 console.log("\n4. run log");

@@ -60,7 +60,7 @@ test("a trace of rain is not a rain day, and the threshold is inclusive", () => 
 test("the threshold is the gridded-data one, not the rain-gauge one", () => {
   // Pinned because it is a decision, not a default. ERA5 averages precipitation
   // across a grid cell, so a gauge's 0.01in "measurable" cut-off counts far more
-  // wet days than a person would recognise — Orlando's July came back at 27 the
+  // wet days than a person would recognize — Orlando's July came back at 27 the
   // first time this ran. Lowering it back to 0.01 should fail here, loudly.
   assert.equal(RAIN_DAY_INCHES, 0.04, "1mm, the standard wet-day cut-off for gridded data");
 });

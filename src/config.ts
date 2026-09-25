@@ -80,7 +80,7 @@ export interface Resort {
   dataConfidence?: {
     /** Short label for the badge itself. Keep it to a couple of words. */
     level: string;
-    /** One plain sentence a non-technical traveller can act on. Say what is
+    /** One plain sentence a non-technical traveler can act on. Say what is
      *  actually unmodelled, not that we are "still working on it". */
     note: string;
   };
@@ -333,7 +333,7 @@ export const RESORTS: Resort[] = [
     // Beauvais dropped (2026-09-10): it is a budget-carrier base with no US
     // service, so every real-fare lookup against it returns nothing while
     // still costing a metered search. CDG is the only Paris gateway a US
-    // traveller actually arrives at.
+    // traveler actually arrives at.
     altArrivalAirports: [],
     goodToKnow: [
       "To be clear about which half is the awkward one: park tickets on their own ARE sold online, at tickets.disneylandparis.com, dated or undated, with no hotel attached. It is the ROOM WITHOUT TICKETS that Disney will not sell you online — call Disney directly for a room-only rate, or book the hotel through a third party such as Booking.com or Expedia and buy the park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
@@ -345,25 +345,10 @@ export const RESORTS: Resort[] = [
     // as goodToKnow's visa notes: plausible and conventional, not checked.
     // The owner click-tests these; fix here if one 404s.
     onPropertyHotels: { url: "https://www.disneylandparis.com/en-gb/hotels/" },
-    // Disney sells Paris ACCOMMODATION as a hotel + ticket PACKAGE by
-    // default — a room-only stay exists but is not sold online. Note the
-    // scope, re-checked 2026-09-21 after the owner asked: buying park
-    // tickets alone online is ordinary and always has been, so the bundling
-    // constraint runs one way only. We price room and tickets as two
-    // separate lines, which matches the room-only booking most people will
-    // not actually make. Deliberately not "fixed" in the pricing math:
-    // package rates are not published, so inventing one would be less honest
-    // than a clearly-labelled room-only basis. Labelled here instead.
-    dataConfidence: {
-      // RENAMED 2026-09-25 (owner's report): "Priced room-only" read, at a
-      // glance next to the resort name, as "we don't price tickets here" —
-      // backwards from what it means. Everything below is still priced and
-      // included in the total (hotel AND tickets); the gap is only that
-      // Disney's own site sells them bundled, ours as two separate lines.
-      // Name that directly so the chip can't be misread as an omission.
-      level: "Hotel+tickets separate",
-      note: "Park tickets on their own are sold online normally — that part is fine. What Disney's own site will not sell you online is a ROOM WITHOUT TICKETS: book a Disney hotel there and it comes as a hotel + ticket package, with admission included for every day of your stay. A room-only stay does exist, but only by phone or through a third party. We price the room and the tickets as two separate lines — both are in your total below — so a real Disney quote may be structured quite differently from this breakdown. Compare against an actual package quote before you budget on it.",
-    },
+    // No dataConfidence badge (REMOVED 2026-09-25, the owner's call). Disney
+    // sells Paris rooms as a hotel + ticket package by default and we price
+    // them as two lines; that is explained once, in goodToKnow above, which
+    // is where the owner wants it — a chip beside the resort name repeated it.
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
@@ -392,13 +377,13 @@ export const RESORTS: Resort[] = [
       h("dlp-dlh", "Disneyland Hotel", "Deluxe · park gates", 826, "deluxe", true),
       h("dlp-bsg", "Bussy-Saint-Georges hotel", "Off property · 12 min", 135, "budget", false),
       h("dlp-vde", "Val d'Europe hotel", "Off property · 8 min", 178, "mid", false),
-      h("dlp-par", "Paris centre (RER A)", "Off property · 45 min", 245, "upscale", false),
+      h("dlp-par", "Paris center (RER A)", "Off property · 45 min", 245, "upscale", false),
     ],
   },
   {
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
-    note: "2 parks · run by Oriental Land Co. under licence",
+    note: "2 parks · run by Oriental Land Co. under license",
     parkList: [
       { name: "Tokyo Disneyland", lands: ["World Bazaar", "Adventureland", "Westernland", "Critter Country", "Fantasyland", "Toontown", "Tomorrowland"] },
       { name: "Tokyo DisneySea", lands: ["Mediterranean Harbor", "American Waterfront", "Port Discovery", "Lost River Delta", "Arabian Coast", "Mermaid Lagoon", "Mysterious Island", "Fantasy Springs"] },
@@ -413,7 +398,7 @@ export const RESORTS: Resort[] = [
     // The `_gl=...` cross-domain analytics token they pasted with it is
     // stripped deliberately — it is a short-lived per-session linker value,
     // so shipping it would hard-code one expired browsing session into every
-    // traveller's link. `lang=en` is the part that actually matters.
+    // traveler's link. `lang=en` is the part that actually matters.
     ticketUrl: "https://plan.tokyodisneyresort.jp/2/4/?lang=en",
     // UNVERIFIED from this environment — every Disney domain is blocked by
     // the egress proxy here, so this path could not be fetched. Same caveat
@@ -429,7 +414,7 @@ export const RESORTS: Resort[] = [
        rather than something on sale, and Tokyo's own 1-Day Passport says so
        in its own words: it admits you to "Tokyo Disneyland OR Tokyo DisneySea
        ... designating the date of visit and Park". The shipped +$38 was an
-       unresearched guess for a product a traveller cannot normally buy, which
+       unresearched guess for a product a traveler cannot normally buy, which
        put money on the six-resort board that nobody could spend. Omitting the
        fields is how a resort says it has no hopper — Hong Kong and Shanghai
        already do it this way.
@@ -530,7 +515,7 @@ export const RESORTS: Resort[] = [
     hotels: [
       /* OWNER DATA, 2026-09-23, from Shanghai's own booking flow for 1-10
          December 2026. Prices there EXCLUDE a 15% service charge, which is
-         added here because a traveller pays it: Toy Story garden view CNY
+         added here because a traveler pays it: Toy Story garden view CNY
          1,427 and courtyard CNY 2,043 become $245 and $351 all-in, and the
          Disneyland Hotel's deluxe garden/park views (CNY 2,856-3,293) become
          $490-565.
@@ -640,7 +625,7 @@ export interface AttractionDef {
   /** Stable key. Never reuse one for a different attraction — a user's saved
    *  picks reference it, and a recycled id silently changes what they chose. */
   id: string;
-  /** What a traveller would call it. Where resorts use different names for
+  /** What a traveler would call it. Where resorts use different names for
    *  the same ride, pick the one most people search for and let `note` carry
    *  the difference. */
   name: string;
@@ -657,7 +642,7 @@ export interface AttractionDef {
  * Kept short on purpose: every row here is one Claude is confident about,
  * because a confident wrong entry is the failure this whole file is shaped
  * to avoid. Treat it the way `seedPromos.ts`'s example rows are treated —
- * real enough to build and test against, not a researched catalogue.
+ * real enough to build and test against, not a researched catalog.
  */
 export const ATTRACTIONS: AttractionDef[] = [
   { id: "zootopia", name: "Zootopia", resortIds: ["shdr"],
@@ -827,7 +812,7 @@ export const ORIGINS_BY_CITY: Origin[] = [...ALL_ORIGINS].sort(compareOriginsByC
 
 /** Resolves any known origin. Callers that must enforce the free/Plus split
  *  check membership of ORIGINS separately — this map deliberately does not,
- *  so pricing and distance maths work the same for either list. */
+ *  so pricing and distance math work the same for either list. */
 export const ORIGIN_BY_IATA = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 
 /** Is this airport free for everyone, or does picking it need Plus? */
@@ -856,7 +841,7 @@ export const RESORT_BY_ARRIVAL_AIRPORT = new Map(
 export const NO_FLY_RADIUS_MILES = 100;
 
 /**
- * True when pricing this route is pointless because the traveller is already
+ * True when pricing this route is pointless because the traveler is already
  * there. Two cases, and both were really happening every night:
  *
  *   1. The same airport at both ends. LAX is a departure airport AND one of
@@ -915,7 +900,7 @@ function isLocalToResort(originIata: string, resort: Resort): boolean {
 /**
  * The resort this departure airport is close enough to drive to, if any.
  *
- * The other half of `isLocalRoute`, and the useful half for a traveller:
+ * The other half of `isLocalRoute`, and the useful half for a traveler:
  * having established that someone departing LAX will not be flying to
  * Disneyland, the board should say what they WILL do — drive to Disneyland,
  * fly to the other five — rather than show a gap where the nearest resort's
@@ -1107,7 +1092,7 @@ export type { ISODate };
  * What the weather is typically doing at each resort, by month.
  *
  * WHY THIS IS A TABLE AND NOT AN API. It is the same call as ticket prices:
- * climate normals move once a decade, a traveller planning six months out
+ * climate normals move once a decade, a traveler planning six months out
  * cannot use a forecast, and a live lookup would be a per-user provider call
  * this project's whole architecture exists to avoid.
  *
@@ -1138,7 +1123,7 @@ export interface ClimateMonth {
   lowF: number;
   rainDays: number;
   /** What the season is doing — hurricanes, a rainy season, short dark days.
-   *  Absent for a month with nothing a traveller needs warning about. */
+   *  Absent for a month with nothing a traveler needs warning about. */
   note?: { emoji: string; text: string };
 }
 
@@ -1199,7 +1184,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
       { months: mo(7, 8), emoji: "🥵",
         text: "The hottest, wettest stretch of the year — expect a heavy thunderstorm most afternoons, then sunshine again by evening." },
       { months: mo(12, 12), emoji: "🎄",
-        text: "Mild and dry, and the busiest, most expensive fortnight of the year falls over Christmas and New Year." },
+        text: "Mild and dry, and the busiest, most expensive two weeks of the year fall over Christmas and New Year." },
       { months: mo(1, 2), emoji: "🧥",
         text: "The coolest, driest months — pleasant for walking the parks, but a morning can genuinely need a jacket." },
       { months: mo(3, 5), emoji: "🌤️",
@@ -1221,7 +1206,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
   ),
   dlp: climate(rowsFor("dlp"),    [
       { months: mo(11, 2), emoji: "🌂",
-        text: "Cold, grey and dark — the sun sets before 5pm around the solstice. Rain is frequent but usually light rather than heavy." },
+        text: "Cold, gray and dark — the sun sets before 5pm around the solstice. Rain is frequent but usually light rather than heavy." },
       { months: mo(6, 8), emoji: "🌤️",
         text: "The warmest, driest stretch and the longest days, with light until well past 9pm. Also the busiest, as most of Europe is on holiday." },
       { months: mo(3, 5), emoji: "🌦️",
@@ -1230,7 +1215,7 @@ export const CLIMATE: Record<string, ClimateMonth[]> = {
   ),
   tdr: climate(rowsFor("tdr"),    [
       { months: mo(6, 7), emoji: "🌧️",
-        text: "Tsuyu, the rainy season — roughly mid-June to mid-July. Not constant downpours, but grey, humid and wet more often than not." },
+        text: "Tsuyu, the rainy season — roughly mid-June to mid-July. Not constant downpours, but gray, humid and wet more often than not." },
       { months: mo(8, 9), emoji: "🌀",
         text: "Typhoon season, and August is genuinely hot and humid. A typhoon can close the parks outright for a day." },
       { months: mo(3, 4), emoji: "🌸",
@@ -1297,7 +1282,7 @@ export { CLIMATE_SOURCE };
  * claim.
  *
  * THE FOUR INTERNATIONAL RESORTS HAVE NO DVC INVENTORY AT ALL, so there is no
- * chart to read and their rows are judgement — local school holidays, national
+ * chart to read and their rows are judgment — local school holidays, national
  * weeks off, and the weather already in CLIMATE. `basis` says which is which
  * per resort and the card prints it, exactly as dataConfidence does: a
  * confident wrong claim about when to go is worse than a hedged right one.
@@ -1325,7 +1310,7 @@ export interface CrowdYear {
    *  lives in `chartMonths` below, because a chart rarely covers a whole
    *  year: Hong Kong's runs April to December and Tokyo's covers one
    *  quarter. Saying the whole resort is chart-derived when a third of it is
-   *  judgement would be the confident-wrong-claim this file keeps refusing to
+   *  judgment would be the confident-wrong-claim this file keeps refusing to
    *  make. */
   basis: "dvcPoints" | "estimate";
   /** Twelve bands, January first. */
@@ -1387,7 +1372,7 @@ export const CROWDS: Record<string, CrowdYear> = {
        Villas points chart. That chart is SEASON-BANDED rather than daily —
        seven travel periods covering all 365 days of 2027 — so each day was
        assigned its period's weekly Deluxe Studio points and averaged per
-       month, then normalised across the year the same way Disneyland's was.
+       month, then normalized across the year the same way Disneyland's was.
        All 365 days are accounted for; a gap would mean a misread period.
 
        TWO THINGS THE MONTHLY AVERAGE HIDES, and both are in the notes below
@@ -1445,7 +1430,7 @@ export const CROWDS: Record<string, CrowdYear> = {
   dlr: {
     /* OWNER DATA, 2026-09-23. Read off the 2026 Disney Collection Exchange
        points chart for the Disneyland Hotel — all twelve months, one hotel,
-       one scale. Each day's cheapest room category was normalised against
+       one scale. Each day's cheapest room category was normalized against
        that chart's own range and averaged per month, so the bands describe
        where a month sits in ITS OWN resort's year, which is the only thing a
        points chart can honestly say.
@@ -1498,14 +1483,14 @@ export const CROWDS: Record<string, CrowdYear> = {
     basis: "estimate",
     months: ["low", "high", "moderate", "moderate", "peak", "moderate",
              "high", "high", "moderate", "peak", "low", "low"],
-    why: { 2: "Chinese New Year", 5: "Labour Day golden week",
+    why: { 2: "Chinese New Year", 5: "Labor Day golden week",
            7: "Chinese school summer holidays", 10: "National Day golden week",
            11: "Cool, dry and quiet — the best value month" },
   },
   hkdl: {
     /* OWNER DATA, 2026-09-23 for APRIL TO DECEMBER, read off the 2026 Hong
        Kong Disneyland Hotel points chart the same way as Disneyland's.
-       January to March are NOT on that chart and remain judgement — see
+       January to March are NOT on that chart and remain judgment — see
        chartMonths, which the card reads so it can say which a given month
        is rather than claiming the whole year is sourced. */
     basis: "dvcPoints",
@@ -1524,7 +1509,7 @@ export const CROWDS: Record<string, CrowdYear> = {
  * FLIPPED FALSE 2026-09-25, the owner's call: the crowd bands are backed by
  * real DVC/Disney Collection Exchange points charts at Walt Disney World,
  * Disneyland and (April-December) Hong Kong Disneyland, and the remaining
- * months/resorts are judgement that already says so per-month via `basis`
+ * months/resorts are judgment that already says so per-month via `basis`
  * ("estimated" vs. "real demand data" on the crowd card). The owner's read:
  * "we have the hotel demand data and that is enough here" — a blanket
  * "not yet checked" banner on top of that per-month disclosure was

@@ -45,7 +45,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     `select destination,
             to_char(depart_date,'YYYY-MM') as month,
             trip_length,
-            coalesce(source, '(unlabelled)') as source,
+            coalesce(source, '(unlabeled)') as source,
             min(carrier) as carrier,
             count(*) as n,
             min(price_usd) as min_p,
@@ -53,7 +53,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
             percentile_cont(0.5) within group (order by price_usd) as med_p
        from flight_prices
       where origin = $1 and depart_date >= $2
-      group by destination, month, trip_length, coalesce(source, '(unlabelled)')
+      group by destination, month, trip_length, coalesce(source, '(unlabeled)')
       order by destination, month, trip_length, source`,
     [origin, today],
   );
