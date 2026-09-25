@@ -12,24 +12,79 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-25
+## START HERE — state as of 2026-09-25 (end of session)
 
-**Live at https://pricingthemagic.com.** `master` is at `c53c52b` (PR #70,
-merged), with a third round of fixes on top not yet in its own PR — see "A
-third 2026-09-25 pass" below. **Ask whether Render has been redeployed before
-trusting what the live site shows** — the owner clicks that by hand and it
-has lagged `master` for days at a time.
+**Live at https://pricingthemagic.com.** `master` is at `f2bb7a2` (PR #71,
+merged — PR #70 merged earlier the same day). **Ask whether Render has been
+redeployed before trusting what the live site shows** — the owner clicks
+that by hand and it has lagged `master` for days at a time.
 
 Run `npm test` and `npm run typecheck` before you believe anything. 565
-tests, typecheck clean, `npm run smoke` unchanged (rental-car removal cost 5
-tests that only tested a feature that's now gone; the food and off-property
-work each added new ones).
+tests, typecheck clean, `npm run smoke` unchanged.
 
-### What happened in the 2026-09-25 session — read this before anything else
+### Today in one paragraph
 
-Five pieces of real work, each merged (PR #67 then PR #68) as its own
-commit — see the dated entries under "Decisions already made" below for the
-full reasoning on each, this is just the map:
+Five pieces of original work (free/Plus regating, real WDW/Disneyland/Paris
+promos, a Shanghai hotel-tier bug, a flight-estimate blending fix, and named
+holiday weeks replacing free-text dates), then two rounds of owner-reported
+fixes from two separate screenshots (PRs #70 and #71) — a recurring
+off-property hotel-tier bug (fixed twice, at ingestion and again at
+display), a crowd-flag threshold that silently never fired, a crowd chip
+that was correct but never rendered, a misleading resort badge, a useless
+rental-car control, and a full food-style rebuild into the owner's own
+seven categories. **The three things below are what's actually left open**
+— read those before doing anything else; the long day-by-day recap that
+used to live here has been folded into "Decisions already made" below,
+searchable by date if you need the blow-by-blow.
+
+### Three things to pick up next — in the owner's likely order
+
+1. **The restaurant-example feature drew direct pushback and hasn't been
+   revised yet.** PR #70 added named real restaurants (Sanaa, 'Ohana,
+   Explorer's Club Restaurant...) per resort per dining style
+   (`foodExamples` in config.ts). The owner: "It sounds like you went too
+   literal. I didn't mean you had to pull those exact restaurants." **Ask
+   what they'd rather see** before changing anything — fewer names? no
+   specific restaurants at all, just a $ range per style? something else?
+   Don't re-guess a second time with no new direction.
+2. **Food's new `character` rate (all-character-dining) is Claude's own
+   unresearched guess** — 1.5x that resort's `ts` rate, one flat multiplier
+   applied identically at all six resorts, same standing as the
+   unresearched Park Hopper differentials. Flagged as its own standing task
+   (`character-dining-rate` in `ownerTasks.ts`). Worth asking the owner to
+   sanity-check against a real character-dining price (e.g. a Cinderella's
+   Royal Table or 'Ohana receipt) before trusting the number for real.
+3. **The crowd chip is correct but the "typical day" picker sometimes
+   dodges the very day it would flag.** `typicalIn()` trims toward the
+   average price, and the day that makes a week "Thanksgiving" (the
+   Nov 24-26 arrival days) is often the pricier tail that gets trimmed
+   away — so a 6-night Thanksgiving-week search can quietly land on the
+   cheaper Nov 27-30 stretch and never flag at all. Not a bug in the chip
+   itself (it correctly describes whichever day was actually priced); it's
+   a mismatch between "the day pricing picked as typical" and "the day a
+   person means when they say Thanksgiving." No fix designed yet — flag it
+   to the owner as a known limitation rather than silently living with it,
+   and don't attempt a fix without their input on what they'd want instead
+   (bias the picker toward the peak day for a NAMED holiday week
+   specifically? show the flag for the whole window regardless of which
+   day was priced? something else).
+
+**Also still open, lower priority (unchanged from before today):**
+
+- **Cruises.** Explicitly on hold — "don't worry about cruises yet, we'll
+  get there." The agreed shape so far (from earlier sessions, still valid):
+  a free-side teaser line ("We estimate a Disney Cruise could run about
+  $X-$Y — see the real per-cabin range with Plus") with the real detail
+  built later. No code exists for this yet.
+- **Spring break** was deliberately left out of the holiday-windows work
+  (real, but shaped completely differently per resort and spans two
+  calendar months) — a natural next addition to `holidayWindows.ts` using
+  the same mechanism, not urgent.
+- **Tokyo, Hong Kong, Shanghai promos** — WDW/Disneyland/Paris are done;
+  nothing official has turned up for the other three yet, see "Next work"
+  below.
+
+### What actually shipped today, for reference (PRs #67-#71, all merged)
 
 1. **Finished the free/Plus launch regating.** The owner's call, mid-session:
    "at launch, the only thing on plus is the PDF print out." Every other
@@ -70,39 +125,13 @@ full reasoning on each, this is just the map:
    Flights also got a real, sourced holiday premium (+55%/+58%,
    Thanksgiving/Christmas) from a third-party fare study, since BTS itself
    is quarterly-only and structurally can't measure this.
-
-**What's mid-thought, not yet built — pick up here:**
-
-- **Food.** The owner explicitly wants something better than a random
-  range: "Eating at Hoopty Doo Review is a lot more than Casey's Corner and
-  we can help the user estimate that if we are clear rather than just
-  giving them a box." They have a more specific idea for how and ran out of
-  tokens mid-message describing it. **Ask them to finish that thought before
-  building anything** — don't guess at what "help the user estimate that"
-  means. The four existing dining styles (grocery/QS/mix/table-service) are
-  the likely raw material, but the actual design is still theirs to finish.
-- **Cruises.** Explicitly on hold — "don't worry about cruises yet, we'll
-  get there." The agreed shape so far (from earlier sessions, still valid):
-  a free-side teaser line ("We estimate a Disney Cruise could run about
-  $X-$Y — see the real per-cabin range with Plus") with the real detail
-  built later. No code exists for this yet.
-- **Spring break** was deliberately left out of the holiday-windows work
-  (real, but shaped completely differently per resort and spans two
-  calendar months) — a natural next addition to `holidayWindows.ts` using
-  the same mechanism, not urgent.
-
-### A second 2026-09-25 pass — six owner-reported fixes
-
-The owner came back with a screenshot and a punch list. All six shipped in
-one session; the reasoning for each is worth not re-deriving:
-
-1. **Dropped the "not yet checked against real demand data" banner from the
+6. **Dropped the "not yet checked against real demand data" banner from the
    crowd card.** The owner's call: "We have the hotel demand data and that
    is enough here." `CROWDS_ARE_PLACEHOLDER` (config.ts) is now `false` — the
    per-month "estimated" vs. "real demand data" chip on the crowd card still
    says which basis a given month has, that per-month honesty didn't change,
    only the blanket first-pass disclaimer sitting on top of it.
-2. **Fixed crowd flagging so a real Thanksgiving-week trip to WDW actually
+7. **Fixed crowd flagging so a real Thanksgiving-week trip to WDW actually
    flags at the default sensitivity.** "Somewhat" used to flag only `peak`,
    and Thanksgiving at WDW is deliberately banded `high` (one notch under
    Christmas's `peak` — see the windows decision above), so it silently never
@@ -111,17 +140,15 @@ one session; the reasoning for each is worth not re-deriving:
    `crowdFlag()`). Verified live: pricing WDW for a date inside the Nov 24-26
    window now flags "Busy" at "somewhat," and the same check for Disneyland
    Paris in November (banded `low`) does not — the owner's own example.
-3. **Sample restaurants under the Food card.** The owner's ask: "if I want
-   to do table service, I need to know that Sanaa is $XX per person." Added
-   `foodExamples` per resort (config.ts) — a couple of named, real restaurants
-   per dining style, priced by $ TIER the way Disney's own dining guide does
+8. **Sample restaurants under the Food card — but see item 1 above, this
+   drew direct pushback and is not settled.** Added `foodExamples` per
+   resort (config.ts) — a couple of named, real restaurants per dining
+   style, priced by $ TIER the way Disney's own dining guide does
    ($ / $$ / $$$ / $$$$), not a claimed dollar figure a real menu would
    contradict. Rendered under the food line items in `prototype.html`.
-   Same standing as the starter attraction rows: Claude's own list, not
-   verified against a current menu or lineup — flagged with a new standing
-   task (`food-examples` in `ownerTasks.ts`) since restaurants close and
-   rename more often than rides do.
-4. **Removed "Compare both" (on-property vs. off-property) entirely.** The
+   Flagged with a standing task (`food-examples` in `ownerTasks.ts`) since
+   restaurants close and rename more often than rides do.
+9. **Removed "Compare both" (on-property vs. off-property) entirely.** The
    owner's report: "that isn't working right." Rather than debug a feature
    whose own reasoning (silently picking the cheaper side, see the
    2026-09-19 decision above) the owner had already found confusing in
@@ -131,7 +158,7 @@ one session; the reasoning for each is worth not re-deriving:
    dining-plan-forces-on-property special case that existed only to handle
    `"both"` is gone too; `planFor()` already refuses a plan for `"off"`/
    `"none"` on its own, so nothing had to replace it.
-5. **Stopped calling anything "exact."** The owner's reasoning: "Even
+10. **Stopped calling anything "exact."** The owner's reasoning: "Even
    though we have good data, we are setting ourselves up for failure." A
    real fare found right now can still move by the time somebody actually
    books, so claiming "exact" was a promise the site couldn't keep. The
@@ -140,96 +167,59 @@ one session; the reasoning for each is worth not re-deriving:
    price" / "Live fare $X" / "live" chip, each with a line making clear it's
    still an estimate, not a guaranteed checkout price. Marketing copy that
    listed "exact live fares" as a free feature now says "live fare checks."
-6. **Fixed a real off-property pricing bug — this is the screenshot.**
-   Budget was pricing at $377/night against Mid-range's $141 and Upscale's
-   $178 — backwards. Root cause: off-property hotels were tiered by Google's
+11. **Fixed the off-property pricing bug — TWICE, because the first fix
+   only helps data bought from now on.** First report: Budget was pricing
+   at $377/night against Mid-range's $141 and Upscale's $178 — backwards.
+   Root cause: off-property hotels were tiered by Google's
    `extracted_hotel_class` (star rating) alone (`providers/serpapi.ts`,
-   `tierFromClass`), which is a weak, sparse signal for what a single
-   sampled night actually costs — a generic "hotels near <resort>" search
-   often returns only one or two lower-star properties, so one outlier owned
-   the whole "budget" bucket with nothing to average it against. Replaced
-   with `tiersByPrice()`: rank what SerpApi actually returned BY PRICE and
-   assign tiers from that ranking, which guarantees budget <= mid <= upscale
-   for these anchors by construction — the same "category median with real
-   spread" treatment every other tier already gets. Verified with a
-   reproduction of the exact screenshot numbers (a $377 low-star outlier
-   among cheaper unclassified properties): it now lands in "upscale," where
-   its price actually puts it.
-
-### A third 2026-09-25 pass — the owner's screenshot said "still wrong"
-
-PR #70 shipped and the owner came back with the SAME Budget-priced-above-
-Mid-range screenshot, this time on Tokyo, plus four more reports. The owner's
-own framing on the restaurant list mattered too: "It sounds like you went
-too literal. I didn't mean you had to pull those exact restaurants" — a
-reminder that a concrete example in a request is not always a literal
-spec, and worth checking before building a whole per-resort research pass
-around it.
-
-1. **The off-property tier bug got a SECOND, independent fix, because the
-   first one (price-ranking at ingestion, PR #70) can only fix data bought
-   from now on — it does nothing for rows already sitting in the cache with
-   the old star-class tag, and the hotel-rotation cycle takes ~10 days to
-   touch every resort/month.** Rather than wait that out, the "Every
-   category, same N nights" comparison itself now sorts off-property by
-   PRICE at display time and labels positionally ("Cheapest off property" /
-   "Mid-range off property" / "Most expensive off property") instead of by
-   the stored budget/mid/upscale tag — so the card literally cannot show a
-   cheaper tier priced above a pricier one, regardless of what's cached.
-   On-property is untouched: Value/Moderate/Deluxe are Disney's own real
-   categories, so those three rows stay in that fixed order, per the
-   owner's own split ("Off property hotels should be organized by price.
-   On property should be organized by category"). With only 1-2 real
-   off-property price points available (not 3), the labels scale down
-   ("Cheapest"/"Most expensive", or just "Off property") rather than
-   claiming a fake "Mid-range" for whichever happens to render second.
-2. **The crowd chip was defined but only ever wired into the "no cached
-   price" fallback row template, never the normal priced row** — a
-   copy-paste-shaped bug, not a logic bug. `crowdFlag()`/`crowdFor()` were
-   already correct (see the second pass above); the chip simply never
-   rendered on a real board row before Details was opened. One line
-   (`${crowdChip(item)}` alongside the existing `${attractionChip(item)}`)
-   fixes it. Verified live: an exact Nov 24 (Thanksgiving arrival) search
-   now shows "Busy" on WDW's board row and nothing on Paris's, the owner's
-   own example, working before Details is pressed. **Worth flagging
-   honestly, not fixed here**: the "typical day" price-picker (see the
-   2026-09-22 decision) sometimes lands on a cheaper, unflagged day even
-   within a flagged window — e.g. a 6-night Thanksgiving-week search can
-   land on Nov 27-30 (deliberately the CHEAPER post-holiday days) rather
-   than the Nov 24-26 peak, because "typical" trims toward the average
-   price and the peak days are exactly what gets trimmed. The chip is
-   reporting accurately on whichever day was actually priced; it just
-   won't always be the day someone pictures when they think "Thanksgiving."
-3. **Removed the rental-car add-on entirely** ("Why do we have the rental
+   `tierFromClass`), a weak, sparse signal for what a single sampled night
+   actually costs. Fixed by ranking what SerpApi actually returned BY PRICE
+   (`tiersByPrice()`) instead, guaranteeing budget <= mid <= upscale by
+   construction. **The owner came back with the SAME bug on a different
+   resort (Tokyo)** — the first fix can't retroactively fix rows already
+   cached with the old tag, and the hotel-rotation cycle takes ~10 days to
+   touch every resort/month. Second, independent fix: the "Every category,
+   same N nights" comparison now sorts off-property by PRICE at DISPLAY
+   time and labels positionally ("Cheapest off property" / "Mid-range off
+   property" / "Most expensive off property") instead of trusting the
+   stored tag — so the card literally cannot show this bug again regardless
+   of what's cached. On-property is untouched: Value/Moderate/Deluxe stay
+   in that fixed order, since those are Disney's own real categories, per
+   the owner's own split ("Off property organized by price, on property by
+   category"). With only 1-2 real off-property price points, the labels
+   scale down rather than claiming a fake "Mid-range."
+12. **Fixed the crowd chip not showing on the main board row.** It was
+   defined and correct (`crowdChip()`, `crowdFlag()`) but only ever wired
+   into the "no cached price" fallback row template, never the normal
+   priced row — a copy-paste-shaped bug, not a logic bug. One line fixes
+   it. Verified live: an exact Nov 24 search shows "Busy" on WDW and
+   nothing on Paris, before Details is opened. **See item 3 above** for the
+   real remaining nuance (the typical-day picker sometimes avoids the
+   flagged day).
+13. **Removed the rental-car add-on entirely** ("Why do we have the rental
    car option? We never include it in the final price. It's kind of
-   useless."). It WAS wired into the total (verified in pricing.ts before
-   touching anything — evidence before fixes), but it priced one flat
-   national-average rate applied identically across all six resorts in a
-   comparison, so it never changed which resort won; as a comparison tool
-   it added a control with no signal. Gone from `pricing.ts` (`rentalCar`
-   param, `rentalCarUsd`/`rentalCarPick`, `carRentalRate()`), `config.ts`
-   (`CAR_RENTAL`), `settings.ts` (the owner-editable rate), and both trip-
-   form controls ("Rent a car at your destination?", "Rent a car for the
-   drive?"). `includeWearAndTear` ("Include wear & tear on your car? Yes/No")
-   is untouched — that's a real, resort-specific choice about whether to
-   price gas only or the full IRS rate, unrelated to renting.
-4. **Reworded Disneyland Paris's `dataConfidence` badge**, "Priced
-   room-only" → "Hotel+tickets separate". The owner: "Get rid of the
-   'Priced Room Only' ... it is misleading because we are actually pricing
-   hotel and tickets." The three-word chip, read alone next to a resort
-   name on the board, said the opposite of what it means — the gap is that
-   Disney's own site bundles hotel+ticket while we price them as two lines,
-   not that either is missing from the total. The full `note` (already
-   accurate) is unchanged; only the short label that has to stand alone
-   in a chip was misleading.
-5. **Food: seven real dining styles, in the owner's own words** ("We'll
+   useless."). It WAS wired into the total (verified before touching
+   anything), but it priced one flat national-average rate applied
+   identically across all six resorts, so it never changed which resort
+   won a comparison. Gone from `pricing.ts`, `config.ts` (`CAR_RENTAL`),
+   `settings.ts`, and both trip-form controls. `includeWearAndTear`
+   ("Include wear & tear on your car?") is untouched — a real, unrelated
+   choice about gas-only vs. full IRS-rate pricing.
+14. **Reworded Disneyland Paris's `dataConfidence` badge**, "Priced
+   room-only" → "Hotel+tickets separate". The three-word chip, read alone
+   next to a resort name, said the opposite of what it means — hotel AND
+   tickets are both priced and in the total; the real gap is only that
+   Disney's own site bundles them while this app prices two lines.
+15. **Food: seven real dining styles, in the owner's own words** ("We'll
    bring our own food, Some Quick Service, All Quick Service, Some Quick
    Service Some Table Service, All table service, Some Character meals, All
    Character Meals"). Four of the seven already existed (grocery/qs/mix/ts);
    new: `someQs`, `someCharacter`, and `character` — a full character-dining
    rate, which the old four-style model didn't have at all (its "ts" label
    literally said "Table service & character meals" as one blended
-   approximation). `foodRate()` in pricing.ts is the one place a style
+   approximation). **See items 1-2 above** — both the example restaurants
+   and the new `character` rate are unverified and worth the owner's look.
+   `foodRate()` in pricing.ts is the one place a style
    becomes a dollar rate: `someQs`/`someCharacter` are the MIDPOINT of their
    neighbors rather than their own researched numbers — "some of each" has
    no real data behind what fraction of meals that actually means, so a
@@ -241,12 +231,6 @@ around it.
    skews `someCharacter`. A test pins that all seven styles price in strict
    ascending order and that a real trip's total actually differs across all
    seven, not just the original four.
-6. **The restaurant-example feature (PR #70) drew direct feedback**: real,
-   specific restaurant names (Sanaa, 'Ohana, Explorer's Club Restaurant...)
-   were more literal than the owner meant by their own example. Left as-is
-   pending the owner's look at the live site — flagged here so a future
-   session doesn't re-guess before hearing back on what "too literal" should
-   change to (fewer names? generic placeholders? something else entirely).
 
 ### What is REAL data and what is still a guess
 
@@ -265,7 +249,7 @@ that every number is either real or labelled a guess.
 | **Hotels — Hong Kong, Shanghai** | **REAL** (owner's screenshots, 2026-09-23). Hong Kong Disneyland Hotel's Deluxe rate is DERIVED from a ratio, not observed. |
 | **Hotels — Tokyo** | Mostly guesses. Only Disney Ambassador Hotel is real. |
 | **Hotels — Paris** | Claude draft. |
-| **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. Seven styles as of 2026-09-25 (see the third-pass recap above); `character` (all-character-dining) is Claude's own unresearched multiplier on `ts`, weaker confidence than the original four. |
+| **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. Seven styles as of 2026-09-25 (see "What actually shipped today" above); `character` (all-character-dining) is Claude's own unresearched multiplier on `ts`, weaker confidence than the original four — see "Three things to pick up next," item 2. |
 | **Promos** | **REAL for WDW, Disneyland, Disneyland Paris** (`seedPromos.ts`, found by web search of each resort's own official offers page, 2026-09-25). **Still illustrative-gap for Tokyo, Hong Kong, Shanghai** — nothing official found, see "Next work". Applying one is free for anyone signed in, not Plus. |
 | **Attractions** | Starter set, ~10 rows. |
 | `parkList` lands, `QUEUE_TIMES_PARKS` | Claude drafts. |
@@ -305,25 +289,28 @@ that every number is either real or labelled a guess.
 
 ### Next work, in the owner's priority order
 
-1. **Food** — the owner has a specific idea for a real per-dining-style
-   breakdown rather than a random range, cut off mid-message by running out
-   of tokens (2026-09-25). Ask them to finish describing it before building
-   anything; don't guess. See the session recap above.
-2. **Tokyo, Hong Kong, Shanghai promos** — WDW/Disneyland/Paris are done
+1. **Food's example restaurants and `character` rate** — both need the
+   owner's look; see "Three things to pick up next," items 1-2 at the top
+   of this file. Don't build anything further on food until that feedback
+   is in.
+2. **The crowd-chip/typical-day mismatch** — see "Three things to pick up
+   next," item 3. Needs the owner's input on the right fix before building
+   one.
+3. **Tokyo, Hong Kong, Shanghai promos** — WDW/Disneyland/Paris are done
    (2026-09-25); nothing official has turned up for the other three, only
    third-party reseller codes that don't fit the model. Their official offer
    pages exist but can't be fetched from this sandbox — paste-the-page, same
    pattern as the ticket tables.
-3. **The attraction list** — paste-and-structure, 40-80 headline rows, every
+4. **The attraction list** — paste-and-structure, 40-80 headline rows, every
    cross-resort clone FLAGGED for the owner rather than asserted.
-4. **Disney Cruise pricing** — explicitly on hold ("don't worry about cruises
+5. **Disney Cruise pricing** — explicitly on hold ("don't worry about cruises
    yet, we'll get there", 2026-09-25). Its monetization is an OPEN QUESTION,
    not settled (see the free/Plus section below) — no longer assumed to be
    "the Plus anchor". No API exists, so it will be a hand-maintained table
    and sailings are dated, which means it goes stale faster than anything
    else here. Add it to `REVIEWABLE` the day it ships.
-5. **Paris tickets**, still on the curve.
-6. **Spring break window** — real, but deliberately left out of the
+6. **Paris tickets**, still on the curve.
+7. **Spring break window** — real, but deliberately left out of the
    2026-09-25 holiday-windows work (shaped differently per resort, spans two
    calendar months). Natural follow-up to `holidayWindows.ts` using the same
    mechanism, once there's a clean way to handle the two-month span.
@@ -767,8 +754,9 @@ found were "starts at" rates during an active 40%-off promotion, which is
 neither a median nor a rack rate.
 
 **"Compare both" now says what it found.** >> REMOVED ENTIRELY 2026-09-25 —
-see "A second 2026-09-25 pass" above. The owner found it "isn't working
-right" in practice, so rather than debug it further it and `stayCompare`
+see "What actually shipped today" (item 9) at the top of this file. The
+owner found it "isn't working right" in practice, so rather than debug it
+further it and `stayCompare`
 were deleted outright. Kept below for the original reasoning. It always
 widened the hotel pool
 to on- and off-property and picked the cheaper — correctly and completely
@@ -1980,7 +1968,8 @@ than it is — this is the comparison people get wrong.
   and Paris (+$45) are unresearched guesses (roughly 20% of base ticket price), explicitly
   weaker confidence — refine before relying on either.
 - ~~Rental car pricing (`CAR_RENTAL.dailyRateUsd`) is one flat national-average guess.~~
-  **REMOVED ENTIRELY 2026-09-25** — see "A third 2026-09-25 pass" above. The owner's
+  **REMOVED ENTIRELY 2026-09-25** — see "What actually shipped today" (item 13) at
+  the top of this file. The owner's
   call: it priced identically across all six resorts in a comparison, so it never
   actually changed which resort won. Kept here so the per-city-rate research below
   isn't accidentally redone for a feature that no longer exists: Travelpayouts also
