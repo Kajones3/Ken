@@ -43,6 +43,7 @@ test("someone departing Los Angeles is set up to drive to Disneyland", () => {
   // flight to Disneyland to show, so the board must offer the drive rather
   // than a blank cell where the nearest resort's price belongs.
   assert.equal(defaultGettingThere("LAX"), "driveDlr");
+  assert.equal(defaultGettingThere("JAX"), "driveWdw", "owner's call: Jacksonville drives to Disney World");
 });
 
 test("someone departing Tampa is set up to drive to Walt Disney World", () => {

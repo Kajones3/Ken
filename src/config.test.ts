@@ -201,10 +201,20 @@ test("real, regularly-flown routes are left alone", () => {
   // fails rather than a user silently losing a price.
   assert.equal(isLocalRoute("MIA", "MCO"), false, "Miami-Orlando is a real route");
   assert.equal(isLocalRoute("LAS", "SNA"), false, "Vegas-Orange County is a real route");
-  assert.equal(isLocalRoute("JAX", "MCO"), false);
+  assert.equal(isLocalRoute("JAX", "SNA"), false, "Jacksonville still flies everywhere else");
   assert.equal(isLocalRoute("RSW", "MCO"), false);
   assert.equal(isLocalRoute("ATL", "MCO"), false);
   assert.equal(isLocalRoute("JFK", "CDG"), false);
+});
+
+test("Jacksonville drives to Disney World by the owner's call, not by a wider radius", () => {
+  // Owner, 2026-09-25: almost nobody flies JAX-MCO, so drive rather than
+  // price a fare from one or two odd itineraries. Tampa is WDW's other
+  // airport, so it goes the same way; RSW stays a flight — the radius itself
+  // did not move.
+  assert.equal(isLocalRoute("JAX", "MCO"), true);
+  assert.equal(isLocalRoute("JAX", "TPA"), true);
+  assert.equal(isLocalRoute("RSW", "MCO"), false);
 });
 
 test("an unknown airport is never guessed at", () => {

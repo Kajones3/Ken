@@ -892,7 +892,20 @@ export function isLocalRoute(originIata: string, destinationIata: string): boole
 
 /** Shared by both directions of the rule, so "too close to fly" and "close
  *  enough to drive" can never disagree about the same pair of points. */
+/**
+ * Pairs treated as drive-only even though they sit outside the radius — the
+ * OWNER'S call, one pair at a time, never a wider radius. JAX->Disney World
+ * (2026-09-25): ~144 miles, almost nobody flies it, and the owner would
+ * rather default Jacksonville to driving than quote a fare built from one or
+ * two odd itineraries. Being "local" means both halves of the rule apply:
+ * the paid nightly jobs never buy it, and the board opens on the drive preset.
+ */
+export const DRIVE_ONLY_PAIRS: Readonly<Record<string, readonly string[]>> = {
+  JAX: ["wdw"],
+};
+
 function isLocalToResort(originIata: string, resort: Resort): boolean {
+  if (DRIVE_ONLY_PAIRS[originIata]?.includes(resort.id)) return true;
   const origin = ORIGIN_BY_IATA.get(originIata);
   if (!origin) return false;
   return haversineMiles(origin.lat, origin.lon, resort.lat, resort.lon) < NO_FLY_RADIUS_MILES;
