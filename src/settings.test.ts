@@ -4,7 +4,7 @@ import { memoryDb } from "./db.js";
 import {
   SETTINGS, SETTING_BY_KEY, validateSetting, loadSettings, setSetting, applySettings, settingsMap,
 } from "./settings.js";
-import { RESORTS, CAR_RENTAL } from "./config.js";
+import { RESORTS } from "./config.js";
 
 /**
  * The rule these all circle: the database OVERRIDES the shipped defaults and
@@ -21,7 +21,6 @@ test("every resort's hotels, transfers and hopper are editable", () => {
     }
     assert.ok(SETTING_BY_KEY.has(`transport.${r.id}.off`), `${r.id} off-property transfers`);
   }
-  assert.equal(SETTING_BY_KEY.get("carRental.dailyRateUsd")!.default, CAR_RENTAL.dailyRateUsd);
   // Hong Kong and Shanghai have one park each and sell no hopper, so offering
   // the owner a box for it would be offering a number that does nothing.
   assert.ok(!SETTING_BY_KEY.has("hopper.hkdl.adult"));
@@ -60,7 +59,7 @@ test("an empty table prices exactly as the shipped defaults", async () => {
 
 test("an override wins, and clearing it goes back to the default", async () => {
   const db = await memoryDb();
-  const key = "carRental.dailyRateUsd";
+  const key = "transport.wdw.off";
   const def = SETTING_BY_KEY.get(key)!.default;
 
   await setSetting(db, key, 95, { note: "checked against a real Orlando booking", by: "owner" });
@@ -81,7 +80,7 @@ test("an override wins, and clearing it goes back to the default", async () => {
 
 test("a stored value outside its bounds falls back to the default rather than poisoning a price", async () => {
   const db = await memoryDb();
-  const key = "carRental.dailyRateUsd";
+  const key = "transport.wdw.off";
   // Written directly, bypassing setSetting — this is the shape of a row left
   // behind when the registry's bounds are tightened later.
   await db.query(`insert into owner_settings (key, value) values ($1, $2::jsonb)`, [key, JSON.stringify(99999)]);
@@ -92,7 +91,7 @@ test("a stored value outside its bounds falls back to the default rather than po
 
 test("a spreadsheet applies completely or not at all", async () => {
   const db = await memoryDb();
-  const good = "carRental.dailyRateUsd";
+  const good = "transport.wdw.off";
   const hotel = `hotel.${RESORTS[0]!.hotels[0]!.id}.base`;
 
   // One bad row among good ones must change NOTHING — a half-applied import
@@ -120,15 +119,15 @@ test("a spreadsheet applies completely or not at all", async () => {
 test("a duplicated key in a spreadsheet is refused rather than last-one-wins", async () => {
   const db = await memoryDb();
   const r = await applySettings(db, [
-    { key: "carRental.dailyRateUsd", value: 70 },
-    { key: "carRental.dailyRateUsd", value: 90 },
+    { key: "transport.wdw.off", value: 70 },
+    { key: "transport.wdw.off", value: 90 },
   ]);
   assert.equal(r.ok, false, "silently taking the last one hides a real editing mistake");
 });
 
 test("a blank cell in a spreadsheet means back to the default, not zero", async () => {
   const db = await memoryDb();
-  const key = "carRental.dailyRateUsd";
+  const key = "transport.wdw.off";
   await setSetting(db, key, 120);
   const r = await applySettings(db, [{ key, value: "" }]);
   assert.equal(r.ok, true);
@@ -178,18 +177,6 @@ test("an override for parking and transfers moves a real total", async () => {
   assert.ok(raised.price.total > shipped.price.total, "and it reaches the headline number");
 });
 
-test("an override for the rental car rate moves the rental line", async () => {
-  const wdw = RESORTS.find((r) => r.id === "wdw")!;
-  const p = { ...baseParams, rentalCar: true };
-  const shipped = priceTrip(bookWith({}), wdw, p, {}, START);
-  const cheap = priceTrip(bookWith({ "carRental.dailyRateUsd": 30 }), wdw, p, {}, START);
-  assert.ok(shipped.ok && cheap.ok);
-  if (!shipped.ok || !cheap.ok) return;
-  assert.equal(shipped.price.rentalCarPick?.dailyRateUsd, CAR_RENTAL.dailyRateUsd, "shipped value by default");
-  assert.equal(cheap.price.rentalCarPick?.dailyRateUsd, 30, "owner's value when set");
-  assert.ok(cheap.price.rentalCarUsd < shipped.price.rentalCarUsd);
-});
-
 test("an override for Park Hopper moves the ticket line", async () => {
   const wdw = RESORTS.find((r) => r.id === "wdw")!;
   const p = { ...baseParams, hopper: true };
@@ -212,10 +199,10 @@ test("no overrides at all prices identically to the shipped defaults", async () 
   // The safety property the whole design rests on: an empty owner_settings
   // table must be indistinguishable from this feature not existing.
   const wdw = RESORTS.find((r) => r.id === "wdw")!;
-  const withHook = priceTrip(bookWith({}), wdw, { ...baseParams, hopper: true, rentalCar: true }, {}, START);
+  const withHook = priceTrip(bookWith({}), wdw, { ...baseParams, hopper: true }, {}, START);
   const noHook = priceTrip(
     { ...bookWith({}), setting: undefined } as PriceBook,
-    wdw, { ...baseParams, hopper: true, rentalCar: true }, {}, START);
+    wdw, { ...baseParams, hopper: true }, {}, START);
   assert.ok(withHook.ok && noHook.ok);
   if (!withHook.ok || !noHook.ok) return;
   assert.equal(withHook.price.total, noHook.price.total);

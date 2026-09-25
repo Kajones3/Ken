@@ -780,7 +780,7 @@ existing mislabelling report more pulls that never happened.
 | Path | What it is |
 |---|---|
 | `db/schema.sql` | 25 tables. Safe to re-run. |
-| `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport, the IRS mileage rate, and the flat rental-car guess. |
+| `src/config.ts` | The six resorts: age bands, ticket rules (including Park Hopper differentials), food rates, hotels, transport, and the IRS mileage rate. |
 | `src/gettingThere.ts` | Pure resolver: turns one "Getting there" preset (fly / fly-with-miles / drive-to-WDW / drive-to-Disneyland / drive-domestic) into a per-resort transport mode, so one six-resort comparison can drive to some resorts and fly to others. |
 | `src/pricing.ts` | **The single source of truth for what a trip costs.** Pure, synchronous, no I/O. |
 | `src/book.ts` | Loads one slice of cache into memory so pricing can stay synchronous. |
@@ -1130,11 +1130,11 @@ has to be deliberate.
 - **A day-by-day trip planner is not built** (itinerary, checklist, dining tracker,
   budget, per-day notes, special-event floor pricing) — confirmed scope, deliberately
   deferred to its own follow-up.
-- **`CAR_RENTAL.dailyRateUsd` is one flat national-average guess, not a per-city rate.**
-  Rental car pricing (and the real IRS wear-and-tear rate) are wired into `pricing.ts`
-  and the "Getting there" trip-form presets, but the rental number itself is a single
-  hand-picked constant — a real per-city rate (ideally from a real provider, e.g. a
-  Travelpayouts/DiscoverCars adapter) is still future work.
+- **The rental-car add-on was removed entirely (2026-09-25, owner's call).** It priced
+  a flat national-average guess that applied uniformly across every resort in a
+  comparison, so it never actually changed which resort won — "kind of useless." Gone
+  from `pricing.ts`, `config.ts`, `settings.ts` and the trip form; `includeWearAndTear`
+  (own car vs. gas-only) is untouched, since that's a real, resort-specific choice.
 - **"Getting there" is three fixed drive presets, not a fully general per-resort
   picker.** You can drive to WDW only, Disneyland only, or both domestic resorts
   (flying everywhere else in the same comparison) — there's no way to pick a mode for

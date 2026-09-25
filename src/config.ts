@@ -6,7 +6,18 @@ export type OnTier = "value" | "moderate" | "deluxe";
 export type OffTier = "budget" | "mid" | "upscale";
 export type Tier = OnTier | OffTier;
 export type Band = "infant" | "child" | "junior" | "adult";
-export type FoodStyle = "grocery" | "qs" | "mix" | "ts" | "plan";
+/**
+ * Seven real, discrete dining styles, cheapest to priciest, plus "plan" (a
+ * Disney dining plan, WDW/Paris only — a purchased product, not a style to
+ * estimate). Replaced a coarser four-style set 2026-09-25 (owner's ask):
+ * "someQs" and "someCharacter" are BLENDS of their neighbors (see
+ * `foodRate()` in pricing.ts) rather than their own researched numbers —
+ * "some quick service" sits between bringing your own food and eating
+ * quick-service every meal, and "some character meals" sits between an
+ * ordinary table-service trip and one that's entirely character dining.
+ */
+export type FoodStyle =
+  | "grocery" | "someQs" | "qs" | "mix" | "ts" | "someCharacter" | "character" | "plan";
 export type Stay = "on" | "off" | "none";
 export type TierIndex = 0 | 1 | 2;
 
@@ -135,7 +146,7 @@ export interface Resort {
      *  Shanghai, which each have one park and no hopper product to sell. */
     hopperAdultUsd?: number; hopperChildUsd?: number;
   };
-  food: { grocery: number; qs: number; mix: number; ts: number };
+  food: { grocery: number; qs: number; mix: number; ts: number; character: number };
   /**
    * A few named restaurants per dining style, so "table service" is not just
    * a number — the owner's ask (2026-09-25): "if I want to do table service,
@@ -205,7 +216,11 @@ export const RESORTS: Resort[] = [
       hopperByDaysUsd: [70, 80, 80, 85, 90, 95, 95],
       hopperAdultUsd: 85, hopperChildUsd: 85,
     },
-    food: { grocery: 38, qs: 62, mix: 96, ts: 158 },
+    // character: Claude's own estimate, not researched — 1.5x the table-service
+    // rate, roughly matching how much more a real character meal (Cinderella's
+    // Royal Table, 'Ohana breakfast) runs over an ordinary table-service one.
+    // Same standing as the food rates above it: a guess from budget guides.
+    food: { grocery: 38, qs: 62, mix: 96, ts: 158, character: 237 },
     foodExamples: {
       qs: [{ name: "Satu'li Canteen", tier: "$$" }, { name: "Docking Bay 7", tier: "$$" }],
       ts: [{ name: "'Ohana", tier: "$$$" }, { name: "Topolino's Terrace", tier: "$$$$" }, { name: "Sanaa", tier: "$$$" }],
@@ -288,7 +303,7 @@ export const RESORTS: Resort[] = [
       hopperByDaysUsd: [70, 100, 110, 120, 135],
       hopperAdultUsd: 110, hopperChildUsd: 110,
     },
-    food: { grocery: 40, qs: 66, mix: 100, ts: 162 },
+    food: { grocery: 40, qs: 66, mix: 100, ts: 162, character: 243 },
     foodExamples: {
       qs: [{ name: "Galactic Grill", tier: "$" }, { name: "Alien Pizza Planet", tier: "$" }],
       ts: [{ name: "Blue Bayou", tier: "$$$" }, { name: "Carthay Circle", tier: "$$$$" }],
@@ -340,15 +355,21 @@ export const RESORTS: Resort[] = [
     // package rates are not published, so inventing one would be less honest
     // than a clearly-labelled room-only basis. Labelled here instead.
     dataConfidence: {
-      level: "Priced room-only",
-      note: "Park tickets on their own are sold online normally — that part is fine. What Disney's own site will not sell you online is a ROOM WITHOUT TICKETS: book a Disney hotel there and it comes as a hotel + ticket package, with admission included for every day of your stay. A room-only stay does exist, but only by phone or through a third party. We price the room and the tickets as two separate lines, so a real Disney quote may be structured quite differently from the breakdown below. Compare against an actual package quote before you budget on it.",
+      // RENAMED 2026-09-25 (owner's report): "Priced room-only" read, at a
+      // glance next to the resort name, as "we don't price tickets here" —
+      // backwards from what it means. Everything below is still priced and
+      // included in the total (hotel AND tickets); the gap is only that
+      // Disney's own site sells them bundled, ours as two separate lines.
+      // Name that directly so the chip can't be misread as an omission.
+      level: "Hotel+tickets separate",
+      note: "Park tickets on their own are sold online normally — that part is fine. What Disney's own site will not sell you online is a ROOM WITHOUT TICKETS: book a Disney hotel there and it comes as a hotel + ticket package, with admission included for every day of your stay. A room-only stay does exist, but only by phone or through a third party. We price the room and the tickets as two separate lines — both are in your total below — so a real Disney quote may be structured quite differently from this breakdown. Compare against an actual package quote before you budget on it.",
     },
     bands: { freeUnder: 3, child: [3, 11], adult: 12 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
     // actual 2026 price check. Refine before relying on this one.
     ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
-    food: { grocery: 30, qs: 49, mix: 80, ts: 128 },
+    food: { grocery: 30, qs: 49, mix: 80, ts: 128, character: 192 },
     foodExamples: {
       qs: [{ name: "Cowboy Cookout Barbecue", tier: "$" }, { name: "Colonel Hathi's Pizza Outpost", tier: "$" }],
       ts: [{ name: "Auberge de Cendrillon", tier: "$$$$" }, { name: "Walt's — an American Restaurant", tier: "$$$" }],
@@ -416,7 +437,7 @@ export const RESORTS: Resort[] = [
        no change: the 1-Day Passport runs JPY 8,900-10,900, and the junior and
        child ratios come out at 0.83 and 0.55 against 0.83 and 0.55 here. */
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
-    food: { grocery: 22, qs: 35, mix: 56, ts: 94 },
+    food: { grocery: 22, qs: 35, mix: 56, ts: 94, character: 141 },
     foodExamples: {
       qs: [{ name: "Pan Galactic Pizza Port", tier: "$" }, { name: "Sunshine Terrace", tier: "$" }],
       ts: [{ name: "Queen of Hearts Banquet Hall", tier: "$$$" }, { name: "Magellan's", tier: "$$$$" }],
@@ -495,7 +516,7 @@ export const RESORTS: Resort[] = [
        observed rather than assumed: on a CNY 719 date, Child (3-11) is CNY
        539, which is 0.75. */
     ticket: { base: 86, child: 0.75, slope: 0.04, floor: 0.7 },
-    food: { grocery: 18, qs: 31, mix: 49, ts: 82 },
+    food: { grocery: 18, qs: 31, mix: 49, ts: 82, character: 123 },
     foodExamples: {
       qs: [{ name: "Wandering Moon Teahouse", tier: "$" }, { name: "L'Chef Pastry", tier: "$" }],
       ts: [{ name: "Royal Banquet Hall", tier: "$$$" }, { name: "Barbossa's Bounty", tier: "$$" }],
@@ -560,7 +581,7 @@ export const RESORTS: Resort[] = [
        The CHILD RATIO IS STILL A GUESS — the calendar shows general admission
        only, so 0.72 is unchanged and unverified. */
     ticket: { base: 92, child: 0.72, slope: 0.045, floor: 0.68 },
-    food: { grocery: 20, qs: 34, mix: 53, ts: 87 },
+    food: { grocery: 20, qs: 34, mix: 53, ts: 87, character: 131 },
     foodExamples: {
       qs: [{ name: "Tomorrowland Terrace", tier: "$" }, { name: "Market Place Kitchen", tier: "$" }],
       ts: [{ name: "Explorer's Club Restaurant", tier: "$$$" }, { name: "Plaza Inn", tier: "$$$" }],
@@ -1064,20 +1085,6 @@ export function mileageRateStatus(todayISO: string, horizonDays = 365): {
   }
   return { newestYearOnFile, uncoveredYears, pricingBroken };
 }
-
-/**
- * A flat national-average daily economy-car rental rate — real rates vary a
- * lot by city and season (2026 research: roughly $55-95/day generally,
- * $49-78/day for economy specifically; Miami runs cheap, Chicago runs
- * pricey). One guess, not a per-city table — a rental's daily rate doesn't
- * move date-to-date the way a flight or gas price does, so this doesn't need
- * its own refresh job or provider module, just this one hand-picked number,
- * same footing as DRIVING's other guesses. Refine (ideally into a real
- * per-city rate, ideally from a real provider) before relying on it.
- */
-export const CAR_RENTAL = {
-  dailyRateUsd: 65,
-} as const;
 
 /**
  * RSS feeds checked for a private, owner-only digest email — never surfaced

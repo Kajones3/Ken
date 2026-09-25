@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
-import { bandOf, cheapestIn, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
+import { bandOf, cheapestIn, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, foodRate, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
-import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS } from "./config.js";
+import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS, type FoodStyle } from "./config.js";
 
 const START = "2027-03-01";
 
@@ -140,6 +140,44 @@ test("a food override is a whole-party daily total, so party size stops moving i
     "a party total already contains whatever the party eats");
   // Part-days still apply: arrival and departure are not whole eating days.
   assert.equal(Math.round(two.price.food), Math.round(250 * (base.nights + 0.4)));
+});
+
+test("foodRate: the seven dining styles run cheapest to priciest in order", () => {
+  // 2026-09-25 (owner's ask): seven real, discrete styles instead of four.
+  // "someQs" and "someCharacter" are blends and must sit strictly between
+  // their neighbors, not merely somewhere in the overall range.
+  const wdw = resortById("wdw");
+  const order: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
+  const rates = order.map((s) => foodRate(wdw, s));
+  for (let i = 1; i < rates.length; i++) {
+    assert.ok(rates[i]! > rates[i - 1]!,
+      `${order[i]} (${rates[i]}) should cost more than ${order[i - 1]} (${rates[i - 1]})`);
+  }
+});
+
+test("foodRate: someQs and someCharacter are the midpoint of their neighbors", () => {
+  const wdw = resortById("wdw");
+  assert.equal(foodRate(wdw, "someQs"), (wdw.food.grocery + wdw.food.qs) / 2);
+  assert.equal(foodRate(wdw, "someCharacter"), (wdw.food.ts + wdw.food.character) / 2);
+});
+
+test("foodRate: 'plan' falls back to counter service, same as the model always used", () => {
+  const wdw = resortById("wdw");
+  assert.equal(foodRate(wdw, "plan"), foodRate(wdw, "qs"));
+});
+
+test("a trip actually prices differently across all seven dining styles", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const styles: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
+  const totals = styles.map((food) => {
+    const r = priceTrip(book, wdw, { ...base, food }, {}, START);
+    assert.ok(r.ok, `${food} should price`);
+    return r.ok ? r.price.food : -1;
+  });
+  for (let i = 1; i < totals.length; i++) {
+    assert.ok(totals[i]! > totals[i - 1]!, `${styles[i]} should cost more than ${styles[i - 1]}`);
+  }
 });
 
 test("a food override loses to a dining plan, which is a real purchased product", () => {
@@ -806,16 +844,14 @@ test("a trip too far past the newest rate fails cleanly instead of guessing", ()
 test("no wear and tear charged means a missing rate cannot block the trip", () => {
   const tooFar = newestMileageRateYear() + MILEAGE_RATE_CARRY_FORWARD_YEARS + 1;
   const book = fullBook("wdw", "MCO", { startISO: `${tooFar}-03-01` });
-  // A rental, and an explicit opt-out: neither charges wear and tear, so
-  // neither has any business failing over a rate it never uses.
-  for (const extra of [{ rentalCar: true }, { includeWearAndTear: false as const }]) {
-    const r = priceTrip(
-      book, resortById("wdw"), { ...base, transportMode: "drive", ...extra }, {}, `${tooFar}-03-01`,
-    );
-    assert.ok(r.ok, `should still price with ${JSON.stringify(extra)}`);
-    assert.equal(r.price.drivingPick!.wearAndTearUsd, 0);
-    assert.equal(r.price.drivingPick!.mileageRate, null, "no rate was used, so none is reported");
-  }
+  // An explicit opt-out charges no wear and tear, so it has no business
+  // failing over a rate it never uses.
+  const r = priceTrip(
+    book, resortById("wdw"), { ...base, transportMode: "drive", includeWearAndTear: false }, {}, `${tooFar}-03-01`,
+  );
+  assert.ok(r.ok, "should still price with wear-and-tear opted out");
+  assert.equal(r.price.drivingPick!.wearAndTearUsd, 0);
+  assert.equal(r.price.drivingPick!.mileageRate, null, "no rate was used, so none is reported");
 });
 
 test("includeWearAndTear: false drops wear and tear, prices gas only", () => {
@@ -838,49 +874,6 @@ test("includeWearAndTear: unset behaves the same as true (default is to include 
   );
   assert.ok(unset.ok && explicitTrue.ok);
   assert.equal(unset.price.drivingPick!.wearAndTearUsd, explicitTrue.price.drivingPick!.wearAndTearUsd);
-});
-
-test("includeWearAndTear: false has no effect on a rental (already zero either way)", () => {
-  const book = fullBook("wdw", "MCO");
-  const r = priceTrip(
-    book, resortById("wdw"),
-    { ...base, transportMode: "drive", rentalCar: true, includeWearAndTear: false },
-    {}, START,
-  );
-  assert.ok(r.ok);
-  assert.equal(r.price.drivingPick!.wearAndTearUsd, 0);
-});
-
-test("rental car: renting instead of driving your own car zeroes wear and tear", () => {
-  const book = fullBook("wdw", "MCO");
-  const owned = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
-  const rented = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive", rentalCar: true }, {}, START);
-  assert.ok(owned.ok && rented.ok);
-  assert.ok(owned.price.drivingPick!.wearAndTearUsd > 0, "owning a car wears it out");
-  assert.equal(rented.price.drivingPick!.wearAndTearUsd, 0, "a rental has no wear-and-tear cost to the user");
-  assert.ok(rented.price.rentalCarUsd > 0);
-});
-
-test("rental car: same formula whether flying or driving, always its own line", () => {
-  const book = fullBook("wdw", "MCO", { fare: 300 });
-  const flyingRented = priceTrip(book, resortById("wdw"), { ...base, rentalCar: true }, {}, START);
-  const drivingRented = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive", rentalCar: true }, {}, START);
-  assert.ok(flyingRented.ok && drivingRented.ok);
-  assert.equal(flyingRented.price.rentalCarUsd, drivingRented.price.rentalCarUsd);
-  assert.equal(flyingRented.price.rentalCarUsd, 65 * (base.nights + 1));
-  assert.equal(flyingRented.price.rentalCarPick?.dailyRateUsd, 65);
-  // Flying + rental: the rental is on top of the flight total.
-  const flyingNoRental = priceTrip(book, resortById("wdw"), { ...base }, {}, START);
-  assert.ok(flyingNoRental.ok);
-  assert.ok(Math.abs(flyingRented.price.total - flyingNoRental.price.total - flyingRented.price.rentalCarUsd) < 0.01);
-});
-
-test("rental car: not renting means no rental line at all", () => {
-  const book = fullBook("wdw", "MCO");
-  const r = priceTrip(book, resortById("wdw"), { ...base, transportMode: "drive" }, {}, START);
-  assert.ok(r.ok);
-  assert.equal(r.price.rentalCarUsd, 0);
-  assert.equal(r.price.rentalCarPick, null);
 });
 
 test("transport mode: driving from an unrecognized starting city fails, doesn't guess", () => {

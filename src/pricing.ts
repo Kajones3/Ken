@@ -10,7 +10,7 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, CAR_RENTAL, bucketFor, irsMileageRate,
+  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
   type MileageRateLookup,
 } from "./config.js";
@@ -68,13 +68,6 @@ export interface TripParams {
    *  ignored (never throws) at a resort with no hopperAdultUsd configured —
    *  Hong Kong and Shanghai each have one park and no hopper product. */
   hopper?: boolean;
-  /** Rent a car — for whichever mode this params object represents. "drive":
-   *  rent instead of putting miles on your own car (replaces wearAndTearUsd
-   *  with rentalCarUsd, gas still applies). "fly"/"miles": rent something to
-   *  get around once there (rentalCarUsd is a new line, on top of flights).
-   *  A mixed board can send this true for the driving leg, the flying legs,
-   *  both, or neither — see server.ts's gettingThereParams(). */
-  rentalCar?: boolean;
   /** "drive" only. Defaults to true (unset behaves the same as true) so the
    *  total keeps including a real cost by default, same reasoning as always
    *  including off-property parking/transfers — an option shouldn't look
@@ -83,8 +76,7 @@ export interface TripParams {
    *  per-mile number, not just gas, which can dwarf the gas line on a long
    *  drive and read as misleading to someone who doesn't think of their own
    *  car's depreciation as a cost of THIS trip — set false to drop it and
-   *  price gas only. Moot (and hidden in the UI) whenever rentalCar is true,
-   *  since a rental already has no wear-and-tear cost to the user. */
+   *  price gas only. */
   includeWearAndTear?: boolean;
   /** Annual passes the traveller already holds, one entry per resort. Only
    *  the entry matching THIS resort does anything — a Magic Key does not get
@@ -300,8 +292,7 @@ export interface TripPrice {
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
   /** Gas + optional overnight stop + wear-and-tear, replacing flights
-   *  entirely when transportMode is "drive". $0 otherwise. Never includes
-   *  rentalCarUsd — that's always its own separate line, see below. */
+   *  entirely when transportMode is "drive". $0 otherwise. */
   driving: number;
   drivingPick: {
     from: string; roundTripMiles: number; gasPricePerGallonUsd: number;
@@ -318,12 +309,6 @@ export interface TripPrice {
    *  show it as its own line rather than folding it silently into the base
    *  ticket number. */
   hopperUsd: number;
-  /** Renting a car — set whenever params.rentalCar is true, regardless of
-   *  drive or fly mode. Always its own line in `total`, never folded into
-   *  `driving` (drive mode zeroes wearAndTearUsd instead, since a rental
-   *  isn't wear on a car you own). */
-  rentalCarUsd: number;
-  rentalCarPick: { dailyRateUsd: number; nights: number } | null;
   /** Annual passes and DVC point rental — null when the traveller said
    *  nothing about either. See src/memberships.ts for why a pass is reported
    *  as a counterfactual rather than charged to this one trip. */
@@ -497,10 +482,6 @@ function transportPerDay(book: PriceBook, resort: Resort, onProperty: boolean): 
 }
 
 /** The flat national rental-car rate, owner override first. */
-function carRentalRate(book: PriceBook): number {
-  return book.setting?.("carRental.dailyRateUsd") ?? CAR_RENTAL.dailyRateUsd;
-}
-
 // ---------------------------------------------------------------- food
 
 export function planFor(resort: Resort, p: TripParams, stay: Stay) {
@@ -508,6 +489,33 @@ export function planFor(resort: Resort, p: TripParams, stay: Stay) {
   if (!resort.plans.length) return null;
   if (stay === "off" || stay === "none") return null;   // every Disney dining plan needs an on-property stay
   return resort.plans[Math.min(1, resort.plans.length - 1)]!;
+}
+
+/**
+ * A per-person-per-day rate for any of the seven real dining styles.
+ *
+ * "someQs" and "someCharacter" are not their own researched numbers —
+ * they're the midpoint between the two styles they sit between (see
+ * FoodStyle's doc comment in config.ts). Averaging is the honest amount of
+ * precision to claim for "some of each": there is no real data on what
+ * fraction of meals a traveller who picks this actually eats at each style,
+ * so a straight midpoint is a starting point, not a measurement.
+ *
+ * "plan" falls back to "qs" — reached only when a dining plan was requested
+ * but priceTrip couldn't apply one (see planFor), same fallback the model
+ * has always used.
+ */
+export function foodRate(resort: Resort, style: FoodStyle): number {
+  const f = resort.food;
+  switch (style) {
+    case "grocery": return f.grocery;
+    case "someQs": return (f.grocery + f.qs) / 2;
+    case "qs": case "plan": return f.qs;
+    case "mix": return f.mix;
+    case "ts": return f.ts;
+    case "someCharacter": return (f.ts + f.character) / 2;
+    case "character": return f.character;
+  }
 }
 
 // ---------------------------------------------------------------- the model
@@ -556,11 +564,9 @@ export function priceTrip(
     const gasCostUsd = (roundTripMiles / DRIVING.mpg) * gasPricePerGallonUsd;
     const stop = params.overnightStop;
     const overnightUsd = stop ? Math.max(0, stop.nights) * Math.max(0, stop.costPerNightUsd) : 0;
-    // A rental has no wear-and-tear cost to the user — that's priced into
-    // the rental fee already, and rentalCarUsd (below) covers it separately.
     // includeWearAndTear === false is the user's own opt-out (see TripParams)
     // — unset/true keeps the default of including it.
-    const chargingWearAndTear = !(params.rentalCar || params.includeWearAndTear === false);
+    const chargingWearAndTear = params.includeWearAndTear !== false;
     let wearAndTearUsd = 0;
     let mileageRate: MileageRateUsed = null;
     if (chargingWearAndTear) {
@@ -788,8 +794,7 @@ export function priceTrip(
     // A party total, so no per-age scaling — see ResortOverride.foodPerDayUsd.
     food = Math.max(0, ov.foodPerDayUsd) * (params.nights + FOOD_DAY_ALLOWANCE);
   } else {
-    const style = params.food === "plan" ? "qs" : params.food;
-    const rate = resort.food[style];
+    const rate = foodRate(resort, params.food);
     const days = params.nights + FOOD_DAY_ALLOWANCE;
     for (const age of ages) food += rate * foodMultiplier(bandOf(resort, age)) * days;
   }
@@ -885,15 +890,6 @@ export function priceTrip(
   }
   const hotel = rooms + transport;
 
-  // --- rental car — always its own line, whether renting for the drive -----
-  // --- (instead of your own car) or renting once you've flown in. ----------
-  const rentalCarUsd = params.rentalCar
-    ? Math.round(carRentalRate(book) * (params.nights + 1) * 100) / 100
-    : 0;
-  const rentalCarPick: TripPrice["rentalCarPick"] = params.rentalCar
-    ? { dailyRateUsd: carRentalRate(book), nights: params.nights }
-    : null;
-
   /* --- DVC points rented out --------------------------------------------
    * Money the member receives for points they are not using, set against
    * what this trip costs them. Deliberately a credit on the TOTAL and not a
@@ -912,7 +908,7 @@ export function priceTrip(
 
   const membership: TripPrice["membership"] = passResult || dvc ? { pass: passResult, dvc } : null;
 
-  const total = Math.max(0, flights + tickets + hotel + food + driving + rentalCarUsd
+  const total = Math.max(0, flights + tickets + hotel + food + driving
     - flatOffTotal - (dvc?.creditUsd ?? 0));
   if (!Number.isFinite(total)) return { ok: false, reason: "non-finite total" };
 
@@ -924,7 +920,7 @@ export function priceTrip(
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd,
-      rentalCarUsd, rentalCarPick, membership,
+      membership,
     },
   };
 }

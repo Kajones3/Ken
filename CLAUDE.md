@@ -14,13 +14,16 @@ say when something is a guess.
 
 ## START HERE — state as of 2026-09-25
 
-**Live at https://pricingthemagic.com.** `master` is at `deebf34` (PR #68,
-merged). **Ask whether Render has been redeployed before trusting what the
-live site shows** — the owner clicks that by hand and it has lagged `master`
-for days at a time.
+**Live at https://pricingthemagic.com.** `master` is at `c53c52b` (PR #70,
+merged), with a third round of fixes on top not yet in its own PR — see "A
+third 2026-09-25 pass" below. **Ask whether Render has been redeployed before
+trusting what the live site shows** — the owner clicks that by hand and it
+has lagged `master` for days at a time.
 
-Run `npm test` and `npm run typecheck` before you believe anything. 566
-tests, typecheck clean, `npm run smoke` unchanged.
+Run `npm test` and `npm run typecheck` before you believe anything. 565
+tests, typecheck clean, `npm run smoke` unchanged (rental-car removal cost 5
+tests that only tested a feature that's now gone; the food and off-property
+work each added new ones).
 
 ### What happened in the 2026-09-25 session — read this before anything else
 
@@ -153,6 +156,98 @@ one session; the reasoning for each is worth not re-deriving:
    among cheaper unclassified properties): it now lands in "upscale," where
    its price actually puts it.
 
+### A third 2026-09-25 pass — the owner's screenshot said "still wrong"
+
+PR #70 shipped and the owner came back with the SAME Budget-priced-above-
+Mid-range screenshot, this time on Tokyo, plus four more reports. The owner's
+own framing on the restaurant list mattered too: "It sounds like you went
+too literal. I didn't mean you had to pull those exact restaurants" — a
+reminder that a concrete example in a request is not always a literal
+spec, and worth checking before building a whole per-resort research pass
+around it.
+
+1. **The off-property tier bug got a SECOND, independent fix, because the
+   first one (price-ranking at ingestion, PR #70) can only fix data bought
+   from now on — it does nothing for rows already sitting in the cache with
+   the old star-class tag, and the hotel-rotation cycle takes ~10 days to
+   touch every resort/month.** Rather than wait that out, the "Every
+   category, same N nights" comparison itself now sorts off-property by
+   PRICE at display time and labels positionally ("Cheapest off property" /
+   "Mid-range off property" / "Most expensive off property") instead of by
+   the stored budget/mid/upscale tag — so the card literally cannot show a
+   cheaper tier priced above a pricier one, regardless of what's cached.
+   On-property is untouched: Value/Moderate/Deluxe are Disney's own real
+   categories, so those three rows stay in that fixed order, per the
+   owner's own split ("Off property hotels should be organized by price.
+   On property should be organized by category"). With only 1-2 real
+   off-property price points available (not 3), the labels scale down
+   ("Cheapest"/"Most expensive", or just "Off property") rather than
+   claiming a fake "Mid-range" for whichever happens to render second.
+2. **The crowd chip was defined but only ever wired into the "no cached
+   price" fallback row template, never the normal priced row** — a
+   copy-paste-shaped bug, not a logic bug. `crowdFlag()`/`crowdFor()` were
+   already correct (see the second pass above); the chip simply never
+   rendered on a real board row before Details was opened. One line
+   (`${crowdChip(item)}` alongside the existing `${attractionChip(item)}`)
+   fixes it. Verified live: an exact Nov 24 (Thanksgiving arrival) search
+   now shows "Busy" on WDW's board row and nothing on Paris's, the owner's
+   own example, working before Details is pressed. **Worth flagging
+   honestly, not fixed here**: the "typical day" price-picker (see the
+   2026-09-22 decision) sometimes lands on a cheaper, unflagged day even
+   within a flagged window — e.g. a 6-night Thanksgiving-week search can
+   land on Nov 27-30 (deliberately the CHEAPER post-holiday days) rather
+   than the Nov 24-26 peak, because "typical" trims toward the average
+   price and the peak days are exactly what gets trimmed. The chip is
+   reporting accurately on whichever day was actually priced; it just
+   won't always be the day someone pictures when they think "Thanksgiving."
+3. **Removed the rental-car add-on entirely** ("Why do we have the rental
+   car option? We never include it in the final price. It's kind of
+   useless."). It WAS wired into the total (verified in pricing.ts before
+   touching anything — evidence before fixes), but it priced one flat
+   national-average rate applied identically across all six resorts in a
+   comparison, so it never changed which resort won; as a comparison tool
+   it added a control with no signal. Gone from `pricing.ts` (`rentalCar`
+   param, `rentalCarUsd`/`rentalCarPick`, `carRentalRate()`), `config.ts`
+   (`CAR_RENTAL`), `settings.ts` (the owner-editable rate), and both trip-
+   form controls ("Rent a car at your destination?", "Rent a car for the
+   drive?"). `includeWearAndTear` ("Include wear & tear on your car? Yes/No")
+   is untouched — that's a real, resort-specific choice about whether to
+   price gas only or the full IRS rate, unrelated to renting.
+4. **Reworded Disneyland Paris's `dataConfidence` badge**, "Priced
+   room-only" → "Hotel+tickets separate". The owner: "Get rid of the
+   'Priced Room Only' ... it is misleading because we are actually pricing
+   hotel and tickets." The three-word chip, read alone next to a resort
+   name on the board, said the opposite of what it means — the gap is that
+   Disney's own site bundles hotel+ticket while we price them as two lines,
+   not that either is missing from the total. The full `note` (already
+   accurate) is unchanged; only the short label that has to stand alone
+   in a chip was misleading.
+5. **Food: seven real dining styles, in the owner's own words** ("We'll
+   bring our own food, Some Quick Service, All Quick Service, Some Quick
+   Service Some Table Service, All table service, Some Character meals, All
+   Character Meals"). Four of the seven already existed (grocery/qs/mix/ts);
+   new: `someQs`, `someCharacter`, and `character` — a full character-dining
+   rate, which the old four-style model didn't have at all (its "ts" label
+   literally said "Table service & character meals" as one blended
+   approximation). `foodRate()` in pricing.ts is the one place a style
+   becomes a dollar rate: `someQs`/`someCharacter` are the MIDPOINT of their
+   neighbors rather than their own researched numbers — "some of each" has
+   no real data behind what fraction of meals that actually means, so a
+   midpoint is the honest amount of precision to claim, not a measurement.
+   `character` is Claude's own estimate (1.5x that resort's `ts` rate, one
+   flat multiplier at all six resorts, same standing as the unresearched
+   Park Hopper differentials) — flagged as its own standing task
+   (`character-dining-rate` in `ownerTasks.ts`) since a bad number here also
+   skews `someCharacter`. A test pins that all seven styles price in strict
+   ascending order and that a real trip's total actually differs across all
+   seven, not just the original four.
+6. **The restaurant-example feature (PR #70) drew direct feedback**: real,
+   specific restaurant names (Sanaa, 'Ohana, Explorer's Club Restaurant...)
+   were more literal than the owner meant by their own example. Left as-is
+   pending the owner's look at the live site — flagged here so a future
+   session doesn't re-guess before hearing back on what "too literal" should
+   change to (fewer names? generic placeholders? something else entirely).
+
 ### What is REAL data and what is still a guess
 
 This is the question that matters most, because the product's whole claim is
@@ -170,7 +265,7 @@ that every number is either real or labelled a guess.
 | **Hotels — Hong Kong, Shanghai** | **REAL** (owner's screenshots, 2026-09-23). Hong Kong Disneyland Hotel's Deluxe rate is DERIVED from a ratio, not observed. |
 | **Hotels — Tokyo** | Mostly guesses. Only Disney Ambassador Hotel is real. |
 | **Hotels — Paris** | Claude draft. |
-| **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. |
+| **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. Seven styles as of 2026-09-25 (see the third-pass recap above); `character` (all-character-dining) is Claude's own unresearched multiplier on `ts`, weaker confidence than the original four. |
 | **Promos** | **REAL for WDW, Disneyland, Disneyland Paris** (`seedPromos.ts`, found by web search of each resort's own official offers page, 2026-09-25). **Still illustrative-gap for Tokyo, Hong Kong, Shanghai** — nothing official found, see "Next work". Applying one is free for anyone signed in, not Plus. |
 | **Attractions** | Starter set, ~10 rows. |
 | `parkList` lands, `QUEUE_TIMES_PARKS` | Claude drafts. |
@@ -340,7 +435,7 @@ new decision, not a reason to silently re-add gates this entry removed.
 |---|---|
 | Backend (`src/`, `db/`) | **Working.** 537 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| "Getting there" — mixed drive/fly, rental car, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note). A rental car is a free, optional add-on either for the drive (replaces wear-and-tear — you don't wear out a car you don't own) or at the destination after flying (`CAR_RENTAL.dailyRateUsd`, one flat national guess, always its own cost line). The gas-price alert (told if the cached price has moved since a driving trip was saved) is now free too, same as every other alert — see the 2026-09-24 free/Plus decision at the top of this file. |
+| "Getting there" — mixed drive/fly, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note), with an "Include wear & tear?" opt-out for gas-only pricing. **The rental-car add-on was removed entirely 2026-09-25** (owner's call — it priced one flat rate identically across all six resorts, so it never changed which resort won). The gas-price alert (told if the cached price has moved since a driving trip was saved) is free too, same as every other alert — see the 2026-09-24 free/Plus decision at the top of this file. |
 | Park Hopper | **Wired, free, and now real where it exists.** An add-on that SCALES WITH TICKET LENGTH at WDW ($70-95) and Disneyland ($70-135) from published figures; a flat guess still at Paris. **Tokyo sells no hopper at all** (owner-confirmed) and neither do Hong Kong or Shanghai, which each have one park — asking for one there costs $0. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
@@ -1884,14 +1979,13 @@ than it is — this is the comparison people get wrong.
   WDW (+$90) and Disneyland (+$75) came from an actual 2026 web-search check; Tokyo (+$38)
   and Paris (+$45) are unresearched guesses (roughly 20% of base ticket price), explicitly
   weaker confidence — refine before relying on either.
-- **Rental car pricing** (`CAR_RENTAL.dailyRateUsd` in `config.ts`, currently $65) is one
-  flat national-average guess, not a per-city rate — real rates vary a lot by city
-  (2026 research: ~$55–95/day generally, ~$49–78/day economy specifically; Miami runs
-  cheap, Chicago runs pricey). A real per-city rate, ideally from a real provider
-  (Travelpayouts, the existing flight provider, also brokers car rentals via partners
-  including DiscoverCars — same account, no new vendor relationship needed), is future
-  work; this session shipped the flat guess so the feature works end to end now rather
-  than staying deferred.
+- ~~Rental car pricing (`CAR_RENTAL.dailyRateUsd`) is one flat national-average guess.~~
+  **REMOVED ENTIRELY 2026-09-25** — see "A third 2026-09-25 pass" above. The owner's
+  call: it priced identically across all six resorts in a comparison, so it never
+  actually changed which resort won. Kept here so the per-city-rate research below
+  isn't accidentally redone for a feature that no longer exists: Travelpayouts also
+  brokers car rentals via partners including DiscoverCars, same account, if this is
+  ever revisited as its own thing rather than a comparison-board line item.
 
 ---
 
@@ -2647,12 +2741,8 @@ the warning that there is nowhere to send warnings.
   budget breakdown, per-day notes, and special hard-ticket-event floor pricing (like
   Mickey's Not So Scary) are confirmed, wanted scope, deliberately deferred to its own
   follow-up plan once this foundation has been used.
-- **`CAR_RENTAL.dailyRateUsd` is one flat national-average guess**, not a per-city rate —
-  same limitation as the old airport-transport guesses had, see "NOT verified" above.
-  And **"Getting there" is three fixed presets, not a fully general per-resort picker**:
+- **"Getting there" is three fixed presets, not a fully general per-resort picker**:
   you can drive to WDW-only, Disneyland-only, or both domestic resorts (flying
   everywhere else in that same board), but there's no way to independently choose a
-  mode per resort beyond that grouping, and "Rent a car for the drive" applies to
-  whichever resort(s) are driving as a group, not one at a time. Good enough for the
-  owner's actual asks so far; would need a real per-resort control (bigger UI change)
-  to go further.
+  mode per resort beyond that grouping. Good enough for the owner's actual asks so
+  far; would need a real per-resort control (bigger UI change) to go further.

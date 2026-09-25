@@ -83,7 +83,6 @@ function gettingThereParams(q: URLSearchParams): {
   } else {
     flyBase.transportMode = "fly";
   }
-  if (q.get("flyRentalCar") === "1") flyBase.rentalCar = true;
 
   const driveBase: Partial<TripParams> = { transportMode: "drive" };
   const label = (q.get("overnightLabel") ?? "").slice(0, 80);
@@ -99,10 +98,7 @@ function gettingThereParams(q: URLSearchParams): {
   if (Number.isFinite(lat) && Number.isFinite(lon) && (lat !== 0 || lon !== 0)) {
     driveBase.originPoint = { label: (q.get("originLabel") ?? "").slice(0, 120), lat, lon };
   }
-  if (q.get("driveRentalCar") === "1") driveBase.rentalCar = true;
-  // Default (unset) is true — only an explicit "0" turns it off. Moot once
-  // rentalCar is true, since priceTrip zeroes wear-and-tear for a rental
-  // regardless of this flag.
+  // Default (unset) is true — only an explicit "0" turns it off.
   if (q.get("driveWearAndTear") === "0") driveBase.includeWearAndTear = false;
 
   return { gettingThere, flyBase, driveBase };
@@ -119,7 +115,8 @@ function paramsFrom(q: URLSearchParams): TripParams {
     parkDays: clamp(Number(q.get("parkDays") ?? 4), 1, nights + 1),
     stay: (["on", "off", "none"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
-    food: (["grocery", "qs", "mix", "ts", "plan"].includes(q.get("food") ?? "") ? q.get("food") : "mix") as FoodStyle,
+    food: (["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character", "plan"].includes(q.get("food") ?? "")
+      ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
     transportMode: "fly",
     // Free, like the overrides they most resemble: a traveller correcting the
@@ -873,7 +870,7 @@ const server = createServer(async (req, res) => {
       // A saved trip is always one specific resort, but params.gettingThere
       // (if present) is a whole-board preset that can mean different things
       // per resort (e.g. "drive to WDW, fly everywhere else"). Resolve it to
-      // a concrete transportMode/originPoint/overnightStop/rentalCar for
+      // a concrete transportMode/originPoint/overnightStop for
       // *this* resort now, at save time — the alert job re-prices one saved
       // trip at a time and has no notion of "Getting there" presets, so it
       // needs the resolved shape, the same one compare() builds per resort.
