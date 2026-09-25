@@ -131,7 +131,7 @@ a{color:var(--ink)}
 .btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
 /* The signed-in indicator. A bordered button with an avatar rather than a
    chip, because the complaint it fixes was "I have no real idea that I am
-   signed in" — a small grey chip among other small grey chips was not
+   signed in" — a small gray chip among other small gray chips was not
    telling anybody anything. */
 .attrline{margin-top:5px}
 .attr{display:inline-block; font-size:11px; font-weight:700; letter-spacing:.03em; padding:2px 8px;
@@ -271,7 +271,7 @@ a{color:var(--ink)}
 .estnote.staynote{color:var(--ink-2)}
 /* Weather: a KPI row of stat tiles, not a chart — three headline numbers is
    the case where a chart is the wrong form. Values wear ink tokens and the
-   app's own surfaces; nothing here carries meaning by colour alone, so the
+   app's own surfaces; nothing here carries meaning by color alone, so the
    emoji is decoration beside a written label rather than the label itself.
    Deliberately no tabular-nums: these are standalone values, and forcing every
    digit to a zero's width makes "71" read loose at this size. */
@@ -331,9 +331,9 @@ a{color:var(--ink)}
   @page{margin:16mm 15mm}
   html, body{background:#fff!important; color:#000!important}
   body{font-size:10.5pt; line-height:1.55}
-  /* The app's ink is a light colour for the dark theme, and #printDoc would
+  /* The app's ink is a light color for the dark theme, and #printDoc would
      otherwise inherit it — forcing white on <body> alone left the prose a
-     washed-out navy. A document states its own colours. */
+     washed-out navy. A document states its own colors. */
   #printDoc, #printDoc *{color:#111; background:transparent!important; box-shadow:none!important}
   #printDoc .pnote, #printDoc .pcost caption, #printDoc .pcost tr.sub td,
   #printDoc .presort .prank, #printDoc .pcover .psub{color:#555}
@@ -362,7 +362,7 @@ a{color:var(--ink)}
   .presort li{margin-bottom:4px}
   .presort .pnote{font-size:9pt; color:#555}
 
-  /* The cost table. A document gets a table here, not four coloured bars:
+  /* The cost table. A document gets a table here, not four colored bars:
      the bars answer "which is biggest at a glance", which is the board's
      job on screen, and a reader with the page in their hand wants the
      figures. */
@@ -456,7 +456,7 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 /* align-items:center is load-bearing, not cosmetic. Without it these items
    STRETCH to the tallest one in their wrapped line — and the flights item is
    taller than the others whenever it carries the `est.`/`live` chip. So each
-   colour square's vertical position depended on whether its NEIGHBOUR had a
+   color square's vertical position depended on whether its NEIGHBOR had a
    chip, which is a thing browsers resolve slightly differently and a thing
    that changes as the line re-wraps. Measured identical in Chromium; the
    owner saw the tickets square sitting high, which is exactly what this
@@ -516,7 +516,14 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .cell.empty{background:transparent}
 .cell.sel{outline:2px solid var(--accent-line); outline-offset:1px}
 .mon.gated .days{filter:blur(3.5px); opacity:.5}
-.mon.gated::after{content:"Plus"; position:absolute; inset:auto 0 34% 0; text-align:center; font-size:10px; font-weight:800; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2)}
+.calgate{position:relative}
+.calgate .calgrid{filter:blur(2px); opacity:.55; pointer-events:none; user-select:none}
+.calgate-cta{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px,calc(100% - 24px));
+  background:var(--surface); border:1px solid var(--accent-line); border-radius:12px; padding:16px 18px; text-align:center;
+  box-shadow:0 8px 30px rgba(0,0,0,.18); display:flex; flex-direction:column; gap:8px; align-items:center}
+.calgate-cta b{font-family:"Archivo"; font-size:14px; letter-spacing:-.01em}
+.calgate-cta span{font-size:12.5px; color:var(--ink-2)}
+.spark.gated{filter:blur(2px); opacity:.6; cursor:pointer}
 .calscale{display:flex; align-items:center; gap:8px; font-size:11px; color:var(--ink-2); margin-top:14px; flex-wrap:wrap}
 .calscale .ramp{display:flex; gap:2px}
 .calscale .ramp i{width:20px; height:11px; border-radius:2px; display:block}
@@ -570,7 +577,7 @@ tbody tr[data-open].sel{background:var(--surface-2)}
    and "Average low" into two tiles both reading "AVERAGE" — a label that is
    cut off is worse than one that takes two lines, because nothing says it was
    cut. The values are bottom-aligned (margin-top:auto) so a two-line label in
-   one tile doesn't push its number out of line with its neighbours'. */
+   one tile doesn't push its number out of line with its neighbors'. */
 .kpitile .k{display:flex; align-items:baseline; gap:5px; font-size:10.5px; font-weight:700;
   letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); line-height:1.35}
 .kpitile .v{margin-top:auto; padding-top:5px; font-size:19px; font-weight:650; color:var(--ink);
@@ -900,7 +907,19 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="2">Deluxe / upscale</option>
         </select>
       </div>
+      <div class="f">
+        <label for="rooms">Hotel rooms</label>
+        <select id="rooms" aria-describedby="roomsHint">
+          <option value="1" selected>1 room</option>
+          <option value="2">2 rooms</option>
+          <option value="3">3 rooms</option>
+          <option value="4">4 rooms</option>
+          <option value="5">5 rooms</option>
+          <option value="6">6 rooms</option>
+        </select>
+      </div>
     </div>
+    <p class="hint" id="roomsHint" style="margin:6px 0 14px">More than one family or group? Pick how many rooms — each is priced at the same rate.</p>
     <div class="fields">
       <div class="f">
         <label for="food">Food</label>
@@ -940,7 +959,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </details>
 
     <div class="panel-foot">
-      <p class="hint" id="hint">Cheapest start date inside the chosen month. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
+      <p class="hint" id="hint">Every number is an estimate until you type your own. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
       <button class="btn-primary" id="run"><span id="runLabel">Compare six resorts</span></button>
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
@@ -979,9 +998,9 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="whybody">
       <p>Crowd levels and how these six resorts compare to each other stay pretty stable for
         months — that part of this board doesn't move much once it's set. Exact dollar prices
-        for flights, hotels and cruises are a different kind of number: an airline, a hotel and
-        a cruise line all adjust what they charge in real time based on how full a plane, room
-        or ship already is, which is closer to how a stock price moves than to a fixed rate.
+        for flights and hotels are a different kind of number: an airline and a hotel
+        both adjust what they charge in real time based on how full a plane or
+        hotel already is, which is closer to how a stock price moves than to a fixed rate.
         Nobody can promise what a specific flight or room will cost on a specific day, especially
         close to your trip.</p>
       <p>Treat every number here as a well-informed starting point for deciding when and where to
@@ -992,24 +1011,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <ol class="board" id="board"></ol>
   <div class="tablewrap" id="tablewrap" hidden></div>
 
-  <footer>
-    <h4>What it would take to make these numbers real</h4>
-    <div class="srcs">
-      <p><b>Flights.</b> Travelpayouts / Aviasales gives fare search plus affiliate booking links and is open to solo
-      developers at no cost. Duffel is the alternative if you ever want to sell the ticket yourself — $3 per confirmed
-      order, no IATA accreditation needed. Amadeus is no longer an option: its self-service developer portal was
-      decommissioned on 17 July 2026.</p>
-      <p><b>Hotels.</b> Travelpayouts covers both on-property and off-property inventory through Booking.com and Agoda.
-      Expedia Rapid has better Disney-resort coverage but requires a corporate entity and a trading history.</p>
-      <p><b>Tickets.</b> No Disney park has a public pricing API, at any of the six resorts. The practical route is a
-      maintained price table per resort, refreshed against each resort's published date-based calendar, plus affiliate
-      feeds from authorized resellers. Disney has confirmed airline-style dynamic ticket pricing is coming to Walt Disney
-      World and Disneyland after its trial at Disneyland Paris — which makes a stored price table go stale faster, and
-      makes the "when should we go" question this app answers considerably more valuable.</p>
-      <p><b>Currency.</b> Local prices are converted at the European Central Bank's published reference rates,
-      regenerated monthly. An exchange rate converts a price; it does not say whether a country is cheap.</p>
-    </div>
-  </footer>
 </div>
 
 <!-- ===================== the shared document =====================
@@ -1055,7 +1056,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <div class="modal" style="max-width:420px">
     <div class="mhead">
       <h3 id="nameTitle">Save this search</h3>
-      <p id="nameIntro">Give it a name you'll recognise later.</p>
+      <p id="nameIntro">Give it a name you'll recognize later.</p>
     </div>
     <div class="namefield">
       <label for="tripName">Name</label>
@@ -1063,7 +1064,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <label for="tripHighlight" style="margin-top:6px">Which park should lead?</label>
       <select id="tripHighlight"></select>
       <small class="hint" style="margin:0">All six are saved either way. The one you pick goes first
-        in the PDF, and is the one price-drop alerts watch.</small>
+        in the PDF.</small>
       <small id="nameError" class="downgrade" hidden></small>
     </div>
     <div class="mfoot">
@@ -1112,7 +1113,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="acctline"><span class="k">Email</span><span class="v" id="acctVerified"></span></div>
         <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
         <small id="verifyRow" class="downgrade" hidden>
-          Price alerts only go to a confirmed address, so they're paused until you confirm.
+          Deal emails only go to a confirmed address, so they're paused until you confirm.
           <button type="button" id="resendVerify" class="linkbtn" style="margin-left:6px">Send the link again</button>
           <span id="resendMsg"></span>
         </small>
@@ -1143,11 +1144,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
-      <h3 id="pwTitle">Take it with you</h3>
-      <p>Comparing all six resorts, live fare checks, saved searches, price-drop and deal alerts, custom planning
-      expenses, picking your attractions and applying promos are all free, and always will be —
-      you should never have to pay to plan a trip here. Plus buys exactly one thing: a shareable PDF you can send
-      to whoever you're travelling with, written up per resort rather than a screenshot of the app.</p>
+      <h3 id="pwTitle">Get Parkfare Plus</h3>
+      <p>Comparing all six resorts, live fare checks, typing in your own numbers, picking your attractions and
+      applying Disney deals are free, and always will be — you should never have to pay to see what a trip costs.
+      Plus is for when you're getting serious about one.</p>
     </div>
     <div class="plans">
       <button class="plan" id="planMonthly" aria-pressed="true">
@@ -1162,8 +1162,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </button>
     </div>
     <ul class="feat">
-      <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort (cost, getting there, where to stay, weather, what to know), not a screenshot of the board</span></li>
-      <li><span class="tick">✓</span><span style="color:var(--muted)">Everything else — comparing all six resorts, live fare checks, saved searches, price/deal/gas alerts, custom planning expenses, attraction picks and applying promos — stays free and unlimited</span></li>
+      <li><span class="tick">✓</span><span><b>The trip price calendar</b> — the whole trip's cost (flights, hotel, tickets and food together) for every arrival date over the next year, so you can see when to go</span></li>
+      <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
+      <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
+      <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
     </ul>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
@@ -1223,7 +1225,7 @@ let RESORT_BY_ID = new Map();
    symbols — so they stay here. The RATES do not: they arrive from /api/meta,
    generated from ECB reference rates. This used to be five hardcoded numbers
    in the browser that nothing anywhere could update, which is why a rate
-   written at some point in 2026 was still what every traveller was shown. */
+   written at some point in 2026 was still what every traveler was shown. */
 const FX_SYMBOL = { USD:"$", EUR:"€", JPY:"¥", CNY:"¥", HKD:"HK$" };
 let FX_RATES = { USD:{perUsd:1,name:"US dollar"} };  // replaced by /api/meta
 let FX_AS_OF = "";
@@ -1342,13 +1344,22 @@ const store = {
   set(k,v){ try{ localStorage.setItem("pf_"+k, JSON.stringify(v)); }catch(e){} }
 };
 
-const OV = store.get("ov", {});      // { resortId: {nightly?, farePerSeat?, excludeHotel?, excludeFlights?} } — your numbers, not the model's
+/* Your numbers, not the model's: { resortId: {nightly?, farePerSeat?, ...} }.
+ * Kept for THIS visit only (owner's call, 2026-09-25). They used to be kept
+ * in localStorage forever, so a number typed weeks ago came back on a brand
+ * new search and the card said "Your number" before this visitor had typed
+ * anything. Everything is an estimate until the person enters a number; a
+ * saved search (Plus) is how typed numbers are kept. The old key is cleared
+ * so returning browsers stop carrying stale ones. */
+const OV = {};
+try{ localStorage.removeItem("pf_ov"); }catch(e){}
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.excludeHotel || o.excludeFlights); };
 
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
+let comparePricesAsOf = null;  // /api/compare's own freshness stamp — free visitors have no calendar to read it from
 let calendars = {};          // resortId -> {days:[{date,v}], min, med, max, pricesAsOf}
 let selected = 0, view = "board";
 // Whether the detail panel is expanded inline under the `selected` row.
@@ -1499,6 +1510,7 @@ function readParams(){
     needHotel,
     stay: needHotel === "no" ? "none" : $("#stay").value,
     tier: $("#tier").value,
+    rooms: Math.max(1, +$("#rooms").value || 1),
     food: $("#food").value,
     hopper: $("#hopper").value === "1",
     crowdCare: $("#crowdCare").value,
@@ -1545,7 +1557,7 @@ function syncGettingThere(){
  * coordinates and a second copy of it here would be free to drift from the
  * one pricing uses.
  *
- * It stops the moment the traveller picks a preset themselves. Plenty of
+ * It stops the moment the traveler picks a preset themselves. Plenty of
  * people really do fly LAX->SNA on points; the app should suggest, not
  * insist. */
 let gettingTherePickedByUser = false;
@@ -1595,6 +1607,7 @@ function syncNeedHotel(){
   const no = $("#needHotel").value === "no";
   $("#nightsField").hidden = no;
   $("#hotelDetailFields").hidden = no;
+  $("#roomsHint").hidden = no;
   $("#foodPlanOpt").disabled = no;
   if(no && $("#food").value === "plan") $("#food").value = "mix";
 }
@@ -1608,6 +1621,7 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(params.hopper) q.hopper = "1";
+  if(params.rooms > 1 && params.stay !== "none") q.rooms = params.rooms;
   // Sent on every search, including the default, so a saved search reopens
   // with the answer its owner actually gave rather than silently reverting
   // to "somewhat" and showing a different set of flags under the same name.
@@ -1782,8 +1796,14 @@ function describePromoEffect(kind, value){
   return "";
 }
 
+/* The trip price calendar is Plus (owner's call, 2026-09-25) — the server
+ * answers 402 without it, so a free visitor never fetches one and gets a
+ * blurred stand-in instead. null means "no calendar", never an error. */
 async function fetchCalendarFor(resortId){
-  const data = await apiGet("/api/calendar", calendarQuery(resortId, CAL_FROM, CAL_TO));
+  if(!session.plus) return null;
+  let data;
+  try { data = await apiGet("/api/calendar", calendarQuery(resortId, CAL_FROM, CAL_TO)); }
+  catch(e){ return null; }
   const days = data.days.map(d => ({ date:d.date, v:d.total }));
   const priced = days.map(d=>d.v).filter(v=>v!==null).sort((a,b)=>a-b);
   return {
@@ -1833,7 +1853,7 @@ function setSearchBusy(busy){
 
 async function runSearch(keepId){
   // A choice of resorts belongs to the comparison it was made against.
-  // Carrying it into a new search would quietly drop resorts the traveller
+  // Carrying it into a new search would quietly drop resorts the traveler
   // never excluded.
   pdfChoice = null;
   params = readParams();
@@ -1844,6 +1864,8 @@ async function runSearch(keepId){
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
     crowdRanking = compareData.crowdRanking || null;
+  comparePricesAsOf = compareData.pricesAsOf || null;
+    comparePricesAsOf = compareData.pricesAsOf || null;
     await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
     if(token !== searchToken) return;
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
@@ -1876,8 +1898,37 @@ async function recompute(changedResortId){
 
 /* ============================ render: board ============================ */
 
-function unlocked(){ return true; }   // the tool is free; Plus buys only the shareable PDF
+function unlocked(){ return true; }   // every board row is open; Plus is the calendar, saving, the PDF and deal emails
 
+/** A free visitor's stand-in for the trip price calendar: twelve real-shaped
+ *  months of made-up shades, blurred under a Plus prompt. Deterministic so it
+ *  doesn't flicker between renders, and drawn locally so no real price is in
+ *  the page for anyone to un-blur. */
+function gatedCalHtml(){
+  let seed = 7;
+  const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  return monthOpts.map(([ym])=>{
+    const [y,m] = ym.split("-").map(Number);
+    const first = new Date(Date.UTC(y, m-1, 1));
+    const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const lead = (first.getUTCDay()+6)%7;
+    const cells = Array(lead).fill('<span class="cell empty"></span>')
+      .concat(Array.from({length:days}, ()=>`<span class="cell" style="background:var(${RAMP[Math.floor(rnd()*RAMP.length)]})"></span>`))
+      .join("");
+    return `<div class="mon gated"><h4>${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()} <em>$—</em></h4>
+      <div class="days">${["M","T","W","T","F","S","S"].map(d=>`<span class="dow">${d}</span>`).join("")}${cells}</div></div>`;
+  }).join("");
+}
+/** A free visitor's stand-in for the by-month price line: the same shape of
+ *  thing, blurred, and a click opens the paywall. No real data behind it —
+ *  it is drawn, not fetched, so nothing Plus is leaked into the page. */
+function gatedSpark(){
+  const W=112,H=30;
+  return `<svg class="spark gated openpw" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Trip price by month — a Plus feature"><title>Trip price by month — Plus</title>
+    <path d="M3 18 L13 12 L23 16 L33 9 L43 14 L53 20 L63 24 L73 17 L83 11 L93 15 L103 8 L109 13" fill="none"
+      stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
 function sparkSVG(pts){
   const known = pts.map((p,i)=>({v:p.v, i})).filter(p=>p.v!==null);
   const W=112,H=30,pad=3;
@@ -1942,7 +1993,7 @@ function foodExamplesLine(r, style){
 }
 
 /**
- * A crowd flag on a board row, when the traveller said crowds matter enough
+ * A crowd flag on a board row, when the traveler said crowds matter enough
  * for this month to be worth mentioning. The server decides whether there is
  * anything to say — see crowds.ts — so the threshold lives in one place and
  * the browser cannot disagree with the detail card about it.
@@ -2026,7 +2077,7 @@ function renderBoard(){
     // decide, and an unmarked estimate reads as a quote.
     const est = x.flightPick && x.flightPick.estimate;
     // A priced fare with no estimate attached is a real one somebody bought —
-    // the nightly job, or a traveller checking a live price for this date.
+    // the nightly job, or a traveler checking a live price for this date.
     // Say so on the board, not only inside Details: it's the more expensive
     // thing to get and should be visible where people actually compare.
     // Never called "exact" — a real fare found today can still move by the
@@ -2057,7 +2108,7 @@ function renderBoard(){
         ${crowdChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
-      ${sparkSVG(spark)}
+      ${session.plus ? sparkSVG(spark) : gatedSpark()}
       <div class="bar-wrap">
         <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}">
           <div class="seg f1" style="width:${w(getThere)}"></div>
@@ -2073,7 +2124,7 @@ function renderBoard(){
           <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
-        ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}${est.seasonMatched===false?" · based on a different season, treat as rough":""}</div>`:""}
+        ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}.</div>`:""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -2153,7 +2204,7 @@ const PERSONAL_PROMO_OPTIONS = [
  * on the TripPrice the compare API returned, nothing new to fetch.
  */
 /**
- * Passes and rented points — what the traveller's own memberships do to this
+ * Passes and rented points — what the traveler's own memberships do to this
  * trip.
  *
  * Deliberately shows BOTH numbers for a pass. The trip total already has the
@@ -2343,49 +2394,17 @@ async function renderDetail(){
   const pricedDays = calDays.filter(d=>d.v!==null);
   const bestDay = pricedDays.length ? pricedDays.reduce((a,b)=> b.v<a.v?b:a) : null;
 
-  /* How the fare was arrived at, in full — moved OUT of the row it used to sit
-   * in. It was six lines of body text inside a price row, which made the prose
-   * heavier than the price and left the card several times taller than its
-   * neighbours. Every word is still here, one click away; nothing about the
-   * app's honesty is traded for the tidier card. */
-  const fareWhy = (() => {
-    const e = x.flightPick && x.flightPick.estimate;
-    if (!e) return "";
-    const basis = e.sampledLive
-      ? `the median of real round-trip fares we checked on this route for
-         ${e.basisQuarter.replace(/^(\d{4})Q(\d)$/, "Q$2 $1")}. International routes aren't covered by the
-         free US government fare data, so we price them by sampling real fares directly — no market
-         adjustment is applied, because those are already current prices.`
-      : `what people actually paid on it in ${e.basisQuarter} (the median of real US DOT itinerary
-         data)${typeof e.trendPct === "number"
-           ? `, moved ${e.trendPct >= 0 ? "up" : "down"} ${Math.abs(e.trendPct)}% to match how fares we price
-              for real have shifted since`
-           : ""}.`;
-    // Where the shown number sits in the route's own range. The owner's call
-    // is to lean toward the dear end, and the card has to say so rather than
-    // letting a reader assume they are looking at the middle — this project's
-    // rule is to explain a shaky number, never to quietly bend one.
-    const shown = x.flightPick ? x.flightPick.price : e.med;
-    const leaning = shown > e.med + 0.5
-      ? ` We show <b>${usd(shown)}</b> — deliberately toward the dear end of that range, because an
-         estimate that comes in low is the one that costs you at the checkout.`
-      : shown < e.med - 0.5
-        ? ` We show <b>${usd(shown)}</b>, toward the cheap end of that range.`
-        : "";
-    return `<details class="why"><summary>How this estimate is worked out</summary>
-      <div class="whybody">Not a quote. This route has no real fare for this exact date, so it is estimated from
-        ${basis} Typical range ${usd(e.low)}–${usd(e.high)} per person.${leaning}${
-        e.seasonMatched === false
-          ? " <b>No baseline exists for this time of year on this route</b>, so another season was used — treat this as rough."
-          : ""}</div></details>`;
-  })();
+  /* No "how this estimate is worked out" disclosure any more (owner's call,
+   * 2026-09-25): every number here is an estimate that tries to get as close
+   * as it can, and walking each traveler through our sources was clutter.
+   * The derivation still lives in pricing.ts/book.ts and in CLAUDE.md. */
 
   // flights — the one cached fare this trip actually priced against
   const fp = x.flightPick;
   const floor = fp ? fp.price : x.perSeatFare;
   // excludeFlights also prices to flightPick===null (same as "no cache, no
   // number" today) — check the override directly, before touching fp, so
-  // "excluded" never gets mislabelled as "priced entirely from your number".
+  // "excluded" never gets mislabeled as "priced entirely from your number".
   const excludeFlights = !!ovOf(item.resortId).excludeFlights;
   const lapInfants = list.filter(a=>a<2).length;
   const flightRows = excludeFlights
@@ -2394,11 +2413,10 @@ async function renderDetail(){
         <div class="p">$0</div></div>`
     : (fp && fp.estimate
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
-        <small>Not a quote · typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person${
-          fp.estimate.seasonMatched===false ? " · based on a different season, treat as rough" : ""}</small></div>
+        <small>Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
     : fp
-    ? `<div class="li"><div class="l"><b>${fp.carrier || "Cached fare"}</b>
+    ? `<div class="li"><div class="l"><b>Estimated fare${fp.carrier ? " · " + fp.carrier : ""}</b>
         <small>${fp.stops===0?"Nonstop":fp.stops+" stop"+(fp.stops>1?"s":"")} · ${p.origin}→${r.iata} · round trip, per person</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
     : `<div class="li"><div class="l"><b>Your fare</b><small>No cached fare for this route — priced entirely from your number</small></div>
@@ -2407,14 +2425,14 @@ async function renderDetail(){
     // A lap infant is the one thing that row said which the tiles don't, so it
     // keeps a row of its own — and only when there is one.
     + (lapInfants ? `<div class="li"><div class="l"><b>Lap infant${lapInfants>1?"s":""} × ${lapInfants}</b>
-        <small>Under 2, travelling on a lap — priced at 10% of an adult fare</small></div>
+        <small>Under 2, traveling on a lap — priced at 10% of an adult fare</small></div>
         <div class="p">included</div></div>` : "")
     // Exact live fare. Only offered where it would actually tell you
     // something new — if this date already has a real fare, there is nothing
     // to buy. Free users see what it is and what it costs to unlock, rather
     // than a disabled control with no explanation.
     // Offered wherever the shown fare is NOT a real vendor row — an estimate,
-    // or the traveller's own typed number. It used to require fp.estimate,
+    // or the traveler's own typed number. It used to require fp.estimate,
     // which hid the verify button in the one case with nothing behind the
     // number at all: no cached row, no BTS baseline, just what somebody
     // typed. That is the fare most likely to be wrong and the only one they
@@ -2443,7 +2461,7 @@ async function renderDetail(){
    * `#flt=` is a URL FRAGMENT. Fragments are never sent to the server — only
    * the page's own JavaScript ever sees them — so the format has to be one
    * Google still parses in the browser, and `#flt=` is an old internal one it
-   * no longer honours. An unrecognised fragment is silently ignored, which is
+   * no longer honors. An unrecognized fragment is silently ignored, which is
    * why this failed by showing a blank form rather than an error. `q=` is a
    * real query parameter that reaches Google's server, which is exactly why
    * the older link at least got the airports right.
@@ -2452,7 +2470,7 @@ async function renderDetail(){
    * Google's flight search parses "from X to Y on DATE through DATE" as a
    * round trip. Passenger count is NOT carried: no query wording was found
    * that Google reliably parses into a party size, and claiming it in the
-   * card while the page quietly showed one traveller is the same class of
+   * card while the page quietly showed one traveler is the same class of
    * silent-wrong this whole note is about. The card says to set it there.
    *
    * NONE OF THIS IS VERIFIABLE FROM THIS SANDBOX — google.com is refused by
@@ -2488,7 +2506,7 @@ async function renderDetail(){
    * Google's is gone now that Kayak is the confirmed one.
    *
    * There is no conflict with SerpApi. SerpApi is where the app's fare DATA
-   * comes from, server-side and overnight; this is where a traveller is sent
+   * comes from, server-side and overnight; this is where a traveler is sent
    * to book. Unrelated choices, and a cached row's own affiliate deep link
    * has always pointed wherever the provider said.
    *
@@ -2507,7 +2525,7 @@ async function renderDetail(){
    * Kayak's own trip id (`ucs=`) and filter state (`fs=`) are stripped from
    * that URL. They belong to one browsing session, the same reason Tokyo's
    * ticket link lost its `_gl=` tracking token — shipping one would pin every
-   * traveller to a stranger's expired search.
+   * traveler to a stranger's expired search.
    */
   const kayakKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
   const kayakAdults = Math.max(1, list.length - kayakKidAges.length);
@@ -2539,12 +2557,18 @@ async function renderDetail(){
   // hotel — the real pick, plus what the other categories would cost at the same date
   const stayNow = noHotel ? true : x.hotelPick.onProperty;
   const hp = x.hotelPick;
+  // Several families sharing a trip book several rooms; pricing.ts multiplies
+  // the room line, so every "per night" figure here says whether it is one
+  // room or all of them.
+  const roomCount = Math.max(1, x.roomCount || 1);
+  const roomsNote = roomCount > 1 ? ` × ${roomCount} rooms` : "";
+  const perNightAll = roomCount > 1 ? ` / night for ${roomCount} rooms` : " / night";
   const hotelPickRow = noHotel
     ? `<div class="li"><div class="l"><b>No hotel</b><small>Not counted in this trip's total</small></div><div class="p">$0</div></div>`
     : x.hotelTier.custom
-    ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights</small></div>
+    ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights${roomsNote}</small></div>
         <div class="p">${usd(x.rooms)}</div></div>`
-    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night</small></div>
+    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night${roomsNote}</small></div>
         <div class="p">${usd(x.rooms)}</div></div>`;
   const hotelRows = hotelPickRow
     + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
@@ -2561,7 +2585,7 @@ async function renderDetail(){
    * sample could put a genuinely pricier hotel in the "Budget" bucket (the
    * owner's real report, 2026-09-25: Budget priced HIGHER than Mid-range and
    * Upscale on a real search). Off property is organized by PRICE instead —
-   * sorted low to high and labelled by rank, not by a guessed category name,
+   * sorted low to high and labeled by rank, not by a guessed category name,
    * so the card can never show a "Budget" number above a "Mid-range" one. */
   const tierCompare = noHotel ? "" : (() => {
     const rows = [0,1,2].map(t => ({ t, ...tierRows[t] }));
@@ -2570,7 +2594,7 @@ async function renderDetail(){
         const label = TIER_LABEL[ON_TIERS[t]];
         const detail = swapped ? `Not offered at ${r.name}`
           : cost===null ? "no cached rate for this date"
-          : `${usd(cost/p.nights)} / night`;
+          : `${usd(cost/p.nights)}${perNightAll}`;
         return `<div class="li"><div class="l"><b>${label}</b>
           <small>${detail}</small></div>
           <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${swapped || cost===null?"—":usd(cost)}</div></div>`;
@@ -2587,7 +2611,7 @@ async function renderDetail(){
     return priced.map((x, i) => {
       const isYours = +p.tier === x.t;
       return `<div class="li"><div class="l"><b>${rankLabels[i]}</b>
-        <small>${usd(x.cost/p.nights)} / night${isYours ? " · what you searched" : ""}</small></div>
+        <small>${usd(x.cost/p.nights)}${perNightAll}${isYours ? " · what you searched" : ""}</small></div>
         <div class="p"${isYours?' style="color:var(--accent)"':""}>${usd(x.cost)}</div></div>`;
     }).join("") + unpriced.map(x => `<div class="li"><div class="l"><b>Off property</b>
       <small>${x.swapped ? `Not offered at ${r.name}` : "no cached rate for this date"}</small></div>
@@ -2642,7 +2666,6 @@ async function renderDetail(){
   // tells you the cache disagrees.
   const fareNow = ovR.farePerSeat || x.perSeatFare;
   const belowFloor = x.fareBelowFloor;
-  const overPct = floor ? Math.round((fareNow/floor - 1)*100) : 0;
   const monthName = MONTHSFULL[+p.month.split("-")[1]-1];
   const fareCtl = `<div class="ovcell">
     <label class="ovexclude"><input type="checkbox" id="excludeFlightsCk" ${ovR.excludeFlights ? "checked" : ""}>
@@ -2652,10 +2675,10 @@ async function renderDetail(){
     <input type="number" id="fareOv" step="5" min="0" value="${ovR.farePerSeat || ""}"
            placeholder="${Math.round(x.perSeatFare)}" aria-label="Airfare you expect per person">
     <div class="ovhint">${belowFloor
-      ? `Heads up: the cheapest fare we've found for this route near ${monthName} is ${usd(floor)}, so ${usd(belowFloor.yours)} is below anything we can see. Your number is what's in the total — we're just saying we can't back it up.`
+      ? `Heads up: ${usd(belowFloor.yours)} is below the lowest fare we've seen for this route near ${monthName} (${usd(floor)}). We've used your number.`
       : ovR.farePerSeat
-      ? `Your number is in the total. The cheapest fare the cache has for this route near ${monthName} is ${usd(floor)}${overPct > 0 ? `, so you're ${overPct}% above it` : ""}.`
-      : `Type what you expect to pay per person. Blank uses ${usd(x.perSeatFare)}, the cheapest the cache has for this route near ${monthName}.`}</div>
+      ? `Your number is in the total. Our estimate was ${usd(floor)}.`
+      : `Type what you expect to pay per person. Blank uses our estimate of ${usd(x.perSeatFare)}.`}</div>
     ${ovR.farePerSeat ? `<div class="ovacts"><button class="btn btn-sm" data-reset="farePerSeat">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
@@ -2678,7 +2701,7 @@ async function renderDetail(){
            placeholder="${Math.round(foodModelPerDay)}" aria-label="What your whole party spends on food per day">
     <div class="ovhint">${ovR.foodPerDayUsd
       ? `Your number, for everyone in the party together. Because it's a party total it no longer changes when you change the party size. Arrival and departure still count as part-days, so the trip works out at ${usd(ovR.foodPerDayUsd)} × ${p.nights + 0.4} days.`
-      : `Type what all ${pax} of you spend in a day, together. Blank uses ${usd(foodModelPerDay)} a day from the food style above.`}</div>
+      : `Type what all ${pax} of you spend in a day, together. Blank uses our estimate of ${usd(foodModelPerDay)} a day.`}</div>
     ${ovR.foodPerDayUsd ? `<div class="ovacts"><button class="btn btn-sm" data-reset="foodPerDayUsd">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
   </div>`;
@@ -2687,12 +2710,12 @@ async function renderDetail(){
     <label class="ovexclude"><input type="checkbox" id="excludeHotelCk" ${ovR.excludeHotel ? "checked" : ""}>
       <span>I've already got a room sorted — don't count it in the total</span></label>
     ${ovR.excludeHotel ? `<div class="ovexcluded">Hotel cost excluded from ${r.name}'s total. Uncheck to price a room again.</div>` : `
-    <div class="lab"><span>Hotel, per night</span><b>${ovR.nightly ? usd(ovR.nightly) : usd(modelNightly)}</b></div>
+    <div class="lab"><span>${(x.roomCount||1) > 1 ? "Hotel, per room per night" : "Hotel, per night"}</span><b>${ovR.nightly ? usd(ovR.nightly) : usd(modelNightly)}</b></div>
     <input type="number" id="hotelOv" step="5" min="0" value="${ovR.nightly || ""}"
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
     <div class="ovhint">${ovR.nightly
-      ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. The cache says " + usd(modelNightly) + "."
-      : "Type what you know you can get, for one night. Blank uses the cached " + usd(modelNightly) + " a night."}</div>
+      ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. Our estimate was " + usd(modelNightly) + "."
+      : "Type what you know you can get, for one room, one night. Blank uses our estimate of " + usd(modelNightly) + " a night."}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
@@ -2729,7 +2752,7 @@ async function renderDetail(){
    *
    * Children are left off deliberately rather than guessed. Sending
    * numAdults alone for a family would open a page quietly priced for fewer
-   * people than are travelling — a wrong number presented as a real one,
+   * people than are traveling — a wrong number presented as a real one,
    * which is worse than sending nothing at all. So a party with children
    * gets the plain link until someone verifies what Disney calls them. */
   const withDisneyParty = (url, tp) => {
@@ -2760,26 +2783,26 @@ async function renderDetail(){
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
         <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
-           prices in ${r.currency} · cache last updated ${cal && cal.pricesAsOf ? new Date(cal.pricesAsOf).toLocaleDateString() : "—"}</p>
+           prices in ${r.currency} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
           <b>${item.priceBasis === "cheapest"
             ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, not a typical one.`
             : `This is a typical ${MONTHSFULL[sd.getUTCMonth()]} trip, not the cheapest one.`}</b>
           Across the ${item.spread.priced} days we can price this month, the whole trip runs
           ${usd(item.spread.low)} to ${usd(item.spread.high)}, averaging <b>${usd(item.spread.trimmedMean)}</b>${
-            item.spread.trimmedPerTail ? ` once the ${item.spread.trimmedPerTail} cheapest and ${item.spread.trimmedPerTail} dearest days are left out` : ""}.
+            item.spread.trimmedPerTail ? ` once the ${item.spread.trimmedPerTail} cheapest and ${item.spread.trimmedPerTail} most expensive days are left out` : ""}.
           ${item.priceBasis === "cheapest"
-            ? "You asked for the cheapest day, so that is what is quoted above — a real fare, on a day many travellers would not pick."
-            : "We quote the real day closest to that average, so every line below belongs to one bookable trip."}
+            ? "You asked for the cheapest day, so that is what is quoted above — on a day many travelers would not pick."
+            : "We quote the real day closest to that average."}
           The very cheapest days are cheap because few people want them — a dawn flight on a holiday —
-          so quoting one would be a price most travellers could not actually get.
+          so many travelers won't experience the cheapest fares.
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
         </p>` : ""}
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
-        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.email ? "Save this search, leading with " + esc(item.resort.name) : "Sign in to save this search & watch for price drops"}</button>
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Save this search (Plus)"}</button>
       </div>
     </div>
     ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
@@ -2817,19 +2840,15 @@ async function renderDetail(){
             <small>IRS standard mileage rate — bundles depreciation, maintenance and insurance into one per-mile number, not just gas. Turn this off above if you don't think of your own car's wear as a cost of this trip.</small></div><div class="p">${usd(x.drivingPick.wearAndTearUsd)}</div></div>` : ""}
           ${x.drivingPick && x.drivingPick.overnightUsd ? `<div class="li"><div class="l"><b>Overnight stop</b>
             <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
-          <div class="foot"><details class="why"><summary>How this number is worked out</summary>
-            <div class="whybody">Gas, wear-and-tear and road-distance figures are estimates, and driving is priced
-              for US routes only. Wear and tear uses the IRS standard mileage rate, which bundles depreciation,
-              maintenance and insurance rather than fuel alone.</div></details></div>
+
         </div>` : `<div class="card">
           <h5><i style="background:var(--s1)"></i>Flights</h5>
           <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
           ${excludeFlights ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.perSeatFare)}</div>
-              <div class="s">${!fp ? "your number" : fp.estimate ? "estimate"
-                : item.priceBasis === "cheapest" ? "cheapest in " + MONTHSFULL[sd.getUTCMonth()]
-                : item.spread ? "typical for " + MONTHSFULL[sd.getUTCMonth()] : "cached fare"}</div></div>
+              <div class="s">${ovR.farePerSeat ? "your number"
+                : item.priceBasis === "cheapest" ? "estimate · cheapest day" : "estimate"}</div></div>
             <div class="kpitile"><div class="k">Seats</div>
               <div class="v">${pax}</div><div class="s">round trip</div></div>
             <div class="kpitile total"><div class="k">Flights</div>
@@ -2849,7 +2868,6 @@ async function renderDetail(){
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
           <div class="foot">
-            ${fareWhy}
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
               <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)},
                 for ${kayakAdults} adult${kayakAdults===1?"":"s"}${
@@ -2862,7 +2880,7 @@ async function renderDetail(){
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
-              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">average</div></div>
+              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">estimate</div></div>
             <div class="kpitile"><div class="k">Party</div>
               <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
             <div class="kpitile total"><div class="k">Tickets</div>
@@ -2870,10 +2888,6 @@ async function renderDetail(){
           </div>
           ${ticketRowsHtml}
           <div class="foot">
-            <details class="why"><summary>How this number is worked out</summary>
-              <div class="whybody">An estimate from a general pricing curve, not Disney's own real per-date tiers.
-                Actual prices vary by exact date and can differ from this by a meaningful amount, so check the
-                official page before booking.</div></details>
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
           </div>
         </div>
@@ -2888,14 +2902,14 @@ async function renderDetail(){
               each resort's own bands, not one shared rule.</div></details></div>
         </div>` : ""}
         <div class="card">
-          <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights</h5>
+          <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights${roomCount > 1 ? ` · ${roomCount} rooms` : ""}</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
           ${noHotel ? "" : `<div class="kpi">
-            <div class="kpitile"><div class="k">Per night</div>
-              <div class="v">${usd(x.rooms / Math.max(1, p.nights))}</div>
-              <div class="s">${x.hotelTier.custom ? "your rate" : "room only"}</div></div>
-            <div class="kpitile"><div class="k">Nights</div>
-              <div class="v">${p.nights}</div><div class="s">${x.transport ? "+ parking" : "no parking"}</div></div>
+            <div class="kpitile"><div class="k">${roomCount > 1 ? "Per room, per night" : "Per night"}</div>
+              <div class="v">${usd(x.rooms / Math.max(1, p.nights) / roomCount)}</div>
+              <div class="s">${x.hotelTier.custom ? "your rate" : "estimate"}</div></div>
+            <div class="kpitile"><div class="k">${roomCount > 1 ? "Rooms × nights" : "Nights"}</div>
+              <div class="v">${roomCount > 1 ? roomCount + " × " + p.nights : p.nights}</div><div class="s">${x.transport ? "+ parking" : "no parking"}</div></div>
             <div class="kpitile total"><div class="k">Hotel</div>
               <div class="v">${usd(x.hotel)}</div><div class="s">all in</div></div>
           </div>`}
@@ -2912,7 +2926,7 @@ async function renderDetail(){
           <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"We'll bring our own food",someQs:"Some Quick Service",qs:"All Quick Service",mix:"Some Quick Service, some Table Service",ts:"All Table Service",someCharacter:"Some Character Meals",character:"All Character Meals"})[p.food==="plan"?"qs":p.food]}</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Per day</div>
-              <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">everyone</div></div>
+              <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">${ovR.foodPerDayUsd ? "your number" : "estimate"}</div></div>
             <div class="kpitile"><div class="k">Days</div>
               <div class="v">${p.nights + 0.4}</div><div class="s">part arrival</div></div>
             <div class="kpitile total"><div class="k">Food</div>
@@ -2926,7 +2940,7 @@ async function renderDetail(){
         ${(()=>{
           /* Typical weather for the month actually being priced — x.start, not
            * the month picker, so a Plus trip pinned to real dates gets the
-           * month it is travelling in rather than the one in a control it is
+           * month it is traveling in rather than the one in a control it is
            * ignoring. Silently absent for a resort with no rows: a missing
            * weather box must never take a board down with it. */
           const wx = (CLIMATE[item.resortId] || [])[sd.getUTCMonth()];
@@ -2987,36 +3001,41 @@ async function renderDetail(){
               <small>Same resort, a different time of year</small></div>
               <div class="p">${warn.alternatives.map(a=>MONTHSFULL[a.month-1]).join(", ")}</div></div>` : ""}
             <div class="foot"><details class="why"><summary>Where this comes from</summary>
-              <div class="whybody">${esc(cr.basisNote)} It does not change the price or the order of the board —
-                the cheapest trip stays the cheapest trip, and this tells you what you would be walking
-                into.</div></details></div>
+              <div class="whybody">${esc(cr.basisNote)}</div></details></div>
           </div>`;
         })()}
       </div>
 
       ${(()=>{
+        // No "save & watch" any more: price-drop monitoring was removed
+        // (2026-09-25). The calendar is how you watch a trip now, and it is Plus.
+        if(!session.plus) return `<div class="upsell"><div><b>Is there a cheaper time to go?</b>
+          <span>Plus shows the whole trip's cost — flights, hotel, tickets and food — for every arrival date over the next year.</span></div>
+          <button class="btn btn-sm openpw">See the calendar with Plus</button></div>`;
         if(min===null) return "";
         const save = x.total - min;
         if(save < 25) return `<div class="upsell"><div><b>You're already on one of the cheapest arrivals we found.</b>
-          <span>Save this search and we'll keep watching, and tell you if it drops below ${usd(min)}.</span></div>
-          <button class="btn btn-sm ${session.email?"":"openauth"}">${session.email?"Save & watch":"Sign in to watch"}</button></div>`;
+          <span>The calendar below has every other date.</span></div></div>`;
         const best = bestDay ? new Date(bestDay.date+"T00:00:00Z") : null;
-        return `<div class="upsell"><div><b>Want to make it cheaper? Choose a different time:${best?` Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</b>
-          <span>Save this trip with your own rates and we'll tell you when it drops further.</span></div>
-          <button class="btn btn-sm ${session.email?"":"openauth"}">${session.email?"Save & watch":"Sign in to watch"}</button></div>`;
+        return `<div class="upsell"><div><b>Want to make it cheaper? Choose a different time.</b>
+          <span>${best?`Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</span></div></div>`;
       })()}
       <div class="cols">
         ${whyCheaperCard(item, results)}
         ${promosCard(item, x, promoList)}
       </div>
 
-      <p class="sec-lab">Fare calendar — total trip cost by arrival date</p>
-      <div class="calgrid">${calHtml}</div>
+      <p class="sec-lab">Trip price calendar — flights, hotel, tickets and food, by arrival date${session.plus ? "" : " · Plus"}</p>
+      ${session.plus ? `<div class="calgrid">${calHtml}</div>` : `<div class="calgate">
+        <div class="calgrid" aria-hidden="true">${gatedCalHtml()}</div>
+        <div class="calgate-cta"><b>Every arrival date's total trip price, for the next twelve months</b>
+          <span>Not just the fare — the flights, hotel, tickets and food for your party, priced for each day, so you can see when to go.</span>
+          <button class="btn btn-primary btn-sm openpw">Get Plus</button></div></div>`}
       <div class="calscale">
         <span>Cheaper</span>
         <span class="ramp">${RAMP.map(v=>`<i style="background:var(${v})"></i>`).join("")}</span>
         <span>Pricier</span>
-        <span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>
+        ${session.plus ? `<span style="margin-left:8px" class="mono">${min===null?"no data":usd(min)+" · median "+usd(med)+" · "+usd(max)}</span>` : ""}
       </div>
 
       <p class="sec-lab" style="margin-top:26px">See other park options</p>
@@ -3051,12 +3070,12 @@ function render(){
   syncWindowUi();
   $("#searchChip").hidden = true;
   // Only once there is something to save. A button that refuses every click
-  // is the dead-handler problem in another costume. Saved trips are free at
-  // launch — signing in is the only requirement.
+  // is the dead-handler problem in another costume. Saving is Plus; the
+  // label says so before the click, not after.
   const sv = $("#saveSearchBtn");
   if(sv){
     sv.hidden = !results.some(r=>r.ok);
-    sv.textContent = session.email ? "Save this search" : "Sign in to save this search";
+    sv.textContent = session.plus ? "Save this search" : "Save this search (Plus)";
   }
   $("#upgradeTop").hidden = session.plus;
   syncAccountUi();
@@ -3138,7 +3157,7 @@ document.addEventListener("click", async e=>{
 
 /* ================================ account ================================
  * Signing in used to be two inputs wedged into the masthead, and being
- * signed in was a small grey chip among other small grey chips — so the
+ * signed in was a small gray chip among other small gray chips — so the
  * honest report was "I have no real idea that I am signed in".
  *
  * Now: a Sign in button that opens a real panel, and once you're in, an
@@ -3194,7 +3213,7 @@ function syncAuthMode(){
   const up = authMode === "signup";
   $("#authTitle").textContent = up ? "Create your account" : "Sign in";
   $("#authIntro").textContent = up
-    ? "An account is free and takes two fields. It's what saved trips, price alerts and Plus attach to. There's no email verification yet, so use an address you'd actually want alerts sent to."
+    ? "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read."
     : "Welcome back. Every account needs a password now — if yours predates that, create the account again with the same email to set one.";
   $("#signinBtn").textContent = up ? "Create account" : "Sign in";
   $("#signinPassword").setAttribute("autocomplete", up ? "new-password" : "current-password");
@@ -3219,8 +3238,8 @@ function openAuth(mode){
   $("#acctUpgradeBtn").hidden = !on || session.plus;
   $("#authTitle").textContent = on ? "Your account" : "Sign in";
   $("#authIntro").textContent = on
-    ? "Everything below is tied to this account — saved trips, alerts and Plus all follow the email, not this browser."
-    : "An account is free and takes one field. It's what saved trips, price alerts and Plus attach to. There's no email verification yet, so use an address you'd actually want alerts sent to.";
+    ? "Everything below is tied to this account — saved searches and Plus follow the email, not this browser."
+    : "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read.";
   if(on){
     $("#emailChip").textContent = session.email;
     $("#acctPlanRow").textContent = session.plus ? "Plus" : "Free";
@@ -3233,7 +3252,7 @@ function openAuth(mode){
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts, saving searches, price alerts and live fare checks are all free. Plus adds the shareable PDF.";
+      : "Comparing all six resorts and live fare checks are free. Plus adds the trip price calendar, saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -3478,6 +3497,12 @@ async function refreshSession(){
   // And point the form at their saved airport, which is why this runs on
   // boot rather than only when the account panel is opened.
   applyHomeAirport();
+  // Signing in as a Plus member after a search: fetch the calendars that
+  // were withheld, rather than leaving them blurred until the next search.
+  if(session.plus && results.length && RESORTS.some(r=>!calendars[r.id])){
+    await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
+    render();
+  }
 }
 
 $("#signinBtn").addEventListener("click", async ()=>{
@@ -3638,6 +3663,10 @@ document.addEventListener("click", async e=>{
   const s2 = e.target.closest("#saveSearchBtn, #saveTripBtn");
   if(!s2) return;
   if(!session.email){ openAuth("signin"); return; }
+  // Saving is Plus (owner's call, 2026-09-25). Say so by opening the paywall
+  // rather than a dialog that would only be refused on save — the server
+  // checks too (402), so this is only the courteous half.
+  if(!session.plus){ openPw(); return; }
   if(!results.some(r=>r.ok)) return;
   // A detail card's button preselects the resort you were looking at; the
   // board's button preselects whichever came out cheapest.
@@ -3671,7 +3700,7 @@ function tripWhenLabel(){
     : MONTHSFULL[+params.month.split("-")[1]-1] + " " + params.month.split("-")[0];
 }
 function defaultTripName(){
-  return `${params.adults + params.ages.length} travellers — ${tripWhenLabel()}`;
+  return `${params.adults + params.ages.length} travelers — ${tripWhenLabel()}`;
 }
 function openNameDialog(preferredResortId){
   const priced = results.filter(r=>r.ok);
@@ -3756,6 +3785,7 @@ async function openSavedTrip(trip){
     if(q.stay !== "none") $("#stay").value = q.stay;
   }
   $("#hopper").value = q.hopper ? "1" : "0";
+  $("#rooms").value = String(Math.max(1, +q.rooms || 1));
   $("#crowdCare").value = q.crowdCare || "some";
   $("#priceBasis").value = q.basis === "cheapest" ? "cheapest" : "typical";
   // Passes and points come back too — reopening a saved trip that priced
@@ -3795,7 +3825,6 @@ async function openSavedTrip(trip){
   for(const [rid, ov] of Object.entries(trip.overrides || {})){
     if(ov && Object.keys(ov).length) OV[rid] = { ...ov };
   }
-  store.set("ov", OV);
   syncNeedHotel(); syncGettingThere();
   closeTripsDrop();
   openTrip = trip;
@@ -3881,7 +3910,7 @@ document.addEventListener("click", async e=>{
  * a screenshot." It was one. The previous version dropped the controls off
  * the live page and reordered the board in the print stylesheet, which
  * produces a tidier screenshot and still a screenshot — a reader got four
- * coloured bars and a legend, and had to already know how the app works to
+ * colored bars and a legend, and had to already know how the app works to
  * read it.
  *
  * What actually gets emailed to somebody's family is a document they READ,
@@ -3893,7 +3922,7 @@ document.addEventListener("click", async e=>{
  * TWO RULES, both of which this project has learned the hard way:
  *
  *  - Every sentence is built from data we actually hold. Where a fact is
- *    missing — no cached fare, no carrier on the row, no pass programme —
+ *    missing — no cached fare, no carrier on the row, no pass program —
  *    the sentence is omitted rather than softened into a guess. A document
  *    somebody forwards is the worst possible place to invent a number, and
  *    it is the one artefact from this app that outlives the session that
@@ -4042,7 +4071,7 @@ function gettingThereHtml(item){
       // from this route's own history — a real observed spread, not a percentage
       // invented around a midpoint.
       out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} typically run about
-        <b>${usd(est.med)}</b> a seat, ranging from ${usd(est.low)} at the cheap end to ${usd(est.high)} at the dear end.
+        <b>${usd(est.med)}</b> a seat, ranging from ${usd(est.low)} at the cheap end to ${usd(est.high)} at the expensive end.
         That is an <b>estimate</b>, not a quote: it is built from what people actually paid on this route in
         ${esc(est.basisQuarter)}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
       if(est.seasonMatched === false){
@@ -4166,7 +4195,8 @@ function hotelHtml(item){
   }
 
   const nightly = pick.nightly;
-  out.push(`<p>You priced <b>${esc(pick.name)}</b> at <b>${usd(nightly)}</b> a night, which over
+  const pdfRooms = Math.max(1, pr.roomCount || 1);
+  out.push(`<p>You priced <b>${esc(pick.name)}</b> at <b>${usd(nightly)}</b> a night${pdfRooms > 1 ? ` a room, for ${pdfRooms} rooms` : ""}, which over
     ${params.nights} night${params.nights===1?"":"s"} is <b>${usd(pr.rooms)}</b>${
     pr.transport ? `, plus <b>${usd(pr.transport)}</b> for parking and getting to the parks` : ""}.</p>`);
 
@@ -4289,7 +4319,7 @@ function goodToKnowHtml(item){
   }
 
   // Age bands, but only when there is actually a child in the party — a rule
-  // about 11-year-olds is noise to two adults travelling alone.
+  // about 11-year-olds is noise to two adults traveling alone.
   if(params.ages.length){
     const b = r.bands;
     const bits = [`children under ${b.freeUnder} go free`,
@@ -4478,7 +4508,6 @@ function setOv(id, key, val){
   const o = OV[id] || (OV[id] = {});
   if(val) o[key] = val; else delete o[key];
   if(ovEmpty(o)) delete OV[id];
-  store.set("ov", OV);
   recompute(id);
 }
 /** "I've already got this sorted" — a checkbox, not a price claim, so it's
@@ -4494,21 +4523,18 @@ function setExclude(id, kind, checked){
     delete o[kind];
   }
   if(ovEmpty(o)) delete OV[id];
-  store.set("ov", OV);
   recompute(id);
 }
 function setPromoId(id, promoId){
   const o = OV[id] || (OV[id] = {});
   if(promoId) o.promoId = promoId; else delete o.promoId;
   if(ovEmpty(o)) delete OV[id];
-  store.set("ov", OV);
   recompute(id);
 }
 function setPersonalPromo(id, kind, value, label){
   const o = OV[id] || (OV[id] = {});
   if(value > 0) o.personalPromo = { kind, value, label }; else delete o.personalPromo;
   if(ovEmpty(o)) delete OV[id];
-  store.set("ov", OV);
   recompute(id);
 }
 

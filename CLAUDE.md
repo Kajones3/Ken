@@ -22,6 +22,48 @@ that by hand and it has lagged `master` for days at a time.
 Run `npm test` and `npm run typecheck` before you believe anything. 565
 tests, typecheck clean, `npm run smoke` unchanged.
 
+### LATEST — second 2026-09-25 session: Plus redefined, monitoring removed
+
+The owner's launch-prep list, all built. **These supersede anything below
+that disagrees**, including the whole "Free/Plus split, settled 2026-09-24"
+section further down:
+
+- **Plus is now four things**: the **trip price calendar** (every arrival
+  date's whole-trip total — renamed from "fare calendar", since it prices
+  flights+hotel+tickets+food), **saving searches**, the **PDF**, and
+  **emails about new Disney deals**. Free visitors see a blurred, locally
+  drawn stand-in calendar and a blurred board sparkline (no real prices are
+  fetched or put in the page). Server-side: `/api/calendar` answers 402 for
+  any multi-day range without Plus (a single-day read stays free — the hotel
+  card's "every category" comparison uses it); `POST /api/trips` and
+  `POST /api/trips/:id/expenses` answer 402. Listing, reopening and deleting
+  saved searches stay open to any signed-in account, so a lapsed member
+  keeps what they saved. Comparing, live fare checks, overrides, attraction
+  picks and APPLYING deals stay free.
+- **Price-drop monitoring is REMOVED** (owner picked this option when asked).
+  No price-drop, crossed-your-number or gas alerts, and no "Save & watch"
+  anywhere. `jobs/alerts.ts` now only emails Plus members with a confirmed
+  address about curated promos added since their last deal email (or since
+  their account was created). `price_alerts` gained `user_id` and `trip_id`
+  is now nullable (schema.sql migrates it in place).
+- **Multiple hotel rooms**: a "Hotel rooms" 1-6 picker. `TripParams.hotelRooms`
+  / `?rooms=`; `pricing.ts` multiplies the room line (pick or the traveler's
+  own nightly rate, which is per room). Parking is NOT multiplied — it's per
+  day, and guessing how many cars a group brings would be inventing it.
+  `TripPrice.roomCount` says how many rooms `rooms` covers.
+- **Typed numbers no longer persist in localStorage.** A number typed weeks
+  ago used to come back on a fresh search, so the card said "Your number"
+  before anyone typed. Now kept for the visit only; saved searches keep them.
+  Every untyped tile says "estimate".
+- **American English across the site and code** (traveler, color, gray,
+  "most expensive days" not "dearest", etc.).
+- **Less "where every number came from"**: the flight "how this estimate is
+  worked out" disclosure, the ticket and driving ones, the "based on a
+  different season" suffix, and the "What it would take to make these
+  numbers real" footer are gone. Crowd notes use the owner's wording.
+  Disneyland Paris's "Hotel+tickets separate" badge is gone (Good to know
+  already covers it; config.test.ts pins that).
+
 ### Today in one paragraph
 
 Five pieces of original work (free/Plus regating, real WDW/Disneyland/Paris
@@ -316,6 +358,10 @@ that every number is either real or labelled a guess.
    mechanism, once there's a clean way to handle the two-month span.
 
 ### Free/Plus split, settled 2026-09-24 — at launch, Plus is the PDF, full stop
+
+**>> SUPERSEDED later on 2026-09-25** — see "LATEST" at the top of this file:
+Plus is now the trip price calendar, saving searches, the PDF and deal
+emails, and price-drop monitoring was removed. Kept below for the reasoning.
 
 **SUPERSEDES the 2026-09-22 decision** (which had already reversed an even
 earlier one — see the "SUPERSEDED 2026-09-22" note under "Attractions: what a

@@ -1,7 +1,7 @@
 /**
  * Make an owner's hotel correction visible now, instead of tomorrow morning.
  *
- * The admin page writes a number to `owner_settings`, but the rate a traveller
+ * The admin page writes a number to `owner_settings`, but the rate a traveler
  * sees comes from `hotel_rates` — a cache the nightly refresh fills. Without
  * this, correcting a rate would appear to do nothing for up to a day, and the
  * owner would reasonably conclude the form was broken and type it again. So a

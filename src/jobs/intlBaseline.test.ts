@@ -87,7 +87,7 @@ test("a live-sampled baseline is NOT inflated again by the trend", async () => {
 });
 
 test("a historical BTS baseline IS still moved by the trend", async () => {
-  // The other half of the same rule — domestic behaviour must not change.
+  // The other half of the same rule — domestic behavior must not change.
   const db = await memoryDb();
   await db.query(
     `insert into historical_fares

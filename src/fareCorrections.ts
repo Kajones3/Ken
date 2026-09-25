@@ -6,7 +6,7 @@
  * our estimated cache price". So this is deliberately NOT an override. You
  * cannot type $500 here and have the board display $500. You are adding an
  * observation to the same route/quarter evidence a bought SerpApi fare
- * already feeds, and the estimate moves toward it — and stays labelled an
+ * already feeds, and the estimate moves toward it — and stays labeled an
  * estimate, because that is what it still is.
  *
  * WHY THAT IS THE RIGHT SHAPE rather than a plain override. A fare is not one
@@ -177,7 +177,7 @@ export async function addCorrection(db: Db, input: CorrectionInput, by = ""): Pr
 
 /** Newest first. Expired rows are RETURNED, marked as not counting, rather
  *  than hidden — "where did my correction go?" is a worse question than
- *  seeing it sitting there greyed out. */
+ *  seeing it sitting there grayed out. */
 export async function listCorrections(db: Db, today = new Date().toISOString().slice(0, 10)): Promise<FareCorrection[]> {
   const { rows } = await db.query<Record<string, unknown>>(
     `select id, origin, destination, depart_date, nights, price_usd, band, note,

@@ -263,6 +263,34 @@ test("a nightly override is used flat and does not flex", () => {
   assert.equal(r.price.hotelTier.custom, true);
 });
 
+test("several hotel rooms multiply the room line, and only the room line", () => {
+  // Owner's ask, 2026-09-25: groups of families book more than one room.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const one = priceTrip(book, wdw, base, {}, START);
+  const three = priceTrip(book, wdw, { ...base, hotelRooms: 3 }, {}, START);
+  assert.ok(one.ok && three.ok);
+  if (!one.ok || !three.ok) return;
+  assert.equal(three.price.roomCount, 3);
+  assert.equal(three.price.rooms, one.price.rooms * 3);
+  assert.equal(three.price.transport, one.price.transport, "parking is per day, not per room");
+  assert.equal(three.price.flights, one.price.flights);
+  assert.equal(three.price.total - one.price.total, one.price.rooms * 2);
+  // Your own nightly rate is per ROOM, so it multiplies too.
+  const mine = priceTrip(book, wdw, { ...base, hotelRooms: 2 }, { wdw: { nightly: 150 } }, START);
+  assert.ok(mine.ok);
+  if (mine.ok) assert.equal(mine.price.rooms, 150 * base.nights * 2);
+  // Nonsense counts fall back to something sane rather than NaN or zero.
+  for (const bad of [0, -2, NaN, 99]) {
+    const r = priceTrip(book, wdw, { ...base, hotelRooms: bad }, {}, START);
+    assert.ok(r.ok && Number.isFinite(r.price.total) && r.price.roomCount >= 1 && r.price.roomCount <= 6);
+  }
+  // No hotel means no rooms, whatever the count says.
+  const none = priceTrip(book, wdw, { ...base, stay: "none", hotelRooms: 4 }, {}, START);
+  assert.ok(none.ok);
+  if (none.ok) { assert.equal(none.price.rooms, 0); assert.equal(none.price.roomCount, 0); }
+});
+
 test("excludeHotel: prices $0 hotel with no pick, same shape as stay: none", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
@@ -441,7 +469,7 @@ test("flight estimate: no exact cache hit falls back to a labeled BTS-baseline e
   assert.ok(r.ok);
   if (!r.ok) return;
   // The shipped lean is 100, so the shown figure is this route's p75 — the
-  // dear end of what people actually paid on it. The full low/med/high is
+  // expensive end of what people actually paid on it. The full low/med/high is
   // still attached, so the card can show the range it came from.
   assert.equal(r.price.perSeatFare, estimate.high);
   assert.deepEqual(r.price.flightPick, { price: estimate.high, estimate });
@@ -488,7 +516,7 @@ test("flight estimate: a Thanksgiving-week date gets the holiday premium, an ord
   const r = priceTrip(withEstimate, wdw, base, {}, "2027-11-25");
   assert.ok(r.ok);
   if (!r.ok) return;
-  // Default lean is 100 (the dear end), so the shown figure is the HIGH band
+  // Default lean is 100 (the expensive end), so the shown figure is the HIGH band
   // -- but moved by the +55% default Thanksgiving premium first: 800 * 1.55.
   assert.equal(r.price.perSeatFare, 1240);
   assert.equal(r.price.flightPick?.estimate?.holidayPremiumPct, 55);
@@ -935,7 +963,7 @@ test("leanedFare lands ON the median at 50 even when the spread is lopsided", ()
 });
 
 test("leanedFare can never leave the observed range", () => {
-  // The whole defence of this setting is that it chooses among real numbers
+  // The whole defense of this setting is that it chooses among real numbers
   // rather than inventing one. Out-of-range input must not break that.
   const est = { low: 200, med: 280, high: 360 };
   for (const lean of [-50, 0, 37, 50, 99, 100, 1000, NaN, Infinity]) {
@@ -999,7 +1027,7 @@ test("a multi-day ticket charges Disney's published total, not a fitted curve", 
   }
 });
 
-test("Disneyland's two-day ticket really is dearer per day, and is not clamped away", () => {
+test("Disneyland's two-day ticket really is pricier per day, and is not clamped away", () => {
   const dlr = resortById("dlr");
   assert.ok(ticketMultiDay(dlr, 2) > 1,
     "clamping this to 1 would undercharge the most common Disneyland trip");
@@ -1034,7 +1062,7 @@ test("Park Hopper scales with ticket length where Disney publishes it", () => {
 
 /**
  * Tokyo sells no Park Hopper — its 1-Day Passport admits you to one park,
- * named at purchase. The shipped +$38 was a guess at a product a traveller
+ * named at purchase. The shipped +$38 was a guess at a product a traveler
  * cannot normally buy, which put money on the board nobody could spend.
  */
 test("Tokyo charges no Park Hopper even when one is asked for", () => {

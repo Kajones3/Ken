@@ -1,46 +1,40 @@
 /**
- * The alert job. Runs after the refresh and re-prices every saved trip.
+ * The alert job — now only "a new Disney deal", for Plus members.
  *
- * It reads the cache, so it makes ZERO provider calls no matter how many trips
- * are being watched — ten subscribers or ten thousand, the provider sees the
- * same requests the refresh made.
+ * Price-drop monitoring (re-pricing every saved trip and emailing when it got
+ * cheaper, crossed your own number, or gas moved) was REMOVED on 2026-09-25,
+ * the owner's call: the Plus trip price calendar is the way to watch a trip
+ * now, and a promise to keep watching is one the site should not make. What
+ * Plus promises instead is word about the latest official Disney deals, so
+ * this job emails every Plus member with a confirmed address when the owner
+ * adds a curated promo they have not been told about yet.
  *
- * Two safety rails, both about not emailing people rubbish:
- *   - a per-user daily cap, and
- *   - anomaly suppression: if a large share of trips move by a large amount in
- *     one run, that is a data error, not a sale, so send nothing.
+ * It reads only the database, so it makes ZERO provider calls.
+ *
+ * Two safety rails, kept from the price-alert days because they are still
+ * the right shape: a per-user daily cap, and anomaly suppression (a no-op for
+ * deal emails, whose dropPct is always 0, but runAlerts stays the one path).
  */
 import { randomUUID } from "node:crypto";
 import { RESORT_BY_ID } from "../config.js";
-import { addDaysISO, monthBounds, range, todayISO } from "../dates.js";
-import { holidayWindowsFor } from "../holidayWindows.js";
 import { getDb, type Db } from "../db.js";
-import { loadBook } from "../book.js";
-import { bucketFor } from "../config.js";
-import { typicalIn, poolFor, type Overrides, type TripParams } from "../pricing.js";
 import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
 
 export interface Candidate {
-  tripId: string; userId: string; email: string; resortId: string;
+  userId: string; email: string; resortId: string | null;
   oldTotal: number; newTotal: number; dropPct: number;
-  kind: "total_drop" | "crossed_your_number" | "gas_price_change" | "new_promo"; detail: string;
+  kind: "new_promo"; detail: string;
 }
 
 const CAP = Number(process.env.ALERT_MAX_PER_USER_PER_DAY ?? 3);
 const ANOMALY_SHARE = Number(process.env.ALERT_ANOMALY_SHARE ?? 0.4);
 const ANOMALY_MOVE = Number(process.env.ALERT_ANOMALY_MOVE_PCT ?? 25);
-const GAS_MOVE_PCT = Number(process.env.ALERT_GAS_MOVE_PCT ?? 8);
 
 export function suppressAnomalies(cands: Candidate[], total: number): { keep: Candidate[]; reason: string } {
   if (total === 0) return { keep: [], reason: "" };
-  // gas_price_change is excluded from the "wild" tally on purpose: dropPct
-  // there measures a single shared, externally-sourced number (the national
-  // gas price) moving, not a per-trip provider price — a real, widescale
-  // gas-price swing hitting every driving trip at once is exactly the kind
-  // of thing this alert exists to report, not a sign of bad per-trip data.
-  const wild = cands.filter((c) => c.kind !== "gas_price_change" && c.dropPct >= ANOMALY_MOVE).length;
+  const wild = cands.filter((c) => c.dropPct >= ANOMALY_MOVE).length;
   if (wild / total >= ANOMALY_SHARE) {
     return { keep: [], reason: `suppressed: ${wild}/${total} trips moved >=${ANOMALY_MOVE}% — looks like bad data` };
   }
@@ -71,136 +65,44 @@ function describePromoEffectForEmail(kind: string, value: number): string {
 }
 
 /**
- * Saved trips and their alerts are free as of the 2026-09-24 launch decision
- * (Plus buys only the shareable PDF now) — the one real condition left is a
- * confirmed email address.
+ * Every Plus member with a confirmed email, and the curated promos added since
+ * they were last told about one (or since their account was created, so a
+ * brand-new member is not sent the whole back catalog — the cap trims the
+ * rest). Plus is checked against today, never just for non-null: a lapsed
+ * member stops getting these the day it runs out.
  *
- * Emailing an unconfirmed address is the concrete harm an unverified
- * account does — mail to a stranger, in their name, about a trip they never
- * saved. This used to also require a real current `plus_until`, and a bug in
- * that check once made every brand-new account alert-eligible; the check is
- * gone now, not just fixed, but the lesson (verify a nullable date column
- * against today, don't just test it for non-null) still applies elsewhere.
+ * Emailing an unconfirmed address is the concrete harm an unverified account
+ * does — mail to a stranger, in their name — so that stays a hard condition.
  */
 export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; checked: number }> {
-  const { rows } = await db.query(
-    `select t.id, t.user_id, u.email, t.params, t.overrides, t.baseline_total, t.threshold_pct, t.created_at
-       from saved_trips t
-       join users u on u.id = t.user_id
-      where t.active and u.email_verified_at is not null`,
+  const { rows: members } = await db.query(
+    `select u.id, u.email,
+            coalesce((select max(a.fired_at) from price_alerts a
+                       where a.user_id = u.id and a.kind = 'new_promo'), u.created_at) as since
+       from users u
+      where u.email_verified_at is not null and u.plus_until >= current_date`,
   );
 
   const candidates: Candidate[] = [];
-  for (const row of rows) {
-    const params = row.params as TripParams & { month?: string; window?: string; resortId?: string; gasPriceAtSaveUsd?: number };
-    const overrides = (row.overrides ?? {}) as Overrides;
-    const resortId: string = params.resortId ?? "wdw";
-    const resort = RESORT_BY_ID.get(resortId);
-    if (!resort) continue;
-
-    const month = params.month ?? todayISO().slice(0, 7);
-    // A trip saved against a named holiday window (see holidayWindows.ts)
-    // must re-price against that same real week, not the whole month it
-    // sits in — otherwise a saved "Around Christmas" search would silently
-    // widen back out to all of December on its next alert check.
-    const holidayWindow = params.window ? holidayWindowsFor(month).find((w) => w.id === params.window) : undefined;
-    const [from, to] = holidayWindow ? [holidayWindow.from, holidayWindow.to] : monthBounds(month);
-    const book = await loadBook(db, {
-      origin: params.origin, destinations: [resort.iata], resortIds: [resort.id],
-      from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
-    });
-
-    // MUST use the same basis the board quoted. The board moved from the
-    // cheapest day in the month to a trimmed-mean typical day; had this stayed
-    // on the cheapest, every saved trip's re-price would come in below the
-    // total it was saved at and fire an instant "the price dropped!" email
-    // about a drop that never happened. The two are one decision, not two.
-    const { typical, cheapest } = typicalIn(book, resort, params, overrides, range(from, to));
-    // On the basis this trip was SAVED on — see server.ts where it is stamped.
-    // An older row predating the setting has no basis and gets "typical",
-    // which is what the board quoted it at.
-    const best = params.priceBasis === "cheapest" ? cheapest : typical;
-    if (!best) continue;
-
-    const oldTotal = Number(row.baseline_total);
-    const dropPct = ((oldTotal - best.total) / oldTotal) * 100;
-    const threshold = Number(row.threshold_pct);
-
-    // Gas monitoring — the one alert here that isn't "it got cheaper": a
-    // driving trip's gas cost moves on its own, unlike a hotel rate the
-    // user typed themselves, so it's worth flagging either direction.
-    if (params.transportMode === "drive" && typeof params.gasPriceAtSaveUsd === "number" && params.gasPriceAtSaveUsd > 0) {
-      const gas = book.gasPrice();
-      if (gas) {
-        const movePct = ((gas.pricePerGallonUsd - params.gasPriceAtSaveUsd) / params.gasPriceAtSaveUsd) * 100;
-        if (Math.abs(movePct) >= GAS_MOVE_PCT) {
-          const direction = movePct > 0 ? "risen" : "fallen";
-          candidates.push({
-            tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
-            oldTotal, newTotal: best.total, dropPct: Math.abs(movePct),
-            kind: "gas_price_change",
-            detail: `Gas prices have ${direction} ${Math.abs(movePct).toFixed(1)}% since you saved this trip `
-              + `($${params.gasPriceAtSaveUsd.toFixed(2)} → $${gas.pricePerGallonUsd.toFixed(2)}/gal) — `
-              + `your ${resort.name} driving estimate is now $${Math.round(best.driving)}.`,
-          });
-        }
-      }
-    }
-
-    // Deal alerts — "we found a new Disney deal": a curated promo the owner
-    // added since this trip was last checked for one. "Since last checked"
-    // is the later of this trip's own new_promo history, or when it was
-    // saved (so an old promo that predates the trip never looks new to it).
-    const newPromos = await db.query(
-      `select label, effect_kind, effect_value
+  for (const m of members) {
+    const { rows: promos } = await db.query(
+      `select resort_id, label, effect_kind, effect_value
          from promos
-        where active and (resort_id = $1 or resort_id is null)
-          and created_at > coalesce(
-            (select max(fired_at) from price_alerts where trip_id = $2 and kind = 'new_promo'),
-            $3)
+        where active and ends_on >= current_date and created_at > $1
         order by created_at desc limit 3`,
-      [resort.id, row.id, row.created_at],
+      [m.since],
     );
-    for (const promo of newPromos.rows) {
+    for (const promo of promos) {
+      const where = promo.resort_id ? RESORT_BY_ID.get(promo.resort_id)?.name ?? promo.resort_id : "Every resort";
+      const effect = describePromoEffectForEmail(promo.effect_kind, Number(promo.effect_value));
       candidates.push({
-        tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
-        oldTotal, newTotal: best.total, dropPct: 0,
-        kind: "new_promo",
-        detail: `${resort.name}: new promo — ${promo.label} (${describePromoEffectForEmail(promo.effect_kind, Number(promo.effect_value))})`,
+        userId: m.id, email: m.email, resortId: promo.resort_id ?? null,
+        oldTotal: 0, newTotal: 0, dropPct: 0, kind: "new_promo",
+        detail: `${where}: ${promo.label}${effect ? ` (${effect})` : ""}`,
       });
-    }
-
-    if (dropPct >= threshold) {
-      candidates.push({
-        tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
-        oldTotal, newTotal: best.total, dropPct,
-        kind: "total_drop",
-        detail: `${resort.name} fell to $${Math.round(best.total)} for arrival ${best.start}`,
-      });
-      continue;
-    }
-
-    // The better alert: a real rate crossed the number the user set themselves.
-    const ov = overrides[resort.id];
-    if (ov?.nightly) {
-      // Only compare against hotels in the category they actually asked for.
-      // Emailing someone about a Value resort when they chose Moderate is noise.
-      const nights = book.hotelNights(resort.id, best.start);
-      const { pool } = poolFor(nights, params.stay, params.tier);
-      const cheapest = pool.reduce<number | null>(
-        (m, h) => (m === null || h.nightly < m ? h.nightly : m), null);
-      if (cheapest !== null && cheapest < ov.nightly) {
-        candidates.push({
-          tripId: row.id, userId: row.user_id, email: row.email, resortId: resort.id,
-          oldTotal, newTotal: best.total,
-          dropPct: ((ov.nightly - cheapest) / ov.nightly) * 100,
-          kind: "crossed_your_number",
-          detail: `You said $${ov.nightly} a night at ${resort.name}. It is now $${Math.round(cheapest)}.`,
-        });
-      }
     }
   }
-  return { candidates, checked: rows.length };
+  return { candidates, checked: members.length };
 }
 
 /**
@@ -212,8 +114,8 @@ async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ r
   const { rows } = await db.query(
     `select a.id, a.kind, a.detail, a.old_total, a.new_total, u.email
        from price_alerts a
-       join saved_trips t on t.id = a.trip_id
-       join users u on u.id = t.user_id
+       left join saved_trips t on t.id = a.trip_id
+       join users u on u.id = coalesce(a.user_id, t.user_id)
       where a.notified_at is null
       order by a.fired_at
       limit $1`,
@@ -252,9 +154,9 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
     // The row below is the durable record — insert it before sending, so a
     // send failure can be retried next run without losing the alert.
     await db.query(
-      `insert into price_alerts (id, trip_id, kind, resort_id, old_total, new_total, detail)
+      `insert into price_alerts (id, user_id, kind, resort_id, old_total, new_total, detail)
        values ($1,$2,$3,$4,$5,$6,$7)`,
-      [id, c.tripId, c.kind, c.resortId, c.oldTotal, c.newTotal, c.detail],
+      [id, c.userId, c.kind, c.resortId, c.oldTotal, c.newTotal, c.detail],
     );
     try {
       await sender.send(buildAlertEmail(c, c.email));
@@ -267,7 +169,7 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
 
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,
-    [runId, final.length, reason || `${checked} trips checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`],
+    [runId, final.length, reason || `${checked} Plus members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`],
   );
   return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final };
 }
@@ -275,6 +177,6 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const db = await getDb();
   const r = await runAlerts(db);
-  console.log(`alerts: ${r.fired} fired from ${r.checked} trips (${r.sent} sent, ${r.retriedSent}/${r.retried} retried) ${r.suppressed}`);
+  console.log(`deal alerts: ${r.fired} fired for ${r.checked} Plus members (${r.sent} sent, ${r.retriedSent}/${r.retried} retried) ${r.suppressed}`);
   await db.close();
 }

@@ -41,7 +41,7 @@ export function resortTransportMode(
  * already express — no new mode, no new pricing path.
  *
  * A suggestion, never a lock: the form pre-selects it and says why, and the
- * moment the traveller picks something else themselves it stops second-
+ * moment the traveler picks something else themselves it stops second-
  * guessing them. Some people really do fly LAX->SNA on points, or are
  * dropping a car off; the app should not claim to know better than they do.
  */

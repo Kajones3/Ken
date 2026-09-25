@@ -88,7 +88,7 @@ test("a row naming only resorts we do not have is NOT applied, and says why", as
   await d.query(
     `insert into owner_attractions (id, name, resort_ids, hidden) values ('ghost','Ghost Ride','atlantis',false)`);
   const eff = await effectiveAttractions(d);
-  assert.ok(!eff.some((a) => a.id === "ghost"), "must not reach travellers");
+  assert.ok(!eff.some((a) => a.id === "ghost"), "must not reach travelers");
   const listed = await listOwnerAttractions(d);
   const row = listed.find((r) => r.id === "ghost")!;
   assert.equal(row.applied, false);

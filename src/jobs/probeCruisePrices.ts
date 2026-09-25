@@ -58,7 +58,7 @@ const ACTOR_INPUT: Record<string, unknown> = {
   maxItems: MAX_ITEMS,
   // Filtering to one ship keeps a first trial small even if maxItems is
   // ignored or named differently than guessed above. Comment out if the
-  // actor rejects an unrecognised field — an unrecognised field is usually
+  // actor rejects an unrecognized field — an unrecognized field is usually
   // silently ignored by Apify actors, but that is exactly what this probe
   // exists to confirm rather than assume.
   shipName: "Disney Wonder",

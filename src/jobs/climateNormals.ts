@@ -291,7 +291,7 @@ export function renderFile(byResort: Record<string, NormalRow[]>, source: string
  *
  * WHY THIS IS A SEPARATE FILE FROM config.ts. The season notes next to these
  * numbers in config.ts ("Atlantic hurricane season", "spring break is the
- * busiest week") are editorial judgement, not data — no API produces them, and
+ * busiest week") are editorial judgment, not data — no API produces them, and
  * regenerating the numbers must never wipe them. Splitting generated data from
  * hand-written commentary is what makes the generator safe to re-run.
  *

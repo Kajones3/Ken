@@ -10,18 +10,16 @@ export interface AlertContent {
 }
 
 export function buildAlertEmail(a: AlertContent, to: string): EmailMessage {
-  const saved = Math.round(a.oldTotal - a.newTotal);
-  const subject = a.kind === "new_promo"
-    ? "Parkfare: we found a new Disney deal"
-    : saved > 0
-    ? `Parkfare: your trip just got $${saved.toLocaleString()} cheaper`
-    : "Parkfare: a price on your trip moved";
+  // The only alert left is a Plus member's deal email (price-drop monitoring
+  // was removed 2026-09-25). A row from before then can still be sitting in
+  // the retry queue, so it gets the same honest, total-free wording.
+  const subject = "Parkfare: a new Disney deal";
   const text = [
     a.detail,
     "",
-    `You were tracking $${Math.round(a.oldTotal).toLocaleString()}. It's now $${Math.round(a.newTotal).toLocaleString()}.`,
+    "Open Parkfare to see what it does to your trip — deals can be applied to any resort's total.",
     "",
-    "Open Parkfare to see the full breakdown and book.",
+    "You get these because you have Parkfare Plus.",
     "",
     "— Parkfare",
   ].join("\n");

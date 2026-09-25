@@ -10,7 +10,7 @@
  * as the climate-normals generator, for the same reason.
  *
  * WHY THE ECB AND NOT A "LIVE FX" FEED. This number translates a menu price
- * for a traveller, not a trade. The ECB publishes one reference rate per
+ * for a traveler, not a trade. The ECB publishes one reference rate per
  * currency per working day, it is authoritative, and it is free forever with
  * no key to leak. A real-time bid/ask would be more precise about something
  * nobody here is doing, and would cost money.
@@ -71,7 +71,7 @@ export function buildTable(
     const v = p.rates[code];
     // A zero or a negative is not a rate, and NaN reaches here as a number.
     // Checking the value rather than its presence is the difference between
-    // catching this and writing Infinity into a traveller's dinner estimate.
+    // catching this and writing Infinity into a traveler's dinner estimate.
     if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) { missing.push(code); continue; }
     rates[code] = v;
   }

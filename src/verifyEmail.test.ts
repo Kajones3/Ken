@@ -18,7 +18,7 @@ function recorder(opts: { throws?: boolean } = {}) {
   return { sent, sender };
 }
 
-async function makeUser(db: Db, email = "traveller@example.test"): Promise<string> {
+async function makeUser(db: Db, email = "traveler@example.test"): Promise<string> {
   const id = randomUUID();
   await db.query(`insert into users (id, email) values ($1,$2)`, [id, email]);
   return id;
@@ -38,7 +38,7 @@ test("clicking the link confirms the address", async () => {
   const token = await issueVerification(db, id);
   const r = await verifyEmailToken(db, token);
   assert.equal(r.ok, true);
-  assert.equal(r.ok && r.email, "traveller@example.test");
+  assert.equal(r.ok && r.email, "traveler@example.test");
   assert.equal(r.ok && r.alreadyVerified, false);
   assert.equal(await isVerified(db, id), true);
   await db.close();
@@ -120,7 +120,7 @@ test("a send failure never loses the account or throws", async () => {
   const db = await memoryDb();
   const id = await makeUser(db);
   const { sender } = recorder({ throws: true });
-  assert.equal(await sendVerification(db, id, "traveller@example.test", sender), false);
+  assert.equal(await sendVerification(db, id, "traveler@example.test", sender), false);
   await db.close();
 });
 
@@ -128,9 +128,9 @@ test("the email carries a working link and says what it is for", async () => {
   const db = await memoryDb();
   const id = await makeUser(db);
   const { sent, sender } = recorder();
-  assert.equal(await sendVerification(db, id, "traveller@example.test", sender, {} as NodeJS.ProcessEnv), true);
+  assert.equal(await sendVerification(db, id, "traveler@example.test", sender, {} as NodeJS.ProcessEnv), true);
   assert.equal(sent.length, 1);
-  assert.equal(sent[0]!.to, "traveller@example.test");
+  assert.equal(sent[0]!.to, "traveler@example.test");
 
   const token = sent[0]!.text.match(/token=([a-f0-9]+)/)?.[1];
   assert.ok(token, "the email must contain the token");

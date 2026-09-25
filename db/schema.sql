@@ -147,6 +147,14 @@ create index if not exists price_alerts_trip on price_alerts (trip_id, fired_at 
 alter table price_alerts drop constraint if exists price_alerts_kind_check;
 alter table price_alerts add constraint price_alerts_kind_check
   check (kind in ('total_drop','crossed_your_number','gas_price_change','new_promo'));
+-- 2026-09-25: price-drop monitoring was removed (owner's call — the Plus
+-- trip price calendar replaces it) and the one alert left is a Plus member's
+-- "new Disney deal" email. That goes to a MEMBER, not to a saved trip, so a
+-- row now names its user and a trip is optional. Old rows keep their trip_id;
+-- the retry path reads the user through either.
+alter table price_alerts add column if not exists user_id uuid references users(id) on delete cascade;
+alter table price_alerts alter column trip_id drop not null;
+create index if not exists price_alerts_user on price_alerts (user_id, fired_at desc);
 
 -- Tracks which RSS items the news-digest job has already emailed about, so
 -- a re-run of the same feed only reports genuinely new items. See

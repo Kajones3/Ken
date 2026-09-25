@@ -11,7 +11,7 @@
  * coffee, and it arrives whether or not anyone remembers to look.
  *
  * "Real" means a row whose `source` names a provider that actually returned
- * it. A row tagged `mock`, or left unlabelled because it predates source
+ * it. A row tagged `mock`, or left unlabeled because it predates source
  * tracking, is not a pull and is counted separately rather than quietly
  * folded in — the whole point is to know what genuinely came from a vendor.
  *

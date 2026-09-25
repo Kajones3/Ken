@@ -12,7 +12,7 @@
  *   3. jobs/fareTrend.ts measures how far those real fares sit from the
  *      same routes' BTS medians, and
  *   4. book.ts moves *every other* route's BTS median by that same
- *      percentage, labelled as an estimate.
+ *      percentage, labeled as an estimate.
  *
  * So a busy route gets a real number, and a quiet one gets a real
  * historical median moved by a real, currently-measured trend. Neither is

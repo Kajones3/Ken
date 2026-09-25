@@ -102,7 +102,7 @@ export function ridesOf(payload: unknown): RideSample[] | null {
 
 /** The park-level view of one sample, for the log line only — nothing stores
  *  this, because it is derivable from the rows that do get stored. */
-export function summarise(rides: RideSample[]): { meanWait: number; maxWait: number; openRides: number } {
+export function summarize(rides: RideSample[]): { meanWait: number; maxWait: number; openRides: number } {
   const waits = rides.filter((r) => r.isOpen && r.waitMin !== null).map((r) => r.waitMin!);
   if (!waits.length) return { meanWait: 0, maxWait: 0, openRides: 0 };
   const sum = waits.reduce((a, b) => a + b, 0);
@@ -117,7 +117,7 @@ export function summarise(rides: RideSample[]): { meanWait: number; maxWait: num
  * The hour of the day at a park, in ITS timezone. Pure, no dependency —
  * Intl has had the whole IANA database for years.
  *
- * Returns null for a zone the runtime does not know, so an unrecognised
+ * Returns null for a zone the runtime does not know, so an unrecognized
  * timezone drops one sample rather than silently recording a UTC hour and
  * poisoning the local-hour aggregation the whole design rests on.
  */
@@ -262,7 +262,7 @@ export async function runWaitTimes(db: Db, deps: WaitTimesDeps = {}): Promise<Wa
       continue;
     }
 
-    const s = summarise(rides);
+    const s = summarize(rides);
     console.log(`  ${park.name}: ${rides.length} rides, ${s.openRides} with a posted wait, `
       + `${s.meanWait} min mean, ${s.maxWait} max (${hour}:00 local)`);
     if (dryRun) continue;

@@ -54,7 +54,7 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
   // drag every estimate down with them, which is the exact "shown $200,
   // click through to $700" failure this is meant to prevent. Rows written
   // before the source column existed are null and excluded on the same
-  // grounds: unlabelled rows are overwhelmingly those old ones.
+  // grounds: unlabeled rows are overwhelmingly those old ones.
   const trusted = (process.env.FARE_TREND_SOURCES ?? "serpapi_flights")
     .split(",").map((s) => s.trim()).filter(Boolean);
   const current = await db.query<

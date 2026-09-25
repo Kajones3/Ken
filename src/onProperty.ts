@@ -7,7 +7,7 @@
  * them with identical code, which is now here once.
  *
  * THE REASON THIS MODULE EXISTS AT ALL is the owner's base rate. The admin
- * page lets the owner correct a hotel's rate, but the number a traveller sees
+ * page lets the owner correct a hotel's rate, but the number a traveler sees
  * comes from `hotel_rates`, which the nightly refresh regenerates — so unless
  * the generator reads the owner's value, every correction would be silently
  * reverted the following morning, with nothing anywhere reporting it. That is

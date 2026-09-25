@@ -58,7 +58,7 @@ test("set-password stores a hash, and --clear returns the account to email-only"
   const db = await memoryDb();
 
   const set = await setPassword(db, "Owner@Example.com ", "letmein");
-  assert.equal(set.email, "owner@example.com", "email is normalised, so case can't create a second account");
+  assert.equal(set.email, "owner@example.com", "email is normalized, so case can't create a second account");
   assert.equal(set.hasPassword, true);
 
   const { rows } = await db.query<{ password_hash: string }>(
@@ -99,7 +99,7 @@ test("setting a password does not disturb the account's Plus status", async () =
  * has to stay reachable.
  * ------------------------------------------------------------------------ */
 
-async function makeUser(db: Db, email = "traveller@example.test"): Promise<string> {
+async function makeUser(db: Db, email = "traveler@example.test"): Promise<string> {
   const id = randomUUID();
   await db.query(`insert into users (id, email) values ($1,$2)`, [id, email]);
   return id;
@@ -141,7 +141,7 @@ test("a lowercase airport is stored the way the rest of the app spells it", asyn
 
 test("an airport we don't know is refused, not stored", async () => {
   // It comes back out as a pre-selected form value, so a junk code would be
-  // a permanently broken form the traveller has no way to explain.
+  // a permanently broken form the traveler has no way to explain.
   const db = await memoryDb();
   const id = await makeUser(db);
   await assert.rejects(() => setHomeAirport(db, id, "ZZZ"), /unknown airport ZZZ/);
@@ -193,7 +193,7 @@ test("one account's home airport is not another's", async () => {
   await db.close();
 });
 
-test("a home airport of LAX lands the traveller on the drive-to-Disneyland preset", async () => {
+test("a home airport of LAX lands the traveler on the drive-to-Disneyland preset", async () => {
   // The two features meeting: the saved airport is what the drive/fly
   // default reads, so an LA user opens the app already set up correctly
   // without touching anything.
@@ -306,7 +306,7 @@ test("signing up twice on a registered email is refused, not silently overwritte
   await db.close();
 });
 
-test("email is normalised the same way on both routes", async () => {
+test("email is normalized the same way on both routes", async () => {
   const db = await memoryDb();
   await signUp(db, "  Mixed@Example.TEST  ", "correcthorse");
   assert.ok(await signIn(db, "mixed@example.test", "correcthorse"));

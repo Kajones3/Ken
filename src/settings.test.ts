@@ -85,7 +85,7 @@ test("a stored value outside its bounds falls back to the default rather than po
   // behind when the registry's bounds are tightened later.
   await db.query(`insert into owner_settings (key, value) values ($1, $2::jsonb)`, [key, JSON.stringify(99999)]);
   const row = (await loadSettings(db)).find((s) => s.key === key)!;
-  assert.equal(row.value, SETTING_BY_KEY.get(key)!.default, "a traveller never sees the bad number");
+  assert.equal(row.value, SETTING_BY_KEY.get(key)!.default, "a traveler never sees the bad number");
   assert.equal(row.overridden, false, "and the admin page shows it as not applied");
 });
 

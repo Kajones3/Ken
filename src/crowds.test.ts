@@ -52,7 +52,7 @@ test("a charted month is no longer flagged provisional", () => {
   const dlr = crowdFor("dlr", 6);
   assert.equal(dlr?.basis, "dvcPoints");
   assert.equal(dlr?.provisional, false, "a real chart reading is not a placeholder");
-  // Hong Kong's chart starts in April, so March is still judgement.
+  // Hong Kong's chart starts in April, so March is still judgment.
   assert.equal(crowdFor("hkdl", 3)?.basis, "estimate");
   assert.equal(crowdFor("hkdl", 8)?.basis, "dvcPoints");
 });
@@ -204,7 +204,7 @@ test("Thanksgiving's real peak is the arrival days, not the weekend after", () =
 
 test("without a day, WDW still returns its whole-month band unchanged", () => {
   // Every existing month-only caller (quietestMonths, a bare comparison) must
-  // see exactly the old behaviour -- windows are additive, never a silent
+  // see exactly the old behavior -- windows are additive, never a silent
   // change to what a 2-argument call returns.
   const decemberWholeMonth = crowdFor("wdw", 12);
   assert.equal(decemberWholeMonth?.band, "moderate");

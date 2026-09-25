@@ -92,7 +92,7 @@ export const SETTINGS: SettingDef[] = [
   ]),
   // Annual passes. Every tier is here because Disney raises them roughly once
   // a year and the owner should never have to wait for a code change to be
-  // right about a number a traveller can look up in thirty seconds.
+  // right about a number a traveler can look up in thirty seconds.
   ...PASS_PROGRAMS.flatMap((prog) => {
     const resort = RESORTS.find((r) => r.id === prog.resortId);
     return prog.tiers.map((t) =>
@@ -102,7 +102,7 @@ export const SETTINGS: SettingDef[] = [
   }),
   money(DVC_TAKE_HOME_KEY, "DVC points rented — take-home per point", "DVC",
     DVC_TAKE_HOME_PER_POINT, 1, 60,
-    "What a member RECEIVES per point, not what a renter pays. Brokers paid roughly $18-20 a point when this was last checked. Travellers can type their own figure over it."),
+    "What a member RECEIVES per point, not what a renter pays. Brokers paid roughly $18-20 a point when this was last checked. Travelers can type their own figure over it."),
   // Not money and not really a percentage of anything — it picks a point in a
   // range. `percent` is the closest kind the admin page renders, and 0-100
   // reads naturally for "how far up the range".
@@ -115,7 +115,7 @@ export const SETTINGS: SettingDef[] = [
     min: 0,
     max: 100,
     help: "0 shows the cheap end of what people actually paid on that route, 50 the middle, "
-      + "100 the dear end. Higher is the safer mistake: an estimate that comes in low is the one "
+      + "100 the expensive end. Higher is the safer mistake: an estimate that comes in low is the one "
       + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
   },
@@ -127,7 +127,7 @@ export const SETTINGS: SettingDef[] = [
     default: DEFAULT_TYPICAL_TRIM,
     min: 0,
     max: 45,
-    help: "A month's cheapest days are cheap because nobody wants them (a 4am flight on Halloween) and its dearest days are the week everybody travels. Both ends describe trips people do not take, so this share of each end is dropped before averaging. 0 uses every day, which pulls the quote toward whichever end is more extreme.",
+    help: "A month's cheapest days are cheap because nobody wants them (a 4am flight on Halloween) and its most expensive days are the week everybody travels. Both ends describe trips people do not take, so this share of each end is dropped before averaging. 0 uses every day, which pulls the quote toward whichever end is more extreme.",
   },
   {
     key: THANKSGIVING_PREMIUM_KEY,
@@ -140,7 +140,7 @@ export const SETTINGS: SettingDef[] = [
     help: "Added to the FLIGHT ESTIMATE only (never a real cached fare) for a date in Thanksgiving week. "
       + "BTS's own data can't measure this — it's reported by quarter, with no month or day at all — so this "
       + "comes from a real, cited third-party fare study instead (Upgraded Points, 2025 season: real Google "
-      + "Flights data across the 10 busiest US routes) and is a judgement call about how much to trust a "
+      + "Flights data across the 10 busiest US routes) and is a judgment call about how much to trust a "
       + "national average against any one route, same standing as the IRS mileage rate.",
   },
   {
@@ -212,7 +212,7 @@ export async function loadSettings(db: Db): Promise<SettingValue[]> {
     const raw = row ? Number(row.value) : NaN;
     // A stored value that no longer validates (the registry's bounds changed,
     // or the row predates a rename) falls back to the default rather than
-    // poisoning a price. Loud in the admin page, silent to travellers.
+    // poisoning a price. Loud in the admin page, silent to travelers.
     const usable = row && Number.isFinite(raw) && raw >= def.min && raw <= def.max;
     return {
       key: def.key,
@@ -240,7 +240,7 @@ export async function loadSettings(db: Db): Promise<SettingValue[]> {
  *     what the app ships with rather than to zero or undefined.
  *   - Only short-lived jobs prime it. The refresh and the re-seed each load it
  *     once at the top and exit; nothing long-running reads it, so there is no
- *     way for a stale value to serve a traveller for hours.
+ *     way for a stale value to serve a traveler for hours.
  * ------------------------------------------------------------------------ */
 let cache: Map<string, number> | null = null;
 

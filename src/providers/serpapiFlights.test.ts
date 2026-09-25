@@ -20,7 +20,7 @@ test("roundTrip: picks the MEDIAN itinerary, not the cheapest, from a spread of 
   const p = new SerpApiFlightProvider("key", 999, 999);
   const f = await p.roundTrip("ATL", "MCO", "2027-03-15", 7);
   assert.ok(f);
-  assert.equal(f!.priceUsd, 300, "the floor ($150) is a real fare, but not what most travellers see");
+  assert.equal(f!.priceUsd, 300, "the floor ($150) is a real fare, but not what most travelers see");
 });
 
 test("roundTrip: an even count of itineraries picks the lower of the two middle ones, never an averaged number", async () => {
