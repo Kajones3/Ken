@@ -78,7 +78,7 @@ test("the quoted day is a REAL day in the set, never an average of days", () => 
   const t = r.typical!;
   // The same arithmetic priceTrip itself does, so a quoted day that was an
   // average of several days would fail here rather than looking plausible.
-  const sum = t.flights + t.tickets + t.hotel + t.food + t.driving + t.rentalCarUsd;
+  const sum = t.flights + t.tickets + t.hotel + t.food + t.driving;
   assert.ok(sum >= t.total - 0.5,
     "the quoted day's own lines must account for its own total");
   assert.ok(Math.abs(t.flights - t.flightPick!.price) < 0.5,

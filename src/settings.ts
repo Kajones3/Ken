@@ -32,7 +32,7 @@
  * December, and the owner's nightly job list already warns about it.
  */
 import type { Db } from "./db.js";
-import { RESORTS, CAR_RENTAL, IRS_MILEAGE_RATES } from "./config.js";
+import { RESORTS, IRS_MILEAGE_RATES } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
@@ -103,8 +103,6 @@ export const SETTINGS: SettingDef[] = [
   money(DVC_TAKE_HOME_KEY, "DVC points rented — take-home per point", "DVC",
     DVC_TAKE_HOME_PER_POINT, 1, 60,
     "What a member RECEIVES per point, not what a renter pays. Brokers paid roughly $18-20 a point when this was last checked. Travellers can type their own figure over it."),
-  money("carRental.dailyRateUsd", "Rental car, per day", "Rental car", CAR_RENTAL.dailyRateUsd, 10, 400,
-    "One flat national average, not a per-city rate. Real rates vary a lot by city."),
   // Not money and not really a percentage of anything — it picks a point in a
   // range. `percent` is the closest kind the admin page renders, and 0-100
   // reads naturally for "how far up the range".

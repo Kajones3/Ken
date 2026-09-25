@@ -98,6 +98,14 @@ const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
     blocking: false,
     done: false,
   },
+  {
+    id: "character-dining-rate",
+    title: "Check each resort's `food.character` rate (all-character-dining, per day)",
+    why: "Added 2026-09-25 alongside the seven-style food picker. It's Claude's own guess, not researched: 1.5x that resort's `ts` (table-service) rate, a flat multiplier applied identically at all six resorts rather than a real per-resort figure — same standing as the unresearched Park Hopper differentials. 'someCharacter' is its own midpoint with `ts`, so a bad `character` number also skews that style.",
+    side: "free",
+    blocking: false,
+    done: false,
+  },
 ];
 
 /** How old a resort's ticket rows may get before it is worth a nudge. */

@@ -58,7 +58,7 @@ test("an unprimed cache is the shipped defaults, not zero", async () => {
   // Forgetting to prime must degrade to what the app ships with. Anything
   // else turns a missed call site into free hotel rooms.
   clearSettingsCache();
-  assert.equal(cachedSetting("carRental.dailyRateUsd", 65), 65);
+  assert.equal(cachedSetting("transport.wdw.off", 65), 65);
   assert.equal(cachedSetting("nothing.like.this", 12), 12);
   assert.equal(effectiveBase(moderate), moderate.base);
 });
@@ -67,7 +67,7 @@ test("an unprimed cache is the shipped defaults, not zero", async () => {
 
 test("a hotel key knows which resort it belongs to, and other keys don't pretend to", () => {
   assert.equal(resortOfHotelSetting(`hotel.${moderate.id}.base`), "wdw");
-  assert.equal(resortOfHotelSetting("carRental.dailyRateUsd"), null);
+  assert.equal(resortOfHotelSetting("transport.wdw.off"), null);
   assert.equal(resortOfHotelSetting("hotel.nothing-real.base"), null);
   const dlp = RESORTS.find((r) => r.id === "dlp")!;
   assert.equal(resortOfHotelSetting(`hotel.${dlp.hotels[0]!.id}.base`), "dlp");
@@ -114,10 +114,10 @@ test("the re-seed leaves a vendor's own off-property rates alone", async () => {
 test("a key that isn't a hotel rate re-seeds nothing", async () => {
   const db = await memoryDb();
   const before = await db.query(`select count(*)::int as n from hotel_rates`);
-  await setSetting(db, "carRental.dailyRateUsd", 80);
+  await setSetting(db, "transport.wdw.off", 40);
   const after = await db.query(`select count(*)::int as n from hotel_rates`);
   assert.equal((after.rows[0] as { n: number }).n, (before.rows[0] as { n: number }).n,
-    "changing the car hire rate must not rewrite hotel rows");
+    "changing the parking-and-transfers rate must not rewrite hotel rows");
 });
 
 /* -------------------------------- the file ------------------------------- */
@@ -132,13 +132,13 @@ test("a spreadsheet survives what spreadsheets do to files", () => {
 });
 
 test("columns are found by name, so a reordered spreadsheet still imports", () => {
-  const r = entriesFromCsv("label,value,key\nRental car,88,carRental.dailyRateUsd\n");
+  const r = entriesFromCsv("label,value,key\nParking,40,transport.wdw.off\n");
   assert.equal(r.ok, true);
-  if (r.ok) assert.deepEqual(r.entries, [{ key: "carRental.dailyRateUsd", value: "88" }]);
+  if (r.ok) assert.deepEqual(r.entries, [{ key: "transport.wdw.off", value: "40" }]);
 });
 
 test("a file with no key/value header is refused with something to act on", () => {
-  const r = entriesFromCsv("name,amount\nRental car,88\n");
+  const r = entriesFromCsv("name,amount\nParking,40\n");
   assert.equal(r.ok, false);
   if (!r.ok) assert.match(r.message, /key.*value/s, "it names the columns it wanted");
   const empty = entriesFromCsv("");
@@ -152,7 +152,7 @@ test("a quote inside a cell round-trips", () => {
 });
 
 test("a blank value column means back to the default, and is carried as such", () => {
-  const r = entriesFromCsv("key,value\ncarRental.dailyRateUsd,\n");
+  const r = entriesFromCsv("key,value\ntransport.wdw.off,\n");
   assert.equal(r.ok, true);
   // applySettings reads "" as "clear it" — pinned here because the CSV path is
   // the one place an empty cell is easy to mistake for zero.

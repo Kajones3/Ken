@@ -790,16 +790,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <p id="originNote" class="notice warn" hidden></p>
       </div>
 
-      <div class="gt-sub" id="flyRentalField">
-        <div class="f" style="width:220px">
-          <label for="flyRentalCar">Rent a car at your destination?</label>
-          <select id="flyRentalCar">
-            <option value="0" selected>No</option>
-            <option value="1">Yes</option>
-          </select>
-        </div>
-      </div>
-
       <div class="gt-sub" id="milesExtra" hidden>
         <span class="cap">Miles discount</span>
         <div class="agef" style="width:220px">
@@ -830,14 +820,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
               <option value="yes">Yes</option>
             </select>
           </div>
-          <div class="f" style="width:200px">
-            <label for="driveRentalCar">Rent a car for the drive?</label>
-            <select id="driveRentalCar">
-              <option value="0" selected>No — use my own car</option>
-              <option value="1">Yes — save the miles on my car</option>
-            </select>
-          </div>
-          <div class="f" style="width:220px" id="wearAndTearField">
+          <div class="f" style="width:220px">
             <label for="driveWearAndTear">Include wear &amp; tear on your car?</label>
             <select id="driveWearAndTear">
               <option value="1" selected>Yes — full IRS mileage rate</option>
@@ -922,10 +905,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div class="f">
         <label for="food">Food</label>
         <select id="food">
-          <option value="grocery">Groceries + counter service</option>
-          <option value="qs">Counter service</option>
-          <option value="mix" selected>Mix of counter &amp; table service</option>
-          <option value="ts">Table service &amp; character meals</option>
+          <option value="grocery">We'll bring our own food</option>
+          <option value="someQs">Some Quick Service</option>
+          <option value="qs">All Quick Service</option>
+          <option value="mix" selected>Some Quick Service, some Table Service</option>
+          <option value="ts">All Table Service</option>
+          <option value="someCharacter">Some Character Meals</option>
+          <option value="character">All Character Meals</option>
           <option value="plan" id="foodPlanOpt">Resort dining plan where offered</option>
         </select>
       </div>
@@ -1248,6 +1234,23 @@ const OFF_TIERS = ["budget","mid","upscale"];
 const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
                      budget:"Budget", mid:"Mid-range", upscale:"Upscale" };
 
+/** Mirrors foodRate() in src/pricing.ts exactly — "someQs" and
+ *  "someCharacter" are blends, not their own stored numbers, so a resort's
+ *  own `food` object doesn't have them directly. */
+function foodRateFor(r, style){
+  const f = r.food;
+  switch(style){
+    case "grocery": return f.grocery;
+    case "someQs": return (f.grocery + f.qs) / 2;
+    case "qs": case "plan": return f.qs;
+    case "mix": return f.mix;
+    case "ts": return f.ts;
+    case "someCharacter": return (f.ts + f.character) / 2;
+    case "character": return f.character;
+    default: return f.mix;
+  }
+}
+
 /* ============================ helpers ============================ */
 
 const $ = s => document.querySelector(s);
@@ -1509,8 +1512,6 @@ function readParams(){
     // means scan the month exactly as before. See holidayWindows.ts.
     window: $("#windowField").hidden ? "" : $("#window").value,
     gettingThere,
-    flyRentalCar: $("#flyRentalCar").value === "1",
-    driveRentalCar: $("#driveRentalCar").value === "1",
     driveWearAndTear: $("#driveWearAndTear").value === "1",
     overnightYN: $("#overnightYN").value,
     overnightNights: +$("#overnightNights").value,
@@ -1583,13 +1584,6 @@ $("#origin").addEventListener("change", ()=>{
 });
 $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = e.target.value + "%"; });
 
-/** Wear-and-tear is already zero on a rental (its own fee covers it), so
- *  the toggle to drop it manually is moot and hidden whenever renting. */
-function syncDriveRentalCar(){
-  $("#wearAndTearField").hidden = $("#driveRentalCar").value === "1";
-}
-$("#driveRentalCar").addEventListener("change", syncDriveRentalCar);
-
 $("#overnightYN").addEventListener("change", e => { $("#overnightDetail").hidden = e.target.value !== "yes"; });
 
 /** "Need a hotel?" hides the fields that only make sense with one — nights
@@ -1630,14 +1624,12 @@ function tripQuery(){
   }
   q.gettingThere = params.gettingThere;
   if(params.gettingThere === "flyMiles") q.milesPct = params.milesPct;
-  if(params.flyRentalCar) q.flyRentalCar = "1";
   if(DRIVE_PRESETS.includes(params.gettingThere)){
     if(params.overnightYN === "yes"){
       q.overnightLabel = "Overnight stop";
       q.overnightNights = params.overnightNights;
       q.overnightCostPerNight = params.overnightCostPerNight;
     }
-    if(params.driveRentalCar) q.driveRentalCar = "1";
     // Default is "include it" — only send anything when explicitly turned off.
     if(!params.driveWearAndTear) q.driveWearAndTear = "0";
     if(params.originPoint){
@@ -1937,8 +1929,11 @@ function attractionChip(item){
 function foodExamplesLine(r, style){
   const fe = r.foodExamples;
   if(!fe) return "";
-  const list = style === "ts" ? (fe.ts||[])
-    : style === "qs" ? (fe.qs||[])
+  // someQs leans toward the quick-service list, someCharacter/character
+  // toward the table-service one — the named examples are the same real
+  // restaurants either way, character dining just means more meals there.
+  const list = style === "ts" || style === "someCharacter" || style === "character" ? (fe.ts||[])
+    : style === "qs" || style === "someQs" ? (fe.qs||[])
     : style === "mix" ? [...(fe.qs||[]).slice(0,1), ...(fe.ts||[]).slice(0,1)]
     : []; // grocery: nothing to show
   if(!list.length) return "";
@@ -2038,7 +2033,7 @@ function renderBoard(){
     // time somebody actually books, and the owner's call (2026-09-25) was to
     // stop implying a precision the site can't stand behind.
     const live = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
-    const getThere = x.flights + x.driving + x.rentalCarUsd;   // flights/driving mutually exclusive — one is always 0
+    const getThere = x.flights + x.driving;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
     const spark = monthlyMinima(calendars[item.resortId]);
     const perPD = tot/pax/(params.nights+1);
@@ -2059,6 +2054,7 @@ function renderBoard(){
           ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
         </div>
         ${attractionChip(item)}
+        ${crowdChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
       ${sparkSVG(spark)}
@@ -2111,7 +2107,7 @@ function renderTable(){
     return `<tr>
       <td>${pos+1}. ${r.name}<br><small style="color:var(--muted)">${r.city}</small></td>
       <td class="n">${item.iata}</td>
-      ${cell(x.flights + x.driving + x.rentalCarUsd)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
+      ${cell(x.flights + x.driving)}${cell(x.tickets)}${cell(x.hotel)}${cell(x.food)}
       <td class="n"><b>${usd(x.total)}</b></td>
       <td class="n">${MONTHS[sd.getUTCMonth()]} ${sd.getUTCDate()}</td>
       <td>${open ? x.hotelPick.name : "Locked"}</td>
@@ -2217,7 +2213,7 @@ function whyCheaperCard(item, allResults){
   if(cheaper.resortId === pricier.resortId) return "";
   const cp = cheaper.price, pp = pricier.price;
   const lines = [
-    ["Getting there (flights/driving/rental car)", cp.flights+cp.driving+cp.rentalCarUsd, pp.flights+pp.driving+pp.rentalCarUsd],
+    ["Getting there (flights/driving)", cp.flights+cp.driving, pp.flights+pp.driving],
     ["Park tickets", cp.tickets, pp.tickets],
     ["Hotel", cp.hotel, pp.hotel],
     ["Food", cp.food, pp.food],
@@ -2557,18 +2553,46 @@ async function renderDetail(){
     ; // No "Hotel total" row: the total tile above is that number, and the
       // parking row already names the part of it that isn't the room.
 
-  const tierCompare = noHotel ? "" : [0,1,2].map(t=>{
-    const { cost, swapped } = tierRows[t];
-    const label = TIER_LABEL[(stayNow ? ON_TIERS : OFF_TIERS)[t]];
-    // Say so rather than pricing a category that doesn't exist here — see
-    // hotelAtTier()'s doc comment.
-    const detail = swapped ? `Not offered at ${r.name}`
-      : cost===null ? "no cached rate for this date"
-      : `${usd(cost/p.nights)} / night`;
-    return `<div class="li"><div class="l"><b>${label}</b>
-      <small>${detail}</small></div>
-      <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${swapped || cost===null?"—":usd(cost)}</div></div>`;
-  }).join("");
+  /* On property, the three rows are Disney's own named categories (Value/
+   * Moderate/Deluxe) — a real product identity, so they stay in that fixed
+   * order regardless of price. Off property has no such identity: "Budget"/
+   * "Mid-range"/"Upscale" was our own guess at which of a handful of real
+   * hotels SerpApi returned belonged in which bucket, and a thin, skewed
+   * sample could put a genuinely pricier hotel in the "Budget" bucket (the
+   * owner's real report, 2026-09-25: Budget priced HIGHER than Mid-range and
+   * Upscale on a real search). Off property is organized by PRICE instead —
+   * sorted low to high and labelled by rank, not by a guessed category name,
+   * so the card can never show a "Budget" number above a "Mid-range" one. */
+  const tierCompare = noHotel ? "" : (() => {
+    const rows = [0,1,2].map(t => ({ t, ...tierRows[t] }));
+    if (stayNow) {
+      return rows.map(({ t, cost, swapped }) => {
+        const label = TIER_LABEL[ON_TIERS[t]];
+        const detail = swapped ? `Not offered at ${r.name}`
+          : cost===null ? "no cached rate for this date"
+          : `${usd(cost/p.nights)} / night`;
+        return `<div class="li"><div class="l"><b>${label}</b>
+          <small>${detail}</small></div>
+          <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${swapped || cost===null?"—":usd(cost)}</div></div>`;
+      }).join("");
+    }
+    const priced = rows.filter(x => x.cost !== null && !x.swapped).sort((a,b) => a.cost - b.cost);
+    const unpriced = rows.filter(x => x.cost === null || x.swapped);
+    // Labels scale to how many DISTINCT real prices there are to rank — with
+    // only two, "Mid-range" would be a lie about whichever one happens to be
+    // shown second, since it's really the priciest of the two available.
+    const rankLabels = priced.length >= 3 ? ["Cheapest off property", "Mid-range off property", "Most expensive off property"]
+      : priced.length === 2 ? ["Cheapest off property", "Most expensive off property"]
+      : ["Off property"];
+    return priced.map((x, i) => {
+      const isYours = +p.tier === x.t;
+      return `<div class="li"><div class="l"><b>${rankLabels[i]}</b>
+        <small>${usd(x.cost/p.nights)} / night${isYours ? " · what you searched" : ""}</small></div>
+        <div class="p"${isYours?' style="color:var(--accent)"':""}>${usd(x.cost)}</div></div>`;
+    }).join("") + unpriced.map(x => `<div class="li"><div class="l"><b>Off property</b>
+      <small>${x.swapped ? `Not offered at ${r.name}` : "no cached rate for this date"}</small></div>
+      <div class="p">—</div></div>`).join("");
+  })();
   const tierNote = !noHotel && x.hotelTier.swapped
     ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
     : "";
@@ -2585,8 +2609,7 @@ async function renderDetail(){
           <small>Eats from an adult's plate — no plan needed</small></div><div class="p">Free</div></div>` : "")
       // No summary row: the per-person rows above add up to the total tile.
     : (()=>{
-        const style = p.food === "plan" ? "qs" : p.food;
-        const rate = r.food[style];
+        const rate = foodRateFor(r, p.food);
         const foodMult = b => b==="infant"?0:b==="child"?0.55:b==="junior"?0.9:1;
         const days = p.nights + 0.4;
         return ORDER.filter(b=>groups[b]).map(b=>{
@@ -2785,7 +2808,7 @@ async function renderDetail(){
               <div class="v">${usd(x.drivingPick ? x.drivingPick.gasPricePerGallonUsd : 0)}</div>
               <div class="s">per gallon</div></div>
             <div class="kpitile total"><div class="k">Getting there</div>
-              <div class="v">${usd(x.driving + x.rentalCarUsd)}</div><div class="s">all in</div></div>
+              <div class="v">${usd(x.driving)}</div><div class="s">all in</div></div>
           </div>
           <div class="li"><div class="l"><b>Gas</b>
             <small>${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles)+" mi round trip · "+usd(x.drivingPick.gasPricePerGallonUsd)+"/gal" : ""}</small></div>
@@ -2794,9 +2817,6 @@ async function renderDetail(){
             <small>IRS standard mileage rate — bundles depreciation, maintenance and insurance into one per-mile number, not just gas. Turn this off above if you don't think of your own car's wear as a cost of this trip.</small></div><div class="p">${usd(x.drivingPick.wearAndTearUsd)}</div></div>` : ""}
           ${x.drivingPick && x.drivingPick.overnightUsd ? `<div class="li"><div class="l"><b>Overnight stop</b>
             <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
-          ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car</b>
-            <small>Instead of your own car · ${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
-            <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
           <div class="foot"><details class="why"><summary>How this number is worked out</summary>
             <div class="whybody">Gas, wear-and-tear and road-distance figures are estimates, and driving is priced
               for US routes only. Wear and tear uses the IRS standard mileage rate, which bundles depreciation,
@@ -2828,9 +2848,6 @@ async function renderDetail(){
           ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
-          ${x.rentalCarUsd > 0 ? `<div class="li"><div class="l"><b>Rental car at your destination</b>
-            <small>${usd(x.rentalCarPick.dailyRateUsd)}/day × ${x.rentalCarPick.nights+1} days</small></div>
-            <div class="p">${usd(x.rentalCarUsd)}</div></div>` : ""}
           <div class="foot">
             ${fareWhy}
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
@@ -2892,7 +2909,7 @@ async function renderDetail(){
         </div>
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
-          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"Groceries + counter service",qs:"Counter service",mix:"Mix of counter & table service",ts:"Table service & character meals"})[p.food==="plan"?"qs":p.food]}</p>
+          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"We'll bring our own food",someQs:"Some Quick Service",qs:"All Quick Service",mix:"Some Quick Service, some Table Service",ts:"All Table Service",someCharacter:"Some Character Meals",character:"All Character Meals"})[p.food==="plan"?"qs":p.food]}</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Per day</div>
               <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">everyone</div></div>
@@ -3977,7 +3994,6 @@ function costTableHtml(item){
   } else {
     line("Flights", pr.flights);
   }
-  line("Renting a car", pr.rentalCarUsd);
   line("Park tickets", pr.tickets);
   line("Hotel", pr.rooms);
   line("Parking and transfers", pr.transport);
@@ -4059,12 +4075,6 @@ function gettingThereHtml(item){
     }
   }
 
-  if(pr.rentalCarUsd && pr.rentalCarPick){
-    out.push(`<p>A rental car adds <b>${usd(pr.rentalCarUsd)}</b> &mdash;
-      ${pr.rentalCarPick.nights} day${pr.rentalCarPick.nights===1?"":"s"} at
-      $${pr.rentalCarPick.dailyRateUsd} a day. That is one national average rate, not a quote for
-      ${esc(r.city.split(",")[0])}.</p>`);
-  }
   return out.join("");
 }
 
@@ -4175,10 +4185,13 @@ function hotelHtml(item){
 /* -------------------------------- food -------------------------------- */
 
 const FOOD_STYLE_WORDS = {
-  grocery: "mostly groceries and eating in",
+  grocery: "bringing your own food",
+  someQs: "mostly your own food, some counter service",
   qs: "counter service",
   mix: "a mix of table and counter service",
-  ts: "mostly table service",
+  ts: "table service",
+  someCharacter: "mostly table service, some character meals",
+  character: "character meals",
 };
 
 function foodHtml(item){
@@ -4197,13 +4210,14 @@ function foodHtml(item){
   // place this app holds anything about local prices. NOT from the exchange
   // rate, which says nothing whatsoever about whether a country is cheap.
   const wdw = RESORT_BY_ID.get("wdw");
-  const style = (params.food && r.food[params.food]) ? params.food : "mix";
-  if(wdw && r.id !== "wdw" && wdw.food[style] && r.food[style]){
-    const pct = Math.round((1 - r.food[style] / wdw.food[style]) * 100);
+  const style = params.food || "mix";
+  const rHere = foodRateFor(r, style), rWdw = wdw ? foodRateFor(wdw, style) : 0;
+  if(wdw && r.id !== "wdw" && rWdw && rHere){
+    const pct = Math.round((1 - rHere / rWdw) * 100);
     if(Math.abs(pct) >= 5){
       out.push(`<p>Eating the same way costs about <b>${Math.abs(pct)}% ${pct > 0 ? "less" : "more"}</b> here than
-        at Walt Disney World &mdash; our own per-resort daily figures are $${r.food[style]} a day against
-        $${wdw.food[style]}. That is a comparison of food prices, not of the exchange rate.</p>`);
+        at Walt Disney World &mdash; our own per-resort daily figures are $${rHere} a day against
+        $${rWdw}. That is a comparison of food prices, not of the exchange rate.</p>`);
     }
   }
   out.push(`<p class="pnote">Food figures come from budget guides and are per person per day, scaled for
