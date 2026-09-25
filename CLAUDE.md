@@ -84,6 +84,12 @@ section further down:
   within `DRIVE_STAND_IN_MILES` (300) — `noFlightsYet` on the row says so. The
   search is still logged in `route_searches`, so `popular-routes` can buy the
   real fare and the flight takes over by itself.
+- **Jacksonville defaults to driving to Disney World** (owner's follow-up:
+  "I'd rather do that than have shoddy data from one or two flights").
+  `DRIVE_ONLY_PAIRS` in config.ts marks JAX->wdw as local by the owner's
+  call — one named pair, NOT a wider radius (RSW, MIA stay flights). So the
+  board opens on "Driving to WDW" from JAX and the paid nightly jobs never
+  buy a JAX->MCO/TPA fare. Add a pair there only on the owner's say-so.
 - **"Check now" (in-app live fare) is gone from the flight card.** One link:
   "See live fares on Kayak". `/api/exact-fare` still exists server-side but
   nothing offers it — no SerpApi spend from clicks now.
