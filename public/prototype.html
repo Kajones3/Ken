@@ -753,7 +753,12 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <label for="kids">Children</label>
         <select id="kids"></select>
       </div>
+      <div class="f">
+        <label for="seniors">Adults 60 or over</label>
+        <select id="seniors"></select>
+      </div>
     </div>
+    <p class="hint" style="margin:6px 0 12px">Hong Kong and Shanghai sell seniors (60+) the cheaper child ticket.</p>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
 
     <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
@@ -917,6 +922,22 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="5">5 rooms</option>
           <option value="6">6 rooms</option>
         </select>
+      </div>
+    </div>
+    <div class="fields" id="parkingFields" hidden>
+      <div class="f">
+        <label for="cars">Cars you're bringing</label>
+        <select id="cars">
+          <option value="0">No car</option>
+          <option value="1" selected>1 car</option>
+          <option value="2">2 cars</option>
+          <option value="3">3 cars</option>
+          <option value="4">4 cars</option>
+        </select>
+      </div>
+      <div class="f">
+        <label class="ovexclude" style="margin-top:22px"><input type="checkbox" id="freeParking">
+          <span>We get free theme park parking</span></label>
       </div>
     </div>
     <p class="hint" id="roomsHint" style="margin:6px 0 14px">More than one family or group? Pick how many rooms — each is priced at the same rate.</p>
@@ -1426,6 +1447,7 @@ function fillOriginOptions(){
 function fillFormOptions(){
   fillOriginOptions();
   fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#seniors"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
   fillSelect($("#overnightNights"), [1,2,3,4,5].map(n=>[n,n+" night"+(n>1?"s":"")]));
@@ -1502,6 +1524,9 @@ function readParams(){
   return {
     origin: $("#origin").value,
     adults: +$("#adults").value,
+    seniors: Math.min(+$("#seniors").value || 0, +$("#adults").value),
+    cars: +$("#cars").value,
+    freeParking: $("#freeParking").checked,
     ages: Array.from({length:+$("#kids").value}, (_,i)=>{
       const el = document.getElementById("age"+i); return el ? +el.value : 7;
     }),
@@ -1598,6 +1623,14 @@ $("#milesPct").addEventListener("input", e => { $("#milesPctVal").textContent = 
 
 $("#overnightYN").addEventListener("change", e => { $("#overnightDetail").hidden = e.target.value !== "yes"; });
 
+/** Cars and free parking only mean anything off property: on property,
+ *  Disney's own hotel guests park free already. */
+function syncParkingUi(){
+  const el = $("#parkingFields");
+  if(el) el.hidden = !($("#needHotel").value !== "no" && $("#stay").value === "off");
+}
+$("#stay").addEventListener("change", syncParkingUi);
+
 /** "Need a hotel?" hides the fields that only make sense with one — nights
  *  (still used internally for flights/food/an overnight driving stop, just
  *  not shown when there's no hotel to count nights against), where-you-stay,
@@ -1607,6 +1640,7 @@ function syncNeedHotel(){
   const no = $("#needHotel").value === "no";
   $("#nightsField").hidden = no;
   $("#hotelDetailFields").hidden = no;
+  syncParkingUi();
   $("#roomsHint").hidden = no;
   $("#foodPlanOpt").disabled = no;
   if(no && $("#food").value === "plan") $("#food").value = "mix";
@@ -1621,6 +1655,11 @@ function tripQuery(){
     nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
   };
   if(params.hopper) q.hopper = "1";
+  if(params.seniors > 0) q.seniors = params.seniors;
+  if(params.stay === "off"){
+    if(params.cars !== 1) q.cars = params.cars;
+    if(params.freeParking) q.freeParking = "1";
+  }
   if(params.rooms > 1 && params.stay !== "none") q.rooms = params.rooms;
   // Sent on every search, including the default, so a saved search reopens
   // with the answer its owner actually gave rather than silently reverting
@@ -2125,6 +2164,7 @@ function renderBoard(){
           <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}.</div>`:""}
+        ${item.noFlightsYet?`<div class="estnote">${esc(item.noFlightsYet)}.</div>`:""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -2427,27 +2467,9 @@ async function renderDetail(){
     + (lapInfants ? `<div class="li"><div class="l"><b>Lap infant${lapInfants>1?"s":""} × ${lapInfants}</b>
         <small>Under 2, traveling on a lap — priced at 10% of an adult fare</small></div>
         <div class="p">included</div></div>` : "")
-    // Exact live fare. Only offered where it would actually tell you
-    // something new — if this date already has a real fare, there is nothing
-    // to buy. Free users see what it is and what it costs to unlock, rather
-    // than a disabled control with no explanation.
-    // Offered wherever the shown fare is NOT a real vendor row — an estimate,
-    // or the traveler's own typed number. It used to require fp.estimate,
-    // which hid the verify button in the one case with nothing behind the
-    // number at all: no cached row, no BTS baseline, just what somebody
-    // typed. That is the fare most likely to be wrong and the only one they
-    // cannot check, which is backwards. Still never offered when flights are
-    // excluded (nothing to look up) or when a real fare is already in hand
-    // (nothing to buy).
-    + (!excludeFlights && (!fp || fp.estimate)
-      ? `<div class="li exactrow"><div class="l"><b>Check a live price</b>
-            <small>${fp ? "" : "Nothing is cached for this route, so this is the only way to get a real number. "}Look up a real round-trip price for ${fmtDate(x.start)} right now — an up-to-the-minute estimate, still not a guarantee of what you'll pay at checkout.${
-              session.exactFare ? ` ${session.exactFare.remainingToday} of ${session.exactFare.perDay} checks left today.` : ""}</small></div>
-            <div class="p"><button class="btn btn-sm" id="exactBtn"
-              data-resort="${r.id}" data-dest="${item.iata}" data-date="${x.start}"
-              data-nights="${p.nights}">Check now</button></div></div>
-           <div class="li exactout" id="exactOut" hidden></div>`
-      : "");
+    // No in-app "Check now" live-fare button any more (owner, 2026-09-25):
+    // two flight buttons read as the same thing. Kayak is the one path.
+    ;
   /**
    * Where "Check live fares" sends you when the cache has no real booking
    * link of its own.
@@ -2572,7 +2594,7 @@ async function renderDetail(){
         <div class="p">${usd(x.rooms)}</div></div>`;
   const hotelRows = hotelPickRow
     + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
-        <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":" off property"}</small></div>
+        <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":` per car × ${p.cars} car${p.cars===1?"":"s"}`}</small></div>
         <div class="p">${usd(x.transport)}</div></div>` : "")
     ; // No "Hotel total" row: the total tile above is that number, and the
       // parking row already names the part of it that isn't the room.
@@ -2798,6 +2820,7 @@ async function renderDetail(){
           so many travelers won't experience the cheapest fares.
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
         </p>` : ""}
+        ${item.noFlightsYet ? `<p class="spreadnote"><b>${esc(item.noFlightsYet)}.</b> We'll look up real flight prices for this route tonight.</p>` : ""}
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
@@ -2868,11 +2891,7 @@ async function renderDetail(){
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
           <div class="foot">
-            ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">Check live fares →</a>
-              <p class="sub" style="margin:6px 0 0">Opens ${p.origin}→${x.destination}, ${fmtDate(x.start)} back ${fmtDate(backDate)},
-                for ${kayakAdults} adult${kayakAdults===1?"":"s"}${
-                  kayakKidAges.length ? ` and ${kayakKidAges.length === 1 ? "a child aged" : "children aged"} ${kayakKidAges.join(" and ")}` : ""}.
-                If it lands on a different trip, the price you see there is not this one's.</p>` : ""}
+            ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">See live fares on Kayak →</a>` : ""}
           </div>
         </div>`}
         <div class="card">
@@ -3785,6 +3804,10 @@ async function openSavedTrip(trip){
     if(q.stay !== "none") $("#stay").value = q.stay;
   }
   $("#hopper").value = q.hopper ? "1" : "0";
+  $("#seniors").value = String(+q.seniors || 0);
+  $("#cars").value = String(q.cars === undefined ? 1 : +q.cars);
+  $("#freeParking").checked = q.freeParking === "1";
+  syncParkingUi();
   $("#rooms").value = String(Math.max(1, +q.rooms || 1));
   $("#crowdCare").value = q.crowdCare || "some";
   $("#priceBasis").value = q.basis === "cheapest" ? "cheapest" : "typical";

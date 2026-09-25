@@ -64,6 +64,30 @@ section further down:
   Disneyland Paris's "Hotel+tickets separate" badge is gone (Good to know
   already covers it; config.test.ts pins that).
 
+### LATEST, part 2 — parking per car, seniors, JAX, one flight link (2026-09-25)
+
+- **Off-property parking is per car.** "Cars you're bringing" (0-4, default 1)
+  and "We get free theme park parking" appear only when staying off property
+  (`TripParams.cars`/`freeParking`, `?cars=`/`?freeParking=1`). On property is
+  unchanged — Disney's hotel guests already park free.
+- **Seniors.** "Adults 60 or over" counts how many of the ADULTS are 60+
+  (`TripParams.seniors`, never more than `adults`, so party size is unchanged).
+  `bands.senior: 60` at Hong Kong and Shanghai prices them at the child ticket
+  (`ticketBandOf()` in pricing.ts — tickets and hopper only; food and flights
+  treat them as adults). Owner-checked prices: Hong Kong HK$790 / HK$611 (child
+  ratio now 0.77, verified), Shanghai CNY 659 / 494 (0.75, already right).
+  **Hong Kong's "Unverified age bands" badge is gone — no resort has a badge now.**
+  Shanghai's disability discount is a Good to know line only (owner's call).
+- **No flight data for a short US hop now prices as a drive, labelled.** The
+  owner's JAX->WDW case: no BTS baseline and never bought, so the row was blank.
+  `compare()` re-prices as a drive when a US resort has no fare/estimate AND is
+  within `DRIVE_STAND_IN_MILES` (300) — `noFlightsYet` on the row says so. The
+  search is still logged in `route_searches`, so `popular-routes` can buy the
+  real fare and the flight takes over by itself.
+- **"Check now" (in-app live fare) is gone from the flight card.** One link:
+  "See live fares on Kayak". `/api/exact-fare` still exists server-side but
+  nothing offers it — no SerpApi spend from clicks now.
+
 ### Today in one paragraph
 
 Five pieces of original work (free/Plus regating, real WDW/Disneyland/Paris

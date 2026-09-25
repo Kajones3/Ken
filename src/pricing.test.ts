@@ -291,6 +291,45 @@ test("several hotel rooms multiply the room line, and only the room line", () =>
   if (none.ok) { assert.equal(none.price.rooms, 0); assert.equal(none.price.roomCount, 0); }
 });
 
+test("off-property parking is per car, free parking is $0, on property is unchanged", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const off = { ...base, stay: "off" as const };
+  const one = priceTrip(book, wdw, off, {}, START);
+  const two = priceTrip(book, wdw, { ...off, cars: 2 }, {}, START);
+  const free = priceTrip(book, wdw, { ...off, cars: 2, freeParking: true }, {}, START);
+  const none = priceTrip(book, wdw, { ...off, cars: 0 }, {}, START);
+  assert.ok(one.ok && two.ok && free.ok && none.ok);
+  if (!one.ok || !two.ok || !free.ok || !none.ok) return;
+  assert.ok(one.price.transport > 0);
+  assert.equal(two.price.transport, one.price.transport * 2);
+  assert.equal(free.price.transport, 0);
+  assert.equal(none.price.transport, 0);
+  const on = priceTrip(book, wdw, base, {}, START);
+  const onCars = priceTrip(book, wdw, { ...base, cars: 3 }, {}, START);
+  assert.ok(on.ok && onCars.ok);
+  if (on.ok && onCars.ok) assert.equal(onCars.price.transport, on.price.transport);
+});
+
+test("seniors (60+) buy the child ticket where a resort sells one, and pay adult elsewhere", () => {
+  for (const [id, iata] of [["hkdl", "HKG"], ["shdr", "PVG"]] as const) {
+    const r = resortById(id);
+    const book = fullBook(id, iata);
+    const adults = priceTrip(book, r, { ...base, adults: 2 }, {}, START);
+    const withSenior = priceTrip(book, r, { ...base, adults: 2, seniors: 1 }, {}, START);
+    assert.ok(adults.ok && withSenior.ok);
+    if (!adults.ok || !withSenior.ok) continue;
+    assert.ok(withSenior.price.tickets < adults.price.tickets, `${id}: a senior should cost less`);
+    assert.equal(withSenior.price.flights, adults.price.flights, "party size is unchanged");
+  }
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const a = priceTrip(book, wdw, { ...base, adults: 2 }, {}, START);
+  const b = priceTrip(book, wdw, { ...base, adults: 2, seniors: 2 }, {}, START);
+  assert.ok(a.ok && b.ok);
+  if (a.ok && b.ok) assert.equal(b.price.tickets, a.price.tickets);
+});
+
 test("excludeHotel: prices $0 hotel with no pick, same shape as stay: none", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
