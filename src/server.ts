@@ -104,6 +104,11 @@ function gettingThereParams(q: URLSearchParams): {
   return { gettingThere, flyBase, driveBase };
 }
 
+/** How far a drive may stand in for a route with no flight price at all.
+ *  JAX->Disney World (~144 miles) is the case it exists for; 300 covers
+ *  every short Florida/California hop without inventing cross-country drives. */
+const DRIVE_STAND_IN_MILES = 300;
+
 function paramsFrom(q: URLSearchParams): TripParams {
   const ages = (q.get("childAges") ?? "").split(",").map((s) => s.trim()).filter(Boolean).map(Number);
   const nights = clamp(Number(q.get("nights") ?? 6), 1, 30);
@@ -119,6 +124,9 @@ function paramsFrom(q: URLSearchParams): TripParams {
       ? q.get("food") : "mix") as FoodStyle,
     hopper: q.get("hopper") === "1" || q.get("hopper") === "true",
     hotelRooms: clamp(Number(q.get("rooms") ?? 1), 1, MAX_HOTEL_ROOMS),
+    seniors: clamp(Number(q.get("seniors") ?? 0), 0, 12),
+    cars: clamp(Number(q.get("cars") ?? 1), 0, 4),
+    freeParking: q.get("freeParking") === "1",
     transportMode: "fly",
     // Free, like the overrides they most resemble: a traveler correcting the
     // app's picture of what THEY actually pay. Both are unverified claims
@@ -296,7 +304,27 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // The day worth QUOTING, not the luckiest day in the month. `cheapest` is
     // still computed and still shown — see typicalIn's header for why the
     // floor stays visible instead of being hidden behind a better headline.
-    const { typical, cheapest, spread, skipped } = typicalIn(book, resort, resortParams, overrides, dates);
+    let { typical, cheapest, spread, skipped } = typicalIn(book, resort, resortParams, overrides, dates);
+    /* No flight price at all for a US resort — JAX->MCO is the owner's case
+     * (2026-09-25): too short a hop for the government fare survey to have a
+     * baseline, and not yet bought by the nightly job. Rather than a blank
+     * row, price the same trip as a DRIVE from that airport's city, and say
+     * so. This is a stand-in, not a decision: the search was recorded above,
+     * so tonight's paid lookup can buy the real fare, and from then on the
+     * flight prices normally and this branch never runs. */
+    let droveInstead = false;
+    // Only a short hop: a 2,000-mile "drive" standing in for a missing
+    // cross-country fare would be a wrong number presented as a real one.
+    const from = ORIGIN_BY_IATA.get(params.origin);
+    const shortHop = !!from && haversineMiles(from.lat, from.lon, resort.lat, resort.lon) <= DRIVE_STAND_IN_MILES;
+    if (!typical && mode !== "drive" && resort.region === "dom" && shortHop
+        && skipped.some((r) => /no cached fare/.test(r))) {
+      const asDrive = typicalIn(book, resort, { ...params, ...driveBase, destination: iata }, overrides, dates);
+      if (asDrive.typical) {
+        ({ typical, cheapest, spread, skipped } = asDrive);
+        droveInstead = true;
+      }
+    }
     // Which day the traveler asked to be quoted. "typical" is the default and
     // the honest answer; "cheapest" is the old behavior, offered deliberately
     // because somebody with flexible dates is asking a real and different
@@ -328,6 +356,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     const crowdWarning = crowdFlag(resort.id, crowdMonthForRow, crowdCare, crowdDay) ?? undefined;
     return best
       ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
+          noFlightsYet: droveInstead ? `No flight prices yet for ${params.origin}→${iata} — priced as a drive for now` : undefined,
           /** What the rest of the month looks like around the quoted day, so
            *  the card can say "as low as $X on the 31st" without a second
            *  request. Absent on an exact-date search: one day has no spread,

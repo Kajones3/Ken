@@ -99,6 +99,15 @@ export interface TripParams {
    *  Parking/transfers are NOT multiplied: they are charged per day, not per
    *  room, and guessing how many cars a group brings would be inventing it. */
   hotelRooms?: number;
+  /** How many of `adults` are 60 or over (never more than `adults`). Only matters at a resort
+   *  with a senior ticket (`bands.senior`); everywhere else they are adults. */
+  seniors?: number;
+  /** Off property only: how many cars pay the daily parking rate. Undefined
+   *  = 1, today's behaviour. 0 means nobody is parking. */
+  cars?: number;
+  /** Off property only: the party parks free (a pass perk, a hotel shuttle
+   *  deal...). The traveler's own claim, like every override. */
+  freeParking?: boolean;
 }
 
 /** Rooms actually priced: a whole number from 1 to MAX_HOTEL_ROOMS. */
@@ -410,8 +419,29 @@ export function flightMultiplier(age: number): number {
   return age < 2 ? 0.1 : 1;
 }
 
+/** Everyone travelling, as ages. Seniors are carried as 65 so a resort with
+ *  a senior ticket (see `bands.senior`) can find them; everywhere else — food,
+ *  flights, every resort without one — a 65-year-old is simply an adult. */
+export const SENIOR_AGE = 65;
 export function partyAges(p: TripParams): number[] {
-  return [...Array.from({ length: p.adults }, () => 30), ...p.childAges];
+  // `seniors` is how many of the ADULTS are 60+, so the party size never
+  // changes with it — only which ticket some of the adults buy.
+  const seniors = Math.max(0, Math.min(p.adults, Math.round(p.seniors ?? 0) || 0));
+  return [
+    ...Array.from({ length: p.adults - seniors }, () => 30),
+    ...Array.from({ length: seniors }, () => SENIOR_AGE),
+    ...p.childAges,
+  ];
+}
+
+/** The band a person's TICKET is priced in. Same as bandOf, except that a
+ *  resort selling a senior ticket at the child price (Hong Kong, Shanghai —
+ *  owner-checked against each resort's own purchase page, 2026-09-25) moves
+ *  its seniors into the child band for admission only. */
+export function ticketBandOf(resort: Resort, age: number): Band {
+  const senior = resort.bands.senior;
+  if (senior !== undefined && age >= senior) return "child";
+  return bandOf(resort, age);
 }
 
 // ---------------------------------------------------------------- hotels
@@ -712,7 +742,7 @@ export function priceTrip(
     const t = book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
     ages.forEach((age, idx) => {
-      const band = bandOf(resort, age);
+      const band = ticketBandOf(resort, age);
       const gate = band === "infant" ? 0
         : band === "child" ? t.child
         : band === "junior" ? (t.junior ?? t.adult * (resort.ticket.junior ?? 0.9))
@@ -738,7 +768,7 @@ export function priceTrip(
   const hopperChild = ownerChild ?? hopperPerTicket(resort, params.parkDays, resort.ticket.hopperChildUsd);
   const hopperPerHead = ages.map((age) => {
     if (!params.hopper || !hopperAdult) return 0;
-    const band = bandOf(resort, age);
+    const band = ticketBandOf(resort, age);
     return band === "infant" ? 0
       : band === "child" ? (hopperChild ?? hopperAdult)
       : band === "junior" ? hopperAdult * (resort.ticket.junior ?? 0.9)
@@ -895,7 +925,14 @@ export function priceTrip(
 
   // Off-property looks cheaper than it is until you pay to park at the parks —
   // unless there's no hotel at all, in which case there's nothing to model.
-  const perDay = stay === "none" ? 0 : transportPerDay(book, resort, hotelPick.onProperty);
+  // Off property the daily rate is PER CAR (owner, 2026-09-25: Disney charges
+  // each car to park; its own hotel guests park free, which is why on
+  // property is already $0). Free parking, or no car at all, is $0.
+  const carCount = Math.max(0, Math.min(4, Math.round(params.cars ?? 1)));
+  const perDay = stay === "none" ? 0
+    : hotelPick.onProperty ? transportPerDay(book, resort, true)
+    : params.freeParking ? 0
+    : transportPerDay(book, resort, false) * carCount;
   const transportFull = perDay * (params.nights + 1);
   // A pass's parking perk lands here rather than on the ticket line, because
   // parking is what it actually pays for. On property this is usually zero

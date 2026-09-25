@@ -20,7 +20,7 @@ import {
  */
 test("only the resorts with real cost-model gaps carry a confidence badge", () => {
   const flagged = RESORTS.filter((r) => r.dataConfidence).map((r) => r.id).sort();
-  assert.deepEqual(flagged, ["hkdl"]);
+  assert.deepEqual(flagged, []);
 });
 
 test("Paris carries no badge — the bundling note lives in Good to know instead", () => {
@@ -41,13 +41,16 @@ test("Shanghai carries no badge, now that its age bands are owner-verified", () 
   // unverified height claim.
   const shdr = RESORT_BY_ID.get("shdr")!;
   assert.equal(shdr.dataConfidence, undefined);
-  assert.deepEqual(shdr.bands, { freeUnder: 3, child: [3, 11], adult: 12 });
+  assert.deepEqual(shdr.bands, { freeUnder: 3, child: [3, 11], adult: 12, senior: 60 });
 });
 
-test("Hong Kong's badge names the actual gap: unverified age bands", () => {
+test("Hong Kong carries no badge: its bands were checked on its own ticket page", () => {
+  // Owner's screenshot, 2026-09-25: under 3 free, Child/Senior (3-11 or 60+)
+  // HK$611, General Admission HK$790.
   const hkdl = RESORT_BY_ID.get("hkdl")!;
-  assert.ok(hkdl.dataConfidence);
-  assert.match(hkdl.dataConfidence!.note, /age/i);
+  assert.equal(hkdl.dataConfidence, undefined);
+  assert.deepEqual(hkdl.bands, { freeUnder: 3, child: [3, 11], adult: 12, senior: 60 });
+  assert.equal(hkdl.ticket.child, 0.77);
 });
 
 test("every badge renders and gives the reader somewhere to check", () => {

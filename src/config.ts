@@ -115,7 +115,9 @@ export interface Resort {
   altArrivalAirports: { iata: string; label: string }[];
   /** Admission age bands differ at every resort. A 12-year-old is an adult in
    *  Orlando, a child in Paris, and a Junior in Tokyo. */
-  bands: { freeUnder: number; child: [number, number]; junior?: [number, number]; adult: number };
+  /** `senior`: the age at which a senior ticket starts, priced at the child
+   *  rate. Only resorts that sell one set it. */
+  bands: { freeUnder: number; child: [number, number]; junior?: [number, number]; adult: number; senior?: number };
   ticket: {
     base: number; child: number; junior?: number; slope: number; floor: number;
     /** PUBLISHED MULTI-DAY TOTALS for an adult, index 0 = one day.
@@ -473,6 +475,7 @@ export const RESORTS: Resort[] = [
     ],
     goodToKnow: [
       "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
+      "Guests with disabilities pay the reduced ticket price at Shanghai Disneyland — the same price as children (3-11) and seniors (60+), about 25% below a regular ticket. Choose that ticket type when you buy and bring documentation. Our totals price everyone else at the regular rate, so a party that qualifies will pay less than shown.",
     ],
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",
@@ -494,7 +497,10 @@ export const RESORTS: Resort[] = [
     // was simply wrong, not a real cost-model gap, so the badge is gone
     // rather than reworded. Same rule as everywhere else in this file: a
     // badge that outlives its reason trains people to ignore badges.
-    bands: { freeUnder: 3, child: [3, 11], adult: 12 },
+    // senior: owner-checked 2026-09-25 — seniors 60+ pay the child price
+    // (CNY 494 against CNY 659 regular on the same date, 0.75, matching the
+    // child ratio below).
+    bands: { freeUnder: 3, child: [3, 11], adult: 12, senior: 60 },
     /* OWNER DATA, 2026-09-23. Shanghai's own purchase flow, October 2026
        calendar: 22 bookable dates running CNY 475-799, mean CNY 579. At the
        generated rate of 6.7 CNY to the dollar that is $86. The child ratio is
@@ -550,22 +556,17 @@ export const RESORTS: Resort[] = [
     // The owner click-tests these; fix here if one 404s.
     onPropertyHotels: { url: "https://www.hongkongdisneyland.com/hotels/" },
     altArrivalAirports: [],
-    // Hong Kong's age bands come from model knowledge, not a checked source
-    // — unlike Tokyo's and Paris's, which were verified against official
-    // pages. Flagged until someone confirms them against Hong Kong
-    // Disneyland's own ticket page.
-    dataConfidence: {
-      level: "Unverified age bands",
-      note: "We haven't confirmed Hong Kong's child/adult ticket ages against an official source, so a family's ticket total is our least certain of the six. Worth checking the official ticket page before you budget on it.",
-    },
-    bands: { freeUnder: 3, child: [3, 11], adult: 12 },
+    // Badge REMOVED 2026-09-25: the owner's screenshot of Hong Kong's own
+    // ticket page shows under-3 free, Child/Senior (3-11 or 60+) HK$611,
+    // General Admission HK$790 — exactly these bands, now verified.
+    bands: { freeUnder: 3, child: [3, 11], adult: 12, senior: 60 },
     /* OWNER DATA, 2026-09-23. Hong Kong's own reservation calendar, November
        2026: a clean two-tier week at HKD 669 Tuesday-Thursday and HKD 759
        Friday-Monday. Weighted across a week that is HKD 720, or $92 at the
        generated 7.843 to the dollar.
-       The CHILD RATIO IS STILL A GUESS — the calendar shows general admission
-       only, so 0.72 is unchanged and unverified. */
-    ticket: { base: 92, child: 0.72, slope: 0.045, floor: 0.68 },
+       Child ratio OWNER DATA, 2026-09-25: HK$611 Child/Senior against HK$790
+       General Admission on the same date, 0.77. */
+    ticket: { base: 92, child: 0.77, slope: 0.045, floor: 0.68 },
     food: { grocery: 20, qs: 34, mix: 53, ts: 87, character: 131 },
     foodExamples: {
       qs: [{ name: "Tomorrowland Terrace", tier: "$" }, { name: "Market Place Kitchen", tier: "$" }],
