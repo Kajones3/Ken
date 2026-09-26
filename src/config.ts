@@ -646,6 +646,19 @@ export interface AttractionDef {
   /** Optional: what makes a resort's version different from its clones.
    *  Worth writing only when it would change where someone goes. */
   note?: string;
+  /** A whole themed LAND (Cars Land, Zootopia, Pandora) or a single
+   *  attraction inside one. Missing means attraction — every shipped row. */
+  kind?: "land" | "attraction";
+  /** Which land it sits in, per resort: { wdw: "Tomorrowland", shdr: "Tomorrowland" }.
+   *  Per resort because clones move — Haunted Mansion is in Liberty Square
+   *  at Walt Disney World and New Orleans Square at Disneyland. */
+  lands?: Record<string, string>;
+  /** Resorts where ANOTHER row of the same kind carries the same name —
+   *  worked out when the owner's list is overlaid, never typed. An owner's
+   *  sheet lists "Adventureland" once per resort, and each of those rows
+   *  names one resort; without this, every one would claim to be the only
+   *  Adventureland anywhere. */
+  alsoAt?: string[];
 }
 
 /**
@@ -688,7 +701,7 @@ export function attractionsFor(resortId: string): AttractionDef[] {
  * flag someone remembers to update when a clone opens.
  */
 export function isOnlyAt(attraction: AttractionDef): boolean {
-  return attraction.resortIds.length === 1;
+  return attraction.resortIds.length === 1 && !(attraction.alsoAt && attraction.alsoAt.length);
 }
 
 export interface Origin { iata: string; name: string; lat: number; lon: number }

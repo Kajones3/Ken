@@ -23,6 +23,10 @@ export interface AttractionMatch {
   /** True when this resort is the only place that has it. */
   onlyHere: boolean;
   note?: string;
+  /** "land" or "attraction" — lands read differently on a board row. */
+  kind?: "land" | "attraction";
+  /** The land it sits in at THIS resort, when the owner's list says. */
+  land?: string;
 }
 
 export interface ResortAttractionMatches {
@@ -70,8 +74,12 @@ export function resolvePicks(
   return out;
 }
 
-function toMatch(a: AttractionDef): AttractionMatch {
-  return { id: a.id, name: a.name, onlyHere: isOnlyAt(a), note: a.note };
+function toMatch(a: AttractionDef, resortId: string): AttractionMatch {
+  const m: AttractionMatch = { id: a.id, name: a.name, onlyHere: isOnlyAt(a), note: a.note };
+  if (a.kind === "land") m.kind = "land";
+  const land = a.lands?.[resortId];
+  if (land) m.land = land;
+  return m;
 }
 
 /** What one resort offers against one traveler's picks. */
@@ -83,7 +91,7 @@ export function matchesForResort(
   const matched: AttractionMatch[] = [];
   const missing: AttractionMatch[] = [];
   for (const a of picks) {
-    (a.resortIds.includes(resortId) ? matched : missing).push(toMatch(a));
+    (a.resortIds.includes(resortId) ? matched : missing).push(toMatch(a, resortId));
   }
   // Exclusives first, then alphabetical so the order never depends on the
   // order the traveler happened to tick the boxes in.

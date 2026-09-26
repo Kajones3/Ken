@@ -96,6 +96,9 @@ details.group[open]>summary::after{transform:rotate(90deg)}
 .arow{display:grid; gap:8px; margin-bottom:8px;
   grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) minmax(0,1.6fr) auto}
 .arow-2{grid-template-columns:1fr}
+.arow-3{grid-template-columns:minmax(0,180px) minmax(0,1fr)}
+select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface); border:1px solid var(--rule-strong);
+  border-radius:9px; padding:9px 11px; min-height:42px; width:100%}
 .arowhead{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
 .arowhead span{padding-left:2px}
 .alist{border-top:1px solid var(--rule)}
@@ -125,7 +128,7 @@ details.group[open]>summary::after{transform:rotate(90deg)}
   color:var(--muted); margin-bottom:2px}
 .farehead span{padding-left:2px}
 @media (max-width:720px){
-  .farerow,.farerow-2,.arow,.arow-2{grid-template-columns:1fr}
+  .farerow,.farerow-2,.arow,.arow-2,.arow-3{grid-template-columns:1fr}
   .farehead{display:none}
 }
 select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface);
@@ -208,6 +211,10 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
       from how many resorts you name, so adding Paris to Ratatouille automatically stops the app claiming
       EPCOT is the only place to ride it. A ride with a different name abroad is still the same ride &mdash;
       put both resorts on one row and explain the difference in the note.</p>
+    <p><b>Lands and rides both belong here.</b> Set the type to <i>land</i> for a whole themed area (Cars Land,
+      Zootopia) and <i>attraction</i> for a ride or show. The land column says where it sits at each resort, as
+      <code>wdw: Liberty Square; dlr: New Orleans Square</code>. <b>Hide</b> keeps a row but takes it off the
+      traveler's list, so you choose what's shown without losing anything you typed.</p>
 
     <div class="arow arowhead">
       <span>Id</span><span>Name</span><span>Resorts that have it</span><span></span>
@@ -217,6 +224,15 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
       <input type="text" id="aName" placeholder="Space Mountain" maxlength="120" aria-label="Name">
       <input type="text" id="aResorts" placeholder="wdw dlr dlp tdr hkdl" aria-label="Resorts">
       <button class="btn primary" id="aAdd">Save</button>
+    </div>
+    <div class="arow arow-3">
+      <select id="aKind" aria-label="Type">
+        <option value="">Type: work it out</option>
+        <option value="attraction">Attraction</option>
+        <option value="land">Land</option>
+      </select>
+      <input type="text" id="aLands" maxlength="400" aria-label="Land at each resort"
+        placeholder="Land (optional) — wdw: Tomorrowland; shdr: Tomorrowland">
     </div>
     <div class="arow arow-2">
       <input type="text" id="aNote" maxlength="400" aria-label="Note"
@@ -541,7 +557,10 @@ function renderAttractions(d){
   const eff = d.effective || [];
 
   $("#aHint").textContent = "Resort ids: " + ATTR_RESORTS.map(r => r.id + " (" + r.name + ")").join(", ");
-  $("#aCount").textContent = eff.length + " attraction" + (eff.length === 1 ? "" : "s") + " live"
+  const nLand = eff.filter(a => a.kind === "land").length;
+  const nHidden = (d.owner || []).filter(o => o.hidden).length;
+  $("#aCount").textContent = `${eff.length} live — ${nLand} land${nLand === 1 ? "" : "s"}, ${eff.length - nLand} attraction${eff.length - nLand === 1 ? "" : "s"}`
+    + (nHidden ? ` · ${nHidden} hidden` : "")
     + (owned.size ? " \u00b7 " + owned.size + " changed by you" : "");
 
   const rows = eff.map(a => {
@@ -549,19 +568,21 @@ function renderAttractions(d){
     const shipped = ATTR_SHIPPED.has(a.id);
     const names = (a.resortIds || [])
       .map(id => (ATTR_RESORTS.find(r => r.id === id) || {}).name || id).join(", ");
+    const lands = Object.entries(a.lands || {}).map(([r, l]) => `${r}: ${l}`).join(" · ");
     return `<div class="aitem">
       <span class="an">${esc(a.name)}</span>
       <span class="ar">${esc(names)}</span>
       <span class="atags">
+        ${a.kind === "land" ? `<span class="atag">Land</span>` : ""}
         ${a.onlyAt ? `<span class="atag only">Only here</span>` : ""}
         ${mine ? `<span class="atag">Yours</span>` : ""}
       </span>
       <span class="aacts">
         <button class="btn" data-edit="${esc(a.id)}">Edit</button>
-        ${mine
-          ? `<button class="btn" data-revert="${esc(a.id)}">${shipped ? "Revert" : "Delete"}</button>`
-          : `<button class="btn" data-hide="${esc(a.id)}">Remove</button>`}
+        <button class="btn" data-hide="${esc(a.id)}">Hide</button>
+        ${mine ? `<button class="btn" data-revert="${esc(a.id)}">${shipped ? "Revert" : "Delete"}</button>` : ""}
       </span>
+      ${lands ? `<span class="anote">In ${esc(lands)}</span>` : ""}
       ${a.note ? `<span class="anote">${esc(a.note)}</span>` : ""}
     </div>`;
   });
@@ -570,11 +591,18 @@ function renderAttractions(d){
   // go?" is a worse question than seeing it greyed out.
   for(const o of (d.owner || [])){
     if(o.hidden){
+      // A shipped row hidden with nothing else changed comes back by
+      // reverting; one of the owner's own rows comes back by un-hiding it,
+      // details intact — deleting it would lose what was typed.
+      const plainShippedHide = ATTR_SHIPPED.has(o.id) && !o.name;
       rows.push(`<div class="aitem">
         <span class="an">${esc(o.name || o.id)}</span>
-        <span class="ar"></span>
-        <span class="atags"><span class="atag bad">Removed by you</span></span>
-        <span class="aacts"><button class="btn" data-revert="${esc(o.id)}">Put it back</button></span>
+        <span class="ar">${esc((o.resortIds || []).join(", "))}</span>
+        <span class="atags"><span class="atag bad">Hidden</span></span>
+        <span class="aacts">${plainShippedHide
+          ? `<button class="btn" data-revert="${esc(o.id)}">Show again</button>`
+          : `<button class="btn" data-unhide="${esc(o.id)}">Show again</button>
+             <button class="btn" data-revert="${esc(o.id)}">Delete</button>`}</span>
       </div>`);
     } else if(!o.applied){
       rows.push(`<div class="aitem">
@@ -613,6 +641,8 @@ $("#aAdd").addEventListener("click", async () => {
     name: $("#aName").value.trim(),
     resortIds: $("#aResorts").value.trim(),
     note: $("#aNote").value.trim(),
+    kind: $("#aKind").value,
+    lands: $("#aLands").value.trim(),
   };
   const r = await fetch("/api/admin/attractions", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -626,6 +656,7 @@ $("#aAdd").addEventListener("click", async () => {
   }
   attrSay(said, true, `Saved "${body.name || body.id}". It is live now.`);
   $("#aId").value = ""; $("#aName").value = ""; $("#aResorts").value = ""; $("#aNote").value = "";
+  $("#aKind").value = ""; $("#aLands").value = "";
   renderAttractions(d);
 });
 
@@ -640,23 +671,31 @@ document.addEventListener("click", async e => {
     $("#aName").value = a.name || "";
     $("#aResorts").value = (a.resortIds || []).join(" ");
     $("#aNote").value = a.note || "";
+    $("#aKind").value = a.kind === "land" ? "land" : "attraction";
+    $("#aLands").value = Object.entries(a.lands || {}).map(([r, l]) => `${r}: ${l}`).join("; ");
     $("#aId").scrollIntoView({ behavior: "smooth", block: "center" });
     $("#aName").focus();
     attrSay($("#aSaid"), true, "Loaded into the form above. Change it and press Save.");
     return;
   }
 
-  const hide = e.target.closest("[data-hide]");
-  if(hide){
-    const a = (window.__attrEffective || []).find(x => x.id === hide.dataset.hide);
-    if(!confirm(`Remove "${a ? a.name : hide.dataset.hide}" from the list?\n\nIt came with the app, so you can put it back afterwards.`)) return;
-    hide.disabled = true;
+  // Hide and show keep every detail of the row: hiding only takes it off the
+  // traveler's list. No confirm needed, since it's one click to undo.
+  const toggle = e.target.closest("[data-hide], [data-unhide]");
+  if(toggle){
+    const id = toggle.dataset.hide || toggle.dataset.unhide;
+    const hiding = !!toggle.dataset.hide;
+    const a = (window.__attrEffective || []).find(x => x.id === id)
+      || (window.__attrOwner || []).find(x => x.id === id) || { id };
+    toggle.disabled = true;
     const r = await fetch("/api/admin/attractions", {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ id: hide.dataset.hide, hidden: true }),
+      body: JSON.stringify({ id, hidden: hiding, name: a.name, resortIds: a.resortIds, note: a.note,
+        kind: a.kind, lands: a.lands }),
     });
     const d = await r.json().catch(() => ({}));
-    if(r.ok) renderAttractions(d); else hide.disabled = false;
+    if(r.ok) renderAttractions(d);
+    else { toggle.disabled = false; attrSay($("#aSaid"), false, d.message || "That didn't save."); }
     return;
   }
 
@@ -690,7 +729,15 @@ $("#aFile").addEventListener("change", async e => {
     }
     return;
   }
-  attrSay(said, true, `The list is now ${d.applied} row${d.applied === 1 ? "" : "s"} as you sent it.`);
+  attrSay(said, true, `The list is now ${d.applied} row${d.applied === 1 ? "" : "s"} as you sent it: `
+    + `${d.lands} land${d.lands === 1 ? "" : "s"} and ${d.attractions} attraction${d.attractions === 1 ? "" : "s"} showing`
+    + (d.hiddenCount ? `, ${d.hiddenCount} hidden.` : "."));
+  if(d.warnings && d.warnings.length){
+    // Saved anyway — these are for a second look, not reasons to refuse.
+    errs.classList.remove("hidden");
+    errs.innerHTML = `<b>Saved. ${d.warnings.length} thing${d.warnings.length===1?"":"s"} worth a second look:</b>
+      <ul>${d.warnings.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  }
   renderAttractions(d);
 });
 

@@ -59,14 +59,6 @@ export interface OwnerTask {
  */
 const STANDING_TASKS: (Omit<OwnerTask, "source"> & { done: boolean })[] = [
   {
-    id: "attraction-list",
-    title: "Replace the starter attraction list with your own",
-    why: "ATTRACTIONS in config.ts ships ~10 rows Claude was confident about, not a researched catalog. Attraction picks are free (2026-09-24), so every signed-in user is matching against a sample, not just a Plus one. Next step is not a scrape (Disney's list is client-rendered, covers only WDW, and cannot tell that Remy's Ratatouille Adventure and Ratatouille: L'Aventure Totalement Toquee are the same ride): paste WDW and Disneyland names in any rough form and have them structured into rows, with every cross-resort clone flagged for you to confirm. Aim for 40-80 headline attractions across all six resorts, not a complete inventory.",
-    side: "free",
-    blocking: false,
-    done: false,
-  },
-  {
     id: "on-property-rates",
     title: "Check on-property hotel rates against a real booking",
     why: "The model treats each hotel's `base` as an ANNUAL AVERAGE and applies a seasonal multiplier on top. Feeding it rack rates or off-peak floors is exactly the mistake that once produced $70/night Orlando rooms.",
@@ -167,9 +159,23 @@ function daysBetween(earlier: string, later: string): number {
   return Math.floor((b - a) / 86_400_000);
 }
 
+/**
+ * Reminders the owner has asked to pause, and until when. A snooze hides a
+ * row until that date and never hides a BLOCKING one: "not now" is a fair
+ * answer to a nag, not to something that is broken.
+ */
+export const SNOOZED: Record<string, ISODate> = {
+  // Owner, 2026-09-26: "Do not remind again until after Thanksgiving."
+  // Nothing to add before then anyway — the IRS publishes next year's rate in
+  // mid-December, and 2027 trips price on 2026's rate, carried forward.
+  "irs-mileage": "2026-11-27",
+};
+
 export interface OwnerTaskOptions {
   env?: NodeJS.ProcessEnv;
   today?: ISODate;
+  /** Defaults to SNOOZED; tests pass their own. */
+  snoozed?: Record<string, ISODate>;
 }
 
 export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<OwnerTask[]> {
@@ -337,6 +343,22 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
     });
   }
 
+  // --- 5. The owner's own attraction list ---------------------------------
+  // Checked, not standing: it's done the day the owner's sheet is uploaded
+  // in /admin, which the table itself can tell us.
+  const ownerRows = await db.query<{ n: string | number }>(
+    `select count(*) as n from owner_attractions where not hidden`,
+  ).then((r) => Number(r.rows[0]?.n ?? 0)).catch(() => 0);
+  if (ownerRows === 0) {
+    checked({
+      id: "attraction-list",
+      title: "Upload your attraction list in /admin",
+      why: "The picker still shows the ~10 starter rows Claude shipped. Upload your spreadsheet in /admin's attraction section (it takes a land column and a type column: land or attraction); every signed-in user matches against whatever is there.",
+      side: "free",
+      blocking: false,
+    });
+  }
+
   for (const t of STANDING_TASKS) {
     if (!t.done) {
       const { done, ...rest } = t;
@@ -349,7 +371,10 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   // everyone), then the rest.
   const weight = (t: OwnerTask) =>
     (t.blocking ? 0 : 10) + (t.side === "both" ? 0 : t.side === "free" ? 1 : 2);
-  return tasks.sort((a, b) => weight(a) - weight(b));
+  const snoozed = opts.snoozed ?? SNOOZED;
+  return tasks
+    .filter((t) => t.blocking || !(snoozed[t.id] && today < snoozed[t.id]!))
+    .sort((a, b) => weight(a) - weight(b));
 }
 
 /** Plain-text block for the digest email. */

@@ -23,3 +23,7 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+          # The sign-in gate itself lives on Render (owner switched it on
+          # 2026-09-26). This job runs here and can't see Render's settings,
+          # so without this line the digest would nag about it forever.
+          REQUIRE_VERIFIED_EMAIL: "true"

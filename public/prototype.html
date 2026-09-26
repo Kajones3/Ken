@@ -140,8 +140,15 @@ a{color:var(--ink)}
 .attr-none{opacity:.6}
 .attrpick{display:flex; flex-direction:column; gap:7px; max-height:230px; overflow-y:auto;
   border:1px solid var(--rule); border-radius:10px; padding:11px 12px; margin-top:7px}
-.attrpick label{display:flex; gap:9px; align-items:flex-start; font-size:13px; line-height:1.4}
-.attrpick input{margin-top:2px; flex:none}
+.authfield .attrpick label{display:flex; flex:none; gap:9px; align-items:flex-start; font-size:13px; line-height:1.4;
+  /* It sits inside .authfield, whose label style is a small uppercase caption. */
+  font-weight:400; letter-spacing:normal; text-transform:none; color:var(--ink)}
+.attrpick .grp{flex:none; font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-top:4px}
+#attrFilter{width:100%; font:inherit; font-size:16px; color:var(--ink); background:var(--surface);
+  border:1px solid var(--rule-strong); border-radius:9px; padding:8px 10px}
+/* The account panel's .authfield rule makes inputs full width, which
+   stretched each checkbox across the row and pushed its label out of view. */
+.attrpick input[type=checkbox]{margin-top:2px; flex:none; width:auto; min-height:0; padding:0}
 .attrpick .who{color:var(--muted); font-size:11.5px; display:block}
 .acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1px solid var(--rule-strong);
   border-radius:999px; background:var(--surface-2); text-align:left; max-width:260px}
@@ -1154,6 +1161,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         </div>
         <div class="authfield" style="margin:16px 0 4px">
           <label for="attrPick">Attractions you care about</label>
+          <input type="search" id="attrFilter" placeholder="Filter — try frozen, Tokyo, Toy Story…"
+            aria-label="Filter the attraction list" hidden>
           <div class="attrpick" id="attrPick"></div>
           <small id="attrPickNote" style="color:var(--muted); font-size:12px"></small>
         </div>
@@ -2029,7 +2038,7 @@ function attractionChip(item){
   const only = a.matched.filter(m=>m.onlyHere);
   const cls = only.length ? "attr attr-only" : (a.matched.length ? "attr" : "attr attr-none");
   const detail = a.matched.length
-    ? a.matched.map(m=>m.name + (m.onlyHere ? " (only here)" : "")).join(", ")
+    ? a.matched.map(m=>m.name + (m.land && m.kind !== "land" ? " in " + m.land : "") + (m.onlyHere ? " (only here)" : "")).join(", ")
     : "Missing: " + a.missing.map(m=>m.name).join(", ");
   return `<div class="attrline"><span class="${cls}" title="${esc(detail)}">${esc(a.summary)}</span></div>`;
 }
@@ -3359,22 +3368,49 @@ async function loadAttractions(){
   }
 }
 
+/* Lands first, then rides and shows, each alphabetical, with a filter box —
+ * the owner's list runs to well over a hundred rows, and a checklist that
+ * long is only usable if you can type "frozen" and see the four that match.
+ * Picked rows stay visible whatever the filter says, so a tick never
+ * silently disappears from view. */
+let attrFilter = "";
 function renderAttractionPicker(){
   const box = $("#attrPick"), note = $("#attrPickNote");
   if(!box) return;
   const picked = new Set(attractionPicks);
-  box.innerHTML = allAttractions.map(a=>{
+  const q = attrFilter.trim().toLowerCase();
+  const resortName = id => (RESORT_BY_ID.get(id)||{}).name || id;
+  const row = a => {
     const where = a.onlyAt
-      ? "Only at " + ((RESORT_BY_ID.get(a.onlyAt)||{}).name || a.onlyAt)
-      : a.resortIds.map(id=>(RESORT_BY_ID.get(id)||{}).name || id).join(" · ");
+      ? "Only at " + resortName(a.onlyAt)
+      : a.resortIds.map(resortName).join(" · ");
+    const lands = a.kind === "land" ? "" : Object.entries(a.lands || {})
+      .map(([r, land]) => a.resortIds.length > 1 ? `${land} (${resortName(r)})` : land).join(" · ");
     return `<label><input type="checkbox" data-attr="${esc(a.id)}"
       ${picked.has(a.id)?"checked":""} ${session.email?"":"disabled"}>
-      <span>${esc(a.name)}<span class="who">${esc(where)}${a.note?" — "+esc(a.note):""}</span></span></label>`;
-  }).join("") || `<small style="color:var(--muted)">No attractions listed yet.</small>`;
+      <span>${esc(a.name)}<span class="who">${esc(where)}${lands ? " — in " + esc(lands) : ""}${a.note?" — "+esc(a.note):""}</span></span></label>`;
+  };
+  const shown = allAttractions.filter(a => picked.has(a.id) || !q
+    || [a.name, a.note || "", ...Object.values(a.lands || {}), ...a.resortIds.map(resortName)]
+         .some(t => t.toLowerCase().includes(q)));
+  const byName = (x, y) => x.name.localeCompare(y.name);
+  const lands = shown.filter(a => a.kind === "land").sort(byName);
+  const rides = shown.filter(a => a.kind !== "land").sort(byName);
+  $("#attrFilter").hidden = allAttractions.length <= 12;
+  box.innerHTML =
+    (lands.length ? `<div class="grp">Lands</div>` + lands.map(row).join("") : "")
+    + (rides.length ? (lands.length ? `<div class="grp">Rides &amp; shows</div>` : "") + rides.map(row).join("") : "")
+    || (allAttractions.length ? "" : `<small style="color:var(--muted)">No attractions listed yet.</small>`);
+  if(!lands.length && !rides.length && allAttractions.length) box.innerHTML += `<small style="color:var(--muted)">Nothing matches "${esc(attrFilter)}".</small>`;
   note.textContent = session.email
     ? "Ticked attractions show on the board — which resorts have them, and which are the only place you can ride them. It never changes the price order."
     : "Browsing what each resort has is free. Sign in to tick yours and have the board answer.";
 }
+
+$("#attrFilter").addEventListener("input", (e)=>{
+  attrFilter = e.target.value;
+  renderAttractionPicker();
+});
 
 document.addEventListener("change", async (e)=>{
   const box = e.target.closest("[data-attr]");

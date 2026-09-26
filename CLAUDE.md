@@ -85,6 +85,38 @@ tests, typecheck clean, `npm run smoke` clean.
   has come too close reopens on the first offered month with a note saying so.
 - **The owner is in North Carolina and has no LLC** (had one before). Legal
   drafts now name NC as governing law; the county is still blank.
+- **Attraction sheet takes LANDS** (owner's list, `docs/attractions/`). Two
+  new columns: `type` (land | attraction; blank = worked out from the name —
+  a row named after its own land is a land) and `land`
+  (`wdw: Liberty Square; dlr: New Orleans Square` — per resort, split on `;`
+  and the FIRST colon, since "Star Wars: Galaxy's Edge" has its own). Stored
+  as `owner_attractions.kind` / `.lands` (JSON). **Hidden now keeps the
+  row's details** (owner: "choose the lands/attractions that are
+  displayed"), stays in the downloaded sheet, and "Show again" restores it.
+  **Same name + same kind at another resort is never "only here"**
+  (`markSameNames()` → `alsoAt`): the owner lists "Adventureland" once per
+  resort, and each row would otherwise claim to be the only one. Uploads
+  WARN (not refuse) on a name repeated at one resort and on an only_here cell
+  that disagrees. The picker groups Lands / Rides & shows with a filter box;
+  board matches say "X in Cars Land". Also fixed: every picker checkbox had
+  been stretched full-width by `.authfield input`, hiding its label.
+  **The owner's own CSV would have been refused** — `hkdl-grizzly-gulch` was
+  used twice (land and ride). `docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv`
+  drops that repeat, hides 28 exact repeats (only where the kept row covers
+  every resort), and adds a `claude_check` column flagging ~15 likely factual
+  slips (Splash Mountain at WDW/DLR, Tangled Spin at WDW, small world at
+  Shanghai...) — FLAGGED, not changed. Frozen Ever After still needs merging.
+- **Daily email:** verify-gate row gone (the gate is on in Render; the digest
+  runs in Actions, so `news-digest.yml` now sets `REQUIRE_VERIFIED_EMAIL`).
+  `SNOOZED` in ownerTasks.ts pauses a reminder until a date and never hides
+  a blocking one — `irs-mileage` until 2026-11-27 (owner: "not until after
+  Thanksgiving"). `attraction-list` is now a CHECKED task (gone once
+  owner_attractions has a visible row).
+- `docs/numbers-to-verify.md` — every still-guessed number, biggest effect
+  first, with where each is changed (/admin vs code). Keep it current.
+- **Screenshot scanner — PLANNED, not built:** see the owner conversation of
+  2026-09-26. Local OCR (Tesseract.js, runs on the owner's own device, no AI
+  service) in /admin, every number confirmed by the owner before saving.
 
 ### This session (PRs #73-#75, 2026-09-25/26) — supersedes anything below that disagrees
 
