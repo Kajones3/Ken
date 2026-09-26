@@ -240,6 +240,23 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
     <div class="errs hidden" id="aCsvErrs"></div>
   </section>
 
+  <section class="sheet" id="waits">
+    <h2>Wait times we've recorded</h2>
+    <p>Every two hours a job reads each park's <b>posted</b> waits from Queue-Times and keeps the ones
+      taken between 9am and 7pm local time. Travelers never see this: posted waits run long, and not by
+      the same amount at every resort. It's an archive, saved so there's a year of history to judge
+      by when the time comes. A park showing nothing recorded, or nothing in the last day, is one to tell
+      Claude about.</p>
+    <p class="count" id="wCount">Loading…</p>
+    <div id="waitList"></div>
+    <div id="rideList"></div>
+    <div class="tools">
+      <a class="btn" href="/api/admin/wait-times.csv?days=7" download>Download the last 7 days</a>
+      <a class="btn" href="/api/admin/wait-times.csv?days=30" download>Last 30 days</a>
+      <a class="btn" href="/api/admin/wait-times.csv?days=366" download>Everything (up to a year)</a>
+    </div>
+  </section>
+
   <section class="sheet">
     <h2>Change a lot of them at once</h2>
     <p>Download the spreadsheet, edit the <b>value</b> column, and send it back. Everything else in
@@ -677,9 +694,53 @@ $("#aFile").addEventListener("change", async e => {
   renderAttractions(d);
 });
 
+/* ------------------------------ wait times ------------------------------ */
+const ago = t => {
+  if(!t) return "never";
+  const h = (Date.now() - new Date(t).getTime()) / 3_600_000;
+  return h < 1 ? "under an hour ago" : h < 48 ? `${Math.round(h)} hours ago` : `${Math.round(h/24)} days ago`;
+};
+const mins = v => v == null ? "—" : `${v} min`;
+
+async function loadWaits(){
+  const r = await fetch("/api/admin/wait-times");
+  if(!r.ok){ $("#wCount").textContent = "Couldn't load the wait-time archive."; return; }
+  const d = await r.json();
+  const total = d.parks.reduce((a, p) => a + p.rows, 0);
+  const silent = d.parks.filter(p => !p.lastAt || Date.now() - new Date(p.lastAt).getTime() > 36 * 3_600_000);
+  $("#wCount").textContent = `${total.toLocaleString("en-US")} ride readings across ${d.parks.length} parks.`
+    + (silent.length ? ` ${silent.length} park${silent.length === 1 ? " hasn't" : "s haven't"} recorded anything in the last day and a half.` : "");
+  $("#waitList").innerHTML = d.parks.map(p => {
+    const quiet = silent.includes(p);
+    return `<div class="fare${quiet ? " spent" : ""}">
+      <div>
+        <span class="who">${esc(p.parkName)}</span> <span class="bandpill">${esc(p.resortName)}</span>
+        <div class="meta">${p.rows ? `${p.rows.toLocaleString("en-US")} readings · ${p.rides} rides · ${p.days} day${p.days === 1 ? "" : "s"}
+          · last ${ago(p.lastAt)} · average posted wait ${mins(p.avgPostedWaitMin)}${p.avgPostedWaitMin7d != null ? ` (last 7 days ${mins(p.avgPostedWaitMin7d)})` : ""}`
+          : "Nothing recorded yet."}</div>
+      </div>
+      ${p.rows ? `<button class="linkish" data-park="${p.parkId}" data-name="${esc(p.parkName)}">Rides</button>` : ""}
+    </div>`;
+  }).join("");
+}
+
+$("#waitList").addEventListener("click", async e => {
+  const b = e.target.closest("[data-park]");
+  if(!b) return;
+  const box = $("#rideList");
+  box.innerHTML = `<p class="count">Loading ${esc(b.dataset.name)}…</p>`;
+  const r = await fetch("/api/admin/wait-times?park=" + encodeURIComponent(b.dataset.park));
+  if(!r.ok){ box.innerHTML = `<p class="count">Couldn't load that park's rides.</p>`; return; }
+  const d = await r.json();
+  box.innerHTML = `<p class="count" style="margin-top:14px"><b>${esc(b.dataset.name)}</b>, longest average posted wait first</p>`
+    + d.rides.map(x => `<div class="fare"><div><span class="who">${esc(x.rideName)}</span>
+        <div class="meta">average ${mins(x.avgPostedWaitMin)} · longest seen ${mins(x.maxPostedWaitMin)} · ${x.samples} reading${x.samples === 1 ? "" : "s"} while open</div></div></div>`).join("");
+});
+
 load();
 loadFares();
 loadAttractions();
+loadWaits();
 </script>
 </body>
 </html>

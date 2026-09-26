@@ -11,8 +11,7 @@
  * which of those exist nowhere else. A resort matching three of your five
  * picks is a fact; "Shanghai is your best fit" is a claim about you, and the
  * project's whole posture is to explain a number rather than assert a
- * conclusion (see the dataConfidence badges and the "why is X cheaper?"
- * explainer). Cost still decides the ordering of the board. This just says
+ * conclusion (see the `est.` chip). Cost still decides the ordering of the board. This just says
  * what you would be giving up by picking the cheaper one.
  */
 import { ATTRACTIONS, ATTRACTION_BY_ID, isOnlyAt, type AttractionDef } from "./config.js";

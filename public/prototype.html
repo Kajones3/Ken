@@ -746,19 +746,19 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     </div>
     <div class="party">
       <div class="f">
-        <label for="adults">Adults (10+)</label>
+        <label for="adults">Adults (18-59)</label>
         <select id="adults"></select>
       </div>
       <div class="f">
-        <label for="kids">Children</label>
-        <select id="kids"></select>
-      </div>
-      <div class="f">
-        <label for="seniors">Adults 60 or over</label>
+        <label for="seniors">Seniors (60+)</label>
         <select id="seniors"></select>
       </div>
+      <div class="f">
+        <label for="kids">Children (0-17)</label>
+        <select id="kids"></select>
+      </div>
     </div>
-    <p class="hint" style="margin:6px 0 12px">Hong Kong and Shanghai sell seniors (60+) the cheaper child ticket.</p>
+    <p class="hint" style="margin:6px 0 12px">Hong Kong and Shanghai sell seniors the cheaper child ticket; everywhere else they pay the adult price. Add children with their ages — each resort decides for itself which of them pay as adults.</p>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
 
     <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
@@ -1446,7 +1446,7 @@ function fillOriginOptions(){
 
 function fillFormOptions(){
   fillOriginOptions();
-  fillSelect($("#adults"), [1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#adults"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#seniors"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
   fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
@@ -1517,14 +1517,29 @@ function readPasses(){
   return out;
 }
 
+/* Adults 18-59 plus seniors 60+, never nobody: a party of zero grown-ups
+ * would price as nothing at all, so an empty pair counts as one adult. */
+function partyAdults(){
+  return Math.max(1, (+$("#adults").value || 0) + (+$("#seniors").value || 0));
+}
+function syncPartyFloor(ev){
+  if((+$("#adults").value || 0) + (+$("#seniors").value || 0) > 0) return;
+  // Whichever box was just emptied, the other one takes the one grown-up.
+  (ev && ev.target && ev.target.id === "adults" ? $("#seniors") : $("#adults")).value = "1";
+}
+$("#adults").addEventListener("change", syncPartyFloor);
+$("#seniors").addEventListener("change", syncPartyFloor);
+
 function readParams(){
   const needHotel = $("#needHotel").value;
   const gettingThere = $("#gettingThere").value;
   const nights = +$("#nights").value;
   return {
     origin: $("#origin").value,
-    adults: +$("#adults").value,
-    seniors: Math.min(+$("#seniors").value || 0, +$("#adults").value),
+    // The form asks for seniors ALONGSIDE adults 18-59; the API's `adults`
+    // counts everyone 18+ and `seniors` says how many of them are 60+.
+    adults: partyAdults(),
+    seniors: +$("#seniors").value || 0,
     cars: +$("#cars").value,
     freeParking: $("#freeParking").checked,
     ages: Array.from({length:+$("#kids").value}, (_,i)=>{
@@ -2237,13 +2252,6 @@ const PERSONAL_PROMO_OPTIONS = [
 ];
 
 /**
- * "Why is X cheaper?" — diffs the viewed resort's TripPrice against the
- * cheapest other resort currently on the board, line by line, and surfaces
- * whichever single line (getting there / tickets / hotel / food) explains
- * the biggest share of the gap. All-client-side: every cost line is already
- * on the TripPrice the compare API returned, nothing new to fetch.
- */
-/**
  * Passes and rented points — what the traveler's own memberships do to this
  * trip.
  *
@@ -2292,37 +2300,6 @@ function membershipCard(x, p){
           ${dvc ? `<p>Renting points is money in your pocket, so it comes off the trip total rather than off the room — what you can rent your points for has nothing to do with what a room at this resort costs, and folding it into the hotel line would break the comparison between the six resorts.</p>` : ""}
         </div></details>
     </div>
-  </div>`;
-}
-
-function whyCheaperCard(item, allResults){
-  const others = allResults.filter(y=>y.ok && y.resortId!==item.resortId);
-  if(!others.length) return "";
-  const other = others.reduce((a,b)=> b.price.total<a.price.total?b:a);
-  const cheaper = item.price.total <= other.price.total ? item : other;
-  const pricier = item.price.total <= other.price.total ? other : item;
-  if(cheaper.resortId === pricier.resortId) return "";
-  const cp = cheaper.price, pp = pricier.price;
-  const lines = [
-    ["Getting there (flights/driving)", cp.flights+cp.driving, pp.flights+pp.driving],
-    ["Park tickets", cp.tickets, pp.tickets],
-    ["Hotel", cp.hotel, pp.hotel],
-    ["Food", cp.food, pp.food],
-  ].map(([label,c,pv])=>({label, delta: pv-c})).sort((a,b)=>b.delta-a.delta);
-  const top = lines[0];
-  if(!top || top.delta < 1) return `<div class="card">
-    <h5>Why is ${cheaper.name} cheaper?</h5>
-    <p class="sub">Compared with ${pricier.name}, same dates and party</p>
-    <div class="li"><div class="l"><b>They're close</b><small>No single line item stands out — it's a mix of small differences</small></div>
-      <div class="p">${usd(pp.total-cp.total)} total</div></div>
-  </div>`;
-  return `<div class="card">
-    <h5>Why is ${cheaper.name} cheaper?</h5>
-    <p class="sub">Compared with ${pricier.name}, same dates and party</p>
-    <div class="li"><div class="l"><b>${top.label}</b><small>the single biggest difference between the two</small></div>
-      <div class="p" style="color:var(--accent)">${usd(top.delta)} less</div></div>
-    <p class="sub" style="margin-top:10px">${pricier.name} total ${usd(pp.total)} vs. ${cheaper.name} total ${usd(cp.total)}.
-      Park ticket estimates are approximate — see the disclaimer on the ticket card.</p>
   </div>`;
 }
 
@@ -2679,7 +2656,12 @@ async function renderDetail(){
         : b==="junior" ? "Junior ticket · adult dining rate"
         : "Adult ticket · adult dining rate"}</small></div>
       <div class="p">${BANDNAME[b]}</div></div>`;
-  }).join("");
+  }).join("") + (p.seniors > 0 ? (() => {
+    const cheap = r.bands.senior !== undefined;
+    return `<div class="li"><div class="l"><b>Senior${p.seniors>1?"s":""} (60+) × ${p.seniors}</b>
+      <small>${cheap ? "Child-price ticket · adult dining rate" : `No senior ticket at ${r.name} · adult ticket and dining rate`}</small></div>
+      <div class="p">${cheap ? "child" : "adult"}</div></div>`;
+  })() : "");
 
   // ---- your numbers: free to set, use, save and watch ----
   const ovR = ovOf(r.id);
@@ -2752,10 +2734,30 @@ async function renderDetail(){
   const coDate = new Date(x.start+"T00:00:00Z");
   coDate.setUTCDate(coDate.getUTCDate() + (p.nights || 1));
   const checkout = coDate.toISOString().slice(0,10);
-  const childAgeParams = p.ages.map(a => `&age=${a}`).join("");
-  const bkSearchTerm = (!noHotel && hp.name) ? hp.name : r.city;
-  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(bkSearchTerm)}`
-    + `&checkin=${x.start}&checkout=${checkout}&group_adults=${p.adults}&group_children=${p.ages.length}${childAgeParams}&no_rooms=1`;
+  /* Off property, send people to a SEARCH OF THE AREA, never to the hotel we
+   * priced. The owner's report: Booking.com opened with our quoted hotel at
+   * the top, marked unavailable — every time. That is structural, not bad
+   * luck: our off-property rate is a sample of ONE night the nightly job
+   * bought (usually mid-month), not the traveler's dates, so the hotel it
+   * happened to find has no reason to have a room on theirs. A link that
+   * opens on "sold out" reads as the app being wrong. An area search with
+   * the right dates and party only ever lists rooms that exist.
+   *
+   * Kayak first, the same place the flight card sends people, so one
+   * affiliate account would cover both. Its hotel path is written to the
+   * same shape as the owner-verified flight link (dates, `2adults`,
+   * `children-4-6` by age) but is NOT click-tested yet — kayak.com is
+   * refused by this sandbox. So Booking.com's area search ships beside it
+   * for one round, exactly as Google did when the flight link moved. */
+  const area = r.hotelSearchArea || r.city;
+  const hotelKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
+  const hotelAdults = Math.max(1, list.length - hotelKidAges.length);
+  const kayakHotelUrl = `https://www.kayak.com/hotels/${encodeURIComponent(area.replace(/,\s*/g, ",").replace(/\s+/g, "-")).replace(/%2C/g, ",")}`
+    + `/${x.start}/${checkout}/${hotelAdults}adults`
+    + (hotelKidAges.length ? `/children${hotelKidAges.map(a => `-${a}`).join("")}` : "");
+  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(area)}`
+    + `&checkin=${x.start}&checkout=${checkout}&group_adults=${hotelAdults}&group_children=${hotelKidAges.length}`
+    + hotelKidAges.map(a => `&age=${a}`).join("") + `&no_rooms=${Math.max(1, x.roomCount || 1)}`;
   /* Carry the party size to Disney, and nothing else.
    *
    * Owner-verified by clicking both forms, because none of this is
@@ -2797,7 +2799,7 @@ async function renderDetail(){
   const stayLink = stayNow && r.onPropertyHotels
     ? { href: withDisneyParty((r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url, p),
         label: `Book ${TIER_LABEL[onTierName].toLowerCase()} rooms on Disney's site` }
-    : { href: bkUrl, label: "Check live rates on Booking.com" };
+    : { href: kayakHotelUrl, label: `Search hotels near ${r.name} on Kayak`, alt: bkUrl };
   const sd = new Date(x.start+"T00:00:00Z");
 
   box.innerHTML = `
@@ -2937,6 +2939,9 @@ async function renderDetail(){
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
+          ${stayLink.alt ? `<p class="sub" style="margin:8px 0 0">Opens a search of hotels in ${esc(area)} for ${fmtDate(x.start)} to ${fmtDate(checkout)}${(x.roomCount||1) > 1 ? ` — set ${x.roomCount} rooms once you're there` : ""}.
+            The hotel named above is a sample price from one night, so it may not have a room on your dates.
+            Or <a href="${stayLink.alt}" target="_blank" rel="noopener">search the same area on Booking.com</a>.</p>` : ""}
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
@@ -3040,7 +3045,6 @@ async function renderDetail(){
           <span>${best?`Arriving ${best.toUTCString().slice(0,11)} costs ${usd(min)} — ${usd(save)} less than your dates.`:""}</span></div></div>`;
       })()}
       <div class="cols">
-        ${whyCheaperCard(item, results)}
         ${promosCard(item, x, promoList)}
       </div>
 
@@ -3083,7 +3087,7 @@ function render(){
     ? `${winDef.label}, ${p.month.split("-")[0]}`
     : `arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
   $("#resSub").textContent =
-    `${p.adults} adult${p.adults>1?"s":""}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · ${whenStr}`;
+    `${partyParts({ ...p, ages: [] }).join(", ")}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · ${whenStr}`;
   $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
   $("#planChip").className = "chip" + (session.plus?" plus":"");
   syncWindowUi();
@@ -3794,7 +3798,7 @@ $("#nameSave").addEventListener("click", async ()=>{
 async function openSavedTrip(trip){
   const q = trip.params || {};
   const setIf = (sel, v) => { if(v !== undefined && v !== null && v !== "") $(sel).value = String(v); };
-  setIf("#origin", q.origin); setIf("#adults", q.adults); setIf("#nights", q.nights);
+  setIf("#origin", q.origin); setIf("#nights", q.nights);
   setIf("#parkdays", q.parkDays); setIf("#tier", q.tier); setIf("#food", q.food);
   setIf("#month", q.month); setIf("#gettingThere", q.gettingThere);
   // "Need a hotel?" and "Where you stay" are two controls over one saved
@@ -3804,7 +3808,10 @@ async function openSavedTrip(trip){
     if(q.stay !== "none") $("#stay").value = q.stay;
   }
   $("#hopper").value = q.hopper ? "1" : "0";
-  $("#seniors").value = String(+q.seniors || 0);
+  // Saved searches store every 18+ traveler in `adults` with `seniors` as a
+  // subset of them; the form shows the two groups side by side.
+  { const all = Math.max(1, +q.adults || 2), sen = Math.min(all, Math.max(0, +q.seniors || 0));
+    $("#adults").value = String(all - sen); $("#seniors").value = String(sen); }
   $("#cars").value = String(q.cars === undefined ? 1 : +q.cars);
   $("#freeParking").checked = q.freeParking === "1";
   syncParkingUi();
@@ -3873,7 +3880,7 @@ function collapseTripPanel(trip){
     ? `${qWinDef.label}, ${String(q.month).slice(0,4)}`
     : q.month ? MONTHSFULL[Number(String(q.month).slice(5,7)) - 1] + " " + String(q.month).slice(0,4)
     : "";
-  const who = `${q.adults || 2} adult${(q.adults||2) === 1 ? "" : "s"}`
+  const who = partyAdultsPhrase({ adults: +q.adults || 2, seniors: +q.seniors || 0 })
     + (String(q.childAges || "").split(",").filter(Boolean).length
         ? ` + ${String(q.childAges).split(",").filter(Boolean).length} child` : "");
   $("#tripCollapsedWhen").textContent =
@@ -3980,11 +3987,24 @@ function drivingFromLabel(){
   return txt || params.origin;
 }
 
-/** "2 adults and 1 child" — the party, written out. */
+/** "2 adults and 1 senior" — the grown-ups, split the way the form asks. */
+function partyAdultsPhrase(p){
+  return andList(partyParts({ ...p, ages: [] }));
+}
+function partyParts(p){
+  const sen = Math.min(p.adults, p.seniors || 0), younger = p.adults - sen, kids = p.ages.length;
+  return [younger ? `${younger} adult${younger===1?"":"s"}` : "",
+          sen ? `${sen} senior${sen===1?"":"s"}` : "",
+          kids ? `${kids} child${kids===1?"":"ren"}` : ""].filter(Boolean);
+}
+/** ["a","b","c"] -> "a, b and c". */
+function andList(xs){
+  return xs.length < 2 ? (xs[0] || "") : xs.slice(0,-1).join(", ") + " and " + xs[xs.length-1];
+}
+
+/** "2 adults, 1 senior and 1 child" — the party, written out. */
 function partyPhrase(p){
-  const kids = p.ages.length;
-  return `${p.adults} adult${p.adults===1?"":"s"}`
-    + (kids ? ` and ${kids} child${kids===1?"":"ren"}` : "");
+  return andList(partyParts(p));
 }
 
 /** "Around Christmas, 2026", or the plain month when no window was picked. */
