@@ -466,3 +466,20 @@ test("every park has a name and at least one land, with no duplicates", () => {
     }
   }
 });
+
+test("the Arriving picker starts two months out and runs to twelve (owner, 2026-09-26)", async () => {
+  const { firstPlannableMonth, plannableMonths } = await import("./config.js");
+  assert.equal(firstPlannableMonth("2026-09-26"), "2026-11");
+  assert.equal(firstPlannableMonth("2026-11-01"), "2027-01", "crosses the year");
+  const months = plannableMonths("2026-09-26");
+  assert.equal(months[0], "2026-11");
+  assert.equal(months[months.length - 1], "2027-09");
+  assert.equal(months.length, 11);
+  assert.ok(!months.includes("2026-09") && !months.includes("2026-10"), "this month and next are not offered");
+});
+
+test("Plus passes are one-off, in price order, with the middle one highlighted", async () => {
+  const { PLUS_PASSES, PLUS_PASS_DEFAULT } = await import("./config.js");
+  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 30], [25, 183]]);
+  assert.equal(PLUS_PASSES[1]!.id, PLUS_PASS_DEFAULT);
+});

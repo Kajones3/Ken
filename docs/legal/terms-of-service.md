@@ -72,7 +72,8 @@ change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a
 refund].
 
-- **Price and term:** [PRICES — being decided], charged once, up front.
+- **Passes:** 1 week for $9, 1 month for $15, or 6 months for $25, each
+  charged once, up front.
   **Plus never renews automatically.** When your pass ends it simply stops;
   we will never charge you again unless you choose to buy another pass.
 - **Refunds:** [e.g. "If you're unhappy, email us within 14 days of buying
@@ -129,9 +130,9 @@ change means you accept the new terms.
 
 ## 12. Governing law
 
-These terms are governed by the laws of [STATE], USA. Any dispute will be
-handled in the courts of [COUNTY, STATE], unless the law where you live
-says otherwise.
+These terms are governed by the laws of the State of North Carolina, USA.
+Any dispute will be handled in the courts of [COUNTY], North Carolina,
+unless the law where you live says otherwise.
 
 ## 13. Contact
 

@@ -14,7 +14,7 @@
  * nightly job only ever needs "how many people asked about ATL-MCO in
  * March", never who they were.
  */
-import { ORIGINS, RESORTS, isLocalRoute } from "./config.js";
+import { ORIGINS, RESORTS, isLocalRoute, firstPlannableMonth } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface PopularRoute {
@@ -73,7 +73,9 @@ export async function popularRoutes(
         and depart_month >= $3
       order by searches desc, last_searched_at desc
       limit $1`,
-    [limit, String(withinDays), today.slice(0, 7)],
+    // Demand for a month that has since come too close to plan is no reason
+    // to spend a paid lookup on it — see firstPlannableMonth().
+    [limit, String(withinDays), firstPlannableMonth(today)],
   );
   return r.rows.map((x) => ({
     origin: x.origin, destination: x.destination,

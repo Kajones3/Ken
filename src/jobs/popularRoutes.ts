@@ -27,7 +27,7 @@ import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates
 import { getDb, type Db } from "../db.js";
 import { popularRoutes, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
-import { TRIP_BUCKETS, isLocalRoute } from "../config.js";
+import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth } from "../config.js";
 
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
@@ -82,7 +82,11 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     // instead of overwriting the same one. A bought fare corrects its whole
     // quarter, so spreading across quarters buys more than depth in one.
     const quarterStep = Math.floor(Date.now() / 86_400_000) % 4;
-    const rotationMonth = monthKey(addDaysISO(todayISO(), 60 + quarterStep * 90));
+    // Never earlier than the first month the form offers: 60 days out from
+    // the 1st of a month is still next month, which nobody can pick.
+    const sampled = monthKey(addDaysISO(todayISO(), 60 + quarterStep * 90));
+    const earliest = firstPlannableMonth(todayISO());
+    const rotationMonth = sampled < earliest ? earliest : sampled;
     const taken = new Set(routes.map((r) => `${r.origin}|${r.destination}`));
     routes = routes.concat(
       await rotationRoutes(db, limit - routes.length, rotationMonth, taken),
