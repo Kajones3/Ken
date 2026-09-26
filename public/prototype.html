@@ -639,7 +639,7 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .mhead{padding:22px 22px 16px; border-bottom:1px solid var(--rule)}
 .mhead h3{font-size:21px; font-weight:800; letter-spacing:-.03em}
 .mhead p{margin:6px 0 0; color:var(--ink-2); font-size:13.5px}
-.plans{display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:18px 22px}
+.plans{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 22px}
 .plan{border:1px solid var(--rule-strong); border-radius:12px; padding:15px; text-align:left; background:var(--surface-2)}
 .plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
 .plan .pn{font-size:11px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2)}
@@ -765,6 +765,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <div class="f" id="monthField">
         <label for="month">Arriving</label>
         <select id="month"></select>
+        <small id="monthMovedNote" class="downgrade" hidden></small>
       </div>
       <div class="f" id="windowField" style="margin-top:10px" hidden>
         <label for="window">Which week</label>
@@ -1172,24 +1173,15 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <div class="modal">
     <div class="mhead">
       <h3 id="pwTitle">Get Parkfare Plus</h3>
-      <p>Comparing all six resorts, live fare checks, typing in your own numbers, picking your attractions and
+      <p>Comparing all six resorts, typing in your own numbers, picking your attractions and
       applying Disney deals are free, and always will be — you should never have to pay to see what a trip costs.
       Plus is for when you're getting serious about one.</p>
+      <p style="margin-top:6px"><b>Pay once. Nothing renews</b> — your pass simply ends.</p>
     </div>
-    <div class="plans">
-      <button class="plan" id="planMonthly" aria-pressed="true">
-        <div class="pn">Trip pass</div>
-        <div class="pp">$9<small> / 90 days</small></div>
-        <div class="ps">Covers a normal planning window. No renewal.</div>
-      </button>
-      <button class="plan" id="planYearly" aria-pressed="false">
-        <div class="pn">Yearly</div>
-        <div class="pp">$19<small> / year</small></div>
-        <div class="ps">For planning more than one trip</div>
-      </button>
-    </div>
+    <!-- Filled from /api/meta's plusPasses, so the prices have one home. -->
+    <div class="plans" id="plusPlans"></div>
     <ul class="feat">
-      <li><span class="tick">✓</span><span><b>The trip price calendar</b> — the whole trip's cost (flights, hotel, tickets and food together) for every arrival date over the next year, so you can see when to go</span></li>
+      <li><span class="tick">✓</span><span><b>The trip price calendar</b> — the whole trip's cost (flights, hotel, tickets and food together) for every arrival date from two months out to a year ahead, so you can see when to go</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -1408,18 +1400,29 @@ function matchesRegion(item){
 
 function fillSelect(el, items){ el.innerHTML = items.map(([v,l])=>`<option value="${v}">${l}</option>`).join(""); }
 
+/* The "Arriving" months: two months out through twelve. This month and next
+ * are deliberately not offered (owner, 2026-09-26) — almost nobody plans an
+ * international trip that close, and prices that near a date swing too much
+ * to compare. The server's list (/api/meta `planMonths`) is the real one, so
+ * the form and the paid overnight lookups agree; this local fallback only
+ * covers the moment before it arrives. The calendar follows the same range. */
 const today = new Date();
 const monthOpts = [];
-for(let i=1;i<=12;i++){
-  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+i, 1));
-  monthOpts.push([d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1), MONTHSFULL[d.getUTCMonth()]+" "+d.getUTCFullYear()]);
+let CAL_FROM = "", CAL_TO = "";
+function setMonthOpts(yms){
+  monthOpts.length = 0;
+  for(const ym of yms){
+    const [y, m] = ym.split("-").map(Number);
+    monthOpts.push([ym, MONTHSFULL[m-1]+" "+y]);
+  }
+  CAL_FROM = monthOpts[0][0]+"-01";
+  const [ly, lm] = monthOpts[monthOpts.length-1][0].split("-").map(Number);
+  CAL_TO = monthOpts[monthOpts.length-1][0]+"-"+pad(new Date(Date.UTC(ly,lm,0)).getUTCDate());
 }
-const CAL_FROM = monthOpts[0][0]+"-01";
-const CAL_TO = (()=>{
-  const [y,m] = monthOpts[monthOpts.length-1][0].split("-").map(Number);
-  const last = new Date(Date.UTC(y,m,0)).getUTCDate();
-  return monthOpts[monthOpts.length-1][0]+"-"+pad(last);
-})();
+setMonthOpts(Array.from({length:11}, (_,i)=>{
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+2+i, 1));
+  return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1);
+}));
 
 /**
  * Every airport as [value, label], in one city-alphabetical run.
@@ -1466,10 +1469,12 @@ function fillFormOptions(){
   $("#nights").value = "6";
   $("#overnightNights").value = "1";
   $("#parkdays").value = "4";
-  $("#month").value = monthOpts[5][0];
+  // About six months out: the middle of the usual 6-9 month planning window.
+  $("#month").value = monthOpts[Math.min(4, monthOpts.length-1)][0];
   syncWindowUi();
 }
 $("#month").addEventListener("change", syncWindowUi);
+$("#month").addEventListener("change", ()=>{ $("#monthMovedNote").hidden = true; });
 
 const DEFAULT_AGES = [11,8,2];   // 11 is the age the resorts actually disagree about
 function buildAges(){
@@ -2000,7 +2005,7 @@ function sparkSVG(pts){
   const d = known.map((p,k)=>(k?"L":"M")+x(p.i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
   const best = known.reduce((b,p)=>p.v<b.v?p:b, known[0]);
   return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
-    aria-label="Cheapest total by month over the next year">
+    aria-label="Cheapest total by month for the months you can plan">
     <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     <circle cx="${x(best.i).toFixed(1)}" cy="${y(best.v).toFixed(1)}" r="4"
       fill="var(--accent-line)" stroke="var(--surface)" stroke-width="2"/>
@@ -3040,7 +3045,7 @@ async function renderDetail(){
         // No "save & watch" any more: price-drop monitoring was removed
         // (2026-09-25). The calendar is how you watch a trip now, and it is Plus.
         if(!session.plus) return `<div class="upsell"><div><b>Is there a cheaper time to go?</b>
-          <span>Plus shows the whole trip's cost — flights, hotel, tickets and food — for every arrival date over the next year.</span></div>
+          <span>Plus shows the whole trip's cost — flights, hotel, tickets and food — for every arrival date from two months out to a year ahead.</span></div>
           <button class="btn btn-sm openpw">See the calendar with Plus</button></div>`;
         if(min===null) return "";
         const save = x.total - min;
@@ -3057,7 +3062,7 @@ async function renderDetail(){
       <p class="sec-lab">Trip price calendar — flights, hotel, tickets and food, by arrival date${session.plus ? "" : " · Plus"}</p>
       ${session.plus ? `<div class="calgrid">${calHtml}</div>` : `<div class="calgate">
         <div class="calgrid" aria-hidden="true">${gatedCalHtml()}</div>
-        <div class="calgate-cta"><b>Every arrival date's total trip price, for the next twelve months</b>
+        <div class="calgate-cta"><b>Every arrival date's total trip price, from two months out to a year ahead</b>
           <span>Not just the fare — the flights, hotel, tickets and food for your party, priced for each day, so you can see when to go.</span>
           <button class="btn btn-primary btn-sm openpw">Get Plus</button></div></div>`}
       <div class="calscale">
@@ -3526,13 +3531,20 @@ async function requestPlus(plan){
     : "Couldn't send that request right now — try again in a moment.";
 }
 
-$("#planMonthly").addEventListener("click", ()=>{
-  $("#planMonthly").setAttribute("aria-pressed","true"); $("#planYearly").setAttribute("aria-pressed","false");
-  requestPlus("trip");
-});
-$("#planYearly").addEventListener("click", ()=>{
-  $("#planYearly").setAttribute("aria-pressed","true"); $("#planMonthly").setAttribute("aria-pressed","false");
-  requestPlus("yearly");
+let PLUS_PASSES = [], PLUS_PASS_DEFAULT = "month";
+function renderPlusPlans(){
+  $("#plusPlans").innerHTML = PLUS_PASSES.map(p => `
+    <button class="plan" data-plan="${esc(p.id)}" aria-pressed="${p.id === PLUS_PASS_DEFAULT}">
+      <div class="pn">${esc(p.label)}</div>
+      <div class="pp">$${p.priceUsd}<small> once</small></div>
+      <div class="ps">${esc(p.note)}</div>
+    </button>`).join("");
+}
+$("#plusPlans").addEventListener("click", e=>{
+  const b = e.target.closest("[data-plan]");
+  if(!b) return;
+  $("#plusPlans").querySelectorAll("[data-plan]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  requestPlus(b.dataset.plan);
 });
 
 /* ============================ accounts ============================ */
@@ -3831,7 +3843,20 @@ async function openSavedTrip(trip){
   const setIf = (sel, v) => { if(v !== undefined && v !== null && v !== "") $(sel).value = String(v); };
   setIf("#origin", q.origin); setIf("#nights", q.nights);
   setIf("#parkdays", q.parkDays); setIf("#tier", q.tier); setIf("#food", q.food);
-  setIf("#month", q.month); setIf("#gettingThere", q.gettingThere);
+  setIf("#gettingThere", q.gettingThere);
+  // A search saved months ago can name a month that is now too close to plan
+  // (or already past). It moves to the first month the form offers, and says
+  // so — quietly repricing a different month would be a wrong number
+  // presented as the saved one.
+  const moved = $("#monthMovedNote");
+  moved.hidden = true;
+  if(q.month && monthOpts.some(([ym]) => ym === q.month)) $("#month").value = q.month;
+  else if(q.month){
+    $("#month").value = monthOpts[0][0];
+    const [y, m] = String(q.month).split("-").map(Number);
+    moved.textContent = `Saved for ${MONTHSFULL[m-1]} ${y}, which is now too close to plan here — showing ${monthOpts[0][1]} instead.`;
+    moved.hidden = false;
+  }
   // "Need a hotel?" and "Where you stay" are two controls over one saved
   // value: stay === "none" is the no-hotel case, anything else is a pick.
   if(q.stay){
@@ -4719,6 +4744,10 @@ async function boot(){
   }
   PASS_PROGRAMS = meta.passPrograms || [];
   HOLIDAY_WINDOWS = meta.holidayWindows || {};
+  if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);
+  PLUS_PASSES = meta.plusPasses || [];
+  PLUS_PASS_DEFAULT = meta.plusPassDefault || PLUS_PASS_DEFAULT;
+  renderPlusPlans();
   // Public, small, and needed by the shared PDF's "what's there" section
   // whether or not anybody ever opens the attractions panel. Not awaited:
   // a slow request here must not hold up the form.

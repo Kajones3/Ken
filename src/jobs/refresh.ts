@@ -9,7 +9,7 @@
  */
 import { randomUUID } from "node:crypto";
 import {
-  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute,
+  ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute, firstPlannableMonth,
 } from "../config.js";
 import { addDaysISO, monthKey, todayISO, range, monthBounds } from "../dates.js";
 import { getDb, type Db } from "../db.js";
@@ -212,7 +212,8 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
     ? opts.hotelSlots
     : (process.env.SERPAPI_KEY && !opts.provider
       ? await rotateHotelSlots(db, {
-          months: allTierMonths(),
+          // Only months a traveler can pick — see firstPlannableMonth().
+          months: allTierMonths().filter((m) => m >= firstPlannableMonth(todayISO())),
           resortIds: resorts.map((r) => r.id),
           limit: hotelBudget(),
         })

@@ -36,6 +36,15 @@ test("popularRoutes ignores months that have already been and gone", async () =>
   await db.close();
 });
 
+test("popularRoutes skips months now too close to plan, so no paid lookup is spent on them", async () => {
+  const db = await memoryDb();
+  await recordSearch(db, "ATL", ["MCO"], "2026-10");   // next month, as of the pinned today
+  await recordSearch(db, "ATL", ["SNA"], "2026-11");   // two months out: the first one offered
+  const rows = await popularRoutes(db, 10, 30, "2026-09-26");
+  assert.deepEqual(rows.map((r) => r.destination), ["SNA"]);
+  await db.close();
+});
+
 test("trendAnchorRoutes prefers the routes with the biggest BTS sample", async () => {
   const db = await memoryDb();
   for (const [o, d, pax] of [["ATL", "MCO", 90000], ["ORD", "MCO", 70000], ["BWI", "MCO", 10]] as const) {

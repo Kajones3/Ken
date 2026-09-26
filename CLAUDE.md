@@ -67,10 +67,24 @@ tests, typecheck clean, `npm run smoke` clean.
   workflow had no `PUBLIC_BASE_URL`** (only Render did) — it now sets the
   apex, runs `npm run migrate` first (Render lags master), and a real Resend
   send with a relative link is refused and stays queued.
-- **Plus never auto-renews** (owner, 2026-09-26). Prices are still OPEN — the
-  owner floated $9/week, $15/month, $25/3 months; Claude suggested stretching
-  the top tier to cover a 6-9 month planning window. Paywall still shows the
-  old $9/90 days and $19/year until decided.
+- **Plus prices, settled** (owner, 2026-09-26): **$9 / 1 week, $15 / 1
+  month, $25 / 6 months**, paid once, **never auto-renewing**. `PLUS_PASSES`
+  in config.ts is the one home — the paywall renders it from /api/meta and
+  the "wants Plus" email to the owner quotes the pass and the exact
+  `grant-plus` days. The owner's reasoning, worth keeping: "This isn't
+  touring plans. Once you pick your trip, the tool kinda becomes useless" —
+  so no yearly option and nothing that renews. Payments are still stubbed.
+- **The Arriving picker starts two months out** (owner: "Most people don't
+  plan an international trip in two months. And the pricing that close to a
+  trip can be wildly inconsistent"). `firstPlannableMonth()` /
+  `plannableMonths()` in config.ts (month+2 through month+12, 11 months),
+  served as `planMonths` from /api/meta; the Plus calendar follows the same
+  range. **The paid jobs obey it too** — the hotel rotation, the flight
+  rotation month and demand-driven buys all skip months nobody can pick. The
+  free refresh still keeps near months warm, and a saved search whose month
+  has come too close reopens on the first offered month with a note saying so.
+- **The owner is in North Carolina and has no LLC** (had one before). Legal
+  drafts now name NC as governing law; the county is still blank.
 
 ### This session (PRs #73-#75, 2026-09-25/26) — supersedes anything below that disagrees
 
@@ -1907,7 +1921,9 @@ a user a number, the alert job that decides whether it dropped, and the tests. A
 implementation in another language would drift, and drift means emailing a customer
 about a price the site never showed them. `src/pricing.ts` is the single source of truth.
 
-**The tool is free. Plus ($9 / 90 days, $19/yr) buys memory and monitoring.**
+**The tool is free. Plus buys memory and monitoring.** (>> Prices SUPERSEDED
+2026-09-26: $9/week, $15/month, $25/6 months, never renewing — see the top of
+this file. The trip-pass reasoning below still holds.)
 All six resorts, twelve-month fare calendars, cheapest dates, line items, booking links
 and user overrides are free and unlimited. Plus = saved trips, saved overrides, price-drop
 alerts, multiple trips.

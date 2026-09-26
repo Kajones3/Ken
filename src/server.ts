@@ -13,7 +13,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
          KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
@@ -582,6 +582,12 @@ const server = createServer(async (req, res) => {
       // from what compare() actually resolves an id to; the browser only
       // renders what it's handed. See holidayWindows.ts for which months
       // have one and why (and which were deliberately left out).
+      // The months the "Arriving" picker offers — two months out through
+      // twelve (see firstPlannableMonth in config.ts). Sent from here so the
+      // form and the paid overnight jobs share one rule.
+      planMonths: plannableMonths(todayISO()),
+      plusPasses: PLUS_PASSES,
+      plusPassDefault: PLUS_PASS_DEFAULT,
       holidayWindows: Object.fromEntries(
         Array.from({ length: 14 }, (_, i): [string, ReturnType<typeof holidayWindowsFor>] => {
           const now = new Date();
@@ -881,13 +887,17 @@ const server = createServer(async (req, res) => {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign in first" });
       const body = await readBody(req);
-      const plan = body.plan === "yearly" ? "yearly ($19/year)" : "trip pass ($9/90 days)";
+      // Only a pass we sell; anything else is refused rather than guessed at,
+      // so the email never quotes a price or a length nobody offered.
+      const pass = PLUS_PASSES.find((p) => p.id === body.plan);
+      if (!pass) return send(400, { error: "unknown_plan" });
       const owner = process.env.OWNER_EMAIL;
       if (owner) {
         await pickEmailSender().send({
           to: owner,
           subject: `Parkfare: ${user.email} wants Plus`,
-          text: `${user.email} picked "${plan}" in the paywall.\n\nGrant it with:\n  npm run grant-plus -- ${user.email} 90`,
+          text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
+            + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.days}`,
         });
       }
       return send(200, { ok: true, delivered: Boolean(owner) });

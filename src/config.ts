@@ -955,6 +955,57 @@ export function localResortFor(originIata: string): Resort | null {
       - haversineMiles(origin.lat, origin.lon, b.lat, b.lon))[0] ?? null;
 }
 
+/**
+ * Which arrival months a traveler may plan (owner, 2026-09-26: "Most people
+ * don't plan an international trip in two months. And the pricing that close
+ * to a trip can be wildly inconsistent."). The current month and the next one
+ * are not offered; the picker runs from two months out to twelve.
+ *
+ * One home for the rule, because three places have to agree on it: the form
+ * (served as `planMonths` from /api/meta), and the two jobs that spend real
+ * SerpApi money — a paid lookup for a month nobody can pick is money spent on
+ * nothing. The free refresh still keeps near months warm; that costs nothing
+ * and an old saved search for a month that has since come close still prices.
+ */
+export const PLANNING_LEAD_MONTHS = 2;
+export const PLANNING_LAST_MONTH = 12;
+
+function addMonthsYM(today: ISODate, n: number): string {
+  const [y, m] = today.split("-").map(Number) as [number, number];
+  const d = new Date(Date.UTC(y, m - 1 + n, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** "YYYY-MM" of the earliest month a traveler may plan. */
+export function firstPlannableMonth(today: ISODate): string {
+  return addMonthsYM(today, PLANNING_LEAD_MONTHS);
+}
+
+/** Every plannable month, "YYYY-MM", nearest first. */
+export function plannableMonths(today: ISODate): string[] {
+  return Array.from({ length: PLANNING_LAST_MONTH - PLANNING_LEAD_MONTHS + 1 },
+    (_, i) => addMonthsYM(today, PLANNING_LEAD_MONTHS + i));
+}
+
+/**
+ * Plus passes (owner, 2026-09-26). One-off payments that simply END — Plus
+ * never renews automatically. Priced for a planning tool rather than a trip
+ * companion: in the owner's words, "Once you pick your trip, the tool kinda
+ * becomes useless," unlike TouringPlans, which is used through the trip
+ * itself. The six-month pass covers the usual 6-9 month planning window.
+ *
+ * One home: the paywall renders these from /api/meta, and the "wants Plus"
+ * email to the owner quotes the price and the exact grant-plus command.
+ */
+export interface PlusPass { id: string; label: string; priceUsd: number; days: number; note: string }
+export const PLUS_PASSES: PlusPass[] = [
+  { id: "week", label: "1 week", priceUsd: 9, days: 7, note: "A quick look while you decide." },
+  { id: "month", label: "1 month", priceUsd: 15, days: 30, note: "Enough to settle where and when." },
+  { id: "sixMonths", label: "6 months", priceUsd: 25, days: 183, note: "Covers a whole planning window." },
+];
+/** The pass the paywall highlights — the middle one. */
+export const PLUS_PASS_DEFAULT = "month";
+
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [
   { name: "near", fromDay: 0, toDay: 60, everyDays: 1 },
