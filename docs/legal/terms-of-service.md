@@ -72,9 +72,9 @@ change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a
 refund].
 
-- **Price and term:** [$9 for 90 days / $19 per year], charged up front.
-  [Plus does NOT renew automatically — it simply ends. / Plus renews
-  automatically until you cancel.]
+- **Price and term:** [PRICES — being decided], charged once, up front.
+  **Plus never renews automatically.** When your pass ends it simply stops;
+  we will never charge you again unless you choose to buy another pass.
 - **Refunds:** [e.g. "If you're unhappy, email us within 14 days of buying
   and we'll refund you in full." — your call.]
 - **Payments** are processed by [Stripe]; we never see or store your full
@@ -101,8 +101,9 @@ back to you or to put it in your PDF. See the Privacy Policy for details.
 
 If you create an account, we'll email you about your account (confirming
 your address, password resets). Plus members with a confirmed address may
-get emails about new Disney deals; every one of those emails includes a way
-to stop them. [Unsubscribe link — needs building before launch.]
+get emails about new Disney deals. Every one of those emails includes a
+link to stop them — no sign-in needed — and you can also switch them off in
+your account panel.
 
 ## 9. No warranty
 

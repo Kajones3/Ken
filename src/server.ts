@@ -24,6 +24,7 @@ import {
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
+import { setDealEmailsByToken, setDealEmailsForUser, dealEmailsOn } from "./dealEmails.js";
 import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
@@ -734,6 +735,49 @@ const server = createServer(async (req, res) => {
       ));
     }
 
+    /* Deal-email unsubscribe (src/dealEmails.ts). No sign-in, by law and by
+     * sense — the link in the email is the whole credential, and it only
+     * unlocks this one switch.
+     *
+     * GET shows a button rather than acting, because mail scanners and link
+     * previews open links on their own. POST acts: that's the page's button,
+     * and it's also what Gmail's own "Unsubscribe" does (RFC 8058 one-click),
+     * with no page to see — so a POST answers 200 whatever its body says. */
+    if (url.pathname === "/unsubscribe") {
+      const token = url.searchParams.get("t") ?? "";
+      const page = (title: string, body: string, status = 200) => sendHtml(status,
+        `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+        + `<meta name="robots" content="noindex"><title>${title} · Parkfare</title>`
+        + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
+        + `<h1 style="font-size:1.4rem">${title}</h1>${body}`
+        + `<p style="margin-top:2rem"><a href="/">Back to Parkfare</a></p></div>`);
+      const button = (label: string, action: "stop" | "resume") =>
+        `<form method="post" action="/unsubscribe?t=${encodeURIComponent(token)}">`
+        + `<input type="hidden" name="do" value="${action}">`
+        + `<button style="font:inherit;font-weight:600;padding:.6rem 1.1rem;border-radius:9px;border:1px solid #999;cursor:pointer">${label}</button></form>`;
+      const unknown = () => page("That link isn't valid",
+        "<p>It may have been copied incompletely. You can also turn deal emails off from your account panel once you've signed in.</p>", 404);
+
+      if (req.method === "GET") {
+        return page("Stop deal emails?",
+          "<p>You'll stop getting Parkfare's emails about new Disney deals. Your account, your Plus and your "
+          + "saved searches aren't affected, and emails about your account (like password resets) still come.</p>"
+          + button("Stop deal emails", "stop"));
+      }
+      if (req.method === "POST") {
+        const form = await readForm(req);
+        const resume = form.do === "resume";
+        const email = await setDealEmailsByToken(db, token, resume);
+        if (!email) return unknown();
+        return resume
+          ? page("Deal emails are back on",
+              `<p>${escapeHtml(email)} will get an email when we add a new official Disney deal.</p>`)
+          : page("You're unsubscribed",
+              `<p>${escapeHtml(email)} won't get any more deal emails from Parkfare.</p>`
+              + `<p>Changed your mind?</p>` + button("Turn deal emails back on", "resume"));
+      }
+    }
+
     if (url.pathname === "/api/auth/resend-verification" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
@@ -758,6 +802,7 @@ const server = createServer(async (req, res) => {
       return send(200, {
         authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
+        dealEmails: await dealEmailsOn(db, user.id),
         // Only so the masthead can offer the link. Every admin route resolves
         // this again for itself — a client that lied about it would get a page
         // it still cannot save anything from.
@@ -773,6 +818,12 @@ const server = createServer(async (req, res) => {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
       const body = await readBody(req);
+      // The deal-email switch rides the same route. It's sent on its own,
+      // so a request carrying only it must not touch the home airport.
+      if (typeof body.dealEmails === "boolean") {
+        await setDealEmailsForUser(db, user.id, body.dealEmails);
+        if (!("homeAirport" in body)) return send(200, { ok: true, dealEmails: body.dealEmails }, { cache: "no-store" });
+      }
       // An explicit null clears it. `undefined` would be ambiguous with "not
       // sent", so the client always sends the key.
       const raw = body.homeAirport;

@@ -85,7 +85,9 @@ affiliate links, which tell that site you came from us.
 
 - **See or delete your data:** email [CONTACT EMAIL] and we'll send you a
   copy or delete your account and everything saved with it within [30] days.
-- **Stop deal emails:** use the link in any deal email, or email us.
+- **Stop deal emails:** use the "Stop these emails" link at the bottom of
+  any deal email (no sign-in needed), switch them off in your account panel,
+  or email us.
 - **Cookies:** you can block cookies in your browser; you just won't be able
   to stay signed in.
 

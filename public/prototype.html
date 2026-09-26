@@ -1138,6 +1138,12 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <button type="button" id="resendVerify" class="linkbtn" style="margin-left:6px">Send the link again</button>
           <span id="resendMsg"></span>
         </small>
+        <div class="authfield" id="dealEmailsRow" style="margin:16px 0 4px" hidden>
+          <label class="ovexclude" style="margin:0"><input type="checkbox" id="dealEmailsCk">
+            <span>Email me when Disney announces a new deal</span></label>
+          <small style="color:var(--muted); font-size:12px">Part of Plus. Every deal email also has a link to stop them.</small>
+          <small id="dealEmailsSaved" class="downgrade" hidden></small>
+        </div>
         <div class="authfield" style="margin:16px 0 4px">
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
@@ -3191,6 +3197,7 @@ document.addEventListener("click", async e=>{
  * this is only the part that tells you about it. */
 function syncAccountUi(){
   const on = session.authenticated;
+  syncDealEmailsUi();
   $("#signinTop").hidden = on;
   $("#accountTop").hidden = !on;
   // Sign out sits in the masthead, not only in the account panel's footer.
@@ -3413,6 +3420,30 @@ function fillHomeAirportOptions(){
   $("#homeAirportLapsed").hidden = true;
 }
 
+/* The deal-email switch. Shown to Plus members only, since only they get
+ * deal emails — a free account would be flipping a switch attached to
+ * nothing. The same setting the email's own unsubscribe link changes. */
+function syncDealEmailsUi(){
+  $("#dealEmailsRow").hidden = !(session.authenticated && session.plus);
+  $("#dealEmailsCk").checked = session.dealEmails !== false;
+}
+$("#dealEmailsCk").addEventListener("change", async (e)=>{
+  const on = e.target.checked, note = $("#dealEmailsSaved");
+  const res = await fetch("/api/profile", {
+    method: "PUT", headers: {"content-type":"application/json"},
+    body: JSON.stringify({ dealEmails: on }),
+  });
+  if(!res.ok){
+    e.target.checked = !on;
+    note.textContent = "Couldn't save that — try again.";
+    note.hidden = false;
+    return;
+  }
+  session.dealEmails = on;
+  note.textContent = on ? "On — we'll email you about new deals." : "Off — no more deal emails.";
+  note.hidden = false;
+});
+
 $("#homeAirport").addEventListener("change", async (e)=>{
   const value = e.target.value || null;
   const note = $("#homeAirportSaved");
@@ -3510,7 +3541,7 @@ async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
     ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null,
-        emailVerified:!!me.emailVerified, owner:!!me.owner }
+        emailVerified:!!me.emailVerified, owner:!!me.owner, dealEmails: me.dealEmails !== false }
     : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going

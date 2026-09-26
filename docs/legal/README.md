@@ -19,9 +19,9 @@ liability cap.
 3. **Governing law**: which state and county.
 4. **Minimum age** for an account: 16 or 18? (13 is the legal floor in the
    US; 18 avoids questions about minors making purchases.)
-5. **Plus price and renewal**: $9/90 days and $19/year are what CLAUDE.md
-   records. Does it auto-renew, or just end? (CLAUDE.md's reasoning favors
-   "just ends" — people plan a trip every 1-3 years.)
+5. **Plus prices.** Decided 2026-09-26: **no auto-renewal** — a pass just
+   ends. The prices themselves are still open (owner proposed $9/week,
+   $15/month, $25/3 months).
 6. **Refund policy**: suggested "full refund within 14 days, no questions".
 7. **How long to keep anonymous searched routes** (suggested: 2 years).
 
@@ -29,8 +29,9 @@ liability cap.
 
 These are claims the drafts make that the code doesn't back yet:
 
-- **An unsubscribe link in deal emails.** US law (CAN-SPAM) requires one
-  in marketing email. Deal emails currently have none.
+- ~~**An unsubscribe link in deal emails.**~~ **Done 2026-09-26** — every
+  deal email has a "Stop these emails" link plus Gmail's one-click header,
+  and the account panel has an on/off switch.
 - **A way to delete your account.** Right now it's "email us" and Claude
   deletes it by hand — acceptable at launch, but the policy says so.
 - **A "not affiliated with Disney" line on the site itself**, not just in
