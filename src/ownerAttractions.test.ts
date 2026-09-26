@@ -170,7 +170,7 @@ test("a hidden attraction still appears in the sheet, flagged", async () => {
 test("overlay is pure and does not mutate the shipped list", () => {
   const snapshot = JSON.parse(JSON.stringify(ATTRACTIONS));
   overlay(ATTRACTIONS, [{
-    id: "zootopia", name: "Changed", resortIds: ["wdw"], note: "", hidden: false,
+    id: "zootopia", name: "Changed", resortIds: ["wdw"], note: "", hidden: false, kind: "attraction", lands: {},
     applied: true, overridesShipped: true, updatedAt: null,
   }]);
   assert.deepEqual(ATTRACTIONS, snapshot);
@@ -220,4 +220,108 @@ test("editing back to the shipped value clears the override rather than pinning 
   assert.equal((await listOwnerAttractions(d)).length, 1);
   await saveAttraction(d, { id: z.id, name: z.name, resortIds: z.resortIds.join(" "), note: z.note });
   assert.equal((await listOwnerAttractions(d)).length, 0, "typing the shipped value back is not an override");
+});
+
+/* ---------------------------------- lands --------------------------------- */
+
+test("a land cell keeps the colons inside a land's own name", async () => {
+  const { parseLands } = await import("./ownerAttractions.js");
+  const r = parseLands("wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge");
+  assert.ok(r.ok);
+  if (r.ok) assert.deepEqual(r.lands, { wdw: "Star Wars: Galaxy's Edge", dlr: "Star Wars: Galaxy's Edge" });
+  assert.equal(parseLands("Tomorrowland").ok, false, "a land with no resort is refused, with the shape to use");
+});
+
+test("a row named after its own land is a land; everything else is a ride", async () => {
+  const { inferKind } = await import("./ownerAttractions.js");
+  assert.equal(inferKind("Cars Land", { dlr: "Cars Land" }), "land");
+  assert.equal(inferKind("Storybook Circus", { wdw: "Fantasyland (Storybook Circus)" }), "land");
+  assert.equal(inferKind("Toy Story Land", { shdr: "Disney•Pixar Toy Story Land", wdw: "Toy Story Land" }), "land");
+  assert.equal(inferKind("Radiator Springs Racers", { dlr: "Cars Land" }), "attraction");
+  assert.equal(inferKind("Frozen", {}), "attraction", "no land named, no reason to call it one");
+});
+
+test("a land for a resort the row doesn't list is refused, and says how to fix it", () => {
+  const v = validateAttraction({ id: "x-ride", name: "X", resortIds: "wdw", lands: "wdw: Tomorrowland; dlr: Tomorrowland" });
+  assert.equal(v.ok, false);
+  if (!v.ok) assert.match(v.reason, /dlr isn't in its resorts/);
+  const typed = validateAttraction({ id: "x-ride", name: "X", resortIds: "wdw", kind: "stadium" });
+  assert.equal(typed.ok, false);
+});
+
+test("lands and type survive a save, the overlay and a download", async () => {
+  const db = await memoryDb();
+  await saveAttraction(db, { id: "cars-land", name: "Cars Land", resortIds: "dlr", lands: "dlr: Cars Land" });
+  await saveAttraction(db, { id: "haunted", name: "Haunted Mansion", resortIds: "wdw dlr",
+    lands: "wdw: Liberty Square; dlr: New Orleans Square", kind: "attraction" });
+  const eff = await effectiveAttractions(db);
+  const cars = eff.find((a) => a.id === "cars-land")!;
+  assert.equal(cars.kind, "land", "worked out from the name");
+  const hm = eff.find((a) => a.id === "haunted")!;
+  assert.deepEqual(hm.lands, { wdw: "Liberty Square", dlr: "New Orleans Square" });
+  const sheet = sheetRows(eff, await listOwnerAttractions(db));
+  const row = sheet.find((r) => r.id === "haunted")!;
+  assert.equal(row.land, "wdw: Liberty Square; dlr: New Orleans Square");
+  assert.equal(sheet.find((r) => r.id === "cars-land")!.type, "land");
+  await db.close();
+});
+
+test("hiding keeps the row: its details come back in the sheet and on un-hiding", async () => {
+  const db = await memoryDb();
+  const full = { id: "grizzly-gulch", name: "Grizzly Gulch", resortIds: "hkdl", lands: "hkdl: Grizzly Gulch", note: "World exclusive." };
+  await saveAttraction(db, { ...full, hidden: true });
+  assert.equal((await effectiveAttractions(db)).find((a) => a.id === "grizzly-gulch"), undefined, "hidden means not shown");
+  const sheet = sheetRows(await effectiveAttractions(db), await listOwnerAttractions(db));
+  const row = sheet.find((r) => r.id === "grizzly-gulch")!;
+  assert.equal(row.hidden, "yes");
+  assert.equal(row.name, "Grizzly Gulch");
+  assert.equal(row.land, "hkdl: Grizzly Gulch", "a hidden row is not reduced to an empty shell");
+  await saveAttraction(db, { ...full, hidden: false });
+  const back = (await effectiveAttractions(db)).find((a) => a.id === "grizzly-gulch")!;
+  assert.equal(back.note, "World exclusive.");
+  await db.close();
+});
+
+test("the same name twice at one resort is flagged, not refused", async () => {
+  const { sheetWarnings } = await import("./ownerAttractions.js");
+  const v = (id: string, name: string, resorts: string) => {
+    const r = validateAttraction({ id, name, resortIds: resorts });
+    assert.ok(r.ok);
+    return r.ok ? r.value : (null as never);
+  };
+  const w = sheetWarnings([
+    { row: 2, value: v("pirates-a", "Pirates of the Caribbean", "wdw dlr"), onlyHere: "" },
+    { row: 3, value: v("pirates-b", "Pirates of the Caribbean", "wdw"), onlyHere: "" },
+    { row: 4, value: v("cars", "Radiator Springs Racers", "dlr"), onlyHere: "no" },
+  ]);
+  assert.equal(w.length, 2);
+  assert.match(w[0]!, /row 3: .*already on row 2/);
+  assert.match(w[1]!, /only_here/);
+});
+
+test("the owner's reviewed 2026-09-26 sheet uploads with no errors", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { parseCsv } = await import("./csv.js");
+  const rows = parseCsv(readFileSync(new URL("../docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8"));
+  const h = rows[0]!.map((x) => x.trim().toLowerCase());
+  const c = (r: string[], n: string) => (r[h.indexOf(n)] ?? "").trim();
+  const bad = rows.slice(1).filter((r) => r.some((x) => x.trim())).map((r) => validateAttraction({
+    id: c(r, "id"), name: c(r, "name"), resortIds: c(r, "resorts"), note: c(r, "note"),
+    hidden: /^yes$/i.test(c(r, "hidden")), kind: c(r, "type"), lands: c(r, "land"),
+  })).filter((v) => !v.ok);
+  assert.deepEqual(bad, []);
+  const ids = rows.slice(1).map((r) => c(r, "id")).filter(Boolean);
+  assert.equal(new Set(ids).size, ids.length, "no id twice — the upload refuses a repeated id");
+});
+
+test("a land listed once per resort never claims to be the only one", async () => {
+  const db = await memoryDb();
+  await saveAttraction(db, { id: "wdw-adv", name: "Adventureland", resortIds: "wdw", lands: "wdw: Adventureland" });
+  await saveAttraction(db, { id: "dlp-adv", name: "Adventureland", resortIds: "dlp", lands: "dlp: Adventureland" });
+  await saveAttraction(db, { id: "cars", name: "Cars Land", resortIds: "dlr", lands: "dlr: Cars Land" });
+  const eff = await effectiveAttractions(db);
+  assert.equal(isOnlyAt(eff.find((a) => a.id === "wdw-adv")!), false, "Paris has one too");
+  assert.deepEqual(eff.find((a) => a.id === "wdw-adv")!.alsoAt, ["dlp"]);
+  assert.equal(isOnlyAt(eff.find((a) => a.id === "cars")!), true, "a name nobody else uses is still only here");
+  await db.close();
 });

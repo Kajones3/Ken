@@ -25,6 +25,19 @@
  *   - an id matching nothing ADDS an attraction
  *   - hidden = true REMOVES one from the list
  *
+ * LANDS (2026-09-26). The owner's list mixes whole themed lands (Cars Land,
+ * Zootopia, Pandora) with the rides inside them, so a row has a `kind` and,
+ * per resort, the land it sits in. The sheet writes lands as
+ * "wdw: Liberty Square; dlr: New Orleans Square" — one cell, resort then
+ * land, because clones move between lands from resort to resort. A blank
+ * type is worked out from the name (a row named after its own land is a
+ * land); the downloaded sheet always writes it out so it can be corrected.
+ *
+ * HIDDEN ROWS KEEP THEIR DETAILS. The owner's ask was to "choose the
+ * lands/attractions that are displayed", so hiding is a display switch, not a
+ * delete: a hidden row keeps its name, resorts and lands, stays in the
+ * downloaded sheet, and comes back with one click.
+ *
  * "Only here" stays derived from the resort list, never asserted. That rule
  * predates this file and survives it: `isOnlyAt` still reads `resortIds`, so
  * an owner who adds Paris to Ratatouille automatically stops the app claiming
@@ -41,12 +54,17 @@ const ID_SHAPE = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
 export const MAX_NAME = 120;
 export const MAX_NOTE = 400;
+export const MAX_LAND = 80;
+
+export type AttractionKind = "land" | "attraction";
 
 export interface OwnerAttractionRow {
   id: string;
   name: string;
   resortIds: string[];
   note: string;
+  kind: AttractionKind;
+  lands: Record<string, string>;
   hidden: boolean;
   /** False when this row cannot be applied — every resort it names has
    *  stopped existing, say. Listed anyway, marked, for the same reason an
@@ -63,11 +81,72 @@ export interface OwnerAttractionRow {
 
 export interface AttractionInput {
   id?: unknown; name?: unknown; resortIds?: unknown; note?: unknown; hidden?: unknown;
+  /** "land" or "attraction"; blank means work it out from the name. */
+  kind?: unknown;
+  /** "wdw: Tomorrowland; shdr: Tomorrowland", or an object of the same. */
+  lands?: unknown;
+}
+
+export interface AttractionValue {
+  id: string; name: string; resortIds: string[]; note: string; hidden: boolean;
+  kind: AttractionKind; lands: Record<string, string>;
 }
 
 export type ValidatedAttraction =
-  | { ok: true; value: { id: string; name: string; resortIds: string[]; note: string; hidden: boolean } }
+  | { ok: true; value: AttractionValue }
   | { ok: false; reason: string };
+
+/**
+ * "wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge" -> a map.
+ *
+ * Split on ";" between resorts and on the FIRST colon inside each part, since
+ * land names carry colons of their own ("Star Wars: Galaxy's Edge").
+ */
+export function parseLands(raw: unknown): { ok: true; lands: Record<string, string> } | { ok: false; reason: string } {
+  const lands: Record<string, string> = {};
+  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const land = String(v ?? "").trim();
+      if (land) lands[k.trim().toLowerCase()] = land;
+    }
+    return { ok: true, lands };
+  }
+  const text = String(raw ?? "").trim();
+  if (!text) return { ok: true, lands };
+  for (const part of text.split(";")) {
+    const piece = part.trim();
+    if (!piece) continue;
+    const m = /^([a-z]+)\s*:\s*(.+)$/i.exec(piece);
+    if (!m) return { ok: false, reason: `"${piece}" should look like "wdw: Tomorrowland" — a resort id, a colon, then the land.` };
+    const resort = m[1]!.toLowerCase();
+    if (lands[resort]) return { ok: false, reason: `the land column names ${resort} twice.` };
+    lands[resort] = m[2]!.trim();
+  }
+  return { ok: true, lands };
+}
+
+/** A row named after its own land is a land ("Cars Land" in "dlr: Cars Land"),
+ *  including an area written inside another land's brackets ("Storybook
+ *  Circus" in "Fantasyland (Storybook Circus)"). Everything else is a ride. */
+export function inferKind(name: string, lands: Record<string, string>): AttractionKind {
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const n = norm(name);
+  if (!n) return "attraction";
+  for (const land of Object.values(lands)) {
+    if (norm(land) === n) return "land";
+    const inner = /\(([^)]+)\)/.exec(land);
+    if (inner && norm(inner[1]!) === n) return "land";
+  }
+  return "attraction";
+}
+
+function parseKind(raw: unknown): AttractionKind | null | "bad" {
+  const k = String(raw ?? "").trim().toLowerCase();
+  if (!k) return null;
+  if (k === "land" || k === "lands" || k === "area") return "land";
+  if (["attraction", "ride", "show", "attractions"].includes(k)) return "attraction";
+  return "bad";
+}
 
 /**
  * Accept "wdw, dlr", "wdw dlr" and ["wdw","dlr"] alike.
@@ -102,8 +181,21 @@ export function validateAttraction(input: AttractionInput): ValidatedAttraction 
 
   // A row that only hides something does not need a name or resorts: there is
   // nothing to show. Requiring them would mean typing out an attraction in
-  // order to delete it.
-  if (hidden) return { ok: true, value: { id, name: "", resortIds: [], note: "", hidden: true } };
+  // order to delete it. But whatever it DOES carry is kept, so un-hiding it
+  // later brings the whole row back rather than an empty shell.
+  if (hidden) {
+    const name = String(input.name ?? "").trim().slice(0, MAX_NAME);
+    const resortIds = parseResortIds(input.resortIds).filter((r) => KNOWN_RESORTS.has(r));
+    const parsed = parseLands(input.lands);
+    const lands = parsed.ok
+      ? Object.fromEntries(Object.entries(parsed.lands).filter(([r]) => resortIds.includes(r)))
+      : {};
+    const k = parseKind(input.kind);
+    return { ok: true, value: {
+      id, name, resortIds, note: String(input.note ?? "").trim().slice(0, MAX_NOTE), hidden: true,
+      kind: k === "land" || k === "attraction" ? k : inferKind(name, lands), lands,
+    } };
+  }
 
   const name = String(input.name ?? "").trim();
   if (!name) return { ok: false, reason: `"${id}" needs a name — what a traveler would call it.` };
@@ -121,7 +213,20 @@ export function validateAttraction(input: AttractionInput): ValidatedAttraction 
   const note = String(input.note ?? "").trim();
   if (note.length > MAX_NOTE) return { ok: false, reason: `That note is ${note.length} characters; keep it under ${MAX_NOTE}.` };
 
-  return { ok: true, value: { id, name, resortIds, note, hidden: false } };
+  const parsed = parseLands(input.lands);
+  if (!parsed.ok) return { ok: false, reason: `"${name}": ${parsed.reason}` };
+  for (const [resort, land] of Object.entries(parsed.lands)) {
+    if (!resortIds.includes(resort)) {
+      return { ok: false, reason: `"${name}" gives a land for ${resort}, but ${resort} isn't in its resorts column. Add ${resort} to the resorts, or take it out of the land column.` };
+    }
+    if (land.length > MAX_LAND) return { ok: false, reason: `"${name}": the ${resort} land name is ${land.length} characters; keep it under ${MAX_LAND}.` };
+  }
+
+  const k = parseKind(input.kind);
+  if (k === "bad") return { ok: false, reason: `"${name}": the type should be "land" or "attraction" (or blank to work it out from the name).` };
+  const kind = k ?? inferKind(name, parsed.lands);
+
+  return { ok: true, value: { id, name, resortIds, note, hidden: false, kind, lands: parsed.lands } };
 }
 
 const SHIPPED_IDS = new Set(ATTRACTIONS.map((a) => a.id));
@@ -130,10 +235,14 @@ const SHIPPED_IDS = new Set(ATTRACTIONS.map((a) => a.id));
 export async function listOwnerAttractions(db: Db): Promise<OwnerAttractionRow[]> {
   const { rows } = await db.query<{
     id: string; name: string; resort_ids: string; note: string; hidden: boolean; updated_at: Date | null;
-  }>(`select id, name, resort_ids, note, hidden, updated_at from owner_attractions order by id`);
+    kind: string | null; lands: string | null;
+  }>(`select id, name, resort_ids, note, hidden, updated_at, kind, lands from owner_attractions order by id`);
 
   return rows.map((r) => {
     const resortIds = parseResortIds(r.resort_ids);
+    let lands: Record<string, string> = {};
+    try { const j = JSON.parse(r.lands || "{}"); if (j && typeof j === "object") lands = j; } catch { /* unreadable: no lands */ }
+    const kind: AttractionKind = r.kind === "land" ? "land" : "attraction";
     const usable = resortIds.filter((x) => KNOWN_RESORTS.has(x));
     let applied = true;
     let problem: string | undefined;
@@ -147,7 +256,7 @@ export async function listOwnerAttractions(db: Db): Promise<OwnerAttractionRow[]
       }
     }
     return {
-      id: r.id, name: r.name, resortIds, note: r.note, hidden: r.hidden,
+      id: r.id, name: r.name, resortIds, note: r.note, kind, lands, hidden: r.hidden,
       applied, problem, overridesShipped: SHIPPED_IDS.has(r.id), updatedAt: r.updated_at,
     };
   });
@@ -172,6 +281,9 @@ export function overlay(shipped: readonly AttractionDef[], owner: readonly Owner
     if (!usable.length || !o.name.trim()) continue;
     const def: AttractionDef = { id: o.id, name: o.name.trim(), resortIds: usable };
     if (o.note.trim()) def.note = o.note.trim();
+    if (o.kind === "land") def.kind = "land";
+    const lands = Object.fromEntries(Object.entries(o.lands ?? {}).filter(([r]) => usable.includes(r)));
+    if (Object.keys(lands).length) def.lands = lands;
     if (SHIPPED_IDS.has(o.id)) replacing.set(o.id, def);
     else added.push(def);
   }
@@ -184,7 +296,39 @@ export function overlay(shipped: readonly AttractionDef[], owner: readonly Owner
   // Added rows go after the shipped ones, sorted, so the order is stable
   // rather than depending on when each was typed.
   added.sort((x, y) => x.name.localeCompare(y.name));
-  return [...out, ...added];
+  return markSameNames([...out, ...added]);
+}
+
+/**
+ * Same name, same kind, different resort: neither row is "only here".
+ *
+ * "Only here" is derived from the resort list, and that works while one ride
+ * is one row. The owner's sheet lists a land once per resort ("Adventureland"
+ * at four of them), so each row names a single resort and would otherwise
+ * claim to be the only Adventureland anywhere — a confident wrong claim, the
+ * exact thing the derived rule exists to prevent. Returns new objects; the
+ * inputs are left alone.
+ */
+export function markSameNames(list: readonly AttractionDef[]): AttractionDef[] {
+  const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const where = new Map<string, Set<string>>();
+  for (const a of list) {
+    const key = `${a.kind ?? "attraction"}|${norm(a.name)}`;
+    const set = where.get(key) ?? new Set<string>();
+    for (const r of a.resortIds) set.add(r);
+    where.set(key, set);
+  }
+  return list.map((a) => {
+    const all = where.get(`${a.kind ?? "attraction"}|${norm(a.name)}`)!;
+    const others = [...all].filter((r) => !a.resortIds.includes(r));
+    if (!others.length) {
+      if (!a.alsoAt) return a;
+      const { alsoAt, ...rest } = a;
+      void alsoAt;
+      return rest;
+    }
+    return { ...a, alsoAt: others };
+  });
 }
 
 /** The effective list, loaded. Falls back to the shipped list on any database
@@ -199,10 +343,12 @@ export async function effectiveAttractions(db: Db): Promise<AttractionDef[]> {
 }
 
 /** Does this proposed row say exactly what the shipped one already says? */
-function matchesShipped(v: { id: string; name: string; resortIds: string[]; note: string; hidden: boolean }): boolean {
+function matchesShipped(v: AttractionValue): boolean {
   if (v.hidden) return false;
   const ship = ATTRACTIONS.find((a) => a.id === v.id);
   if (!ship) return false;
+  // Shipped rows carry no lands, so any land named is a real change.
+  if (Object.keys(v.lands).length || v.kind !== (ship.kind ?? "attraction")) return false;
   return ship.name === v.name
     && (ship.note ?? "") === v.note
     && ship.resortIds.length === v.resortIds.length
@@ -229,14 +375,15 @@ export async function saveAttraction(
     return { ok: true, id: v.value.id };
   }
 
-  const { id, name, resortIds, note, hidden } = v.value;
+  const { id, name, resortIds, note, hidden, kind, lands } = v.value;
   await db.query(
-    `insert into owner_attractions (id, name, resort_ids, note, hidden, updated_by, updated_at)
-     values ($1,$2,$3,$4,$5,$6, now())
+    `insert into owner_attractions (id, name, resort_ids, note, hidden, kind, lands, updated_by, updated_at)
+     values ($1,$2,$3,$4,$5,$6,$7,$8, now())
      on conflict (id) do update set
        name = excluded.name, resort_ids = excluded.resort_ids, note = excluded.note,
-       hidden = excluded.hidden, updated_by = excluded.updated_by, updated_at = now()`,
-    [id, name, resortIds.join(","), note, hidden, by],
+       hidden = excluded.hidden, kind = excluded.kind, lands = excluded.lands,
+       updated_by = excluded.updated_by, updated_at = now()`,
+    [id, name, resortIds.join(","), note, hidden, kind, JSON.stringify(lands), by],
   );
   return { ok: true, id };
 }
@@ -254,30 +401,79 @@ export async function deleteOwnerAttraction(db: Db, id: string): Promise<boolean
   return r.rows.length > 0;
 }
 
+/** "wdw: Tomorrowland; shdr: Tomorrowland" — the sheet's land cell. */
+export function landsCell(lands: Record<string, string> | undefined, resortIds: readonly string[]): string {
+  if (!lands) return "";
+  return resortIds.filter((r) => lands[r]).map((r) => `${r}: ${lands[r]}`).join("; ");
+}
+
 /** Rows for the spreadsheet: the EFFECTIVE list, so the owner edits what the
  *  app is actually using rather than only the overrides they have already
  *  made. A shipped row downloaded and re-uploaded unchanged writes an
  *  override identical to the shipped value, which is harmless. */
 export function sheetRows(effective: readonly AttractionDef[], owner: readonly OwnerAttractionRow[]) {
-  const hidden = new Set(owner.filter((o) => o.hidden).map((o) => o.id));
+  const hidden = owner.filter((o) => o.hidden);
   const rows = effective.map((a) => ({
     id: a.id,
     name: a.name,
+    type: a.kind ?? "attraction",
     resorts: a.resortIds.join(" "),
+    land: landsCell(a.lands, a.resortIds),
     note: a.note ?? "",
     hidden: "",
     only_here: isOnlyAt(a) ? "yes" : "",
     source: SHIPPED_IDS.has(a.id) ? (owner.some((o) => o.id === a.id) ? "yours (replaces shipped)" : "shipped") : "yours",
   }));
-  // A hidden shipped attraction is absent from the effective list, so it
-  // would vanish from the sheet and re-appear on the next import. Carry it
-  // with its flag set instead.
-  for (const id of hidden) {
-    const ship = ATTRACTIONS.find((a) => a.id === id);
+  // A hidden row is absent from the effective list, so it would vanish from
+  // the sheet and be lost on the next import. Carry it with its flag set —
+  // and with its own details, so un-hiding it brings the whole row back.
+  for (const o of hidden) {
+    const ship = ATTRACTIONS.find((a) => a.id === o.id);
+    const name = o.name || ship?.name || "";
+    const resortIds = o.resortIds.length ? o.resortIds : (ship?.resortIds ?? []);
     rows.push({
-      id, name: ship?.name ?? "", resorts: (ship?.resortIds ?? []).join(" "),
-      note: ship?.note ?? "", hidden: "yes", only_here: "", source: "hidden by you",
+      id: o.id, name, type: o.kind, resorts: resortIds.join(" "),
+      land: landsCell(o.lands, resortIds),
+      note: o.note || ship?.note || "", hidden: "yes", only_here: "", source: "hidden by you",
     });
   }
   return rows;
+}
+
+/**
+ * Things worth a second look in an uploaded sheet that are NOT reasons to
+ * refuse it — the owner's data, the owner's call. Returned with the upload
+ * result and printed on the admin page.
+ *
+ *  - The same name twice at the same resort: almost always one ride typed
+ *    twice, and the picker would then show it twice.
+ *  - An `only_here` cell that disagrees with the resorts column. That column
+ *    is worked out from the resorts and never read, so a "yes" on a row
+ *    naming three resorts is ignored — said out loud so it isn't a surprise.
+ */
+export function sheetWarnings(rows: { row: number; value: AttractionValue; onlyHere: string }[]): string[] {
+  const out: string[] = [];
+  const byKey = new Map<string, number>();
+  for (const { row, value } of rows) {
+    if (value.hidden) continue;
+    const norm = value.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    for (const r of value.resortIds) {
+      const key = `${value.kind}|${r}|${norm}`;
+      const first = byKey.get(key);
+      if (first !== undefined) {
+        out.push(`row ${row}: "${value.name}" at ${r} is already on row ${first} — the picker will show it twice. Hide or delete one.`);
+        break;
+      }
+      byKey.set(key, row);
+    }
+  }
+  for (const { row, value, onlyHere } of rows) {
+    if (value.hidden || !onlyHere.trim()) continue;
+    const says = /^(yes|y|true|1)$/i.test(onlyHere.trim());
+    const is = value.resortIds.length === 1;
+    if (says !== is) {
+      out.push(`row ${row}: "${value.name}" says only_here = ${onlyHere.trim()}, but lists ${value.resortIds.length} resort${value.resortIds.length === 1 ? "" : "s"}. "Only here" is worked out from the resorts column, so that column wins.`);
+    }
+  }
+  return out;
 }

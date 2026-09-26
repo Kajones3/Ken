@@ -1,0 +1,174 @@
+id,name,resorts,land,note,hidden,only_here,source,claude_check
+zootopia,Zootopia,shdr,shdr: Zootopia,"A whole themed land, and the only one anywhere.",,yes,shipped,
+mystic-manor,Mystic Manor,hkdl,hkdl: Mystic Point,"Hong Kong's own take on the haunted-house idea — no Doom Buggies, a different story entirely.",,yes,shipped,
+journey-center-earth,Journey to the Center of the Earth,tdr,tdr: Mysterious Island,Tokyo DisneySea only.,,yes,shipped,
+radiator-springs-racers,Radiator Springs Racers,dlr,dlr: Cars Land,,,yes,shipped,
+guardians-cosmic-rewind,Guardians of the Galaxy: Cosmic Rewind,wdw,wdw: World Discovery,,,yes,shipped,
+pirates-sunken-treasure,Pirates of the Caribbean: Battle for the Sunken Treasure,shdr,shdr: Treasure Cove,Shares a name with the Pirates rides elsewhere and is a completely different attraction.,,yes,shipped,
+ratatouille,Ratatouille,wdw dlp,wdw: World Showcase (France Pavilion); dlp: Worlds of Pixar,"Remy's Ratatouille Adventure at EPCOT, Ratatouille: L'Aventure Totalement Toquée at Walt Disney Studios.",,,shipped,
+tron,TRON Lightcycle / Run,wdw shdr,wdw: Tomorrowland; shdr: Tomorrowland,,,,shipped,
+rise-of-the-resistance,Star Wars: Rise of the Resistance,wdw dlr,wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge,,,,shipped,
+crush-coaster,Crush's Coaster,dlp,dlp: Worlds of Pixar,,,yes,shipped,
+magic-kingdom-main-street,"Main Street, U.S.A.",wdw,"wdw: Main Street, U.S.A.",Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-adventureland,Adventureland,wdw,wdw: Adventureland,Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-frontierland,Frontierland,wdw,wdw: Frontierland,Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-liberty-square,Liberty Square,wdw,wdw: Liberty Square,Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-fantasyland,Fantasyland,wdw,wdw: Fantasyland,Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-tomorrowland,Tomorrowland,wdw,wdw: Tomorrowland,Walt Disney World — Magic Kingdom land.,,,expanded-2026,
+magic-kingdom-storybook-circus,Storybook Circus,wdw,wdw: Fantasyland (Storybook Circus),Walt Disney World — Magic Kingdom area.,,,expanded-2026,
+epcot-world-celebration,World Celebration,wdw,wdw: World Celebration,Walt Disney World — EPCOT neighborhood.,,,expanded-2026,
+epcot-world-discovery,World Discovery,wdw,wdw: World Discovery,Walt Disney World — EPCOT neighborhood.,,,expanded-2026,
+epcot-world-nature,World Nature,wdw,wdw: World Nature,Walt Disney World — EPCOT neighborhood.,,,expanded-2026,
+epcot-world-showcase,World Showcase,wdw,wdw: World Showcase,Walt Disney World — EPCOT neighborhood.,,,expanded-2026,
+hollywood-studios-hollywood,Hollywood Boulevard,wdw,wdw: Hollywood Boulevard,Walt Disney World — Hollywood Studios area.,,,expanded-2026,"Missing lands worth adding at Hollywood Studios: Sunset Boulevard (wdw-tower refers to it), Animation Courtyard, Grand Avenue."
+hollywood-studios-echo-lake,Echo Lake,wdw,wdw: Echo Lake,Walt Disney World — Hollywood Studios area.,,,expanded-2026,
+hollywood-studios-galaxys-edge,Star Wars: Galaxy's Edge,wdw dlr,wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge,Shared land at Walt Disney World and Disneyland Resort.,,,expanded-2026,
+hollywood-studios-toy-story,Toy Story Land,wdw shdr hkdl,wdw: Toy Story Land; shdr: Disney•Pixar Toy Story Land; hkdl: Toy Story Land,Toy Story-themed land found at multiple Disney destinations.,,,expanded-2026,
+animal-kingdom-discovery-island,Discovery Island,wdw,wdw: Discovery Island,Walt Disney World — Animal Kingdom area.,,,expanded-2026,
+animal-kingdom-pandora,Pandora – The World of Avatar,wdw,wdw: Pandora – The World of Avatar,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
+animal-kingdom-africa,Africa,wdw,wdw: Africa,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
+animal-kingdom-asia,Asia,wdw,wdw: Asia,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
+animal-kingdom-dino,DinoLand U.S.A.,wdw,wdw: DinoLand U.S.A.,Walt Disney World — Animal Kingdom area.,,,expanded-2026,Worth checking: DinoLand U.S.A. is being replaced by Tropical Americas.
+disneyland-main-street,"Main Street, U.S.A.",dlr,"dlr: Main Street, U.S.A.",Disneyland Park land.,,,expanded-2026,
+disneyland-adventureland,Adventureland,dlr,dlr: Adventureland,Disneyland Park land.,,,expanded-2026,
+disneyland-new-orleans,New Orleans Square,dlr,dlr: New Orleans Square,Disneyland Park land.,,,expanded-2026,
+disneyland-frontierland,Frontierland,dlr,dlr: Frontierland,Disneyland Park land.,,,expanded-2026,
+disneyland-fantasyland,Fantasyland,dlr,dlr: Fantasyland,Disneyland Park land.,,,expanded-2026,
+disneyland-tomorrowland,Tomorrowland,dlr,dlr: Tomorrowland,Disneyland Park land.,,,expanded-2026,
+disneyland-toontown,Mickey's Toontown,dlr,dlr: Mickey's Toontown,Disneyland Park land.,,,expanded-2026,
+dca-buena-vista,Buena Vista Street,dlr,dlr: Buena Vista Street,Disney California Adventure area.,,,expanded-2026,
+dca-hollywood-land,Hollywood Land,dlr,dlr: Hollywood Land,Disney California Adventure area.,,,expanded-2026,
+dca-grizzly-peak,Grizzly Peak,dlr,dlr: Grizzly Peak,Disney California Adventure land.,,,expanded-2026,
+dca-pacific-wharf,San Fransokyo Square,dlr,dlr: San Fransokyo Square,Current Disney California Adventure area.,,,expanded-2026,
+dca-cars-land,Cars Land,dlr,dlr: Cars Land,Distinctive Cars-themed land at Disney California Adventure.,,yes,expanded-2026,
+dca-avengers-campus,Avengers Campus,dlr dlp,dlr: Avengers Campus; dlp: Marvel Avengers Campus,Marvel-themed land at Disneyland Resort and Disneyland Paris.,,,expanded-2026,
+dca-pixar-pier,Pixar Pier,dlr,dlr: Pixar Pier,Disney California Adventure area.,,,expanded-2026,
+dca-paradise-gardens,Paradise Gardens Park,dlr,dlr: Paradise Gardens Park,Disney California Adventure area.,,,expanded-2026,
+dlp-main-street,"Main Street, U.S.A.",dlp,"dlp: Main Street, U.S.A.",Disneyland Park Paris land.,,,expanded-2026,
+dlp-frontierland,Frontierland,dlp,dlp: Frontierland,Disneyland Park Paris land.,,,expanded-2026,
+dlp-adventureland,Adventureland,dlp,dlp: Adventureland,Disneyland Park Paris land.,,,expanded-2026,
+dlp-fantasyland,Fantasyland,dlp,dlp: Fantasyland,Disneyland Park Paris land.,,,expanded-2026,
+dlp-discoveryland,Discoveryland,dlp,dlp: Discoveryland,Disneyland Park Paris land.,,,expanded-2026,
+daw-world-of-frozen,World of Frozen,dlp hkdl,dlp: World of Frozen; hkdl: World of Frozen,Frozen-themed land at Disneyland Paris and Hong Kong Disneyland; Paris opened in 2026.,,,expanded-2026,
+daw-worlds-of-pixar,Worlds of Pixar,dlp,dlp: Worlds of Pixar,Disney Adventure World — immersive Pixar area.,,,expanded-2026,
+daw-marvel-avengers-campus,Marvel Avengers Campus,dlp dlr,dlp: Marvel Avengers Campus; dlr: Avengers Campus,Marvel-themed land at Disneyland Paris and Disneyland Resort.,yes,,expanded-2026,"Hidden: a repeat of ""dca-avengers-campus"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+tdl-world-bazaar,World Bazaar,tdr,tdr: World Bazaar,Tokyo Disneyland land.,,,expanded-2026,
+tdl-adventureland,Adventureland,tdr,tdr: Adventureland,Tokyo Disneyland land.,,,expanded-2026,
+tdl-westernland,Westernland,tdr,tdr: Westernland,Tokyo Disneyland land.,,,expanded-2026,
+tdl-critter-country,Critter Country,tdr,tdr: Critter Country,Tokyo Disneyland land.,,,expanded-2026,
+tdl-fantasyland,Fantasyland,tdr,tdr: Fantasyland,Tokyo Disneyland land.,,,expanded-2026,
+tdl-toontown,Toontown,tdr,tdr: Toontown,Tokyo Disneyland land.,,,expanded-2026,
+tdl-tomorrowland,Tomorrowland,tdr,tdr: Tomorrowland,Tokyo Disneyland land.,,,expanded-2026,
+tds-mediterranean-harbor,Mediterranean Harbor,tdr,tdr: Mediterranean Harbor,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-american-waterfront,American Waterfront,tdr,tdr: American Waterfront,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-port-discovery,Port Discovery,tdr,tdr: Port Discovery,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-lost-river-delta,Lost River Delta,tdr,tdr: Lost River Delta,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-fantasy-springs,Fantasy Springs,tdr,tdr: Fantasy Springs,"Tokyo DisneySea themed port; includes Frozen, Tangled and Peter Pan areas.",,yes,expanded-2026,
+tds-arabian-coast,Arabian Coast,tdr,tdr: Arabian Coast,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-mermaid-lagoon,Mermaid Lagoon,tdr,tdr: Mermaid Lagoon,Tokyo DisneySea themed port.,,,expanded-2026,
+tds-mysterious-island,Mysterious Island,tdr,tdr: Mysterious Island,Tokyo DisneySea themed port.,,,expanded-2026,
+hkdl-main-street,"Main Street, U.S.A.",hkdl,"hkdl: Main Street, U.S.A.",Hong Kong Disneyland land.,,,expanded-2026,
+hkdl-fantasyland,Fantasyland,hkdl,hkdl: Fantasyland,Hong Kong Disneyland land.,,,expanded-2026,
+hkdl-adventureland,Adventureland,hkdl,hkdl: Adventureland,Hong Kong Disneyland land.,,,expanded-2026,
+hkdl-tomorrowland,Tomorrowland,hkdl,hkdl: Tomorrowland,Hong Kong Disneyland land.,,,expanded-2026,
+hkdl-toy-story-land,Toy Story Land,hkdl,hkdl: Toy Story Land,Hong Kong Disneyland land.,yes,,expanded-2026,"Hidden: a repeat of ""hollywood-studios-toy-story"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+hkdl-grizzly-gulch,Grizzly Gulch,hkdl,hkdl: Grizzly Gulch,World-exclusive themed land at Hong Kong Disneyland.,yes,yes,expanded-2026,"Hidden: a repeat of ""hkdl-big-grizzly"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+hkdl-mystic-point,Mystic Point,hkdl,hkdl: Mystic Point,World-exclusive themed land at Hong Kong Disneyland.,,yes,expanded-2026,
+hkdl-world-of-frozen,World of Frozen,hkdl dlp,hkdl: World of Frozen; dlp: World of Frozen,Frozen-themed land at Hong Kong Disneyland and Disneyland Paris.,yes,,expanded-2026,"Hidden: a repeat of ""daw-world-of-frozen"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-mickey-avenue,Mickey Avenue,shdr,shdr: Mickey Avenue,Shanghai Disneyland land.,,,expanded-2026,
+shdr-gardens,Gardens of Imagination,shdr,shdr: Gardens of Imagination,Shanghai Disneyland land.,,,expanded-2026,
+shdr-fantasyland,Fantasyland,shdr,shdr: Fantasyland,Shanghai Disneyland land.,,,expanded-2026,
+shdr-adventure-isle,Adventure Isle,shdr,shdr: Adventure Isle,Shanghai Disneyland land.,,,expanded-2026,
+shdr-treasure-cove,Treasure Cove,shdr,shdr: Treasure Cove,Pirate-themed land unique to Shanghai Disneyland.,,yes,expanded-2026,
+shdr-tomorrowland,Tomorrowland,shdr,shdr: Tomorrowland,Shanghai Disneyland land.,,,expanded-2026,
+shdr-toy-story-land,Disney•Pixar Toy Story Land,shdr,shdr: Disney•Pixar Toy Story Land,Shanghai Disneyland land.,yes,,expanded-2026,"Hidden: a repeat of ""hollywood-studios-toy-story"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-zootopia,Zootopia,shdr,shdr: Zootopia,"Themed land at Shanghai Disneyland, the first Zootopia-themed land.",yes,yes,expanded-2026,"Hidden: a repeat of ""zootopia"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-seven-dwarfs,Seven Dwarfs Mine Train,wdw shdr,wdw: Fantasyland (Storybook Circus); shdr: Fantasyland,Mine-train attraction in Fantasyland.,,,expanded-2026,"Worth checking: at Magic Kingdom it's in Fantasyland's Enchanted Forest, not Storybook Circus."
+wdw-tron-mk,TRON Lightcycle / Run,wdw shdr,wdw: Tomorrowland; shdr: Tomorrowland,Lightcycle coaster; Shanghai's version is TRON Lightcycle Power Run.,yes,,expanded-2026,"Hidden: a repeat of ""tron"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-pirates,Pirates of the Caribbean,wdw dlr tdr dlp,wdw: Adventureland; dlr: Adventureland; tdr: Adventureland; dlp: Adventureland,Classic Pirates attraction; versions differ by resort.,,,expanded-2026,
+wdw-haunted-mansion,Haunted Mansion,wdw dlr tdr,wdw: Liberty Square; dlr: New Orleans Square; tdr: Fantasyland,Haunted-house attraction; Tokyo's is in Fantasyland.,,,expanded-2026,
+wdw-space-mountain,Space Mountain,wdw dlr tdr dlp,wdw: Tomorrowland; dlr: Tomorrowland; tdr: Tomorrowland; dlp: Discoveryland,Space-themed coaster with resort-specific versions.,,,expanded-2026,"Worth checking: Tokyo's Space Mountain closed in 2024 for a rebuild (new one due 2027), and Paris runs Star Wars Hyperspace Mountain (its own row, dlp-hyperspace), which the site already notes closes end of 2027."
+wdw-big-thunder,Big Thunder Mountain Railroad,wdw dlr tdr dlp,wdw: Frontierland; dlr: Frontierland; tdr: Westernland; dlp: Frontierland,Western mine-train coaster.,,,expanded-2026,
+wdw-jungle-cruise,Jungle Cruise,wdw dlr tdr,wdw: Adventureland; dlr: Adventureland; tdr: Adventureland,Jungle-themed boat attraction.,,,expanded-2026,
+wdw-dumbo,Dumbo the Flying Elephant,wdw dlr tdr shdr hkdl dlp,wdw: Fantasyland (Storybook Circus); dlr: Fantasyland; tdr: Fantasyland; shdr: Fantasyland; hkdl: Fantasyland; dlp: Fantasyland,Classic spinning attraction at multiple Disney parks.,,,expanded-2026,
+wdw-small-world,it's a small world,wdw dlr tdr hkdl dlp shdr,wdw: Fantasyland; dlr: Fantasyland; tdr: Fantasyland; hkdl: Fantasyland; dlp: Fantasyland; shdr: Fantasyland,Classic boat attraction at multiple Disney parks.,,,expanded-2026,"Worth checking: Shanghai Disneyland isn't known to have ""it's a small world"" — shdr may not belong here."
+wdw-winnie-pooh,The Many Adventures of Winnie the Pooh,wdw dlr tdr hkdl shdr,wdw: Fantasyland; dlr: Critter Country; tdr: Fantasyland; hkdl: Fantasyland; shdr: Fantasyland,Winnie the Pooh dark ride at several destinations.,,,expanded-2026,"Worth checking: Tokyo has Pooh's Hunny Hunt instead (its own row, tdr-pooh), a different ride; and Disneyland's Critter Country was renamed Bayou Country in 2024."
+wdw-buzz,Buzz Lightyear's Space Ranger Spin,wdw dlr tdr shdr,wdw: Tomorrowland; dlr: Tomorrowland; tdr: Tomorrowland; shdr: Tomorrowland,Interactive Buzz Lightyear attraction; names/versions vary.,,,expanded-2026,"Worth checking: the name differs by resort (Astro Blasters at Disneyland and Tokyo), and Shanghai's is Buzz Lightyear Planet Rescue — already its own row (shdr-buzz), so shdr is listed twice."
+wdw-pirates-caribbean,Pirates of the Caribbean,wdw dlr tdr dlp,wdw: Adventureland; dlr: Adventureland; tdr: Adventureland; dlp: Adventureland,Classic Pirates attraction.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-pirates"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-peoplemover,Tomorrowland Transit Authority PeopleMover,wdw,wdw: Tomorrowland,Tomorrowland elevated tour; Walt Disney World version.,,,expanded-2026,
+wdw-under-sea,Under the Sea – Journey of the Little Mermaid,wdw,wdw: Fantasyland,Fantasyland dark ride.,,,expanded-2026,
+wdw-space-ship-earth,Spaceship Earth,wdw,wdw: World Celebration,EPCOT icon and dark ride.,,,expanded-2026,
+wdw-test-track,Test Track,wdw,wdw: World Discovery,EPCOT high-speed vehicle test attraction.,,,expanded-2026,
+wdw-soarin,Soarin' Around the World,wdw dlr shdr tdr,wdw: World Nature; dlr: Grizzly Peak; shdr: Adventure Isle; tdr: Fantasy Springs,Flying theater attraction at several Disney parks.,,,expanded-2026,"Worth checking: Tokyo's version (Soaring: Fantastic Flight, Mediterranean Harbor) and Shanghai's (Soaring Over the Horizon) are also their own rows (tds-soaring, shdr-soaring), so both are listed twice. Tokyo's land here says Fantasy Springs; it's Mediterranean Harbor."
+wdw-guardians,Guardians of the Galaxy: Cosmic Rewind,wdw,wdw: World Discovery,EPCOT indoor spinning coaster.,yes,,expanded-2026,"Hidden: a repeat of ""guardians-cosmic-rewind"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-remy,Remy's Ratatouille Adventure,wdw dlp,wdw: World Showcase (France Pavilion); dlp: Worlds of Pixar,Ratatouille trackless dark ride.,yes,,expanded-2026,"Hidden: a repeat of ""ratatouille"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-frozen,Frozen Ever After,wdw dlp,wdw: World Showcase (Norway Pavilion); dlp: World Showcase (Norway Pavilion),Frozen boat ride; Paris version opened in 2026.,,,expanded-2026,"Worth checking: Paris's Frozen Ever After is in World of Frozen, not the Norway Pavilion (that's EPCOT). Hong Kong has it too (row hkdl-frozen) — suggest one row: resorts wdw dlp hkdl; land wdw: World Showcase (Norway Pavilion); dlp: World of Frozen; hkdl: World of Frozen."
+wdw-rise,Star Wars: Rise of the Resistance,wdw dlr,wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge,Large-scale Star Wars attraction.,yes,,expanded-2026,"Hidden: a repeat of ""rise-of-the-resistance"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+wdw-smugglers,Millennium Falcon: Smugglers Run,wdw dlr,wdw: Star Wars: Galaxy's Edge; dlr: Star Wars: Galaxy's Edge,Interactive Star Wars flight simulator.,,,expanded-2026,
+wdw-tower,The Twilight Zone Tower of Terror,wdw dlp,wdw: Sunset Boulevard; dlp: Marvel Avengers Campus,Tower-drop attraction; Paris has the same Twilight Zone concept.,,,expanded-2026,"Worth checking which land Paris puts its Tower of Terror in. Tokyo's (tds-tower) is a different story and its own row, correctly."
+wdw-mickeys-runaway,Mickey & Minnie's Runaway Railway,wdw dlr,wdw: Mickey's Toontown; dlr: Mickey's Toontown,Mickey-themed trackless attraction.,,,expanded-2026,Worth checking: at Walt Disney World this ride is in Hollywood Studios (Hollywood Boulevard); Mickey's Toontown is a Disneyland land.
+wdw-slinky,Slinky Dog Dash,wdw shdr,wdw: Toy Story Land; shdr: Disney•Pixar Toy Story Land,Toy Story coaster.,,,expanded-2026,"Worth checking: Shanghai's is Slinky Dog Spin (its own row, shdr-slinky), a different ride from Slinky Dog Dash — shdr probably doesn't belong here."
+wdw-rapunzel,Rapunzel's Tangled Spin,wdw dlp,wdw: Fantasy Springs; dlp: Adventure Way,Paris-only current attraction; Tokyo has Rapunzel's Lantern Festival in Fantasy Springs instead.,,,expanded-2026,"Worth checking: Walt Disney World has no Tangled Spin, and Fantasy Springs is at Tokyo DisneySea. Paris's ride is already its own row (dlp-tangled-spin). As written this row tells travelers WDW has it."
+dlr-radiator,Radiator Springs Racers,dlr,dlr: Cars Land,Cars Land racing attraction.,yes,yes,expanded-2026,"Hidden: a repeat of ""radiator-springs-racers"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlr-indiana,Indiana Jones Adventure,dlr tdr,dlr: Adventureland; tdr: Lost River Delta,Temple-of-the-Forbidden-Eye attraction; Tokyo has a distinct Crystal Skull version.,,,expanded-2026,
+dlr-matterhorn,Matterhorn Bobsleds,dlr,dlr: Fantasyland,Distinctive Disneyland mountain coaster.,,yes,expanded-2026,
+dlr-mr-toad,Mr. Toad's Wild Ride,dlr,dlr: Fantasyland,Fantasyland dark ride.,,,expanded-2026,
+dlr-mansion,Haunted Mansion,dlr wdw tdr,dlr: New Orleans Square; wdw: Liberty Square; tdr: Fantasyland,Haunted attraction.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-haunted-mansion"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlr-toontown,Mickey & Minnie's Runaway Railway,dlr wdw,dlr: Mickey's Toontown; wdw: Mickey's Toontown,Mickey-themed trackless attraction.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-mickeys-runaway"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlr-incredicoaster,Incredicoaster,dlr,dlr: Pixar Pier,Pixar Pier coaster.,,,expanded-2026,
+dlr-web-slingers,WEB SLINGERS: A Spider-Man Adventure,dlr dlp,dlr: Avengers Campus; dlp: Marvel Avengers Campus,Interactive Spider-Man attraction; Paris has Spider-Man W.E.B. Adventure.,,,expanded-2026,
+dlr-goofy,Goofy's Sky School,dlr,dlr: Paradise Gardens Park,Disney California Adventure coaster.,,,expanded-2026,
+dlr-grizzly,Grizzly River Run,dlr,dlr: Grizzly Peak,Disney California Adventure raft ride.,,,expanded-2026,
+dlr-luigis,Luigi's Rollickin' Roadsters,dlr,dlr: Cars Land,Cars Land spinning ride.,,,expanded-2026,
+dlr-soarin,Soarin' Around the World,dlr wdw shdr tdr,dlr: Grizzly Peak; wdw: World Nature; shdr: Adventure Isle; tdr: Fantasy Springs,Flying theater.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-soarin"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlr-world-color,World of Color,dlr,dlr: Paradise Gardens Park,Disney California Adventure nighttime spectacular.,,,expanded-2026,
+dlp-crush,Crush's Coaster,dlp,dlp: Worlds of Pixar,Turtle-themed spinning coaster.,yes,yes,expanded-2026,"Hidden: a repeat of ""crush-coaster"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-ratatouille,Ratatouille: L'Aventure Totalement Toquée de Rémy,dlp wdw,dlp: Worlds of Pixar; wdw: World Showcase (France Pavilion),Paris version of Ratatouille trackless ride.,yes,,expanded-2026,"Hidden: a repeat of ""ratatouille"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-avengers-flight-force,Avengers Assemble: Flight Force,dlp,dlp: Marvel Avengers Campus,Marvel launch coaster.,,,expanded-2026,
+dlp-spider-man,Spider-Man W.E.B. Adventure,dlp dlr,dlp: Marvel Avengers Campus; dlr: Avengers Campus,Interactive Spider-Man attraction.,yes,,expanded-2026,"Hidden: a repeat of ""dlr-web-slingers"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-big-thunder,Big Thunder Mountain,dlp wdw dlr tdr,dlp: Frontierland; wdw: Frontierland; dlr: Frontierland; tdr: Westernland,Mine-train coaster.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-big-thunder"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-phantom-manor,Phantom Manor,dlp,dlp: Frontierland,Disneyland Paris's distinct haunted attraction.,,yes,expanded-2026,
+dlp-hyperspace,Star Wars Hyperspace Mountain,dlp,dlp: Discoveryland,Paris's Star Wars reworking of Space Mountain.,,,expanded-2026,
+dlp-pirates,Pirates of the Caribbean,dlp wdw dlr tdr,dlp: Adventureland; wdw: Adventureland; dlr: Adventureland; tdr: Adventureland,Pirates attraction.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-pirates"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-indiana,Indiana Jones et le Temple du Péril,dlp,dlp: Adventureland,Indiana Jones-themed looping coaster.,,yes,expanded-2026,
+dlp-frozen,Frozen Ever After,dlp wdw,dlp: World of Frozen; wdw: World Showcase (Norway Pavilion),Frozen attraction; Paris version opened with World of Frozen in 2026.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-frozen"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+dlp-tangled-spin,Raiponce Tangled Spin,dlp,dlp: Adventure Way,Tangled-themed spinning attraction that opened with Disney Adventure World in 2026.,,yes,expanded-2026,
+tdr-beauty-beast,Enchanted Tale of Beauty and the Beast,tdr,tdr: Fantasyland,Large-scale trackless Beauty and the Beast attraction.,,yes,expanded-2026,
+tdr-baymax,The Happy Ride with Baymax,tdr,tdr: Tomorrowland,Tokyo Disneyland's Baymax spinning ride.,,yes,expanded-2026,
+tdr-pooh,Pooh's Hunny Hunt,tdr,tdr: Fantasyland,Trackless Winnie the Pooh attraction.,,yes,expanded-2026,
+tdr-monsters,"Monsters, Inc. Ride & Go Seek!",tdr,tdr: Tomorrowland,"Interactive Monsters, Inc. dark ride.",,yes,expanded-2026,
+tdr-splash,Splash Mountain,tdr wdw dlr,tdr: Critter Country,Splash Mountain at Tokyo Disneyland; current operation subject to park schedules.,,,expanded-2026,Worth checking: Splash Mountain closed at Walt Disney World (2023) and Disneyland (2023) and became Tiana's Bayou Adventure — wdw and dlr probably don't belong here.
+tds-journey,Journey to the Center of the Earth,tdr,tdr: Mysterious Island,Tokyo DisneySea original attraction.,yes,yes,expanded-2026,"Hidden: a repeat of ""journey-center-earth"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+tds-sinbad,Sindbad's Storybook Voyage,tdr,tdr: Arabian Coast,Tokyo DisneySea boat attraction.,,yes,expanded-2026,
+tds-tower,Tower of Terror,tdr,tdr: American Waterfront,Tokyo DisneySea's original Tower of Terror story.,,yes,expanded-2026,
+tds-soaring,Soaring: Fantastic Flight,tdr,tdr: Mediterranean Harbor,Tokyo DisneySea's original Soarin' presentation.,,,expanded-2026,
+tds-indiana,Indiana Jones Adventure: Temple of the Crystal Skull,tdr dlr,tdr: Lost River Delta; dlr: Adventureland,Tokyo version of Indiana Jones Adventure.,yes,,expanded-2026,"Hidden: a repeat of ""dlr-indiana"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+tds-raging-spirits,Raging Spirits,tdr,tdr: Lost River Delta,Looping coaster in Lost River Delta.,,yes,expanded-2026,
+tds-20k,"20,000 Leagues Under the Sea",tdr,tdr: Mysterious Island,Mysterious Island attraction.,,yes,expanded-2026,
+tds-frozen,Anna and Elsa's Frozen Journey,tdr,tdr: Fantasy Springs,Frozen boat attraction in Fantasy Springs.,,yes,expanded-2026,
+tds-rapunzel,Rapunzel's Lantern Festival,tdr,tdr: Fantasy Springs,Tangled-themed attraction in Fantasy Springs.,,yes,expanded-2026,
+tds-peter-pan,Peter Pan's Never Land Adventure,tdr,tdr: Fantasy Springs,Peter Pan attraction in Fantasy Springs.,,,expanded-2026,
+tds-toy-story,Toy Story Mania!,tdr wdw dlr,tdr: American Waterfront; wdw: Toy Story Land; dlr: Pixar Pier,Interactive Toy Story midway attraction.,,,expanded-2026,
+hkdl-mystic-manor,Mystic Manor,hkdl,hkdl: Mystic Point,Hong Kong's original haunted-house-style attraction.,yes,yes,expanded-2026,"Hidden: a repeat of ""mystic-manor"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+hkdl-big-grizzly,Big Grizzly Mountain Runaway Mine Cars,hkdl,hkdl: Grizzly Gulch,Hong Kong's reverse-launch mine-train coaster.,,yes,expanded-2026,
+hkdl-frozen,Frozen Ever After,hkdl dlp,hkdl: World of Frozen; dlp: World of Frozen,Frozen boat attraction; World of Frozen at HKDL opened first.,,,expanded-2026,"Same as ""wdw-frozen"" but names hkdl too, so NOT hidden — merge the two rows into one, then hide or delete this one."
+hkdl-wandering-oaken,Wandering Oaken's Sliding Sleighs,hkdl,hkdl: World of Frozen,Frozen-themed family coaster in World of Frozen.,,yes,expanded-2026,
+hkdl-iron-man,Iron Man Experience,hkdl,hkdl: Tomorrowland,Marvel simulator attraction.,,yes,expanded-2026,
+hkdl-antman,Ant-Man and The Wasp: Nano Battle!,hkdl,hkdl: Tomorrowland,Interactive Marvel dark ride.,,yes,expanded-2026,
+hkdl-jungle,Jungle River Cruise,hkdl,hkdl: Adventureland,Hong Kong version of Jungle Cruise.,,,expanded-2026,
+hkdl-mickey-wondrous,Mickey and the Wondrous Book,hkdl,hkdl: Fantasyland,Live stage production in Fantasyland.,,,expanded-2026,
+hkdl-moana,Moana: A Homecoming Celebration,hkdl,hkdl: Adventureland,Live entertainment offering; included as an attraction-style entry for completeness.,,,expanded-2026,
+shdr-pirates,Pirates of the Caribbean: Battle for the Sunken Treasure,shdr,shdr: Treasure Cove,Shanghai's original Pirates attraction.,yes,yes,expanded-2026,"Hidden: a repeat of ""pirates-sunken-treasure"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-zootopia-hot-pursuit,Zootopia: Hot Pursuit,shdr,shdr: Zootopia,Shanghai's Zootopia dark ride.,,yes,expanded-2026,
+shdr-soaring,Soaring Over the Horizon,shdr,shdr: Adventure Isle,Shanghai's original Soarin' attraction.,,,expanded-2026,
+shdr-roaring-rapids,Roaring Rapids,shdr,shdr: Adventure Isle,Adventure Isle raft ride.,,,expanded-2026,
+shdr-tron,TRON Lightcycle Power Run,shdr wdw,shdr: Tomorrowland; wdw: Tomorrowland,Shanghai's TRON coaster; Walt Disney World has TRON Lightcycle / Run.,yes,,expanded-2026,"Hidden: a repeat of ""tron"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-seven-dwarfs,Seven Dwarfs Mine Train,shdr wdw,shdr: Fantasyland; wdw: Fantasyland (Storybook Circus),Fantasyland mine-train coaster.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-seven-dwarfs"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-boat,Voyage to the Crystal Grotto,shdr,shdr: Fantasyland,Fantasyland boat attraction.,,yes,expanded-2026,
+shdr-jet-packs,Jet Packs,shdr,shdr: Tomorrowland,Tomorrowland spinning attraction.,,yes,expanded-2026,
+shdr-rex,Rex's Racer,shdr,shdr: Disney•Pixar Toy Story Land,Toy Story Land shuttle coaster.,,yes,expanded-2026,
+shdr-woody,Woody's Roundup,shdr,shdr: Disney•Pixar Toy Story Land,Toy Story Land spinning attraction.,,yes,expanded-2026,
+shdr-slinky,Slinky Dog Spin,shdr,shdr: Disney•Pixar Toy Story Land,Toy Story Land spinning attraction.,,yes,expanded-2026,
+shdr-peter-pan,Peter Pan's Flight,shdr wdw dlr tdr hkdl dlp,shdr: Fantasyland; wdw: Fantasyland; dlr: Fantasyland; tdr: Fantasyland; hkdl: Fantasyland; dlp: Fantasyland,Classic Fantasyland dark ride.,,,expanded-2026,Worth checking: Hong Kong Disneyland isn't known to have Peter Pan's Flight — hkdl may not belong here.
+shdr-winnie,The Many Adventures of Winnie the Pooh,shdr wdw dlr tdr hkdl,shdr: Fantasyland; wdw: Fantasyland; dlr: Critter Country; tdr: Fantasyland; hkdl: Fantasyland,Winnie the Pooh dark ride.,yes,,expanded-2026,"Hidden: a repeat of ""wdw-winnie-pooh"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+shdr-buzz,Buzz Lightyear Planet Rescue,shdr,shdr: Tomorrowland,Shanghai's Buzz Lightyear interactive attraction.,,yes,expanded-2026,

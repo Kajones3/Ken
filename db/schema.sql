@@ -487,6 +487,10 @@ create table if not exists owner_attractions (
   updated_by  text not null default '',
   updated_at  timestamptz not null default now()
 );
+-- 2026-09-26: the owner's list names lands as well as rides. `kind` is
+-- 'land' or 'attraction'; `lands` is JSON, resort id -> land name.
+alter table owner_attractions add column if not exists kind text not null default 'attraction';
+alter table owner_attractions add column if not exists lands text not null default '{}';
 
 -- Wait-time observations, recorded and nothing else. NOTHING READS THIS YET
 -- and that is deliberate.

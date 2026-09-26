@@ -19,7 +19,7 @@ import { picksFor, setPicks, matchesForResort, matchSummary } from "./attraction
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
   effectiveAttractions, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
-  validateAttraction,
+  validateAttraction, sheetWarnings, type AttractionValue,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
@@ -1349,10 +1349,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/admin/attractions.csv" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       const rows = sheetRows(await effectiveAttractions(db), await listOwnerAttractions(db));
-      const head = ["id", "name", "resorts", "note", "hidden", "only_here", "source"];
+      // `type` and `land` added 2026-09-26. only_here and source are
+      // read-only: worked out from the rows, never read back.
+      const head = ["id", "name", "type", "resorts", "land", "note", "hidden", "only_here", "source"];
       const lines = [head.join(",")];
       for (const r of rows) {
-        lines.push([r.id, r.name, r.resorts, r.note, r.hidden, r.only_here, r.source].map(csvCell).join(","));
+        lines.push([r.id, r.name, r.type, r.resorts, r.land, r.note, r.hidden, r.only_here, r.source].map(csvCell).join(","));
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
@@ -1384,6 +1386,10 @@ const server = createServer(async (req, res) => {
         .map((r) => ({
           id: cell(r, "id"), name: cell(r, "name"), resortIds: cell(r, "resorts"),
           note: cell(r, "note"), hidden: /^(yes|true|1|y)$/i.test(cell(r, "hidden")),
+          // Older sheets have neither column; a blank type is worked out from
+          // the name, and "lands" is accepted as well as "land".
+          kind: cell(r, "type"), lands: cell(r, "land") || cell(r, "lands"),
+          onlyHere: cell(r, "only_here"),
         }));
 
       // All or nothing, and a duplicated id is refused rather than
@@ -1392,14 +1398,16 @@ const server = createServer(async (req, res) => {
       // a real editing mistake.
       const errors: string[] = [];
       const seen = new Map<string, number>();
+      const valid: { row: number; value: AttractionValue; onlyHere: string }[] = [];
       inputs.forEach((row, i) => {
         const v = validateAttraction(row);
         if (!v.ok) { errors.push(`row ${i + 2}: ${v.reason}`); return; }
         const first = seen.get(v.value.id);
         if (first !== undefined) errors.push(`row ${i + 2}: "${v.value.id}" is already on row ${first + 2}.`);
-        else seen.set(v.value.id, i);
+        else { seen.set(v.value.id, i); valid.push({ row: i + 2, value: v.value, onlyHere: row.onlyHere }); }
       });
       if (errors.length) return send(400, { error: "rejected", errors });
+      const warnings = sheetWarnings(valid);
 
       // A row the owner DELETED from the sheet should disappear from the
       // app. Without this, the spreadsheet could only ever add and change,
@@ -1413,7 +1421,10 @@ const server = createServer(async (req, res) => {
 
       const effective = await effectiveAttractions(db);
       return send(200, {
-        ok: true, applied: inputs.length,
+        ok: true, applied: inputs.length, warnings,
+        lands: valid.filter((v) => !v.value.hidden && v.value.kind === "land").length,
+        attractions: valid.filter((v) => !v.value.hidden && v.value.kind === "attraction").length,
+        hiddenCount: valid.filter((v) => v.value.hidden).length,
         effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
         owner: await listOwnerAttractions(db),
       }, { cache: "no-store" });

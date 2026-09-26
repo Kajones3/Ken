@@ -94,14 +94,14 @@ test("a missing mileage year is reported with the fix, urgent or not", async () 
   // carried forward — told you something was wrong and not how to fix it.
   const db = await memoryDb();
   const carried = `${newestMileageRateYear()}-07-01`;
-  const soft = (await ownerTasks(db, { env: ALL_SET, today: carried }))
+  const soft = (await ownerTasks(db, { env: ALL_SET, today: carried, snoozed: {} }))
     .find((t) => t.id === "irs-mileage")!;
   assert.ok(soft, "a carried-forward year is still worth saying");
   assert.equal(soft.blocking, false, "carried forward is a warning, not a breakage");
   assert.match(soft.why, /irs\.gov/);
 
   const brokenYear = newestMileageRateYear() + MILEAGE_RATE_CARRY_FORWARD_YEARS + 1;
-  const hard = (await ownerTasks(db, { env: ALL_SET, today: `${brokenYear}-07-01` }))
+  const hard = (await ownerTasks(db, { env: ALL_SET, today: `${brokenYear}-07-01`, snoozed: {} }))
     .find((t) => t.id === "irs-mileage")!;
   assert.equal(hard.blocking, true, "trips that will not price at all are blocking");
   assert.match(hard.why, /irs\.gov/);
@@ -216,5 +216,26 @@ test("a placeholder table is nagged about while its own flag says it is one", as
   } else {
     assert.equal(row, undefined, "the flag is off, so the nag must be gone");
   }
+  await db.close();
+});
+
+test("a snoozed reminder stays quiet until its date, and never hides a blocking one", async () => {
+  const db = await memoryDb();
+  const carried = `${newestMileageRateYear()}-07-01`;
+  const quiet = await ownerTasks(db, { env: ALL_SET, today: carried, snoozed: { "irs-mileage": "2099-01-01" } });
+  assert.equal(quiet.find((t) => t.id === "irs-mileage"), undefined);
+  const back = await ownerTasks(db, { env: ALL_SET, today: carried, snoozed: { "irs-mileage": carried } });
+  assert.ok(back.find((t) => t.id === "irs-mileage"), "back on the day the snooze ends");
+  const brokenYear = newestMileageRateYear() + MILEAGE_RATE_CARRY_FORWARD_YEARS + 1;
+  const broken = await ownerTasks(db, { env: ALL_SET, today: `${brokenYear}-07-01`, snoozed: { "irs-mileage": "2099-01-01" } });
+  assert.ok(broken.find((t) => t.id === "irs-mileage"), "a snooze never hides trips that won't price");
+  await db.close();
+});
+
+test("the attraction-list reminder goes away once the owner's list is uploaded", async () => {
+  const db = await memoryDb();
+  assert.ok((await ownerTasks(db, { env: ALL_SET, today: SETTLED })).find((t) => t.id === "attraction-list"));
+  await db.query(`insert into owner_attractions (id, name, resort_ids) values ('cars-land','Cars Land','dlr')`);
+  assert.equal((await ownerTasks(db, { env: ALL_SET, today: SETTLED })).find((t) => t.id === "attraction-list"), undefined);
   await db.close();
 });

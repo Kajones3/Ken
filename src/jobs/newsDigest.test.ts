@@ -99,10 +99,11 @@ test("news digest: tells the owner which year the IRS rate is missing for", asyn
   const sender: EmailSender = { name: "test", async send(msg) { sent.push(msg); } };
   const feeds = [{ url: "https://feed.example/a", label: "Feed A" }];
 
-  // Mid-2026: the 365-day booking window reaches into 2027, which the IRS
-  // hasn't published yet.
+  // December 2026: the 365-day booking window reaches into 2027, which the
+  // IRS hasn't published yet — and it's past the owner's snooze on this row
+  // (until after Thanksgiving 2026, see SNOOZED in ownerTasks.ts).
   const r = await runNewsDigest(db, {
-    sender, ownerEmail: "owner@example.com", todayISO: "2026-07-01",
+    sender, ownerEmail: "owner@example.com", todayISO: "2026-12-01",
     fetchImpl: fakeFetch({ "https://feed.example/a": FEED_XML }),
     feeds,
   });
