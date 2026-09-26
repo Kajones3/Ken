@@ -23,6 +23,7 @@ import {
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
+import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
 import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { recordSearch } from "./routeDemand.js";
@@ -1122,6 +1123,35 @@ const server = createServer(async (req, res) => {
      * bury everything else in it. The owner's call: "I think it would be too
      * much to have ALL of it on one sheet."
      * -------------------------------------------------------------------- */
+    /* Wait times: what the two-hourly job has recorded. Read-only, owner
+     * only, and never shown to travelers — see waitTimesView.ts. */
+    if (url.pathname === "/api/admin/wait-times" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const park = Number(url.searchParams.get("park"));
+      if (Number.isInteger(park) && park > 0) {
+        return send(200, { parkId: park, rides: await rideSummary(db, park) }, { cache: "no-store" });
+      }
+      return send(200, { parks: await waitTimesSummary(db) }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/wait-times.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const days = clamp(Number(url.searchParams.get("days") ?? 30) || 30, 1, 366);
+      const rows = await waitTimeRows(db, days);
+      const head = ["observed_at_utc", "resort", "park_id", "ride", "local_hour", "open", "posted_wait_min"];
+      const lines = [head.join(",")];
+      for (const r of rows) {
+        lines.push([r.observed_at, r.resort_id, r.park_id, r.ride_name, r.local_hour,
+          r.is_open ? "yes" : "no", r.wait_min ?? ""].map(csvCell).join(","));
+      }
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-wait-times-${days}d-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
     if (url.pathname === "/api/admin/fares" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       return send(200, {

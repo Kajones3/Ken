@@ -38,6 +38,11 @@ export interface HotelDef {
 
 export interface Resort {
   id: string; name: string; city: string; iata: string;
+  /** Where the hotel card's off-property link searches: a town or city a
+   *  hotel site recognises, close to the parks. Blank falls back to `city`.
+   *  The link searches the AREA, never the hotel we priced — that hotel is a
+   *  one-night sample and often has no room on the traveler's dates. */
+  hotelSearchArea?: string;
   lat: number; lon: number; currency: string; parks: number;
   /** Each park and the lands inside it, for the "what does this resort
    *  actually have" half of the shared PDF. `parks` above stays the count
@@ -178,6 +183,7 @@ const h = (id: string, name: string, descriptor: string, base: number, tier: Tie
 export const RESORTS: Resort[] = [
   {
     id: "wdw", name: "Walt Disney World", city: "Orlando, Florida", iata: "MCO",
+    hotelSearchArea: "Lake Buena Vista, Florida",
     lat: 28.43, lon: -81.31, currency: "USD", parks: 4, region: "dom",
     note: "4 parks · park-hopper priced separately",
     parkList: [
@@ -270,6 +276,7 @@ export const RESORTS: Resort[] = [
   },
   {
     id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "SNA",
+    hotelSearchArea: "Anaheim, California",
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
     parkList: [
@@ -324,6 +331,7 @@ export const RESORTS: Resort[] = [
   },
   {
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
+    hotelSearchArea: "Chessy, France",
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
     parkList: [
@@ -384,6 +392,7 @@ export const RESORTS: Resort[] = [
   },
   {
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
+    hotelSearchArea: "Urayasu, Japan",
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under license",
     parkList: [
@@ -468,6 +477,7 @@ export const RESORTS: Resort[] = [
   },
   {
     id: "shdr", name: "Shanghai Disney Resort", city: "Pudong, Shanghai", iata: "PVG",
+    hotelSearchArea: "Shanghai, China",
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
     parkList: [
@@ -539,6 +549,7 @@ export const RESORTS: Resort[] = [
   },
   {
     id: "hkdl", name: "Hong Kong Disneyland", city: "Lantau Island, Hong Kong", iata: "HKG",
+    hotelSearchArea: "Hong Kong",
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
     parkList: [
@@ -701,13 +712,20 @@ export interface Origin { iata: string; name: string; lat: number; lon: number }
 export interface QueueTimesPark { id: number; name: string }
 
 export const QUEUE_TIMES_PARKS: Record<string, QueueTimesPark[]> = {
+  // Names corrected 2026-09-26 against what Queue-Times itself returned in
+  // the live job's refusal log (run 36243504041). Five of twelve parks had
+  // recorded nothing since the job started: four only spelled differently,
+  // and id 32 turned out to be Six Flags Magic Mountain — the name check
+  // doing exactly its job. Shanghai is id 30 (queue-times.com/parks/30); its
+  // name is a best guess, and a mismatch is refused and logged, not stored.
+  // Walt Disney Studios is now "Disney Adventure World" — Paris renamed it.
   wdw:  [{ id: 6, name: "Magic Kingdom" }, { id: 5, name: "Epcot" },
-         { id: 7, name: "Disney's Hollywood Studios" }, { id: 8, name: "Disney's Animal Kingdom" }],
+         { id: 7, name: "Disney Hollywood Studios" }, { id: 8, name: "Disney's Animal Kingdom" }],
   dlr:  [{ id: 16, name: "Disneyland" }, { id: 17, name: "Disney California Adventure" }],
-  dlp:  [{ id: 4, name: "Disneyland Paris" }, { id: 28, name: "Walt Disney Studios" }],
+  dlp:  [{ id: 4, name: "Disneyland Park Paris" }, { id: 28, name: "Disney Adventure World Paris" }],
   tdr:  [{ id: 274, name: "Tokyo Disneyland" }, { id: 275, name: "Tokyo DisneySea" }],
-  shdr: [{ id: 32, name: "Shanghai Disneyland" }],
-  hkdl: [{ id: 31, name: "Hong Kong Disneyland" }],
+  shdr: [{ id: 30, name: "Shanghai Disney Resort" }],
+  hkdl: [{ id: 31, name: "Disneyland Hong Kong" }],
 };
 
 /**

@@ -7,8 +7,10 @@ name: Parkfare popular routes
 # bounded three ways: POPULAR_ROUTES_LIMIT (how many routes),
 # POPULAR_ROUTES_DATES (how many sample dates each), and
 # SERPAPI_FLIGHTS_BUDGET (a hard ceiling on lookups per run, enforced inside
-# the provider). Sized for SerpApi Starter (1,000 searches/month): 10 x 1 =
-# 10 lookups a night, ~300/month.
+# the provider). Sized for SerpApi Starter (1,000 searches/month): 18 x 1 =
+# 18 lookups a night, ~540/month — raised from 10 on 2026-09-26 once the
+# in-app live-fare button (~180/month) was removed. With the refresh's 12
+# hotel lookups a night that is ~900/month, ~100 left for manual runs.
 #
 # Slots are filled demand-first, then by rotation (routeDemand.ts's
 # rotationRoutes) stalest-route-first. Before launch route_searches is empty,
@@ -27,7 +29,7 @@ on:
         description: How many popular routes to buy fares for
         required: false
         type: string
-        default: "10"
+        default: "18"
       dates:
         description: Sample departure dates per route/month
         required: false
@@ -37,7 +39,7 @@ on:
         description: Hard ceiling on paid lookups for this run
         required: false
         type: string
-        default: "10"
+        default: "18"
 
 jobs:
   popular-routes:
@@ -52,6 +54,6 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '10' }}
+          POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '18' }}
           POPULAR_ROUTES_DATES: ${{ inputs.dates || '1' }}
-          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '10' }}
+          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '18' }}

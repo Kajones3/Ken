@@ -22,6 +22,40 @@ owner clicks that by hand and it has lagged `master` for days at a time.
 Run `npm test` and `npm run typecheck` before you believe anything. 566
 tests, typecheck clean, `npm run smoke` clean.
 
+### 2026-09-26 session — supersedes anything below that disagrees
+
+- **Hotel link searches the AREA, not the hotel we priced.** Owner: Booking.com
+  opened on our quoted hotel marked unavailable, every time. Structural —
+  the off-property rate is a one-night sample, not the traveler's dates. Now
+  Kayak hotels for `Resort.hotelSearchArea` (config.ts) with dates, adults
+  and children-by-age, plus a Booking.com area search beside it **for one
+  round, until the owner click-tests Kayak's hotel URL** (same pattern as the
+  flight link's Google->Kayak move). Rooms aren't in the Kayak URL (format
+  unknown); the card says to set them. On-property still goes to Disney.
+- **Party form: Adults (18-59), Seniors (60+), Children (0-17)** as three
+  separate counts. The API is unchanged: `adults` = everyone 18+, `seniors`
+  = how many of them are 60+. The form sends adults+seniors and splits them
+  back when a saved search reopens. Adults may be 0 if there's a senior.
+  Tokyo sells no senior ticket (checked); the Age bands card now says so per
+  resort.
+- **"Why is X cheaper?" removed** (owner: "kinda useless").
+- **Wait times: viewable in /admin** (`src/waitTimesView.ts`, "Wait times
+  we've recorded" section + CSV). **Five of twelve parks had recorded
+  NOTHING since the job started** — found in the live log: four spelled
+  differently at Queue-Times (Hollywood Studios, Paris's two parks — Walt
+  Disney Studios is now "Disney Adventure World" — and Hong Kong), and
+  Shanghai's id 32 was Six Flags Magic Mountain. Fixed to Queue-Times' own
+  names; Shanghai is id 30 with a best-guess name — check the next run's log.
+  Also: the "every two hours" schedule actually fires ~5 times a day
+  (GitHub throttles scheduled runs).
+- **SerpApi raised to ~900/month**: popular-routes 18/night (was 10), hotels
+  12/night (was 8). The live-fare button's ~180/month is gone. A repo
+  variable `SERPAPI_HOTELS_BUDGET` would override the hotel default. Billing
+  month renews on the 17th.
+- **Terms & privacy DRAFTS** in `docs/legal/` — not published; the README
+  there lists the owner's blanks and what the code must add first
+  (unsubscribe link in deal emails, a "not affiliated with Disney" line).
+
 ### This session (PRs #73-#75, 2026-09-25/26) — supersedes anything below that disagrees
 
 **Plus, redefined (#73).** Plus = the **trip price calendar** (every arrival
@@ -625,10 +659,10 @@ case, must stay inside 1,000:
 
 | Job | Budget | Worst case/month |
 |---|---|---|
-| `popular-routes` (demand + rotation) | 10/night | 300 |
-| `refresh` off-property hotels | 8/night | 240 |
-| exact-fare (on demand) | 6/day site-wide | 180 |
-| Reserve (manual `intl-sweep`, headroom) | | 280 |
+| `popular-routes` (demand + rotation) | 18/night | 540 |
+| `refresh` off-property hotels | 12/night | 360 |
+| exact-fare (on demand) | no longer offered in the UI (2026-09-25) | 0 |
+| Reserve (manual runs, debug, headroom) | | 100 |
 
 Two consequences worth not re-deriving: **`intl-sweep` is deliberately
 unscheduled** (a full 12-month sweep is ~1,140 lookups, more than a whole
