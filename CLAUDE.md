@@ -53,8 +53,24 @@ tests, typecheck clean, `npm run smoke` clean.
   variable `SERPAPI_HOTELS_BUDGET` would override the hotel default. Billing
   month renews on the 17th.
 - **Terms & privacy DRAFTS** in `docs/legal/` — not published; the README
-  there lists the owner's blanks and what the code must add first
-  (unsubscribe link in deal emails, a "not affiliated with Disney" line).
+  there lists the owner's blanks and what the code must add first (a "not
+  affiliated with Disney" line).
+- **Deal emails can be stopped** (`src/dealEmails.ts`): a "Stop these emails"
+  link in every deal email (`/unsubscribe?t=<token>`, no sign-in; GET shows a
+  button because mail scanners open links, POST acts — which is also what
+  Gmail's RFC 8058 one-click does), `List-Unsubscribe` headers when
+  `PUBLIC_BASE_URL` is https, and an on/off switch in the account panel for
+  Plus members. `users.deal_emails_off_at` (timestamp, null = on) and a
+  random per-user `unsubscribe_token` that never expires. The alert job and
+  its retry queue both skip anyone switched off. `buildAlertEmail` REQUIRES
+  the link, so a deal email without one can't be built. **The alerts
+  workflow had no `PUBLIC_BASE_URL`** (only Render did) — it now sets the
+  apex, runs `npm run migrate` first (Render lags master), and a real Resend
+  send with a relative link is refused and stays queued.
+- **Plus never auto-renews** (owner, 2026-09-26). Prices are still OPEN — the
+  owner floated $9/week, $15/month, $25/3 months; Claude suggested stretching
+  the top tier to cover a 6-9 month planning window. Paywall still shows the
+  old $9/90 days and $19/year until decided.
 
 ### This session (PRs #73-#75, 2026-09-25/26) — supersedes anything below that disagrees
 

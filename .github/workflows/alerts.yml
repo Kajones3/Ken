@@ -22,9 +22,19 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
+      # Apply db/schema.sql first (idempotent). Render also migrates on each
+      # deploy, but it's redeployed by hand and can lag master by days, and
+      # this job must not fail on a column the deploy hasn't created yet.
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npm run alerts
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Every deal email carries an unsubscribe link built from this.
+          # The apex, not www — see "The www trap" in CLAUDE.md. A repo
+          # variable of the same name overrides it.
+          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://pricingthemagic.com' }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           ALERT_MAX_PER_USER_PER_DAY: "3"

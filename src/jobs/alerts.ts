@@ -21,6 +21,7 @@ import { getDb, type Db } from "../db.js";
 import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
+import { unsubscribeToken, unsubscribeUrl } from "../dealEmails.js";
 
 export interface Candidate {
   userId: string; email: string; resortId: string | null;
@@ -73,6 +74,7 @@ function describePromoEffectForEmail(kind: string, value: number): string {
  *
  * Emailing an unconfirmed address is the concrete harm an unverified account
  * does — mail to a stranger, in their name — so that stays a hard condition.
+ * So is having switched deal emails off (src/dealEmails.ts).
  */
 export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; checked: number }> {
   const { rows: members } = await db.query(
@@ -80,7 +82,8 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
             coalesce((select max(a.fired_at) from price_alerts a
                        where a.user_id = u.id and a.kind = 'new_promo'), u.created_at) as since
        from users u
-      where u.email_verified_at is not null and u.plus_until >= current_date`,
+      where u.email_verified_at is not null and u.plus_until >= current_date
+        and u.deal_emails_off_at is null`,
   );
 
   const candidates: Candidate[] = [];
@@ -112,11 +115,14 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
  */
 async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ retried: number; sent: number }> {
   const { rows } = await db.query(
-    `select a.id, a.kind, a.detail, a.old_total, a.new_total, u.email
+    `select a.id, a.kind, a.detail, a.old_total, a.new_total, u.id as user_id, u.email
        from price_alerts a
        left join saved_trips t on t.id = a.trip_id
        join users u on u.id = coalesce(a.user_id, t.user_id)
       where a.notified_at is null
+        -- Someone who unsubscribed after a send failed must not get the
+        -- retry: the queue drains on its next pass, stopping means stopping.
+        and u.deal_emails_off_at is null
       order by a.fired_at
       limit $1`,
     [limit],
@@ -125,7 +131,8 @@ async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ r
   for (const row of rows) {
     try {
       await sender.send(buildAlertEmail(
-        { detail: row.detail, oldTotal: Number(row.old_total), newTotal: Number(row.new_total), kind: row.kind }, row.email));
+        { detail: row.detail, oldTotal: Number(row.old_total), newTotal: Number(row.new_total), kind: row.kind }, row.email,
+        await dealUnsubscribeLink(db, row.user_id, sender)));
       await db.query(`update price_alerts set notified_at = now() where id = $1`, [row.id]);
       sent++;
     } catch (e) {
@@ -133,6 +140,22 @@ async function retryUnsent(db: Db, sender: EmailSender, limit = 50): Promise<{ r
     }
   }
   return { retried: rows.length, sent };
+}
+
+/**
+ * The unsubscribe link for one member's deal email. A real send with a
+ * relative link (PUBLIC_BASE_URL unset) is refused rather than sent: an
+ * email whose "stop these" link goes nowhere is the one thing CAN-SPAM
+ * actually forbids, and the alert row stays queued to go out once the
+ * setting is fixed. The console sender, for local runs, doesn't care.
+ */
+async function dealUnsubscribeLink(db: Db, userId: string, sender: EmailSender): Promise<string> {
+  const link = unsubscribeUrl(await unsubscribeToken(db, userId));
+  if (sender.name === "resend" && !/^https?:\/\//.test(link)) {
+    throw new Error("PUBLIC_BASE_URL is not set, so the unsubscribe link would be broken — not sending. "
+      + "Set it (e.g. https://pricingthemagic.com) where this job runs.");
+  }
+  return link;
 }
 
 export interface AlertsOptions { sender?: EmailSender }
@@ -159,7 +182,7 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
       [id, c.userId, c.kind, c.resortId, c.oldTotal, c.newTotal, c.detail],
     );
     try {
-      await sender.send(buildAlertEmail(c, c.email));
+      await sender.send(buildAlertEmail(c, c.email, await dealUnsubscribeLink(db, c.userId, sender)));
       await db.query(`update price_alerts set notified_at = now() where id = $1`, [id]);
       sent++;
     } catch (e) {

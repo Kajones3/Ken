@@ -109,3 +109,81 @@ test("a failed send leaves the alert for next run to retry — it is not lost", 
   assert.equal(second.fired, 0, "the unsent deal still counts as told — it is retried, not re-found");
   await db.close();
 });
+
+/* ------------------------------ unsubscribing ----------------------------- */
+
+test("every deal email carries a working unsubscribe link, and using it stops the next one", async () => {
+  const { setDealEmailsByToken } = await import("../dealEmails.js");
+  const db = await memoryDb();
+  await member(db, "plus@example.com");
+  await promo(db, "Summer room discount");
+  const sent: EmailMessage[] = [];
+  const capture: EmailSender = { name: "capture", async send(m) { sent.push(m); } };
+
+  await runAlerts(db, { sender: capture });
+  assert.equal(sent.length, 1);
+  const token = /unsubscribe\?t=([0-9a-f]+)/.exec(sent[0]!.text)?.[1];
+  assert.ok(token, "the email names its own unsubscribe link");
+
+  assert.equal(await setDealEmailsByToken(db, token!, false), "plus@example.com");
+  await promo(db, "Another deal", new Date().toISOString());
+  const after = await runAlerts(db, { sender: capture });
+  assert.equal(after.fired, 0, "stopping means stopping");
+  assert.equal(sent.length, 1);
+
+  // And back on: the next new deal arrives again.
+  await setDealEmailsByToken(db, token!, true);
+  assert.equal((await runAlerts(db, { sender: capture })).fired, 1);
+  await db.close();
+});
+
+test("a deal queued before someone unsubscribed is not retried after", async () => {
+  const { setDealEmailsForUser } = await import("../dealEmails.js");
+  const db = await memoryDb();
+  const id = await member(db, "plus@example.com");
+  await promo(db, "Summer room discount");
+  const failing: EmailSender = { name: "down", async send() { throw new Error("provider down"); } };
+  assert.equal((await runAlerts(db, { sender: failing })).sent, 0, "queued, unsent");
+
+  await setDealEmailsForUser(db, id, false);
+  const sent: EmailMessage[] = [];
+  const r = await runAlerts(db, { sender: { name: "capture", async send(m) { sent.push(m); } } });
+  assert.equal(r.retried, 0);
+  assert.equal(sent.length, 0);
+  await db.close();
+});
+
+test("the same person always gets the same link, and a made-up token changes nothing", async () => {
+  const { unsubscribeToken, setDealEmailsByToken, dealEmailsOn } = await import("../dealEmails.js");
+  const db = await memoryDb();
+  const id = await member(db, "plus@example.com");
+  const a = await unsubscribeToken(db, id);
+  assert.equal(await unsubscribeToken(db, id), a, "an old email's link must keep working");
+  assert.equal(await setDealEmailsByToken(db, "0".repeat(48), false), null);
+  assert.equal(await setDealEmailsByToken(db, "not-hex'; drop table users;--", false), null);
+  assert.equal(await dealEmailsOn(db, id), true);
+  await db.close();
+});
+
+test("a real send is refused, and stays queued, when the unsubscribe link would be broken", async () => {
+  const db = await memoryDb();
+  await member(db, "plus@example.com");
+  await promo(db, "Summer room discount");
+  const saved = process.env.PUBLIC_BASE_URL;
+  delete process.env.PUBLIC_BASE_URL;
+  try {
+    let calls = 0;
+    const resendLike: EmailSender = { name: "resend", async send() { calls++; } };
+    const r = await runAlerts(db, { sender: resendLike });
+    assert.equal(r.fired, 1);
+    assert.equal(r.sent, 0);
+    assert.equal(calls, 0, "never handed to the provider with a relative link");
+
+    process.env.PUBLIC_BASE_URL = "https://pricingthemagic.com";
+    const later = await runAlerts(db, { sender: resendLike });
+    assert.equal(later.retriedSent, 1, "goes out once the setting is fixed");
+  } finally {
+    if (saved === undefined) delete process.env.PUBLIC_BASE_URL; else process.env.PUBLIC_BASE_URL = saved;
+  }
+  await db.close();
+});

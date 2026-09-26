@@ -39,6 +39,7 @@ export class ResendEmailSender implements EmailSender {
       body: JSON.stringify({
         from: fromHeader, to: msg.to, subject: msg.subject, text: msg.text,
         ...(replyTo ? { reply_to: replyTo } : {}),
+        ...(msg.headers ? { headers: msg.headers } : {}),
       }),
     });
     if (!res.ok) {

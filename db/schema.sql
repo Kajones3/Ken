@@ -341,6 +341,14 @@ create table if not exists user_attractions (
 -- claiming it verified would be asserting something nobody ever checked.
 alter table users add column if not exists email_verified_at timestamptz;
 
+-- Deal emails are marketing mail, so every one carries a way to stop them
+-- (src/dealEmails.ts). Off is a timestamp, not a boolean: "never said" and
+-- "said stop on this date" are different facts. The token is random per
+-- user and never expires, so a years-old email's link still works.
+alter table users add column if not exists deal_emails_off_at timestamptz;
+alter table users add column if not exists unsubscribe_token text;
+create unique index if not exists users_unsubscribe_token on users (unsubscribe_token);
+
 -- One outstanding link per account (primary key on user_id, upserted), so
 -- asking for a new link silently invalidates the old one — a link sent to
 -- the wrong person stops working the moment the right person asks again.
