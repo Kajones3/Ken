@@ -12,87 +12,71 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-25 (end of session)
+## START HERE — state as of 2026-09-26 (end of session)
 
-**Live at https://pricingthemagic.com.** `master` is at `f2bb7a2` (PR #71,
-merged — PR #70 merged earlier the same day). **Ask whether Render has been
-redeployed before trusting what the live site shows** — the owner clicks
-that by hand and it has lagged `master` for days at a time.
+**Live at https://pricingthemagic.com.** `master` is at `51125ff` (PR #75,
+merged — PRs #73 and #74 merged earlier the same session). **Ask whether
+Render has been redeployed before trusting what the live site shows** — the
+owner clicks that by hand and it has lagged `master` for days at a time.
 
-Run `npm test` and `npm run typecheck` before you believe anything. 565
-tests, typecheck clean, `npm run smoke` unchanged.
+Run `npm test` and `npm run typecheck` before you believe anything. 566
+tests, typecheck clean, `npm run smoke` clean.
 
-### LATEST — second 2026-09-25 session: Plus redefined, monitoring removed
+### This session (PRs #73-#75, 2026-09-25/26) — supersedes anything below that disagrees
 
-The owner's launch-prep list, all built. **These supersede anything below
-that disagrees**, including the whole "Free/Plus split, settled 2026-09-24"
-section further down:
+**Plus, redefined (#73).** Plus = the **trip price calendar** (every arrival
+date's whole-trip total; free visitors see a blurred, locally drawn stand-in
+and a blurred board sparkline, no real prices fetched), **saving searches**,
+the **PDF**, and **emails about new Disney deals**. Server-side:
+`/api/calendar` answers 402 for any multi-day range without Plus (single-day
+reads stay free — the hotel card's "every category" uses them);
+`POST /api/trips` and `POST /api/trips/:id/expenses` answer 402. Listing,
+reopening and deleting saved searches stay open to any signed-in account.
+Comparing, overrides, attraction picks and APPLYING deals stay free. The
+whole "Free/Plus split, settled 2026-09-24" section below is superseded.
 
-- **Plus is now four things**: the **trip price calendar** (every arrival
-  date's whole-trip total — renamed from "fare calendar", since it prices
-  flights+hotel+tickets+food), **saving searches**, the **PDF**, and
-  **emails about new Disney deals**. Free visitors see a blurred, locally
-  drawn stand-in calendar and a blurred board sparkline (no real prices are
-  fetched or put in the page). Server-side: `/api/calendar` answers 402 for
-  any multi-day range without Plus (a single-day read stays free — the hotel
-  card's "every category" comparison uses it); `POST /api/trips` and
-  `POST /api/trips/:id/expenses` answer 402. Listing, reopening and deleting
-  saved searches stay open to any signed-in account, so a lapsed member
-  keeps what they saved. Comparing, live fare checks, overrides, attraction
-  picks and APPLYING deals stay free.
-- **Price-drop monitoring is REMOVED** (owner picked this option when asked).
-  No price-drop, crossed-your-number or gas alerts, and no "Save & watch"
-  anywhere. `jobs/alerts.ts` now only emails Plus members with a confirmed
-  address about curated promos added since their last deal email (or since
-  their account was created). `price_alerts` gained `user_id` and `trip_id`
-  is now nullable (schema.sql migrates it in place).
-- **Multiple hotel rooms**: a "Hotel rooms" 1-6 picker. `TripParams.hotelRooms`
-  / `?rooms=`; `pricing.ts` multiplies the room line (pick or the traveler's
-  own nightly rate, which is per room). Parking is NOT multiplied — it's per
-  day, and guessing how many cars a group brings would be inventing it.
-  `TripPrice.roomCount` says how many rooms `rooms` covers.
-- **Typed numbers no longer persist in localStorage.** A number typed weeks
-  ago used to come back on a fresh search, so the card said "Your number"
-  before anyone typed. Now kept for the visit only; saved searches keep them.
-  Every untyped tile says "estimate".
-- **American English across the site and code** (traveler, color, gray,
-  "most expensive days" not "dearest", etc.).
-- **Less "where every number came from"**: the flight "how this estimate is
-  worked out" disclosure, the ticket and driving ones, the "based on a
-  different season" suffix, and the "What it would take to make these
-  numbers real" footer are gone. Crowd notes use the owner's wording.
-  Disneyland Paris's "Hotel+tickets separate" badge is gone (Good to know
-  already covers it; config.test.ts pins that).
+**Price-drop monitoring REMOVED (#73, owner picked it).** No price-drop,
+crossed-your-number or gas alerts, no "Save & watch". `jobs/alerts.ts` only
+emails Plus members with a confirmed address about curated promos added
+since their last deal email (or account creation). `price_alerts` gained
+`user_id`; `trip_id` is nullable (schema.sql migrates in place). The job no
+longer re-prices saved trips at all.
 
-### LATEST, part 2 — parking per car, seniors, JAX, one flight link (2026-09-25)
+**Pricing inputs added:**
+- *Hotel rooms* 1-6 (`TripParams.hotelRooms`, `?rooms=`) multiplies the room
+  line, including a typed nightly rate (per room). `TripPrice.roomCount`.
+- *Parking per car* (#74): off property only, "Cars you're bringing" 0-4
+  (default 1) and "We get free theme park parking" (`cars`/`freeParking`,
+  `?cars=`/`?freeParking=1`). On property is $0 as before (Disney hotel
+  guests park free).
+- *Seniors* (#74): "Adults 60 or over" = how many of the ADULTS are 60+
+  (`TripParams.seniors`, never > adults). `bands.senior: 60` at Hong Kong and
+  Shanghai prices them at the child ticket (`ticketBandOf()` — tickets and
+  hopper only). Owner-checked: Hong Kong HK$790/HK$611 (child ratio 0.77),
+  Shanghai CNY 659/494 (0.75). Shanghai's disability discount is a Good to
+  know line only (owner's call — not priced).
 
-- **Off-property parking is per car.** "Cars you're bringing" (0-4, default 1)
-  and "We get free theme park parking" appear only when staying off property
-  (`TripParams.cars`/`freeParking`, `?cars=`/`?freeParking=1`). On property is
-  unchanged — Disney's hotel guests already park free.
-- **Seniors.** "Adults 60 or over" counts how many of the ADULTS are 60+
-  (`TripParams.seniors`, never more than `adults`, so party size is unchanged).
-  `bands.senior: 60` at Hong Kong and Shanghai prices them at the child ticket
-  (`ticketBandOf()` in pricing.ts — tickets and hopper only; food and flights
-  treat them as adults). Owner-checked prices: Hong Kong HK$790 / HK$611 (child
-  ratio now 0.77, verified), Shanghai CNY 659 / 494 (0.75, already right).
-  **Hong Kong's "Unverified age bands" badge is gone — no resort has a badge now.**
-  Shanghai's disability discount is a Good to know line only (owner's call).
-- **No flight data for a short US hop now prices as a drive, labelled.** The
-  owner's JAX->WDW case: no BTS baseline and never bought, so the row was blank.
-  `compare()` re-prices as a drive when a US resort has no fare/estimate AND is
-  within `DRIVE_STAND_IN_MILES` (300) — `noFlightsYet` on the row says so. The
-  search is still logged in `route_searches`, so `popular-routes` can buy the
-  real fare and the flight takes over by itself.
-- **Jacksonville defaults to driving to Disney World** (owner's follow-up:
-  "I'd rather do that than have shoddy data from one or two flights").
-  `DRIVE_ONLY_PAIRS` in config.ts marks JAX->wdw as local by the owner's
-  call — one named pair, NOT a wider radius (RSW, MIA stay flights). So the
-  board opens on "Driving to WDW" from JAX and the paid nightly jobs never
-  buy a JAX->MCO/TPA fare. Add a pair there only on the owner's say-so.
-- **"Check now" (in-app live fare) is gone from the flight card.** One link:
-  "See live fares on Kayak". `/api/exact-fare` still exists server-side but
-  nothing offers it — no SerpApi spend from clicks now.
+**Getting there (#74, #75).**
+- Jacksonville defaults to **driving to Disney World** (owner: "rather that
+  than shoddy data from one or two flights"). `DRIVE_ONLY_PAIRS` in config.ts
+  marks JAX->wdw local by name — the 100-mile radius did NOT move (RSW, MIA
+  still fly). Nightly paid jobs never buy JAX->MCO/TPA. Add pairs only on the
+  owner's say-so.
+- Any other US resort with no fare AND no estimate within
+  `DRIVE_STAND_IN_MILES` (300) is priced as a drive, labelled via
+  `noFlightsYet`, until a real fare gets cached.
+- The flight card has ONE link, "See live fares on Kayak". The in-app "Check
+  now" live-fare button is gone; `/api/exact-fare` still exists but nothing
+  calls it, so clicks spend no SerpApi money now.
+
+**Honesty/wording (#73).** Typed numbers no longer persist in localStorage
+(visit only; saved searches keep them), so "Your number" never shows before
+someone types one; every untyped tile says "estimate". American English
+across the site and code. Removed: flight/ticket/driving "how this is worked
+out" disclosures, the "based on a different season" suffix, the "What it
+would take to make these numbers real" footer. Crowd notes use the owner's
+wording. **No resort carries a `dataConfidence` badge any more** (Paris's
+removed — Good to know covers bundling; Hong Kong's removed — bands verified).
 
 ### Today in one paragraph
 
@@ -140,6 +124,17 @@ searchable by date if you need the blow-by-blow.
    (bias the picker toward the peak day for a NAMED holiday week
    specifically? show the flag for the whole window regardless of which
    day was priced? something else).
+
+**New open items from this session:**
+
+- **Payments are still stubbed.** "Get Plus" only emails the owner; Plus is
+  granted by hand with `npm run grant-plus`. Needed before Plus can be sold.
+- **Deal emails need deals.** They fire only when the owner adds a curated
+  promo; Tokyo, Hong Kong and Shanghai have none (see "Next work").
+- **`/api/exact-fare` is now dead code from the UI's point of view.** Decide
+  whether to delete it (and `exactFare.ts`) or bring a live check back.
+- **Shanghai's disability discount is described, not priced** — owner's call;
+  revisit only if asked.
 
 **Also still open, lower priority (unchanged from before today):**
 
@@ -312,7 +307,7 @@ that every number is either real or labelled a guess.
 | Data | State |
 |---|---|
 | **Tickets — WDW, Disneyland** | **REAL.** Published multi-day totals 1-7 / 1-5 days, adult and child, plus Park Hopper by ticket length. Stored as published in `ticket.multiDayAdultUsd`; the old base x slope curve is now only a fallback for resorts without a table. |
-| **Tickets — Tokyo, Shanghai, Hong Kong** | **REAL** (owner-checked against each resort's own purchase flow, 2026-09-23). Hong Kong's CHILD RATIO is still a guess. |
+| **Tickets — Tokyo, Shanghai, Hong Kong** | **REAL** (owner-checked against each resort's own purchase flow, 2026-09-23). Hong Kong's child/senior ratio verified 2026-09-25 (HK$611/HK$790); Shanghai's senior price verified the same day. |
 | **Tickets — Paris** | Still the curve. No real table. |
 | **Crowd bands** | **REAL from DVC points charts** at WDW and Disneyland (all 12 months) and Hong Kong (Apr-Dec). Tokyo and Paris have one-quarter charts that only ORDER their own months. Shanghai is judgement. `chartMonths` says which per resort, per month. |
 | **Exchange rates** | **REAL.** ECB via the monthly Actions job, generated 2026-09-22. |
@@ -389,7 +384,7 @@ that every number is either real or labelled a guess.
 
 ### Free/Plus split, settled 2026-09-24 — at launch, Plus is the PDF, full stop
 
-**>> SUPERSEDED later on 2026-09-25** — see "LATEST" at the top of this file:
+**>> SUPERSEDED later on 2026-09-25** — see "This session (PRs #73-#75)" at the top of this file:
 Plus is now the trip price calendar, saving searches, the PDF and deal
 emails, and price-drop monitoring was removed. Kept below for the reasoning.
 
@@ -496,9 +491,9 @@ new decision, not a reason to silently re-add gates this entry removed.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 537 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 566 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
-| "Getting there" — mixed drive/fly, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note), with an "Include wear & tear?" opt-out for gas-only pricing. **The rental-car add-on was removed entirely 2026-09-25** (owner's call — it priced one flat rate identically across all six resorts, so it never changed which resort won). The gas-price alert (told if the cached price has moved since a driving trip was saved) is free too, same as every other alert — see the 2026-09-24 free/Plus decision at the top of this file. |
+| "Getting there" — mixed drive/fly, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note), with an "Include wear & tear?" opt-out for gas-only pricing. **The rental-car add-on was removed entirely 2026-09-25** (owner's call — it priced one flat rate identically across all six resorts, so it never changed which resort won). The gas-price alert was removed with all price monitoring on 2026-09-25. |
 | Park Hopper | **Wired, free, and now real where it exists.** An add-on that SCALES WITH TICKET LENGTH at WDW ($70-95) and Disneyland ($70-135) from published figures; a flat guess still at Paris. **Tokyo sells no hopper at all** (owner-confirmed) and neither do Hong Kong or Shanghai, which each have one park — asking for one there costs $0. |
 | "Need a hotel?" | **Wired, free.** A real `stay: "none"` state (not just "off property") prices $0 hotel/transport with no pick, for day-trippers or anyone staying with family/friends. |
 | Driving-mode city search | **Wired, free — the one live-provider exception.** `src/geo/` (Nominatim geocoding + ip-api.com IP lookup, both free/keyless, mock by default, `GEOCODE_LIVE=true` to go live) backs a real "Departing from" search box and a "use my location" button for driving mode. See the architecture-invariants note below on why this is a deliberate exception to "users never call a provider API." |
@@ -507,7 +502,7 @@ new decision, not a reason to silently re-add gates this entry removed.
 | Frontend (`public/prototype.html`) | **Wired to the real API.** Every price on the page comes from `/api/compare` and `/api/calendar` — no in-browser pricing model left. `src/server.ts` now also serves the prototype itself at `/`, so `npm start` + open `http://localhost:PORT/` is the whole dev loop, same origin, no CORS. |
 | Live provider data | **Partly connected.** Travelpayouts + SerpApi keys are set in production. Flights now come from real per-date SerpApi Google Flights lookups on searched routes, and from real BTS DB1B medians moved by a measured trend everywhere else — see "How a flight number is arrived at" in README.md. |
 | Flight pricing model | **Reworked (2026-09-09).** Median-not-mean, same-quarter-not-newest, demand-driven real lookups, honest `est.` labelling on the board itself. See the decision note below. |
-| Alert emails | **Wired.** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
+| Alert emails | **Deal emails only, Plus members only (2026-09-25).** `runAlerts` sends through `src/email/` — console by default (no account), Resend if `RESEND_API_KEY` is set. Now also fires a `new_promo` "we found a deal" alert. |
 | Accounts | **Real, minimal, and now visible.** Signing in is a real dialog (`#authModal`) reached from a **Sign in** button, not two inputs wedged into the masthead; once you're in, an account button carries your initial, email and plan, and opens a panel showing who you are, your plan, when Plus runs out, how many trips you've saved, and your **home airport** (free, `users.home_airport` — see the profile decision below). The owner's report was "I have no real idea that I am signed in" — a small grey chip among other small grey chips. **Nothing about entitlement changed**: Plus is still resolved server-side from the session cookie on every request that matters; this is only the part that tells you about it. **Every account requires a password** (scrypt, salted, `node:crypto`, no new dependency) — sign-up and sign-in are separate operations and email-only sign-in no longer exists anywhere. A real `sessions` table, real `plus_until`-based entitlement. **Email verification is live and links genuinely arrive**; the alert job refuses any address without `email_verified_at`, and `REQUIRE_VERIFIED_EMAIL=true` additionally blocks sign-in. Signing out has a masthead button, not just the account panel's footer. **Guessing is rate-limited and there is a real "Forgot your password?"** — five wrong answers lock an address for 15 minutes (25 per IP, so one household's typos don't lock out the street), and an emailed single-use link sets a new password, signs out every device, confirms the email and clears the lockout. The owner can still reset one by hand with `npm run set-password -- email 'value'` (`--clear` makes the account unreachable until re-claimed through Sign up). The owner comps Plus via `npm run grant-plus -- email days` — no payment processor yet. |
 | Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
@@ -518,9 +513,9 @@ new decision, not a reason to silently re-add gates this entry removed.
 | Average wait times | **Recorded, shown to nobody.** `wait_time_samples` + a two-hourly Actions job reading Queue-Times, keeping only 9am-7pm local. No card, no API wiring, no aggregation — the card was dropped because every automated source records POSTED waits and that bias is not uniform across six operators. This exists so there is an archive to decide with in a year. Park ids are a draft until the probe runs. See the decision note. |
 | Flight estimate lean | **Wired, owner-editable.** `flight.estimateLean` picks a point between a route's own p25 / median / p75; ships at 100, the dear end. A BTS median is the median fare *paid* over a quarter and runs structurally below what you are quoted today. See the decision note, including the halving bug that was diagnosed, written, and turned out to be wrong. |
 | Weather per month | **Wired, free, and now real.** Average high/low, rainy days and a season note on each resort's detail view, from the generated `src/climateData.ts`. Nothing in the request path fetches weather. **The generator has been run** (2026-09-20, commit `369d5fa`): the rows are Open-Meteo ERA5 daily observations, 2006-2025, for all six resorts. **One column is worth a second look** — see the rain-day note below; ERA5 counts more wet days than a rain gauge does. |
-| Saved searches | **Wired, free (2026-09-24) — signed in, not Plus.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
-| Promos, custom expenses | **Wired, free (2026-09-24) — signed in, not Plus.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side on sign-in only. `custom_expenses` lets a signed-in traveller attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
-| Exact live fares | **Wired, free (2026-09-24) but capped, not Plus.** Free = a labelled estimate with its range, unlimited, no sign-in needed. Any signed-in account can also get the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide — the cap exists because the lookup spends metered provider money per click, not because of who is asking. The one route where a user's click spends real money. |
+| Saved searches | **Wired — PLUS to save (2026-09-25); listing/reopening/deleting open to any signed-in account.** A save captures the WHOLE comparison — every resort's own typed numbers — and asks which park should lead. Reopened from the "My searches" masthead dropdown; deleting confirms by name. Extra costs hang off the open search rather than a standalone panel. |
+| Promos, custom expenses | **Wired. Applying promos is free (signed in); custom expenses are Plus (2026-09-25), since they hang off a saved search.** Curated + personal discounts are real cost lines in `pricing.ts`, gated server-side on sign-in only. `custom_expenses` lets a signed-in traveller attach free-form planning-expense line items (VIP tours, PhotoPass, anything not modeled) to a saved trip — this, not airport ground-transport pricing (built earlier, since removed), is what "extra planning of expenses" turned out to mean once the owner used the app: monitoring, saved trips, deal/gas alerts, and room for costs the model can't guess at. |
+| Exact live fares | **Server route still exists, NOT offered in the UI since 2026-09-25** (owner: one Kayak link instead). Old description: Free = a labelled estimate with its range, unlimited, no sign-in needed. Any signed-in account can also get the real fare for one specific date (`POST /api/exact-fare`, `src/exactFare.ts`), cache-first and capped per-user + site-wide — the cap exists because the lookup spends metered provider money per click, not because of who is asking. The one route where a user's click spends real money. |
 | Payments | Not built. Stripe is stubbed in the prototype. |
 | Deployment | **Ready, $0/month.** `render.yaml` + Neon (free Postgres) + three GitHub Actions cron workflows (`refresh`, `alerts`, `news-digest`). Owner still has to click through the actual Neon/Render sign-ups by hand — see README.md's "Deploy for free" section — but nothing else is missing. |
 
@@ -2015,7 +2010,9 @@ than it is — this is the comparison people get wrong.
   announcement — not fetched from Disney's own site directly (blocked from this
   environment's network). Re-check closer to booking; multi-year construction projects
   slip.
-- **Hong Kong's age bands** come from model knowledge, not a source. Configured as free
+- ~~**Hong Kong's age bands**~~ **RESOLVED 2026-09-25** — owner's screenshot of
+  Hong Kong's own ticket page: under 3 free, Child/Senior (3-11 or 60+) HK$611,
+  General HK$790. Badge removed. Old note kept for history: they came from model knowledge, not a source. Configured as free
   under 3 / child 3–11 / adult 12+ — still unverified against Hong Kong Disneyland's own
   ticket page, hence its own `dataConfidence` badge. **Shanghai's are no longer in this
   category** (resolved 2026-09-23): the owner confirmed the same 3–11/12+ split against
@@ -2191,7 +2188,7 @@ not "fixed" in the math, since package rates aren't published and inventing one
 would be less honest than a labelled assumption). Same reasoning
 as the override controls and the "why is X cheaper?" explainer — explain a shaky
 number, don't hide it, because the six-resort comparison *is* the product.
-**Remove a badge when its gap is actually fixed**; `config.test.ts` pins which
+**As of 2026-09-25 every badge has been removed** (Shanghai, Paris and Hong Kong each resolved or moved to Good to know). **Remove a badge when its gap is actually fixed**; `config.test.ts` pins which
 resorts carry one so it can't drift.
 
 **International routes have no free baseline, and are sampled instead.** BTS DB1B
@@ -2295,6 +2292,8 @@ Found by testing an all-international demand day, not in production.
   LAX→Disneyland 36, SAN→Disneyland 77, TPA→WDW 81, then a clear gap to
   RSW→WDW 133, JAX→WDW 144, MIA→WDW 193, LAS→Disneyland 226 — the last four
   being genuine, regularly-flown routes that must never be withheld.
+  **Exception, 2026-09-25:** JAX→WDW is now drive-only by the owner's call
+  (`DRIVE_ONLY_PAIRS`), not by the radius — the radius is unchanged.
   **Resolved the same day:** `defaultGettingThere()` in `gettingThere.ts`
   pre-selects the matching drive preset (`driveDlr` from LAX or SAN,
   `driveWdw` from TPA) so the local resort prices as a drive and the other
@@ -2374,6 +2373,10 @@ Found by testing an all-international demand day, not in production.
   Custom expenses and saved trips are gated the same way, directly on the `/api/trips*`
   routes. Never trust a client-supplied `isPlus`/`plus` flag; always resolve it from the
   session cookie against the database.
+- **Plus gates as of 2026-09-25:** `/api/calendar` multi-day ranges, `POST
+  /api/trips` and `POST /api/trips/:id/expenses` answer 402 without Plus,
+  resolved from the session. The alert job sends deal emails only and never
+  re-prices saved trips.
 - A curated promo's *effect* (`effectKind`/`effectValue`) is always looked up
   server-side from `promosFor()` — only its `id` is ever taken from the client. A
   `personalPromo`'s value/kind *are* client-supplied, and that's fine: it's the user's
