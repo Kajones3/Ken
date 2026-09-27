@@ -22,7 +22,7 @@ None of #77-#80 is visible until Render redeploys (its build runs the
 migration that adds the new `users` and `owner_attractions` columns).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-588 tests, and typecheck is clean.
+591 tests, and typecheck is clean.
 
 ### Pick up here — next session, in rough priority order
 
@@ -49,6 +49,17 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    Queue-Times uses; put that name into `QUEUE_TIMES_PARKS`.
 
 **Decisions the owner hasn't made yet. Ask; don't build ahead:**
+
+0. **Real-trip price checks (upload).** The owner is pricing whole real
+   trips to test the app and wants those numbers to inform it. Proposed
+   2026-09-27, not built: one row per price seen (long format), sample at
+   `docs/price-checks/sample-2026-09-27-tokyo-christmas.csv` (their Tokyo
+   sheet converted). Plan offered: an /admin upload that (a) shows a
+   scorecard, their number vs what the app charges for the same dates, per
+   line; (b) sends flight rows into the existing fare corrections; (c) keeps
+   hotel/ticket/food rows as dated evidence beside each setting rather than
+   overwriting a base rate from one peak-week observation. Waiting on the
+   owner's go, and on whether "Rate" is per room for the whole stay.
 
 5. **Screenshot scanner.** Planned only. The plan: Tesseract.js OCR running
    in the owner's own browser inside /admin, with no AI service. It
@@ -94,6 +105,35 @@ make. `docs/numbers-to-verify.md` lists every number that is still a guess,
 biggest effect first, and says where each one is changed (/admin or code).
 When the owner sends a real number, update that file in the same commit
 that changes the number.
+
+### 2026-09-27 session — supersedes anything below that disagrees
+
+- **A real fare wins only at or above the LEANED estimate, not the median**
+  (owner: a JetBlue PHL-MCO fare at $129 was "NOT HELPFUL... surface that as
+  an OPTION but display the AVERAGE"). The median check let one cheap real
+  fare between the median and the leaned figure replace the estimate, so the
+  lean-high setting never applied where we had real data. The cheaper real
+  fare now rides along as `flightPick.cheaperFound` and the flight card and
+  PDF show it as an option, not in the total. The comparison uses the
+  estimate WITHOUT the holiday premium, so the premium still can't tip a real
+  row. Supersedes "Which number WINS is still decided on the median" below.
+- **Seniors get their own ticket line at every resort.** `TripPrice.ticketLines`
+  (pricing.ts) groups the server's own per-traveler prices; the card no
+  longer re-splits the total client-side (which lumped seniors in with
+  adults). Where a resort sells no senior ticket the line says so. Tokyo
+  re-checked 2026-09-27: no senior ticket, 65+ pay adult.
+- **The PDF carries the booking links**: Kayak flights, the hotel link
+  (Disney or Kayak + Booking.com area search), the official ticket page.
+  `tripLinks()` in prototype.html is the one home for those links, shared by
+  the cards and the PDF. The PDF also now names the fare the total was
+  built from; it used to say "typically about" the median.
+- **The detail-card tiles went wonky between ~560px and 940px wide** because
+  the board row's `.total{grid-area:total}` also hit `.kpitile.total`.
+  Board-row rules are now scoped `.row > ...`, and the tiles switch layout on
+  the CARD's width (container query), with the number shrinking slightly
+  (`cqi`) so a 7-character total never clips. Checked 360-1300px.
+- Party dropdowns show "None" instead of 0. Two sentences cut on the owner's
+  word (the "very cheapest days" line; "one year is a sample of one").
 
 ### 2026-09-26/27 session (PRs #77-#80) — supersedes anything below that disagrees
 
@@ -1662,7 +1702,9 @@ prevent, and showing high and finding it cheaper costs nobody a booking.
 - *Piecewise, not a straight line*, because a lean of 50 has to land exactly on
   the median and a straight interpolation misses it whenever the spread is
   lopsided — which on real fares it usually is.
-- *Which number WINS is still decided on the median.* A real cached fare beats
+- *>> SUPERSEDED 2026-09-27: a real fare now has to reach the LEANED figure
+  to win (owner's call), and a cheaper one is shown as an option.* Old text:
+  *Which number WINS is still decided on the median.* A real cached fare beats
   the estimate at or above it. Comparing the real row against the leaned figure
   would start overriding genuine fares far more often — a different change
   wearing this one's clothes.

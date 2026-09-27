@@ -330,6 +330,30 @@ test("seniors (60+) buy the child ticket where a resort sells one, and pay adult
   if (a.ok && b.ok) assert.equal(b.price.tickets, a.price.tickets);
 });
 
+test("ticketLines: seniors get their own line at every resort, and the lines add up to the ticket total", () => {
+  // The owner, 2026-09-27: "We're still not showing the senior tickets". The
+  // card used to lump seniors in with adults. Tokyo sells no senior ticket
+  // (checked again 2026-09-27), so its seniors pay adult — but still get a
+  // line that says so.
+  for (const [id, iata, sells] of [["hkdl", "HKG", true], ["shdr", "PVG", true], ["tdr", "NRT", false], ["wdw", "MCO", false]] as const) {
+    const r = resortById(id);
+    const res = priceTrip(fullBook(id, iata), r, { ...base, adults: 3, seniors: 1, childAges: [7] }, {}, START);
+    assert.ok(res.ok, id);
+    if (!res.ok) continue;
+    const lines = res.price.ticketLines;
+    const senior = lines.find((l) => l.group === "senior");
+    const adult = lines.find((l) => l.group === "adult");
+    assert.equal(senior?.count, 1, `${id}: one senior line`);
+    assert.equal(adult?.count, 2, `${id}: the other two adults`);
+    assert.equal(senior?.seniorPrice, sells, `${id}: says whether a senior ticket exists`);
+    const perAdult = adult!.totalUsd / 2;
+    if (sells) assert.ok(senior!.totalUsd < perAdult, `${id}: senior is cheaper`);
+    else assert.ok(Math.abs(senior!.totalUsd - perAdult) < 0.01, `${id}: senior pays adult`);
+    const sum = lines.reduce((a, l) => a + l.totalUsd, 0);
+    assert.ok(Math.abs(sum - res.price.tickets) < 0.05, `${id}: lines sum to tickets`);
+  }
+});
+
 test("excludeHotel: prices $0 hotel with no pick, same shape as stay: none", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
@@ -609,7 +633,7 @@ test("flight estimate: a route with no BTS baseline still fails cleanly, not wit
   if (!r.ok) assert.match(r.reason, /no cached fare/);
 });
 
-test("flight estimate: a real cached fare wins when it's at or above the route's own median", () => {
+test("flight estimate: a real cached fare wins when it's at or above the estimate we'd quote", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 400, days: 6 });
   const lowEstimate = { ...book, flightEstimate: () => ({ low: 1, med: 2, high: 3, basisQuarter: "2020Q1" }) };
@@ -640,6 +664,34 @@ test("flight estimate: the median wins and is shown as an estimate when it's HIG
   assert.equal(r.price.perSeatFare, 600, "the estimate wins over the real-but-unrepresentative $90 fare");
   assert.equal(r.price.flightPick?.price, 600);
   assert.ok(r.price.flightPick?.estimate, "shown honestly as an estimate, not passed off as the real $90 quote");
+});
+
+test("flight estimate: a real fare between the median and our quoted figure is an OPTION, not the headline", () => {
+  // The owner's case, 2026-09-27: JetBlue PHL-MCO at $129 on one date was
+  // above the route's median, so it used to replace the estimate outright and
+  // the lean-high setting never applied. Now the leaned estimate is quoted and
+  // the $129 is kept beside it.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 129, days: 6 });
+  const est = { ...book, flightEstimate: () => ({ low: 100, med: 120, high: 186, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(est, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 186, "the leaned estimate is quoted, not the one cheap fare");
+  assert.ok(r.price.flightPick?.estimate, "and it says it is an estimate");
+  assert.equal(r.price.flightPick?.cheaperFound?.price, 129, "the real fare is still surfaced");
+});
+
+test("flight estimate: a real fare at or above our quoted figure is still the headline, with no option line", () => {
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 250, days: 6 });
+  const est = { ...book, flightEstimate: () => ({ low: 100, med: 120, high: 186, basisQuarter: "2027Q1" }) };
+  const r = priceTrip(est, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 250);
+  assert.equal(r.price.flightPick?.estimate, undefined);
+  assert.equal(r.price.flightPick?.cheaperFound, undefined);
 });
 
 test("flight estimate: a farePerSeat override still floors against the real row's price, not the corrected median", () => {
