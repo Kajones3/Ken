@@ -88,3 +88,22 @@ test("the suggestion never proposes driving to a resort across an ocean", () => 
     }
   }
 });
+
+test("the 100-mile rule is enforced whatever the preset: too close to fly is always a drive", () => {
+  // Owner, 2026-09-27: someone was shown LAX -> Disneyland as a flight. The
+  // rule used to live only in the form's default preset.
+  const dlr = RESORTS.find((r) => r.id === "dlr")!;
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  for (const mode of ["fly", "flyMiles", "driveWdw", "driveDlr", "driveDomestic"] as const) {
+    assert.equal(resortTransportMode(mode, dlr, "LAX"), "drive", `LAX to Disneyland under ${mode}`);
+    assert.equal(resortTransportMode(mode, dlr, "SAN"), "drive", `SAN to Disneyland under ${mode}`);
+    assert.equal(resortTransportMode(mode, wdw, "TPA"), "drive", `TPA to Disney World under ${mode}`);
+    assert.equal(resortTransportMode(mode, wdw, "JAX"), "drive", `JAX to Disney World (owner's pair) under ${mode}`);
+  }
+  // Only the close resort changes: LAX still flies to the other five.
+  assert.equal(resortTransportMode("fly", wdw, "LAX"), "fly");
+  for (const r of RESORTS.filter((x) => x.region !== "dom")) assert.notEqual(resortTransportMode("fly", r, "LAX"), "drive", r.id);
+  // A genuinely flown route is untouched (Las Vegas is 226 miles out).
+  assert.equal(resortTransportMode("fly", dlr, "LAS"), "fly");
+  assert.equal(resortTransportMode("fly", wdw, "MIA"), "fly");
+});

@@ -2216,6 +2216,7 @@ function renderBoard(){
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}.</div>`:""}
         ${item.noFlightsYet?`<div class="estnote">${esc(item.noFlightsYet)}.</div>`:""}
+        ${item.drivenBecauseClose?`<div class="estnote">${esc(item.drivenBecauseClose)}.</div>`:""}
       </div>
       <div class="total">
         <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
@@ -2902,6 +2903,7 @@ async function renderDetail(){
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
         </p>` : ""}
         ${item.noFlightsYet ? `<p class="spreadnote"><b>${esc(item.noFlightsYet)}.</b> We'll look up real flight prices for this route tonight.</p>` : ""}
+        ${item.drivenBecauseClose ? `<p class="spreadnote"><b>${esc(item.drivenBecauseClose)}.</b></p>` : ""}
         ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>

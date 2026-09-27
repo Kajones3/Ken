@@ -302,7 +302,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // A "Getting there" preset can send different resorts down different
     // legs in this same request (e.g. drive to WDW, fly to the rest) —
     // resortTransportMode() decides which baseline this resort gets.
-    const mode = resortTransportMode(gettingThere, resort);
+    const mode = resortTransportMode(gettingThere, resort, params.origin);
+    // Too close to fly, whatever the preset said (the 100-mile rule).
+    const drivenBecauseClose = mode === "drive" && resortTransportMode(gettingThere, resort) !== "drive";
     const modeParams = mode === "drive" ? driveBase : flyBase;
     const resortParams = { ...params, ...modeParams, destination: iata };
     // The day worth QUOTING, not the luckiest day in the month. `cheapest` is
@@ -361,6 +363,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     return best
       ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
           noFlightsYet: droveInstead ? `No flight prices yet for ${params.origin}→${iata} — priced as a drive for now` : undefined,
+          drivenBecauseClose: drivenBecauseClose
+            ? `${params.origin} is within driving distance of ${resort.name}, so it's priced as a drive, not a flight`
+            : undefined,
           /** What the rest of the month looks like around the quoted day, so
            *  the card can say "as low as $X on the 31st" without a second
            *  request. Absent on an exact-date search: one day has no spread,
@@ -410,7 +415,7 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const overrides = overridesFrom(q);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
-  const mode = resortTransportMode(gettingThere, resort);
+  const mode = resortTransportMode(gettingThere, resort, params.origin);
   Object.assign(params, mode === "drive" ? driveBase : flyBase);
   params.destination = resolveDestination(resort, q.get("destination"));
   const from = from0, to = to0;
@@ -1017,7 +1022,7 @@ const server = createServer(async (req, res) => {
           Object.entries(params).map(([k, v]): [string, string] => [k, String(v)]),
         );
         const { gettingThere, flyBase, driveBase } = gettingThereParams(asQuery);
-        const mode = resortTransportMode(gettingThere, savedResort);
+        const mode = resortTransportMode(gettingThere, savedResort, String(params.origin ?? ""));
         Object.assign(params, mode === "drive" ? driveBase : flyBase);
       }
       // Passes and DVC points are normalized HERE, not trusted as saved. The
