@@ -548,3 +548,60 @@ create table if not exists wait_time_samples (
 );
 create index if not exists wait_time_samples_month
   on wait_time_samples (resort_id, observed_at);
+
+-- Prices the owner has seen with their own eyes while checking whole trips
+-- (2026-09-27). The owner's rule, in their words: "Everything I bring in
+-- should be information. It shouldn't necessarily OVERWRITE anything, but it
+-- should help with our estimates." So every row is kept, forever, with the
+-- day it was pulled and the dates it is about, and beside it what OUR model
+-- said for the same thing that day. observed / model is the ratio that
+-- nudges an estimate (see src/priceChecks.ts), and the snapshot is what makes
+-- "next September, how far off were we for trips six months out?" answerable
+-- at all: nothing can recover later what the model said on the day.
+create table if not exists price_checks (
+  id             uuid primary key,
+  trip           text not null default '',
+  checked_on     date not null,
+  resort_id      text not null,
+  category       text not null check (category in ('flight','hotel','ticket','food','other')),
+  item           text not null default '',
+  detail         text not null default '',
+  from_airport   text,
+  start_date     date,
+  end_date       date,
+  adults         int,
+  seniors        int,
+  children_ages  text not null default '',
+  amount         numeric(14,2) not null,
+  currency       text not null,
+  price_is       text not null,
+  source         text not null default '',
+  notes          text not null default '',
+  -- The price in one comparable unit, in US dollars at the day's exchange
+  -- rate: per person round trip, per room per night, per person per ticket,
+  -- or per item. Null when the row can't be put in one (a whole-party total
+  -- with no party size).
+  unit_usd       numeric(14,2),
+  unit           text not null default '',
+  -- What the row is about in our own terms: ORIGIN|resort for a flight, a
+  -- hotel id, a resort id for tickets. Null when it names nothing we price.
+  match_key      text,
+  -- What our model said for the same unit that day, BEFORE any price check
+  -- nudged it. Never the nudged figure, or checks would be measured against
+  -- themselves and compound.
+  model_usd      numeric(14,2),
+  -- Hotels only: the base rate model_usd was built on, so a base the owner
+  -- edits later rescales old checks instead of being counted twice.
+  model_base_usd numeric(14,2),
+  -- What the board itself would have shown, when that differs from the model
+  -- (a flight whose headline was a real cached fare).
+  app_usd        numeric(14,2),
+  -- Why this row can't nudge an estimate; blank when it does. Stored rows are
+  -- never thrown away for being unusable — they are still a record.
+  not_counted    text not null default '',
+  created_by     text not null default '',
+  created_at     timestamptz not null default now(),
+  -- The same price uploaded twice is one data point, not two.
+  dedupe         text not null unique
+);
+create index if not exists price_checks_key on price_checks (category, match_key);

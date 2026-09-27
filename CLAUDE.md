@@ -22,11 +22,20 @@ None of #77-#80 is visible until Render redeploys (its build runs the
 migration that adds the new `users` and `owner_attractions` columns).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-591 tests, and typecheck is clean.
+615 tests, and typecheck is clean.
 
 ### Pick up here — next session, in rough priority order
 
 **Waiting on the owner's click (Claude can't test these from the sandbox):**
+
+0. **Price checks + screenshot reader (built 2026-09-27).** The owner is
+   checking whole trips this week. Upload
+   `docs/price-checks/sample-2026-09-27-tokyo-christmas.csv` in /admin if it
+   isn't in yet, then read one real screenshot on a phone. The reader was
+   tested with real OCR against a mock booking page, not a real Disney one.
+   Open: whether the Tokyo sheet's room rates were per stay or per night
+   (loaded as whole stay; Ambassador lands within 2%, which suggests that's
+   right).
 
 1. **Kayak hotel link.** Open a board row's off-property hotel card, click
    "Kayak", and check that the area, dates and party came through. If they
@@ -50,26 +59,9 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 
 **Decisions the owner hasn't made yet. Ask; don't build ahead:**
 
-0. **Real-trip price checks (upload).** The owner is pricing whole real
-   trips to test the app and wants those numbers to inform it. Proposed
-   2026-09-27, not built: one row per price seen (long format), sample at
-   `docs/price-checks/sample-2026-09-27-tokyo-christmas.csv` (their Tokyo
-   sheet converted). Plan offered: an /admin upload that (a) shows a
-   scorecard, their number vs what the app charges for the same dates, per
-   line; (b) sends flight rows into the existing fare corrections; (c) keeps
-   hotel/ticket/food rows as dated evidence beside each setting rather than
-   overwriting a base rate from one peak-week observation. Waiting on the
-   owner's go, and on whether "Rate" is per room for the whole stay.
-
-5. **Screenshot scanner.** Planned only. The plan: Tesseract.js OCR running
-   in the owner's own browser inside /admin, with no AI service. It
-   pre-fills the EXISTING forms (hotel rates, fares, tickets, promos), and
-   nothing saves until the owner confirms each number. The owner asked for
-   this so they "don't have to depend on AI for everything". Build it only
-   once the owner says go.
 6. **Showing people the PDF is worth paying for.** Three options were
    offered and none has been picked:
-   - clickable booking links inside the PDF;
+   - clickable booking links inside the PDF (BUILT 2026-09-27, PR #82);
    - a "See a sample" PDF built from a real trip;
    - an "email me this trip" option for Plus, with clickable links.
 7. **Legal blanks** (`docs/legal/README.md`): county, contact email, minimum
@@ -105,6 +97,45 @@ make. `docs/numbers-to-verify.md` lists every number that is still a guess,
 biggest effect first, and says where each one is changed (/admin or code).
 When the owner sends a real number, update that file in the same commit
 that changes the number.
+
+### 2026-09-27, second half — price checks and the screenshot reader
+
+- **Price checks** (`src/priceChecks.ts`, `src/checkFactors.ts`,
+  `price_checks` table, /admin → "Prices you've checked",
+  `docs/price-checks/README.md`). The owner's rule: "Everything I bring in
+  should be information. It shouldn't necessarily OVERWRITE anything, but it
+  should help with our estimates." Every row is kept, with `checked_on`, the
+  travel dates, and a SNAPSHOT of what our model said for the same unit that
+  day (`model_usd`, measured with `loadBook(..., { applyChecks: false })`, so
+  checks never measure themselves). observed / model is the ratio.
+- **How a ratio moves an estimate:** median ratio per thing, shrunk by
+  n / (n + K), K = `checks.priorWeight` (default 3; one check = a quarter of
+  the way). Final factor clamped 0.5-2x; single ratios outside 0.2-5x are
+  kept but not counted (a currency typo). `checks.use` = 0 switches it off.
+  Applied in `loadBook` to: on-property hotel nightly (by hotel id), ticket
+  rows (by resort), and flight ESTIMATES (by origin|resort), never to a real
+  cached fare or a vendor's off-property rate. `TripPrice.checkAdjust` feeds
+  a one-line note on the flight, hotel and ticket cards.
+- **Hotels collapse room types:** one data point per hotel + stay + day
+  checked, at the cheapest room (a family room is a different product).
+  Hotel ratios are rescaled by base_now / base_then, so editing a base in
+  /admin after a check doesn't count the correction twice.
+- **Kept, not counted, with a reason:** food items (a dish can't become a
+  daily rate), hotels we don't price, off-property hotels, and routes with
+  no estimate yet (RDU->Tokyo had none locally).
+- **Lead time:** every row keeps days ahead; /admin shows median ratio by
+  category x lead bucket, which is the "a year from now, how far off were we
+  six months out" answer the owner asked for.
+- **Screenshot reader** (`public/screenshot-reader.js`, Tesseract.js 6.0.1 from
+  jsdelivr, runs in the owner's own browser, no AI). Pick or paste an
+  image, and it PRE-FILLS the price-check form with highlighted boxes
+  (resort, category, name, amount, currency, dates, from-airport). Nothing
+  saves until the owner presses Save. Optional Japanese and Chinese.
+  It pre-fills the price-check form rather than the hotel/fare/ticket
+  settings forms planned earlier, because the owner said everything should be
+  information, not overwrites. Verified with real OCR in Chromium. The
+  sandbox needs `--ignore-certificate-errors` for the CDN, which is a test-only
+  proxy issue. The pure parsers are tested against verbatim OCR output.
 
 ### 2026-09-27 session — supersedes anything below that disagrees
 

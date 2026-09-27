@@ -139,6 +139,37 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
 .fare .who{font-weight:650}
 .fare .meta{font-size:12px; color:var(--muted); margin-top:2px}
 .fare.spent{opacity:.55}
+/* Price checks. Labels sit above their boxes, three to a row on a laptop and
+   one to a row on a phone, because the owner is checking prices from a phone
+   as often as not. */
+.cgrid{display:grid; gap:10px 10px; grid-template-columns:repeat(3,minmax(0,1fr)); margin-bottom:10px}
+.cgrid.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.cgrid.one{grid-template-columns:1fr}
+@media (max-width:620px){ .cgrid,.cgrid.two{grid-template-columns:1fr} }
+.cgrid label{display:block; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:3px}
+.cgrid .filled{border-color:var(--accent-line); background:var(--accent-bg)}
+.sheet h3{margin:20px 0 6px; font-size:13.5px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+.chip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--rule-strong); border-radius:99px;
+  padding:4px 5px 4px 11px; font-size:13px; background:var(--surface)}
+.chip small{color:var(--muted)}
+.chip button{min-height:0; padding:3px 9px; font-size:12px; border-radius:99px}
+.shot{max-width:100%; max-height:220px; border:1px solid var(--rule); border-radius:8px; margin-top:8px; display:block}
+pre.ocr{white-space:pre-wrap; font-size:12px; max-height:220px; overflow:auto; background:var(--surface);
+  border:1px solid var(--rule); border-radius:8px; padding:8px}
+.check{padding:11px 0; border-top:1px solid var(--rule); font-size:13.5px; display:flex; gap:10px;
+  justify-content:space-between; align-items:flex-start}
+.check .what{font-weight:650}
+.check .meta{font-size:12px; color:var(--muted); margin-top:2px}
+.check .vs{font-size:12.5px; margin-top:3px}
+.check .up{color:var(--bad)} .check .down{color:var(--ok)}
+.check.nc .vs{color:var(--muted)}
+table.ctab{width:100%; border-collapse:collapse; font-size:13px}
+table.ctab th, table.ctab td{text-align:left; padding:6px 6px; border-bottom:1px solid var(--rule)}
+table.ctab th{font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+table.ctab th.n{text-align:right}
+table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
 .fare .bandpill{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
   border:1px solid var(--rule-strong); border-radius:99px; padding:1px 7px; margin-left:6px; white-space:nowrap}
 </style>
@@ -153,6 +184,94 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
     </div>
     <a class="btn" href="/">← Back to Parkfare</a>
   </header>
+
+  <section class="sheet" id="checks" style="margin-top:0; margin-bottom:22px">
+    <h2>Prices you've checked</h2>
+    <p>Every real price you bring in is kept, with the day you saw it and the dates it's for, next to
+      what we were quoting for the same thing that day. <b>Nothing here replaces a rate.</b> A check that
+      matches something we price (a flight route, a Disney hotel, a resort's tickets) nudges that estimate
+      toward what you saw: one check a quarter of the way, three checks halfway. Restaurant items and
+      hotels we don't price are kept as a record.</p>
+
+    <h3>Read a screenshot</h3>
+    <p>The text is read <b>on this device</b> &mdash; the picture isn't sent anywhere and no AI looks at it
+      (the reader itself downloads once from cdn.jsdelivr.net). It only fills in the form below. <b>Check
+      every box before you save</b>: a reader can mistake a 3 for an 8.</p>
+    <div class="tools" style="margin:6px 0 4px">
+      <button class="btn" id="sPick">Choose a screenshot</button>
+      <input type="file" id="sFile" accept="image/*" class="hidden">
+      <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2)">
+        <input type="checkbox" id="sCjk"> Also read Japanese and Chinese (slower the first time)</label>
+    </div>
+    <p class="count" id="sStatus">Or paste a screenshot anywhere on this page.</p>
+    <img id="sImg" class="shot hidden" alt="The screenshot being read">
+    <div id="sFound"></div>
+    <details id="sTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
+      <pre class="ocr" id="sText"></pre></details>
+
+    <h3>Add one price</h3>
+    <div class="cgrid">
+      <div><label for="cChecked">Day you saw it</label><input type="date" id="cChecked"></div>
+      <div><label for="cResort">Resort</label><select id="cResort"></select></div>
+      <div><label for="cCat">What it is</label><select id="cCat">
+        <option value="hotel">Hotel</option><option value="flight">Flight</option>
+        <option value="ticket">Park ticket</option><option value="food">Food</option><option value="other">Other</option></select></div>
+    </div>
+    <div class="cgrid two">
+      <div><label for="cItem">Name</label><input type="text" id="cItem" maxlength="200" placeholder="Disney Ambassador Hotel · 1-Day Passport · Eastside Cafe"></div>
+      <div><label for="cDetail">Detail</label><input type="text" id="cDetail" maxlength="200" placeholder="Superior room · Adult (18+) · Child's set"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="cFrom">Flying from</label><input type="text" id="cFrom" list="originList" maxlength="3" placeholder="RDU"></div>
+      <div><label for="cStart">Start (check-in, fly out, park day)</label><input type="date" id="cStart"></div>
+      <div><label for="cEnd">End (check-out, fly home)</label><input type="date" id="cEnd"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="cAdults">Adults</label><input type="number" id="cAdults" min="0" max="20" inputmode="numeric"></div>
+      <div><label for="cSeniors">Seniors</label><input type="number" id="cSeniors" min="0" max="20" inputmode="numeric"></div>
+      <div><label for="cKids">Children's ages</label><input type="text" id="cKids" placeholder="4, 8"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="cAmount">Price</label><input type="text" id="cAmount" inputmode="decimal" placeholder="371,500"></div>
+      <div><label for="cCur">Currency</label><select id="cCur">
+        <option>USD</option><option>JPY</option><option>EUR</option><option>CNY</option><option>HKD</option></select></div>
+      <div><label for="cPriceIs">That price is</label><select id="cPriceIs">
+        <option value="whole_stay">For the whole stay</option><option value="per_night">Per night</option>
+        <option value="per_person">Per person</option><option value="total">For everyone together</option>
+        <option value="per_item">Per item</option><option value="per_day">Per day</option></select></div>
+    </div>
+    <div class="cgrid two">
+      <div><label for="cTrip">Trip name</label><input type="text" id="cTrip" maxlength="120" placeholder="Tokyo Christmas (expensive)"></div>
+      <div><label for="cSource">Where you saw it</label><input type="text" id="cSource" maxlength="300" placeholder="Tokyo Disney Resort site, Google Flights…"></div>
+    </div>
+    <div class="cgrid one">
+      <div><label for="cNotes">Notes</label><input type="text" id="cNotes" maxlength="500"></div>
+    </div>
+    <button class="btn primary" id="cAdd">Save this price</button>
+    <div class="said" id="cSaid"></div>
+
+    <h3>Upload a sheet</h3>
+    <p>One row per price, the same columns as the sample in <code>docs/price-checks/</code>. Upload the same
+      sheet again with new rows at the bottom and only the new rows are added. A row that can't be read
+      stops the whole file, so nothing half-lands.</p>
+    <div class="tools" style="margin-top:4px">
+      <a class="btn" href="/api/admin/checks.csv" download>Download everything you've checked</a>
+      <button class="btn" id="cPick">Upload a sheet</button>
+      <input type="file" id="cFile" accept=".csv,text/csv" class="hidden">
+    </div>
+    <div class="said" id="cCsvSaid"></div>
+    <div class="errs hidden" id="cCsvErrs"></div>
+
+    <h3>What your checks are doing now</h3>
+    <div id="cFactors"><p class="count">Loading…</p></div>
+
+    <h3>How far off we run, by how far ahead you checked</h3>
+    <div id="cLead"><p class="count">Loading…</p></div>
+
+    <h3>Everything you've checked</h3>
+    <p class="count" id="cCount">Loading…</p>
+    <div id="cList"></div>
+  </section>
 
   <input type="search" id="q" placeholder="Search — hotel name, resort, “mileage”…" aria-label="Search settings">
   <p class="count" id="count">Loading…</p>
@@ -784,10 +903,222 @@ $("#waitList").addEventListener("click", async e => {
         <div class="meta">average ${mins(x.avgPostedWaitMin)} · longest seen ${mins(x.maxPostedWaitMin)} · ${x.samples} reading${x.samples === 1 ? "" : "s"} while open</div></div></div>`).join("");
 });
 
+/* ------------------------------ your price checks -----------------------
+ * Real prices the owner has seen. Every row is kept; the ones that match
+ * something we price nudge that estimate (src/checkFactors.ts). Nothing here
+ * writes a rate. The screenshot reader only fills the form — Save is always
+ * the owner's own click.
+ */
+const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const fmtD = iso => { if(!iso) return ""; const [y,m,d] = iso.split("-").map(Number); return `${MON3[m-1]} ${d}, ${y}`; };
+const CUR_SIGN = { USD:"$", JPY:"¥", EUR:"€", CNY:"¥", HKD:"HK$" };
+const fmtLocal = (amt, cur) => (CUR_SIGN[cur] || "") + Number(amt).toLocaleString("en-US", { maximumFractionDigits: 2 })
+  + (cur === "CNY" ? " (yuan)" : "");
+const fmtUsd = n => "$" + Math.round(Number(n)).toLocaleString("en-US");
+const pctTxt = r => { const p = Math.round((r - 1) * 100); return (p > 0 ? "+" : "") + p + "%"; };
+const CAT_LABEL = { flight:"Flight", hotel:"Hotel", ticket:"Park ticket", food:"Food", other:"Other" };
+const PRICE_IS_WORDS = { per_person:"per person", per_night:"per night", whole_stay:"whole stay",
+  total:"for everyone", per_item:"per item", per_day:"per day" };
+const DEFAULT_PRICE_IS = { hotel:"whole_stay", flight:"per_person", ticket:"per_person", food:"per_item", other:"total" };
+let CHECK_RESORTS = [];
+
+function todayLocal(){
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function renderChecks(d){
+  if(d.resorts && !CHECK_RESORTS.length){
+    CHECK_RESORTS = d.resorts;
+    $("#cResort").innerHTML = d.resorts.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
+  }
+  const rname = id => (CHECK_RESORTS.find(r => r.id === id) || {}).name || id;
+
+  $("#cFactors").innerHTML = !d.factors.length
+    ? `<p class="count">Nothing yet. Once a check matches something we price, it shows here with how far it moved us.</p>`
+    : `${d.applying ? "" : `<p class="count"><b>Switched off</b> in the settings below (“Let my price checks nudge estimates”), so none of this is moving a price right now.</p>`}
+      <table class="ctab"><thead><tr><th>What</th><th class="n">Your prices vs ours</th><th class="n">Checks</th><th class="n">Our estimate moved</th></tr></thead>
+      <tbody>${d.factors.map(f => `<tr><td>${esc(f.label)}</td><td class="n">${pctTxt(f.medianRatio)}</td>
+        <td class="n">${f.n}</td><td class="n">${d.applying ? pctTxt(f.factor) : "—"}</td></tr>`).join("")}</tbody></table>
+      <p class="count" style="margin-top:6px">“Your prices vs ours” compares each price with what we charged for the same
+        dates. Our estimate moves part of that way — right now ${d.priorWeight} check${d.priorWeight === 1 ? "" : "s"} count as much
+        as our own figure, which you can change in the settings below.</p>`;
+
+  $("#cLead").innerHTML = !d.byLead.length
+    ? `<p class="count">This fills in as you check trips at different distances ahead. In a year it's what tells you
+        whether, six months out, we tend to run low.</p>`
+    : `<table class="ctab"><thead><tr><th>What</th><th>Checked</th><th class="n">Checks</th><th class="n">Your prices vs ours</th></tr></thead>
+      <tbody>${d.byLead.map(x => `<tr><td>${esc(CAT_LABEL[x.category] || x.category)}</td><td>${esc(x.bucket)} ahead</td>
+        <td class="n">${x.n}</td><td class="n">${pctTxt(x.medianRatio)}</td></tr>`).join("")}</tbody></table>`;
+
+  const counted = d.checks.filter(c => !c.notCounted).length;
+  $("#cCount").textContent = d.checks.length
+    ? `${d.checks.length} price${d.checks.length === 1 ? "" : "s"} kept · ${counted} feeding an estimate.`
+    : "Nothing yet. Read a screenshot, add one above, or upload a sheet.";
+  $("#cList").innerHTML = d.checks.map(c => {
+    const what = [c.item, c.detail].filter(Boolean).join(" — ") || CAT_LABEL[c.category];
+    const travel = c.startDate ? `${fmtD(c.startDate)}${c.endDate ? ` – ${fmtD(c.endDate)}` : ""}` : "no travel date";
+    const vs = c.ratio !== null
+      ? `You: ${fmtLocal(c.amount, c.currency)} ${esc(PRICE_IS_WORDS[c.priceIs] || "")} = <b>${fmtUsd(c.unitUsd)}</b> ${esc(c.unit)}
+         · we said ${fmtUsd(c.modelUsd)} that day <b class="${c.ratio > 1 ? "up" : "down"}">${pctTxt(c.ratio)}</b>
+         ${c.appUsd && Math.abs(c.appUsd - c.modelUsd) > 1 ? ` · the board showed ${fmtUsd(c.appUsd)}` : ""}`
+      : `You: ${fmtLocal(c.amount, c.currency)} ${esc(PRICE_IS_WORDS[c.priceIs] || "")}${c.unitUsd !== null ? ` = ${fmtUsd(c.unitUsd)} ${esc(c.unit)}` : ""}`;
+    return `<div class="check${c.notCounted ? " nc" : ""}">
+      <div>
+        <div class="what">${esc(CAT_LABEL[c.category])} · ${esc(rname(c.resortId))} · ${esc(what)}${c.fromAirport ? ` · from ${esc(c.fromAirport)}` : ""}</div>
+        <div class="meta">For ${esc(travel)} · checked ${esc(fmtD(c.checkedOn))}${c.leadDays !== null ? `, ${c.leadDays} days ahead` : ""}${c.trip ? ` · ${esc(c.trip)}` : ""}${c.source ? ` · ${esc(c.source)}` : ""}</div>
+        <div class="vs">${vs}</div>
+        ${c.notCounted ? `<div class="meta">Kept, not counted: ${esc(c.notCounted)}.</div>` : ""}
+      </div>
+      <button class="linkish" data-delcheck="${esc(c.id)}">Remove</button>
+    </div>`;
+  }).join("");
+}
+
+async function loadChecks(){
+  const r = await fetch("/api/admin/checks");
+  if(!r.ok){ $("#cCount").textContent = "Couldn't load your price checks."; return; }
+  renderChecks(await r.json());
+}
+
+$("#cCat").addEventListener("change", () => { $("#cPriceIs").value = DEFAULT_PRICE_IS[$("#cCat").value] || "total"; });
+$("#cChecked").value = todayLocal();
+// A box the screenshot filled is highlighted until the owner touches it.
+document.querySelectorAll("#checks input, #checks select").forEach(el =>
+  el.addEventListener("input", () => el.classList.remove("filled")));
+
+const CHECK_FIELDS = { checked_on:"#cChecked", resort:"#cResort", category:"#cCat", item:"#cItem", detail:"#cDetail",
+  from_airport:"#cFrom", start_date:"#cStart", end_date:"#cEnd", adults:"#cAdults", seniors:"#cSeniors",
+  children_ages:"#cKids", amount:"#cAmount", currency:"#cCur", price_is:"#cPriceIs", trip:"#cTrip",
+  source:"#cSource", notes:"#cNotes" };
+
+$("#cAdd").addEventListener("click", async () => {
+  const said = $("#cSaid");
+  said.className = "said"; said.textContent = "";
+  const body = Object.fromEntries(Object.entries(CHECK_FIELDS).map(([k, sel]) => [k, $(sel).value]));
+  const r = await fetch("/api/admin/checks", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const d = await r.json();
+  if(!r.ok){ said.className = "said bad"; said.textContent = d.message || "That wasn't saved."; return; }
+  said.className = "said ok";
+  said.textContent = (d.added ? "Saved." : "You'd already saved that exact price, so it wasn't added twice.")
+    + (d.warnings && d.warnings.length ? " Note: " + d.warnings.join("; ") + "." : "");
+  // Keep the trip, resort and dates: the next price is usually another room
+  // or another ticket on the same trip.
+  ["#cAmount","#cDetail","#cNotes"].forEach(sel => { $(sel).value = ""; });
+  document.querySelectorAll("#checks .filled").forEach(el => el.classList.remove("filled"));
+  renderChecks(d);
+});
+
+document.addEventListener("click", async e => {
+  const del = e.target.closest("[data-delcheck]");
+  if(!del) return;
+  del.disabled = true;
+  const r = await fetch("/api/admin/checks/" + encodeURIComponent(del.dataset.delcheck), { method: "DELETE" });
+  if(r.ok) loadChecks(); else del.disabled = false;
+});
+
+$("#cPick").addEventListener("click", () => $("#cFile").click());
+$("#cFile").addEventListener("change", async e => {
+  const f = e.target.files[0]; if(!f) return;
+  const said = $("#cCsvSaid"), errs = $("#cCsvErrs");
+  said.className = "said"; said.textContent = ""; errs.classList.add("hidden");
+  const r = await fetch("/api/admin/checks.csv", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ csv: await f.text() }),
+  });
+  const d = await r.json();
+  e.target.value = "";
+  if(!r.ok){
+    said.className = "said bad";
+    said.textContent = d.message || "Nothing was added — the file needs fixing first.";
+    if(d.errors && d.errors.length){
+      errs.classList.remove("hidden");
+      errs.innerHTML = `<b>Nothing was added.</b> ${d.errors.length} row${d.errors.length === 1 ? "" : "s"} to fix:
+        <ul>${d.errors.map(x => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    }
+    return;
+  }
+  said.className = "said ok";
+  said.textContent = `Added ${d.added} price${d.added === 1 ? "" : "s"}`
+    + (d.duplicates ? `; ${d.duplicates} ${d.duplicates === 1 ? "was" : "were"} already here and skipped` : "") + "."
+    + (d.warnings && d.warnings.length ? " Check: " + d.warnings.join("; ") + "." : "");
+  renderChecks(d);
+});
+
+/* The screenshot reader. Loaded only when first used, since it pulls in a
+   few megabytes the rest of this page never needs. */
+let readerModule = null;
+const getReader = () => readerModule || (readerModule = import("/public/screenshot-reader.js"));
+const fill = (sel, value) => { if(value === undefined || value === null || value === "") return; $(sel).value = value; $(sel).classList.add("filled"); };
+
+async function readShot(file){
+  const status = $("#sStatus");
+  const img = $("#sImg");
+  img.src = URL.createObjectURL(file); img.classList.remove("hidden");
+  $("#sFound").innerHTML = ""; $("#sTextBox").classList.add("hidden");
+  status.textContent = "Reading… the first time, the reader downloads itself (a few seconds).";
+  let R, text;
+  try {
+    R = await getReader();
+    text = await R.readImage(file, {
+      langs: $("#sCjk").checked ? "eng+jpn+chi_sim" : "eng",
+      onProgress: (p, st) => { status.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(p * 100)}%` : "Getting the reader ready…"; },
+    });
+  } catch(err){
+    status.textContent = err && err.message ? err.message : "Couldn't read that picture.";
+    return;
+  }
+  $("#sText").textContent = text; $("#sTextBox").classList.remove("hidden");
+
+  const resort = R.guessResort(text);
+  if(resort) fill("#cResort", resort);
+  const cat = R.guessCategory(text);
+  if(cat){ fill("#cCat", cat); $("#cPriceIs").value = DEFAULT_PRICE_IS[cat]; }
+  const resortCur = (CHECK_RESORTS.find(r => r.id === $("#cResort").value) || {}).currency || "";
+  const amounts = R.findAmounts(text, resortCur);
+  const dates = R.findDates(text, todayLocal());
+  const airports = R.findAirports(text);
+  const firstPriced = amounts.find(a => a.currency) || amounts[0];
+  if(firstPriced){ fill("#cAmount", firstPriced.amount); if(firstPriced.currency) fill("#cCur", firstPriced.currency); }
+  if(dates[0]) fill("#cStart", dates[0]);
+  if(dates[1] && dates[1] > dates[0]) fill("#cEnd", dates[1]);
+  if(airports[0] && $("#cCat").value === "flight") fill("#cFrom", airports[0]);
+  if(!$("#cItem").value && $("#cCat").value !== "flight") fill("#cItem", R.guessName(text));
+  if(!$("#cSource").value) fill("#cSource", ("Screenshot " + (file.name && file.name !== "image.png" ? file.name : "")).trim());
+  if(!$("#cChecked").value) $("#cChecked").value = todayLocal();
+
+  window.__shotAmounts = amounts;
+  $("#sFound").innerHTML =
+    (amounts.length ? `<div class="chips">${amounts.map((a, i) => `<span class="chip">${esc(a.currency ? fmtLocal(a.amount, a.currency) : a.raw)}
+        ${a.context ? `<small>${esc(a.context)}</small>` : ""}<button data-useamt="${i}">Use</button></span>`).join("")}</div>` : "")
+    + (dates.length ? `<div class="chips">${dates.map(iso => `<span class="chip">${esc(fmtD(iso))}
+        <button data-usestart="${iso}">Start</button><button data-useend="${iso}">End</button></span>`).join("")}</div>` : "");
+  status.textContent = amounts.length
+    ? `Found ${amounts.length} price${amounts.length === 1 ? "" : "s"} and ${dates.length} date${dates.length === 1 ? "" : "s"}. The highlighted boxes are its best guess — check them against the picture (the Use / Start / End buttons swap in another), fill in the rest, then save.`
+    : "Couldn't find a price in that picture. Try a tighter crop of the price, or tick Japanese and Chinese if the page isn't in English.";
+}
+
+$("#sPick").addEventListener("click", () => $("#sFile").click());
+$("#sFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(f) readShot(f); });
+document.addEventListener("paste", e => {
+  const item = [...((e.clipboardData && e.clipboardData.items) || [])].find(i => i.type.startsWith("image/"));
+  if(!item) return;
+  e.preventDefault();
+  readShot(item.getAsFile());
+});
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-useamt]");
+  if(a){ const x = (window.__shotAmounts || [])[+a.dataset.useamt]; if(x){ fill("#cAmount", x.amount); if(x.currency) fill("#cCur", x.currency); } return; }
+  const st = e.target.closest("[data-usestart]"); if(st){ fill("#cStart", st.dataset.usestart); return; }
+  const en = e.target.closest("[data-useend]"); if(en){ fill("#cEnd", en.dataset.useend); }
+});
+
 load();
 loadFares();
 loadAttractions();
 loadWaits();
+loadChecks();
 </script>
 </body>
 </html>

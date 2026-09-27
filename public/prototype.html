@@ -2370,6 +2370,14 @@ function promosCard(item, x, promoList){
   </div>`;
 }
 
+/* One line saying a real price we checked moved this number (checkFactors.ts
+   on the server). Said rather than hidden: an estimate a human has corrected
+   should say so, the same rule the fare-correction note follows. */
+function checkNote(a, where){
+  if(!a || !a.pct) return "";
+  return ` · ${a.pct > 0 ? "Raised" : "Lowered"} ${Math.abs(a.pct)}% using ${a.n} real price${a.n===1?"":"s"} we checked ${where}`;
+}
+
 /* Where each card sends people to book, in ONE place, so the website's cards
    and the PDF can never send somebody to two different pages (owner,
    2026-09-27: "I want the PDF to carry clickable links with it just like the
@@ -2637,7 +2645,7 @@ async function renderDetail(){
         <div class="p">$0</div></div>`
     : (fp && fp.estimate
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
-        <small>Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person</small></div>
+        <small>Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person${checkNote(fp.estimate.checkAdjust, "on this route")}</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
       // A real fare for this day that came in under what we quote: an option,
       // not the headline (owner, 2026-09-27). Not added to the total.
@@ -2973,6 +2981,7 @@ async function renderDetail(){
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
           ${ticketRowsHtml}
+          ${x.checkAdjust && x.checkAdjust.tickets ? `<p class="sub" style="margin:10px 0 0">${checkNote(x.checkAdjust.tickets, "here").replace(/^ · /, "")}</p>` : ""}
           <div class="foot">
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
           </div>
@@ -3001,6 +3010,7 @@ async function renderDetail(){
           </div>`}
           ${hotelWantedGlobally ? hotelCtl : ""}
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
+          ${x.checkAdjust && x.checkAdjust.hotel ? `<p class="sub" style="margin:10px 0 0">${checkNote(x.checkAdjust.hotel, "at this hotel").replace(/^ · /, "")}</p>` : ""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>

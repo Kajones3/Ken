@@ -34,6 +34,7 @@
 import type { Db } from "./db.js";
 import { RESORTS, IRS_MILEAGE_RATES } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
+import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
   THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
@@ -118,6 +119,26 @@ export const SETTINGS: SettingDef[] = [
       + "100 the expensive end. Higher is the safer mistake: an estimate that comes in low is the one "
       + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
+  },
+  {
+    key: CHECKS_USE_KEY,
+    label: "Let my price checks nudge estimates",
+    group: "Your price checks",
+    kind: "number",
+    default: 1,
+    min: 0,
+    max: 1,
+    help: "1: every price you check moves our estimate for that hotel, route or resort's tickets a little toward what you saw. 0: your checks are kept as a record and a scorecard only, and nothing moves.",
+  },
+  {
+    key: CHECKS_WEIGHT_KEY,
+    label: "How many checks count as much as our own estimate",
+    group: "Your price checks",
+    kind: "number",
+    default: DEFAULT_CHECKS_WEIGHT,
+    min: 0,
+    max: 50,
+    help: "At 3, one check moves an estimate a quarter of the way to what you saw, three checks halfway, nine three-quarters. Higher is more cautious. 0 trusts your checks completely. However many agree, an estimate never moves below half or above double.",
   },
   {
     key: TYPICAL_TRIM_KEY,

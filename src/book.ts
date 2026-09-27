@@ -8,6 +8,18 @@ import type { Db } from "./db.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
 import { RESORTS, type Tier } from "./config.js";
+import {
+  computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
+  type CheckFactor,
+} from "./checkFactors.js";
+
+/** Every on-property hotel's shipped base, for rescaling hotel checks. */
+const HOTEL_BASE = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
+/** Arrival airport (primary or alternate) -> the resort it serves. */
+const RESORT_OF_AIRPORT = new Map(
+  RESORTS.flatMap((r) => [[r.iata, r.id] as const, ...r.altArrivalAirports.map((a) => [a.iata, r.id] as const)]),
+);
+const pctOf = (f: CheckFactor) => ({ pct: Math.round((f.factor - 1) * 100), n: f.n });
 
 /**
  * Baseline sources the fare_trend multiplier should be applied to. The
@@ -82,7 +94,13 @@ function tsOf(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
+export async function loadBook(
+  db: Db, req: BookRequest,
+  /** applyChecks: false gives the model as it stands WITHOUT the owner's
+   *  price checks — what a new check must be measured against, or checks
+   *  would be measured against themselves and compound. */
+  opts: { applyChecks?: boolean } = {},
+): Promise<PriceBook> {
   const flights = new Map<string, FlightRow>();
   const hotels = new Map<string, HotelNight[]>();
   const tickets = new Map<string, TicketRow>();
@@ -323,100 +341,148 @@ export async function loadBook(db: Db, req: BookRequest): Promise<PriceBook> {
   // caller on the value in config.ts, which is the shipped behavior.
   const settings = await settingsMap(db);
 
+  /* The owner's price checks (checkFactors.ts). Each one is a ratio of what
+   * they saw to what our model said that day; together they nudge the same
+   * thing next time, a little per check. Applied HERE, to the book, so the
+   * board, the calendar, the hotel card's "every category" and the PDF all
+   * see one set of numbers. Only ever our own model's numbers: a vendor's
+   * off-property rate and a real cached fare are real prices already, and are
+   * never nudged. */
+  const factors = opts.applyChecks !== false && (settings.get(CHECKS_USE_KEY) ?? 1) >= 1
+    ? computeFactors(await countedChecks(db), {
+        priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+        hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? HOTEL_BASE.get(id),
+      })
+    : new Map<string, CheckFactor>();
+  if (factors.size) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    for (const list of hotels.values()) {
+      for (const night of list) {
+        const f = night.onProperty ? factors.get(`hotel|${night.hotelId}`) : undefined;
+        if (!f) continue;
+        night.nightly = r2(night.nightly * f.factor);
+        night.checkAdjust = pctOf(f);
+      }
+    }
+    for (const [key, row] of tickets) {
+      const f = factors.get(`ticket|${key.split("|")[0]}`);
+      if (!f) continue;
+      tickets.set(key, {
+        adult: r2(row.adult * f.factor), child: r2(row.child * f.factor),
+        junior: row.junior === undefined ? undefined : r2(row.junior * f.factor),
+        checkAdjust: pctOf(f),
+      });
+    }
+  }
+  const rawEstimate = (origin: string, dest: string): ReturnType<NonNullable<PriceBook["flightEstimate"]>> => {
+    const primary = ALT_TO_PRIMARY_IATA.get(dest);
+    const h = historicals.get(`${origin}|${dest}`)
+      ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
+    if (!h) return undefined;
+
+    // Route-specific evidence first. If real fares have been bought on
+    // this exact route and quarter — by the nightly jobs, or by someone
+    // paying to check one — measure the correction from those rather than
+    // from a global average of other routes. This is what makes an exact
+    // fare teach the estimate: buy one $511 fare on a route the model
+    // thought was $382, and every other date in that quarter moves toward
+    // it — BLENDED by how much evidence backs it, not a full override on
+    // the strength of one fare. `baseM` is what the route would show with
+    // no route-specific evidence at all (the global trend, or 1 for a
+    // baseline the trend must not touch — see TREND_APPLIES_TO); a route
+    // correction moves the multiplier FROM baseM TOWARD its own observed
+    // ratio, reaching full weight only at ROUTE_CORRECTION_MIN_SAMPLES.
+    // One sample nudges it a third of the way there; three or more is full
+    // weight, same as before this existed. `routeM` stays undefined
+    // exactly when there is no observation at all, so every caller of it
+    // below (the "no evidence anywhere" guard included) is unaffected by
+    // blending — it only changes HOW MUCH a real observation moves things,
+    // never WHETHER one exists.
+    const baseM = h.applyTrend ? (trend?.m ?? 1) : 1;
+    const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
+      ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
+    const rawRouteM = obs && h.med > 0 ? obs.med / h.med : undefined;
+    const routeWeight = obs ? Math.min(obs.n / ROUTE_CORRECTION_MIN_SAMPLES, 1) : 0;
+    const routeM = rawRouteM !== undefined ? baseM + (rawRouteM - baseM) * routeWeight : undefined;
+
+    /**
+     * The owner's corrections, per band.
+     *
+     * A "typical" correction speaks for the median, a "low" one for p25, a
+     * "high" one for p75 — so "that was the cheap end" and "that is what it
+     * usually costs" stay different claims instead of all three pretending
+     * to be the midpoint. Where the owner has not spoken for a band, that
+     * band keeps whatever the median's movement was, so the spread keeps
+     * its shape rather than collapsing.
+     */
+    const ckey = `${dest}|${quarterOf(req.from)}`;
+    const pkey = primary ? `${primary}|${quarterOf(req.from)}` : null;
+    const said = (band: FareBand) => ownerSays(ckey, band) ?? (pkey ? ownerSays(pkey, band) : undefined);
+    const ownerMed = said("typical");
+    const ownerLow = said("low");
+    const ownerHigh = said("high");
+    const anyCorrection = ownerMed ?? ownerLow ?? ownerHigh;
+
+    // A historical baseline is useless without a trend to bring it to the
+    // present, so it still requires one — unless this route has its own
+    // observation, which is strictly better evidence than the global
+    // average would have been. A live-sampled baseline needs no trend and
+    // must not wait on one.
+    if (h.applyTrend && !trend && routeM === undefined && anyCorrection === undefined) return undefined;
+    // The owner's own figure for the middle outranks a measured correction,
+    // which outranks the global trend: each is better evidence about THIS
+    // route than the one after it. A correction they typed is a fare they
+    // actually saw on the route in question.
+    const m = (ownerMed !== undefined && h.med > 0 ? ownerMed / h.med : undefined)
+      ?? routeM ?? baseM;
+    // The shown number is the MEDIAN, moved by the trend the real-fare
+    // lookups measured (or left as-is when it is already current).
+    // Low/High are that route's own p25/p75 spread moved the same way — a
+    // real observed range for this route, not a percentage invented
+    // around the midpoint.
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    // Each band takes the owner's own figure where they gave one, and the
+    // median's movement where they didn't. Sorted afterwards because a low
+    // above a high is nonsense however the arithmetic arrived at it — and
+    // mixing a typed number with a scaled one can arrive at it.
+    const band = [ownerLow ?? h.p25 * m, ownerMed ?? h.med * m, ownerHigh ?? h.p75 * m]
+      .sort((a, b) => a - b);
+    return {
+      low: r2(band[0]!),
+      med: r2(band[1]!),
+      high: r2(band[2]!),
+      basisQuarter: h.quarter,
+      seasonMatched: h.seasonMatched,
+      trendPct: (routeM !== undefined || h.applyTrend) ? Math.round((m - 1) * 1000) / 10 : undefined,
+      sampledLive: !h.applyTrend,
+      // How many real fares on this exact route the correction rests on.
+      // Undefined means it fell back to the global trend. The UI says this
+      // out loud, because a correction built on one fare deserves less
+      // confidence than one built on ten — and one bought date could be a
+      // peak date that doesn't represent its quarter.
+      routeSamples: obs?.n,
+      // Said out loud so the card can tell a traveler that a human has
+      // corrected this route, rather than quietly bending the number.
+      ownerCorrected: anyCorrection !== undefined,
+    };
+  };
+
+  /** A flight estimate nudged by the owner's checks on that route. */
+  const checkedEstimate = (origin: string, dest: string, est: NonNullable<ReturnType<NonNullable<PriceBook["flightEstimate"]>>>) => {
+    const resortId = RESORT_OF_AIRPORT.get(dest);
+    const f = resortId ? factors.get(`flight|${origin}|${resortId}`) : undefined;
+    if (!f) return est;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return { ...est, low: r2(est.low * f.factor), med: r2(est.med * f.factor), high: r2(est.high * f.factor),
+             checkAdjust: pctOf(f) };
+  };
+
   return {
     setting: (key) => settings.get(key),
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     flightEstimate: (origin, dest) => {
-      const primary = ALT_TO_PRIMARY_IATA.get(dest);
-      const h = historicals.get(`${origin}|${dest}`)
-        ?? (primary ? historicals.get(`${origin}|${primary}`) : undefined);
-      if (!h) return undefined;
-
-      // Route-specific evidence first. If real fares have been bought on
-      // this exact route and quarter — by the nightly jobs, or by someone
-      // paying to check one — measure the correction from those rather than
-      // from a global average of other routes. This is what makes an exact
-      // fare teach the estimate: buy one $511 fare on a route the model
-      // thought was $382, and every other date in that quarter moves toward
-      // it — BLENDED by how much evidence backs it, not a full override on
-      // the strength of one fare. `baseM` is what the route would show with
-      // no route-specific evidence at all (the global trend, or 1 for a
-      // baseline the trend must not touch — see TREND_APPLIES_TO); a route
-      // correction moves the multiplier FROM baseM TOWARD its own observed
-      // ratio, reaching full weight only at ROUTE_CORRECTION_MIN_SAMPLES.
-      // One sample nudges it a third of the way there; three or more is full
-      // weight, same as before this existed. `routeM` stays undefined
-      // exactly when there is no observation at all, so every caller of it
-      // below (the "no evidence anywhere" guard included) is unaffected by
-      // blending — it only changes HOW MUCH a real observation moves things,
-      // never WHETHER one exists.
-      const baseM = h.applyTrend ? (trend?.m ?? 1) : 1;
-      const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
-        ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
-      const rawRouteM = obs && h.med > 0 ? obs.med / h.med : undefined;
-      const routeWeight = obs ? Math.min(obs.n / ROUTE_CORRECTION_MIN_SAMPLES, 1) : 0;
-      const routeM = rawRouteM !== undefined ? baseM + (rawRouteM - baseM) * routeWeight : undefined;
-
-      /**
-       * The owner's corrections, per band.
-       *
-       * A "typical" correction speaks for the median, a "low" one for p25, a
-       * "high" one for p75 — so "that was the cheap end" and "that is what it
-       * usually costs" stay different claims instead of all three pretending
-       * to be the midpoint. Where the owner has not spoken for a band, that
-       * band keeps whatever the median's movement was, so the spread keeps
-       * its shape rather than collapsing.
-       */
-      const ckey = `${dest}|${quarterOf(req.from)}`;
-      const pkey = primary ? `${primary}|${quarterOf(req.from)}` : null;
-      const said = (band: FareBand) => ownerSays(ckey, band) ?? (pkey ? ownerSays(pkey, band) : undefined);
-      const ownerMed = said("typical");
-      const ownerLow = said("low");
-      const ownerHigh = said("high");
-      const anyCorrection = ownerMed ?? ownerLow ?? ownerHigh;
-
-      // A historical baseline is useless without a trend to bring it to the
-      // present, so it still requires one — unless this route has its own
-      // observation, which is strictly better evidence than the global
-      // average would have been. A live-sampled baseline needs no trend and
-      // must not wait on one.
-      if (h.applyTrend && !trend && routeM === undefined && anyCorrection === undefined) return undefined;
-      // The owner's own figure for the middle outranks a measured correction,
-      // which outranks the global trend: each is better evidence about THIS
-      // route than the one after it. A correction they typed is a fare they
-      // actually saw on the route in question.
-      const m = (ownerMed !== undefined && h.med > 0 ? ownerMed / h.med : undefined)
-        ?? routeM ?? baseM;
-      // The shown number is the MEDIAN, moved by the trend the real-fare
-      // lookups measured (or left as-is when it is already current).
-      // Low/High are that route's own p25/p75 spread moved the same way — a
-      // real observed range for this route, not a percentage invented
-      // around the midpoint.
-      const r2 = (n: number) => Math.round(n * 100) / 100;
-      // Each band takes the owner's own figure where they gave one, and the
-      // median's movement where they didn't. Sorted afterwards because a low
-      // above a high is nonsense however the arithmetic arrived at it — and
-      // mixing a typed number with a scaled one can arrive at it.
-      const band = [ownerLow ?? h.p25 * m, ownerMed ?? h.med * m, ownerHigh ?? h.p75 * m]
-        .sort((a, b) => a - b);
-      return {
-        low: r2(band[0]!),
-        med: r2(band[1]!),
-        high: r2(band[2]!),
-        basisQuarter: h.quarter,
-        seasonMatched: h.seasonMatched,
-        trendPct: (routeM !== undefined || h.applyTrend) ? Math.round((m - 1) * 1000) / 10 : undefined,
-        sampledLive: !h.applyTrend,
-        // How many real fares on this exact route the correction rests on.
-        // Undefined means it fell back to the global trend. The UI says this
-        // out loud, because a correction built on one fare deserves less
-        // confidence than one built on ten — and one bought date could be a
-        // peak date that doesn't represent its quarter.
-        routeSamples: obs?.n,
-        // Said out loud so the card can tell a traveler that a human has
-        // corrected this route, rather than quietly bending the number.
-        ownerCorrected: anyCorrection !== undefined,
-      };
+      const est = rawEstimate(origin, dest);
+      return est ? checkedEstimate(origin, dest, est) : undefined;
     },
     hotelNights: (resortId, date) => hotels.get(`${resortId}|${date}`) ?? [],
     ticket: (resortId, date) => tickets.get(`${resortId}|${date}`),
