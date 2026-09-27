@@ -186,6 +186,17 @@ that changes the number.
   "Shanghai age bands: 2 seniors (child-price ticket), 1 child (3–11)". A
   child old enough to pay adult there ("1 child aged 11 (adult price here,
   10+)" at the US parks) is always named, never folded into adults.
+- **The 100-mile rule is now ENFORCED in pricing, not just defaulted in the
+  form** (owner: someone was shown LAX -> Disneyland as a flight, "We already
+  fixed this"). The earlier fix only pre-selected the drive preset; anyone who
+  had touched "Getting there", or reopened a saved "fly to all" search, got
+  a flight whenever a fare existed (reproduced: a cached $89 LAX->SNA fare
+  priced it at $178 for two). `resortTransportMode(mode, resort, origin)`
+  now returns "drive" for any resort `isLocalRoute()` says is too close,
+  under EVERY preset, including miles. The board, the Plus calendar and
+  saving a search all go through it. The row carries `drivenBecauseClose`,
+  and the board and detail header say so in one line. Supersedes the older
+  note that flying LAX->SNA on points "is a real thing people do".
 - **The header said "prices in CNY" while every number was in dollars.** It
   printed the resort's currency code. It now says "prices in US dollars
   (Shanghai charges in Chinese yuan)".

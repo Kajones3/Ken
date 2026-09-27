@@ -5,7 +5,7 @@
  * WDW, fly to the other five) — this is the one place that split happens,
  * kept pure and tiny so it's trivially testable on its own.
  */
-import { localResortFor } from "./config.js";
+import { localResortFor, isLocalRoute, RESORT_BY_ID } from "./config.js";
 
 export type GettingThereMode = "fly" | "flyMiles" | "driveWdw" | "driveDlr" | "driveDomestic";
 
@@ -16,7 +16,17 @@ export const GETTING_THERE_MODES: GettingThereMode[] = [
 export function resortTransportMode(
   mode: GettingThereMode,
   resort: { id: string; region: string },
+  /** The departure airport. When given, the 100-mile rule is ENFORCED here:
+   *  a resort too close to fly to (isLocalRoute — LAX to Disneyland, or an
+   *  owner-named pair like JAX to Disney World) is always a drive, whatever
+   *  preset is chosen. It used to be only the form's default, so anyone who
+   *  had touched "Getting there", or reopened a saved "fly to all" search,
+   *  got LAX to Disneyland priced as a flight (owner, 2026-09-27: "That
+   *  isn't supposed to happen in our 100 mile radius rule"). */
+  origin?: string,
 ): "fly" | "drive" | "miles" {
+  const r = RESORT_BY_ID.get(resort.id);
+  if (origin && r && resort.region === "dom" && isLocalRoute(origin, r.iata)) return "drive";
   if (mode === "flyMiles") return "miles";
   if (mode === "driveWdw") return resort.id === "wdw" ? "drive" : "fly";
   if (mode === "driveDlr") return resort.id === "dlr" ? "drive" : "fly";
