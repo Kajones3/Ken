@@ -164,6 +164,10 @@ export interface FlightRow {
    *  `seasonMatched` is false when no baseline existed for the quarter being
    *  searched and an off-season one was used instead — a materially weaker
    *  estimate, and the UI says so rather than hiding it. */
+  /** A real cached fare for this exact date that came in BELOW the estimate
+   *  we quote, so it is offered as an option rather than used as the
+   *  headline (owner, 2026-09-27). Only ever set alongside `estimate`. */
+  cheaperFound?: { price: number; carrier?: string; stops?: number; deepLink?: string };
   estimate?: {
     low: number; med: number; high: number; basisQuarter: string;
     seasonMatched?: boolean; trendPct?: number;
@@ -334,6 +338,13 @@ export interface TripPrice {
    *  show it as its own line rather than folding it silently into the base
    *  ticket number. */
   hopperUsd: number;
+  /** The ticket line split by who buys which ticket, straight from the
+   *  per-traveler prices above — so the card never has to re-derive a split.
+   *  `senior` is its own group wherever the party has seniors, INCLUDING
+   *  resorts with no senior ticket (their seniors pay adult, and
+   *  `seniorPrice` is false so the card can say so). Pass holders are their
+   *  own group at $0. Lines sum to `tickets`. */
+  ticketLines: TicketLine[];
   /** Annual passes and DVC point rental — null when the traveler said
    *  nothing about either. See src/memberships.ts for why a pass is reported
    *  as a counterfactual rather than charged to this one trip. */
@@ -432,6 +443,14 @@ export function partyAges(p: TripParams): number[] {
     ...Array.from({ length: seniors }, () => SENIOR_AGE),
     ...p.childAges,
   ];
+}
+
+export interface TicketLine {
+  group: "adult" | "senior" | "junior" | "child" | "infant" | "pass";
+  count: number;
+  totalUsd: number;
+  /** Only on `senior`: true when this resort sells a senior ticket. */
+  seniorPrice?: boolean;
 }
 
 /** The band a person's TICKET is priced in. Same as bandOf, except that a
@@ -662,17 +681,23 @@ export function priceTrip(
     if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
-    // The median wins when it's higher than the real row — a rock-bottom
-    // deal-feed price gets corrected up to the honest median rather than
-    // quietly undercutting what most travelers will actually pay; a real
-    // fare that's already representative (at or above the median) still
-    // shows as real, plain, with its carrier and booking link.
-    // Deliberately still the MEDIAN, not the leaned figure. This decides
-    // whether a real cached fare is trustworthy enough to show, and the
-    // honest central estimate is the right yardstick for that. Comparing
-    // against a leaned figure would start overriding real fares far more
-    // often, which is a different change wearing this one's clothes.
-    const useRow = !!row && !(est && est.med > row.price);
+    // Whenever an ESTIMATE is what gets shown, it is leaned. See
+    // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
+    // estimate that comes in low is the one that costs somebody at checkout.
+    const leanPct = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+    // A real cached fare is the headline only when it is at or above what we
+    // would otherwise quote — the LEANED estimate, not the median (owner,
+    // 2026-09-27). This used to be the median, which let one cheap real fare
+    // for one date (JetBlue PHL-MCO at $129) sit between the median and the
+    // leaned figure and replace it, so the lean-high fix never applied to the
+    // routes we had real data for. "Surface that as an OPTION but display
+    // the AVERAGE": a cheaper real fare is kept as `cheaperFound` and shown
+    // beside the estimate, never thrown away. Real fares still move the
+    // estimate itself through the route correction in book.ts.
+    // Compared against the estimate WITHOUT the holiday premium, so the
+    // premium can never itself tip a real row into looking "too cheap".
+    const estYardstick = est ? leanedFare(est, leanPct) : undefined;
+    const useRow = !!row && !(estYardstick !== undefined && estYardstick > row.price);
     // A holiday week's premium only ever adjusts an ESTIMATE, never a real
     // cached fare — a real fare for that exact date already reflects
     // whatever the market actually charges, so layering a national-average
@@ -691,10 +716,6 @@ export function priceTrip(
                     holidayPremiumPct: pct, holidayLabel: holiday.label };
         })()
       : est;
-    // Whenever an ESTIMATE is what gets shown, it is leaned. See
-    // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
-    // estimate that comes in low is the one that costs somebody at checkout.
-    const leanPct = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
     const estShown = estAdjusted ? leanedFare(estAdjusted, leanPct) : undefined;
     // Flying: an override may raise the fare but never fall below the cheapest fare we know of —
     // "cheapest we know of" is still the real row, even on the rare date the median corrects it up.
@@ -726,7 +747,8 @@ export function priceTrip(
       // two disagree is worse than either choice on its own: a reader adds
       // up the card and gets a different answer from the board.
       : estAdjusted
-      ? { price: estShown ?? estAdjusted.med, estimate: estAdjusted }
+      ? { price: estShown ?? estAdjusted.med, estimate: estAdjusted,
+          ...(row ? { cheaperFound: { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } } : {}) }
       : null;
   }
 
@@ -791,6 +813,8 @@ export function priceTrip(
   const tier = holding ? findTier(holding.resortId, holding.tierId) : undefined;
   let passResult: NonNullable<TripPrice["membership"]>["pass"] = null;
   let parkingPassPct = 0;
+  let passCovered: number[] = [];
+  let passHopperIncluded = false;
   if (holding && tier) {
     const used = Math.min(holding.count, ages.length);
     const order = ticketPerHead
@@ -798,6 +822,8 @@ export function priceTrip(
       .sort((a, b) => b.v - a.v)
       .slice(0, used)
       .map((x) => x.idx);
+    passCovered = order;
+    passHopperIncluded = !!tier.hopperIncluded;
     let ticketsSaved = 0;
     for (const idx of order) {
       ticketsSaved += ticketPerHead[idx]!;
@@ -820,6 +846,27 @@ export function priceTrip(
       ticketsWithoutPassUsd: ticketsSaved,
       coversDearestFirst: true,
     };
+  }
+  const ticketLines: TicketLine[] = [];
+  {
+    const byGroup = new Map<TicketLine["group"], TicketLine>();
+    ages.forEach((age, idx) => {
+      const covered = passCovered.includes(idx);
+      const group: TicketLine["group"] = covered ? "pass"
+        : age === SENIOR_AGE ? "senior"
+        : ticketBandOf(resort, age);
+      const cost = covered
+        ? (passHopperIncluded ? 0 : hopperPerHead[idx]!)
+        : ticketPerHead[idx]! + hopperPerHead[idx]!;
+      const line = byGroup.get(group) ?? { group, count: 0, totalUsd: 0,
+        ...(group === "senior" ? { seniorPrice: resort.bands.senior !== undefined } : {}) };
+      line.count += 1; line.totalUsd += cost;
+      byGroup.set(group, line);
+    });
+    for (const g of ["adult", "senior", "junior", "child", "infant", "pass"] as const) {
+      const l = byGroup.get(g);
+      if (l) ticketLines.push({ ...l, totalUsd: Math.round(l.totalUsd * 100) / 100 });
+    }
   }
 
   // --- food --------------------------------------------------------------
@@ -960,6 +1007,12 @@ export function priceTrip(
   if (dvc) dvc.creditUsd = dvcCredit({ points: dvc.points, takeHomePerPointUsd: dvc.takeHomePerPointUsd });
 
   const membership: TripPrice["membership"] = passResult || dvc ? { pass: passResult, dvc } : null;
+  // A ticket promo (ticket_pct_off) scales the ticket line after the split
+  // was taken, so scale the split the same way — the lines must add up.
+  const linesSum = ticketLines.reduce((a, l) => a + l.totalUsd, 0);
+  if (linesSum > 0 && Math.abs(linesSum - tickets) > 0.01) {
+    for (const l of ticketLines) l.totalUsd = Math.round(l.totalUsd * (tickets / linesSum) * 100) / 100;
+  }
 
   const total = Math.max(0, flights + tickets + hotel + food + driving
     - flatOffTotal - (dvc?.creditUsd ?? 0));
@@ -972,7 +1025,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines,
       membership,
     },
   };

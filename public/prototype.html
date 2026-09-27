@@ -476,7 +476,10 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 /* And the chip no longer inflates the line it sits in. */
 .barlabs .estchip,.barlabs .exactchip{line-height:1.3}
 
-.total{text-align:right}
+/* Scoped to the board row. A bare `.total` also caught the gold total tile in
+   every detail card (`.kpitile.total`), which is how the card tiles went wonky
+   between phone and desktop widths: see the 940px rule below. */
+.row > .total{text-align:right}
 .tnum{font-family:"Archivo"; font-weight:800; font-size:21px; letter-spacing:-.035em; font-variant-numeric:tabular-nums}
 .tsub{font-size:11px; color:var(--ink-2); margin-top:2px; font-variant-numeric:tabular-nums}
 .rowbtn{justify-self:end}
@@ -565,17 +568,20 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .kpi{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:2px 0 12px}
 .kpi.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 
-/* Phones. This lives AFTER the base rule on purpose: the previous attempt sat
-   above it with the same specificity, so the base rule won on source order and
-   the mobile layout never applied at all — three columns were being squeezed
-   into 296px the whole time.
+/* Narrow CARDS, not narrow windows. The tiles used to switch layout on the
+   window's width, but a card is narrow at many window sizes — three across on
+   a laptop, two across on a small tablet, one across on a phone — so between
+   those breakpoints three tiles were squeezed into ~75px each and "$3,980"
+   ran out of its tile. A container query asks the card itself.
 
-   Two columns, and the total spans both. The total is the answer, it carries
-   the longest number, and leaving it to auto-placement is what stranded it
-   alone in a half-width cell below its own row. */
-@media (max-width:560px){
+   Two columns, and the third tile (the total, where there is one) spans both.
+   The total is the answer and carries the longest number. This rule sits
+   AFTER the base rule on purpose: same specificity, so source order decides,
+   and an earlier version lost that and never applied at all. */
+.card{container-type:inline-size}
+@container (max-width:300px){
   .kpi{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .kpi > .kpitile.total{grid-column:1 / -1}
+  .kpi > .kpitile:nth-child(3){grid-column:1 / -1}
   .kpitile .v{font-size:17px}
 }
 .kpitile{background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:10px 11px;
@@ -587,7 +593,10 @@ tbody tr[data-open].sel{background:var(--surface-2)}
    one tile doesn't push its number out of line with its neighbors'. */
 .kpitile .k{display:flex; align-items:baseline; gap:5px; font-size:10.5px; font-weight:700;
   letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); line-height:1.35}
-.kpitile .v{margin-top:auto; padding-top:5px; font-size:19px; font-weight:650; color:var(--ink);
+/* The number shrinks a little with the card (cqi = 1% of the card's width) so
+   a seven-character total like "$12,480" still fits a third of a narrow card.
+   19px is the ceiling; browsers without container units just keep 19px. */
+.kpitile .v{margin-top:auto; padding-top:5px; font-size:19px; font-size:clamp(15px, calc(7.9cqi - 6.5px), 19px); font-weight:650; color:var(--ink);
   line-height:1.15; font-family:"JetBrains Mono",monospace; letter-spacing:-.02em}
 .kpitile .s{margin-top:2px; font-size:11px; color:var(--muted)}
 /* The total is the answer, so it is the one tile that reads as emphasis. */
@@ -678,8 +687,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
 @media (max-width:940px){
   .row{grid-template-columns:26px 1fr 130px; grid-template-areas:"rank ident total" ". bar bar" ". btn btn"; gap:10px 12px}
-  .rank{grid-area:rank} .ident{grid-area:ident} .total{grid-area:total}
-  .bar-wrap{grid-area:bar} .rowbtn{grid-area:btn; justify-self:start}
+  /* `.row >` on every one of these. Unscoped, `.total{grid-area:total}` also
+     hit `.kpitile.total` in the detail cards, which have no area called
+     "total" — so the browser invented extra columns for it and the total
+     tile dropped to its own row, stranded on the right, between 560px and
+     940px wide. */
+  .row > .rank{grid-area:rank} .row > .ident{grid-area:ident} .row > .total{grid-area:total}
+  .row > .bar-wrap{grid-area:bar} .row > .rowbtn{grid-area:btn; justify-self:start}
   .spark{display:none}
 }
 @media (max-width:560px){
@@ -1464,9 +1478,9 @@ function fillOriginOptions(){
 
 function fillFormOptions(){
   fillOriginOptions();
-  fillSelect($("#adults"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#adults"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
   fillSelect($("#seniors"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
-  fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,String(n)]));
+  fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
   fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
   fillSelect($("#overnightNights"), [1,2,3,4,5].map(n=>[n,n+" night"+(n>1?"s":"")]));
   fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
@@ -2356,6 +2370,179 @@ function promosCard(item, x, promoList){
   </div>`;
 }
 
+/* Where each card sends people to book, in ONE place, so the website's cards
+   and the PDF can never send somebody to two different pages (owner,
+   2026-09-27: "I want the PDF to carry clickable links with it just like the
+   website"). */
+function tripLinks(item, p){
+  const r = item.resort, x = item.price, list = paxList(p);
+  const noHotel = !x.hotelPick || x.hotelPick.hotelId === "none";
+  const stayNow = noHotel ? true : x.hotelPick.onProperty;
+  /**
+   * Where "Check live fares" sends you when the cache has no real booking
+   * link of its own.
+   *
+   * THE REGRESSION, AND WHY IT WAS INVISIBLE FROM HERE. A previous pass
+   * replaced a `q=` search with Google Flights' `#flt=` structured form, to
+   * carry the return date and passenger count the old link lacked. It
+   * carried nothing: the owner reported the page arriving with neither the
+   * airports nor the dates filled in, which is the empty-search default.
+   *
+   * `#flt=` is a URL FRAGMENT. Fragments are never sent to the server — only
+   * the page's own JavaScript ever sees them — so the format has to be one
+   * Google still parses in the browser, and `#flt=` is an old internal one it
+   * no longer honors. An unrecognized fragment is silently ignored, which is
+   * why this failed by showing a blank form rather than an error. `q=` is a
+   * real query parameter that reaches Google's server, which is exactly why
+   * the older link at least got the airports right.
+   *
+   * So this goes back to `q=`, with the return date the old one was missing.
+   * Google's flight search parses "from X to Y on DATE through DATE" as a
+   * round trip. Passenger count is NOT carried: no query wording was found
+   * that Google reliably parses into a party size, and claiming it in the
+   * card while the page quietly showed one traveler is the same class of
+   * silent-wrong this whole note is about. The card says to set it there.
+   *
+   * NONE OF THIS IS VERIFIABLE FROM THIS SANDBOX — google.com is refused by
+   * the egress proxy (re-tested 2026-09-22, `CONNECT tunnel failed, 403`).
+   * That is why the card prints the route and dates it is asking for: if the
+   * page ever lands somewhere else, the mismatch is visible rather than
+   * silent. It needs a real click to confirm.
+   */
+  const backDate = (() => {
+    const d = new Date(x.start + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + (p.nights || 1));
+    return d.toISOString().slice(0, 10);
+  })();
+  // BUILT HERE, not taken from the cached row — the same call the hotel link
+  // already makes, and for the same reason. A stored deep link encodes
+  // whatever dates it was FETCHED for, which is not the trip on screen: the
+  // owner clicked through on a July 10-17 trip and landed on another week at
+  // another price. A link to the right trip beats a link to a specific
+  // itinerary for the wrong one.
+  /**
+   * WHERE "CHECK LIVE FARES" SENDS YOU. Kayak, confirmed by the owner's own
+   * click on 2026-09-22 — route, both dates, adults and every child's age,
+   * all arriving filled in.
+   *
+   * It replaced a Google Flights `q=` search, which carried the route and
+   * both dates and NOT the party size: no wording was found that Google
+   * parses into a passenger count, so the card had to ask people to set it
+   * themselves. Kayak puts all of it in the path. Both shipped side by side
+   * for one round precisely because kayak.com is refused by this sandbox's
+   * egress proxy (tested) and the Google link had just been confirmed
+   * working — swapping a working link for an untestable one is how the
+   * `#flt=` regression happened. The owner's click is what settled it, and
+   * Google's is gone now that Kayak is the confirmed one.
+   *
+   * There is no conflict with SerpApi. SerpApi is where the app's fare DATA
+   * comes from, server-side and overnight; this is where a traveler is sent
+   * to book. Unrelated choices, and a cached row's own affiliate deep link
+   * has always pointed wherever the provider said.
+   *
+   * Children are carried BY AGE, never as a count. Kayak's segment is
+   * `children-1-4` for a one-year-old and a four-year-old — the ages
+   * themselves, ascending, not how many there are. A first pass guessed
+   * `/2children`, which Kayak ignored: the owner clicked through and got the
+   * two adults with the children silently dropped. That is the failure this
+   * whole link exists to avoid, so the format below is the owner's own
+   * click-tested URL rather than a guess.
+   *
+   * Ages are sent as the app holds them, which is also why this is worth
+   * doing: an airline prices a four-year-old and a lap infant differently,
+   * and a count could not say which is which.
+   *
+   * Kayak's own trip id (`ucs=`) and filter state (`fs=`) are stripped from
+   * that URL. They belong to one browsing session, the same reason Tokyo's
+   * ticket link lost its `_gl=` tracking token — shipping one would pin every
+   * traveler to a stranger's expired search.
+   */
+  const kayakKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
+  const kayakAdults = Math.max(1, list.length - kayakKidAges.length);
+  const kayakLink =
+    `https://www.kayak.com/flights/${p.origin}-${x.destination}/${x.start}/${backDate}`
+    + `/${kayakAdults}adults`
+    + (kayakKidAges.length ? `/children${kayakKidAges.map(a => `-${a}`).join("")}` : "")
+    + `?sort=bestflight_a`;
+
+  // Real search context (dates, party size) baked in, same as the flight
+  // card's render-time link — no cached hotel deepLink today ever carries
+  // checkout/party size (mock and on-property links are name+checkin only;
+  // SerpApi's off-property link reflects its own sample query date, not the
+  // user's), so the render-time link is never worse and is made the primary
+  // one rather than a last-resort fallback.
+  const coDate = new Date(x.start+"T00:00:00Z");
+  coDate.setUTCDate(coDate.getUTCDate() + (p.nights || 1));
+  const checkout = coDate.toISOString().slice(0,10);
+  /* Off property, send people to a SEARCH OF THE AREA, never to the hotel we
+   * priced. The owner's report: Booking.com opened with our quoted hotel at
+   * the top, marked unavailable — every time. That is structural, not bad
+   * luck: our off-property rate is a sample of ONE night the nightly job
+   * bought (usually mid-month), not the traveler's dates, so the hotel it
+   * happened to find has no reason to have a room on theirs. A link that
+   * opens on "sold out" reads as the app being wrong. An area search with
+   * the right dates and party only ever lists rooms that exist.
+   *
+   * Kayak first, the same place the flight card sends people, so one
+   * affiliate account would cover both. Its hotel path is written to the
+   * same shape as the owner-verified flight link (dates, `2adults`,
+   * `children-4-6` by age) but is NOT click-tested yet — kayak.com is
+   * refused by this sandbox. So Booking.com's area search ships beside it
+   * for one round, exactly as Google did when the flight link moved. */
+  const area = r.hotelSearchArea || r.city;
+  const hotelKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
+  const hotelAdults = Math.max(1, list.length - hotelKidAges.length);
+  const kayakHotelUrl = `https://www.kayak.com/hotels/${encodeURIComponent(area.replace(/,\s*/g, ",").replace(/\s+/g, "-")).replace(/%2C/g, ",")}`
+    + `/${x.start}/${checkout}/${hotelAdults}adults`
+    + (hotelKidAges.length ? `/children${hotelKidAges.map(a => `-${a}`).join("")}` : "");
+  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(area)}`
+    + `&checkin=${x.start}&checkout=${checkout}&group_adults=${hotelAdults}&group_children=${hotelKidAges.length}`
+    + hotelKidAges.map(a => `&age=${a}`).join("") + `&no_rooms=${Math.max(1, x.roomCount || 1)}`;
+  /* Carry the party size to Disney, and nothing else.
+   *
+   * Owner-verified by clicking both forms, because none of this is
+   * documented anywhere and the page is a JavaScript app that can't be
+   * fetched from this environment:
+   *
+   *   .../resorts/?numAdults=4#/moderate/   — works, the page opens on 4
+   *   .../resorts/#/moderate/?numAdults=4   — does not, it's a fragment
+   *
+   * So the query has to go BEFORE the fragment. Appending it naively is the
+   * obvious mistake and produces the second, silently-ignored form.
+   *
+   * DATES ARE NOT ADDRESSABLE and there is no parameter left to find:
+   * entering them by hand on Disney's own page leaves the URL unchanged, so
+   * they live in page state, not the address. Settled, not deferred.
+   *
+   * Children are left off deliberately rather than guessed. Sending
+   * numAdults alone for a family would open a page quietly priced for fewer
+   * people than are traveling — a wrong number presented as a real one,
+   * which is worse than sending nothing at all. So a party with children
+   * gets the plain link until someone verifies what Disney calls them. */
+  const withDisneyParty = (url, tp) => {
+    if(tp.ages.length) return url;
+    const [base, frag] = url.split("#");
+    return `${base}${base.includes("?") ? "&" : "?"}numAdults=${tp.adults}${frag ? "#" + frag : ""}`;
+  };
+
+  /* An on-property room is Disney's own product, so it goes to Disney's own
+   * site — a Booking.com search for "Disney's Pop Century" is a worse answer
+   * whatever it does for commission. Walt Disney World publishes a page per
+   * category, so a Moderate search lands on the Moderate list rather than an
+   * index of fifty hotels; every other resort has one page.
+   *
+   * Dates are deliberately NOT appended. Disney's category pages are
+   * hash-routed and no date parameter has been confirmed to work on them, and
+   * a link that lands on an error page is worse than one that lands on the
+   * right page with dates to re-enter. */
+  const onTierName = ON_TIERS[x.hotelTier.actual];
+  const stayLink = stayNow && r.onPropertyHotels
+    ? { href: withDisneyParty((r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url, p),
+        label: `Book ${TIER_LABEL[onTierName].toLowerCase()} rooms on Disney's site` }
+    : { href: kayakHotelUrl, label: `Search hotels near ${r.name} on Kayak`, alt: bkUrl };
+  return { kayakLink, stayLink, area, checkout };
+}
+
 async function renderDetail(){
   const token = ++detailToken;
   const box = $("#detail");
@@ -2452,6 +2639,13 @@ async function renderDetail(){
     ? `<div class="li"><div class="l"><b>Estimated fare <span class="estchip">est.</span></b>
         <small>Typical range ${usd(fp.estimate.low)}–${usd(fp.estimate.high)} per person</small></div>
         <div class="p">${usd(x.perSeatFare)}</div></div>`
+      // A real fare for this day that came in under what we quote: an option,
+      // not the headline (owner, 2026-09-27). Not added to the total.
+      + (fp.cheaperFound ? (()=>{ const c = fp.cheaperFound;
+          return `<div class="li"><div class="l"><b>Cheaper fare we found${c.carrier ? " · " + esc(c.carrier) : ""}</b>
+            <small>${c.stops===0?"Nonstop":c.stops!=null?c.stops+" stop"+(c.stops>1?"s":""):"Round trip"} · ${p.origin}→${x.destination} · a real fare for this day, below what most people pay, so it isn't in the total${
+              c.deepLink ? ` · <a href="${esc(c.deepLink)}" target="_blank" rel="noopener">see it</a>` : ""}</small></div>
+            <div class="p" style="color:var(--ink-2)">${usd(c.price)}</div></div>`; })() : "")
     : fp
     ? `<div class="li"><div class="l"><b>Estimated fare${fp.carrier ? " · " + fp.carrier : ""}</b>
         <small>${fp.stops===0?"Nonstop":fp.stops+" stop"+(fp.stops>1?"s":"")} · ${p.origin}→${r.iata} · round trip, per person</small></div>
@@ -2467,107 +2661,34 @@ async function renderDetail(){
     // No in-app "Check now" live-fare button any more (owner, 2026-09-25):
     // two flight buttons read as the same thing. Kayak is the one path.
     ;
-  /**
-   * Where "Check live fares" sends you when the cache has no real booking
-   * link of its own.
-   *
-   * THE REGRESSION, AND WHY IT WAS INVISIBLE FROM HERE. A previous pass
-   * replaced a `q=` search with Google Flights' `#flt=` structured form, to
-   * carry the return date and passenger count the old link lacked. It
-   * carried nothing: the owner reported the page arriving with neither the
-   * airports nor the dates filled in, which is the empty-search default.
-   *
-   * `#flt=` is a URL FRAGMENT. Fragments are never sent to the server — only
-   * the page's own JavaScript ever sees them — so the format has to be one
-   * Google still parses in the browser, and `#flt=` is an old internal one it
-   * no longer honors. An unrecognized fragment is silently ignored, which is
-   * why this failed by showing a blank form rather than an error. `q=` is a
-   * real query parameter that reaches Google's server, which is exactly why
-   * the older link at least got the airports right.
-   *
-   * So this goes back to `q=`, with the return date the old one was missing.
-   * Google's flight search parses "from X to Y on DATE through DATE" as a
-   * round trip. Passenger count is NOT carried: no query wording was found
-   * that Google reliably parses into a party size, and claiming it in the
-   * card while the page quietly showed one traveler is the same class of
-   * silent-wrong this whole note is about. The card says to set it there.
-   *
-   * NONE OF THIS IS VERIFIABLE FROM THIS SANDBOX — google.com is refused by
-   * the egress proxy (re-tested 2026-09-22, `CONNECT tunnel failed, 403`).
-   * That is why the card prints the route and dates it is asking for: if the
-   * page ever lands somewhere else, the mismatch is visible rather than
-   * silent. It needs a real click to confirm.
-   */
-  const backDate = (() => {
-    const d = new Date(x.start + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + (p.nights || 1));
-    return d.toISOString().slice(0, 10);
-  })();
-  // BUILT HERE, not taken from the cached row — the same call the hotel link
-  // already makes, and for the same reason. A stored deep link encodes
-  // whatever dates it was FETCHED for, which is not the trip on screen: the
-  // owner clicked through on a July 10-17 trip and landed on another week at
-  // another price. A link to the right trip beats a link to a specific
-  // itinerary for the wrong one.
-  /**
-   * WHERE "CHECK LIVE FARES" SENDS YOU. Kayak, confirmed by the owner's own
-   * click on 2026-09-22 — route, both dates, adults and every child's age,
-   * all arriving filled in.
-   *
-   * It replaced a Google Flights `q=` search, which carried the route and
-   * both dates and NOT the party size: no wording was found that Google
-   * parses into a passenger count, so the card had to ask people to set it
-   * themselves. Kayak puts all of it in the path. Both shipped side by side
-   * for one round precisely because kayak.com is refused by this sandbox's
-   * egress proxy (tested) and the Google link had just been confirmed
-   * working — swapping a working link for an untestable one is how the
-   * `#flt=` regression happened. The owner's click is what settled it, and
-   * Google's is gone now that Kayak is the confirmed one.
-   *
-   * There is no conflict with SerpApi. SerpApi is where the app's fare DATA
-   * comes from, server-side and overnight; this is where a traveler is sent
-   * to book. Unrelated choices, and a cached row's own affiliate deep link
-   * has always pointed wherever the provider said.
-   *
-   * Children are carried BY AGE, never as a count. Kayak's segment is
-   * `children-1-4` for a one-year-old and a four-year-old — the ages
-   * themselves, ascending, not how many there are. A first pass guessed
-   * `/2children`, which Kayak ignored: the owner clicked through and got the
-   * two adults with the children silently dropped. That is the failure this
-   * whole link exists to avoid, so the format below is the owner's own
-   * click-tested URL rather than a guess.
-   *
-   * Ages are sent as the app holds them, which is also why this is worth
-   * doing: an airline prices a four-year-old and a lap infant differently,
-   * and a count could not say which is which.
-   *
-   * Kayak's own trip id (`ucs=`) and filter state (`fs=`) are stripped from
-   * that URL. They belong to one browsing session, the same reason Tokyo's
-   * ticket link lost its `_gl=` tracking token — shipping one would pin every
-   * traveler to a stranger's expired search.
-   */
-  const kayakKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
-  const kayakAdults = Math.max(1, list.length - kayakKidAges.length);
-  const kayakLink =
-    `https://www.kayak.com/flights/${p.origin}-${x.destination}/${x.start}/${backDate}`
-    + `/${kayakAdults}adults`
-    + (kayakKidAges.length ? `/children${kayakKidAges.map(a => `-${a}`).join("")}` : "")
-    + `?sort=bestflight_a`;
+  // Booking links: see tripLinks(), shared with the PDF.
 
-  // tickets, grouped by this resort's own age bands — split from the real total
-  const { groups, perGroup } = splitByBand(r, list, x.tickets);
+  // Age groups by this resort's own bands — still what the food lines use.
+  const { groups } = splitByBand(r, list, x.tickets);
   const ORDER = ["adult","junior","child","infant"];
-  const ticketRowsHtml = ORDER.filter(b=>groups[b]).map(b=>{
-    const n = groups[b].length;
-    const who = b === "adult" ? `Adult (${r.bands.adult}+)`
-      : b === "junior" ? `Junior (${r.bands.junior[0]}–${r.bands.junior[1]})`
-      : b === "child" ? `Child (${r.bands.child[0]}–${r.bands.child[1]})`
+
+  // tickets, one line per kind of ticket, straight from the server's own
+  // per-traveler prices (x.ticketLines). The card used to re-split the total
+  // here by age band, which put seniors in with the adults — so a senior
+  // ticket never showed, even where it was priced (owner, 2026-09-27).
+  const ticketRowsHtml = (x.ticketLines || []).map(l=>{
+    const n = l.count;
+    const who = l.group === "adult" ? `Adult (${r.bands.adult}+)`
+      : l.group === "senior" ? `Senior (${r.bands.senior ?? 60}+)`
+      : l.group === "junior" ? `Junior (${r.bands.junior[0]}–${r.bands.junior[1]})`
+      : l.group === "child" ? `Child (${r.bands.child[0]}–${r.bands.child[1]})`
+      : l.group === "pass" ? "Annual pass holder"
       : `Under ${r.bands.freeUnder}`;
-    const detail = b === "infant" ? "No admission charged" : `${p.parkDays}-day ticket × ${n}`;
+    const detail = l.group === "infant" ? "No admission charged"
+      : l.group === "pass" ? "Your pass covers the gate"
+      : l.group === "senior" ? (l.seniorPrice
+          ? `Senior ticket, the child price here · ${p.parkDays}-day ticket × ${n}`
+          : `${esc(r.name)} sells no senior ticket, so adult price · ${p.parkDays}-day ticket × ${n}`)
+      : `${p.parkDays}-day ticket × ${n}`;
     return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
-      <div class="p">${b==="infant"?"Free":usd(perGroup[b])}</div></div>`;
+      <div class="p">${l.group==="infant"?"Free":usd(l.totalUsd)}</div></div>`;
   }).join("")
-    + (x.hopperUsd > 0 ? `<div class="li"><div class="l"><b>Park Hopper</b><small>Flat add-on, already included in the ticket total below</small></div>
+    + (x.hopperUsd > 0 ? `<div class="li"><div class="l"><b>Park Hopper</b><small>Add-on, already included in the ticket lines above</small></div>
       <div class="p">${usd(x.hopperUsd)}</div></div>` : "")
     // No "Party of N" row: the total tile above already carries that number,
     // and printing it twice was the clearest case of the card repeating itself.
@@ -2745,81 +2866,7 @@ async function renderDetail(){
     `}
   </div>`;
 
-  // Real search context (dates, party size) baked in, same as the flight
-  // card's render-time link — no cached hotel deepLink today ever carries
-  // checkout/party size (mock and on-property links are name+checkin only;
-  // SerpApi's off-property link reflects its own sample query date, not the
-  // user's), so the render-time link is never worse and is made the primary
-  // one rather than a last-resort fallback.
-  const coDate = new Date(x.start+"T00:00:00Z");
-  coDate.setUTCDate(coDate.getUTCDate() + (p.nights || 1));
-  const checkout = coDate.toISOString().slice(0,10);
-  /* Off property, send people to a SEARCH OF THE AREA, never to the hotel we
-   * priced. The owner's report: Booking.com opened with our quoted hotel at
-   * the top, marked unavailable — every time. That is structural, not bad
-   * luck: our off-property rate is a sample of ONE night the nightly job
-   * bought (usually mid-month), not the traveler's dates, so the hotel it
-   * happened to find has no reason to have a room on theirs. A link that
-   * opens on "sold out" reads as the app being wrong. An area search with
-   * the right dates and party only ever lists rooms that exist.
-   *
-   * Kayak first, the same place the flight card sends people, so one
-   * affiliate account would cover both. Its hotel path is written to the
-   * same shape as the owner-verified flight link (dates, `2adults`,
-   * `children-4-6` by age) but is NOT click-tested yet — kayak.com is
-   * refused by this sandbox. So Booking.com's area search ships beside it
-   * for one round, exactly as Google did when the flight link moved. */
-  const area = r.hotelSearchArea || r.city;
-  const hotelKidAges = list.filter(a => a < 18).sort((a, b) => a - b);
-  const hotelAdults = Math.max(1, list.length - hotelKidAges.length);
-  const kayakHotelUrl = `https://www.kayak.com/hotels/${encodeURIComponent(area.replace(/,\s*/g, ",").replace(/\s+/g, "-")).replace(/%2C/g, ",")}`
-    + `/${x.start}/${checkout}/${hotelAdults}adults`
-    + (hotelKidAges.length ? `/children${hotelKidAges.map(a => `-${a}`).join("")}` : "");
-  const bkUrl = `https://www.booking.com/searchresults.html?ss=${encodeURIComponent(area)}`
-    + `&checkin=${x.start}&checkout=${checkout}&group_adults=${hotelAdults}&group_children=${hotelKidAges.length}`
-    + hotelKidAges.map(a => `&age=${a}`).join("") + `&no_rooms=${Math.max(1, x.roomCount || 1)}`;
-  /* Carry the party size to Disney, and nothing else.
-   *
-   * Owner-verified by clicking both forms, because none of this is
-   * documented anywhere and the page is a JavaScript app that can't be
-   * fetched from this environment:
-   *
-   *   .../resorts/?numAdults=4#/moderate/   — works, the page opens on 4
-   *   .../resorts/#/moderate/?numAdults=4   — does not, it's a fragment
-   *
-   * So the query has to go BEFORE the fragment. Appending it naively is the
-   * obvious mistake and produces the second, silently-ignored form.
-   *
-   * DATES ARE NOT ADDRESSABLE and there is no parameter left to find:
-   * entering them by hand on Disney's own page leaves the URL unchanged, so
-   * they live in page state, not the address. Settled, not deferred.
-   *
-   * Children are left off deliberately rather than guessed. Sending
-   * numAdults alone for a family would open a page quietly priced for fewer
-   * people than are traveling — a wrong number presented as a real one,
-   * which is worse than sending nothing at all. So a party with children
-   * gets the plain link until someone verifies what Disney calls them. */
-  const withDisneyParty = (url, tp) => {
-    if(tp.ages.length) return url;
-    const [base, frag] = url.split("#");
-    return `${base}${base.includes("?") ? "&" : "?"}numAdults=${tp.adults}${frag ? "#" + frag : ""}`;
-  };
-
-  /* An on-property room is Disney's own product, so it goes to Disney's own
-   * site — a Booking.com search for "Disney's Pop Century" is a worse answer
-   * whatever it does for commission. Walt Disney World publishes a page per
-   * category, so a Moderate search lands on the Moderate list rather than an
-   * index of fifty hotels; every other resort has one page.
-   *
-   * Dates are deliberately NOT appended. Disney's category pages are
-   * hash-routed and no date parameter has been confirmed to work on them, and
-   * a link that lands on an error page is worse than one that lands on the
-   * right page with dates to re-enter. */
-  const onTierName = ON_TIERS[x.hotelTier.actual];
-  const stayLink = stayNow && r.onPropertyHotels
-    ? { href: withDisneyParty((r.onPropertyHotels.byTier && r.onPropertyHotels.byTier[onTierName]) || r.onPropertyHotels.url, p),
-        label: `Book ${TIER_LABEL[onTierName].toLowerCase()} rooms on Disney's site` }
-    : { href: kayakHotelUrl, label: `Search hotels near ${r.name} on Kayak`, alt: bkUrl };
+  const { kayakLink, stayLink, area, checkout } = tripLinks(item, p);
   const sd = new Date(x.start+"T00:00:00Z");
 
   box.innerHTML = `
@@ -2838,8 +2885,6 @@ async function renderDetail(){
           ${item.priceBasis === "cheapest"
             ? "You asked for the cheapest day, so that is what is quoted above — on a day many travelers would not pick."
             : "We quote the real day closest to that average."}
-          The very cheapest days are cheap because few people want them — a dawn flight on a holiday —
-          so many travelers won't experience the cheapest fares.
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
         </p>` : ""}
         ${item.noFlightsYet ? `<p class="spreadnote"><b>${esc(item.noFlightsYet)}.</b> We'll look up real flight prices for this route tonight.</p>` : ""}
@@ -3006,9 +3051,8 @@ async function renderDetail(){
             ${wx.note ? `<div class="wxnote"><span class="wxemoji" aria-hidden="true">${wx.note.emoji}</span>
               <div>${esc(wx.note.text)}</div></div>` : ""}
             <div class="foot"><details class="why"><summary>What these numbers are</summary>
-              <div class="whybody">Long-run averages for a typical ${monthName} — not a forecast, and not last
-                year, because one year is a sample of one. Any single trip can be wetter or hotter than
-                this.</div></details></div>
+              <div class="whybody">Long-run averages for a typical ${monthName} — not a forecast. Any single
+                trip can be wetter or hotter than this.</div></details></div>
           </div>`;
         })()}
 
@@ -3031,7 +3075,7 @@ async function renderDetail(){
           return `<div class="card">
             <h5><i style="background:var(--s6)"></i>Crowds in ${monthName}</h5>
             <p class="sub">How busy ${esc(r.name)} usually is — a forecast of demand, not a head count</p>
-            <div class="kpi">
+            <div class="kpi two">
               <div class="kpitile"><div class="k"><span aria-hidden="true">👥</span>Typical crowds</div>
                 <div class="v">${esc(cr.label)}</div>
                 <div class="s">${cr.basis === "dvcPoints" ? "from real demand data" : "estimated"}</div></div>
@@ -4186,6 +4230,7 @@ function costTableHtml(item){
 function gettingThereHtml(item){
   const pr = item.price, out = [];
   const r = item.resort;
+  const links = tripLinks(item, params);
 
   if(pr.transportMode === "drive" && pr.drivingPick){
     const d = pr.drivingPick;
@@ -4205,10 +4250,20 @@ function gettingThereHtml(item){
       // The owner's own shape: typical, and the range it sits in. p25/median/p75
       // from this route's own history — a real observed spread, not a percentage
       // invented around a midpoint.
-      out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} typically run about
-        <b>${usd(est.med)}</b> a seat, ranging from ${usd(est.low)} at the cheap end to ${usd(est.high)} at the expensive end.
+      // The figure named here is the one the total was built from (f.price,
+      // the leaned estimate) — it used to name the median, so the document
+      // said one number and added up another.
+      out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} usually run
+        ${usd(est.low)} to ${usd(est.high)} a seat. We've priced them at <b>${usd(f.price)}</b>${
+        f.price > est.med + 1 ? ", toward the expensive end on purpose, because an estimate that comes in low is the one that hurts when you book" : ""}.
         That is an <b>estimate</b>, not a quote: it is built from what people actually paid on this route in
         ${esc(est.basisQuarter)}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
+      if(f.cheaperFound){
+        const c = f.cheaperFound;
+        out.push(`<p>We also found a real fare of <b>${usd(c.price)}</b>${c.carrier ? ` on ${esc(c.carrier)}` : ""}${
+          typeof c.stops === "number" ? (c.stops === 0 ? ", nonstop" : `, ${c.stops} stop${c.stops===1?"":"s"}`) : ""} for these dates.
+          It is below what most people pay on this route, so it is not in the total &mdash; worth checking, not counting on.</p>`);
+      }
       if(est.seasonMatched === false){
         out.push(`<p class="pnote">No fare history existed for this time of year on this route, so an off-season
           quarter was used instead. Treat this one as weaker than the others.</p>`);
@@ -4233,6 +4288,10 @@ function gettingThereHtml(item){
     if(pr.flights){
       out.push(`<p>For ${esc(partyPhrase(params))} that is <b>${usd(pr.flights)}</b> in all.</p>`);
     }
+    if(pr.flights && links.kayakLink){
+      out.push(`<p><a href="${esc(links.kayakLink)}">See live fares on Kayak</a> &mdash; opens with your airports,
+        dates and party filled in.</p>`);
+    }
     if(pr.fareBelowFloor){
       out.push(`<p class="pnote">You told us to price this at ${usd(pr.fareBelowFloor.yours)} a seat. We used your
         number, but the cheapest fare we know of on this route is ${usd(pr.fareBelowFloor.cheapestKnown)}.</p>`);
@@ -4253,6 +4312,19 @@ function ticketsHtml(item){
     r.parkList.length ? ` &mdash; ${r.parkList.map(k=>esc(k.name)).join(", ")}` : ""}.
     ${params.parkDays} park day${params.parkDays===1?"":"s"} for ${esc(partyPhrase(params))} comes to
     <b>${usd(pr.tickets)}</b>${perDay ? `, roughly ${usd(perDay)} per person per day` : ""}.</p>`);
+
+  const tl = (pr.ticketLines || []).filter(l => l.group !== "infant");
+  if(tl.length > 1 || tl.some(l => l.group === "senior")){
+    const b = r.bands;
+    const name = l => l.group === "adult" ? `adult (${b.adult}+)`
+      : l.group === "senior" ? `senior (${b.senior ?? 60}+)`
+      : l.group === "junior" ? `junior (${b.junior[0]}&ndash;${b.junior[1]})`
+      : l.group === "child" ? `child (${b.child[0]}&ndash;${b.child[1]})`
+      : "annual pass holder";
+    out.push(`<ul>${tl.map(l => `<li>${l.count} ${name(l)}: <b>${usd(l.totalUsd)}</b>${
+      l.group === "senior" && !l.seniorPrice ? ` &mdash; ${esc(r.name)} sells no senior ticket, so adult price` : ""}${
+      l.group === "senior" && l.seniorPrice ? " &mdash; the senior ticket, same price as a child's" : ""}</li>`).join("")}</ul>`);
+  }
 
   if(pr.hopperUsd){
     out.push(`<p>That includes <b>${usd(pr.hopperUsd)}</b> for Park Hopper, which lets you visit more than one
@@ -4276,11 +4348,13 @@ function ticketsHtml(item){
     }
   }
 
+  out.push(`<p><a href="${esc(r.ticketUrl)}">Buy tickets on ${esc(r.name)}'s official ticket page</a>.</p>`);
+
   // Said plainly, because it is the single weakest number in this document
   // and the one most likely to embarrass somebody at the checkout.
   out.push(`<p class="pnote">Ticket prices are a maintained table, not a live feed &mdash; no Disney park publishes
     a pricing API. Real admission is tiered by date in ways this flat curve only approximates, so check
-    <a href="${esc(r.ticketUrl)}">${esc(r.name)}'s own ticket page</a> before you budget on it.</p>`);
+    the official ticket page linked above before you budget on it.</p>`);
   return out.join("");
 }
 
@@ -4343,6 +4417,12 @@ function hotelHtml(item){
     out.push(`<p class="pnote">Off-property totals here include $${Math.round(r.transport.off)} a day for parking
       at the parks and getting to them.</p>`);
   }
+  const { stayLink, area, checkout } = tripLinks(item, params);
+  out.push(stayLink.alt
+    ? `<p><a href="${esc(stayLink.href)}">${esc(stayLink.label)}</a> &mdash; a search of hotels in ${esc(area)} for
+        ${fmtDate(pr.start)} to ${fmtDate(checkout)}. Or <a href="${esc(stayLink.alt)}">search the same area on Booking.com</a>.</p>`
+    : `<p><a href="${esc(stayLink.href)}">${esc(stayLink.label)}</a> &mdash; Disney's own booking page. Disney's site
+        can't take dates in a link, so enter ${fmtDate(pr.start)} to ${fmtDate(checkout)} once you're there.</p>`);
   out.push(`<p class="pnote">Room rates are estimates from cached and researched prices, not quotes.</p>`);
   return out.join("");
 }

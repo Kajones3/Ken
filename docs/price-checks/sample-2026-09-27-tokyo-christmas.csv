@@ -1,0 +1,13 @@
+trip,checked_on,resort,category,item,detail,from_airport,start_date,end_date,adults,seniors,children_ages,amount,currency,price_is,source,notes
+Tokyo Christmas (expensive),2026-09-27,tdr,flight,Round trip,,RDU,2026-12-17,2026-12-22,,,,2081,USD,per_person,,Per person or whole party? Party size blank on the original sheet
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Tokyo Disneyland Hotel,Superior Alcove,,2026-12-17,2026-12-22,,,,502500,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Tokyo Disneyland Hotel,Family Room,,2026-12-17,2026-12-22,,,,897500,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Disney Ambassador Hotel,Superior Room,,2026-12-17,2026-12-22,,,,371500,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Disney Ambassador Hotel,Character Room,,2026-12-17,2026-12-22,,,,411500,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Disney Ambassador Hotel,Family Room,,2026-12-17,2026-12-22,,,,768000,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Tokyo Disney Celebration Hotel,Discover,,2026-12-17,2026-12-22,,,,250000,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,hotel,Tokyo Disney Celebration Hotel,Wish,,2026-12-17,2026-12-22,,,,250000,JPY,whole_stay,,
+Tokyo Christmas (expensive),2026-09-27,tdr,ticket,1-Day Passport,Adult (18+),,2026-12-17,,,,,10900,JPY,per_person,,You marked this one as an estimate
+Tokyo Christmas (expensive),2026-09-27,tdr,food,Eastside Cafe,Child's set,,,,,,,1400,JPY,per_item,,
+Tokyo Christmas (expensive),2026-09-27,tdr,food,Restaurant Hokusai,Tonkatsu rice,,,,,,,2600,JPY,per_item,,
+Tokyo Christmas (expensive),2026-09-27,tdr,food,Troubadour Tavern,Orange drink,,,,,,,360,JPY,per_item,,
