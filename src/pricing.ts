@@ -194,6 +194,8 @@ export interface FlightRow {
      *  double-counted against a national-average adjustment. */
     holidayPremiumPct?: number;
     holidayLabel?: string;
+    /** The owner's price checks on this route moved the estimate. */
+    checkAdjust?: CheckAdjust;
   };
 }
 /**
@@ -214,6 +216,24 @@ export interface FlightRow {
  */
 export const ESTIMATE_LEAN_KEY = "flight.estimateLean";
 export const DEFAULT_ESTIMATE_LEAN = 100;
+
+/**
+ * What our ESTIMATE alone would quote for this route on this date: the
+ * holiday-week premium applied, then leaned — the same steps priceTrip takes
+ * when it shows an estimate. Undefined when the route has no estimate.
+ *
+ * Price checks use it to record what our model said on the day a real price
+ * was seen, whether or not the board that day happened to show a real cached
+ * fare instead.
+ */
+export function quotedEstimate(book: PriceBook, origin: string, dest: string, start: ISODate): number | undefined {
+  const est = book.flightEstimate?.(origin, dest);
+  if (!est) return undefined;
+  const holiday = holidayFlightPremium(start);
+  const m = holiday ? 1 + (book.setting?.(holiday.settingKey) ?? holiday.defaultPct) / 100 : 1;
+  const lean = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+  return Math.round(leanedFare({ low: est.low * m, med: est.med * m, high: est.high * m }, lean) * 100) / 100;
+}
 
 /**
  * Piecewise-linear through p25 -> median -> p75. Pure.
@@ -237,11 +257,17 @@ export function leanedFare(
   return mid + (hi - mid) * ((t - 50) / 50);
 }
 
+/** Set when the owner's own price checks moved this number (checkFactors.ts).
+ *  `pct` is how far it moved, `n` how many checks it rests on. Said out loud
+ *  on the card rather than bending the number quietly. */
+export interface CheckAdjust { pct: number; n: number }
+
 export interface HotelNight {
   hotelId: string; name: string; descriptor: string;
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
+  checkAdjust?: CheckAdjust;
 }
-export interface TicketRow { adult: number; child: number; junior?: number }
+export interface TicketRow { adult: number; child: number; junior?: number; checkAdjust?: CheckAdjust }
 export interface PromoRow {
   id: string; resortId: string | null; label: string;
   effectKind: PromoEffectKind; effectValue: number;
@@ -345,6 +371,9 @@ export interface TripPrice {
    *  `seniorPrice` is false so the card can say so). Pass holders are their
    *  own group at $0. Lines sum to `tickets`. */
   ticketLines: TicketLine[];
+  /** Which lines the owner's own price checks nudged, and by how much. Null
+   *  when none did. See checkFactors.ts. */
+  checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
   /** Annual passes and DVC point rental — null when the traveler said
    *  nothing about either. See src/memberships.ts for why a pass is reported
    *  as a counterfactual rather than charged to this one trip. */
@@ -1007,6 +1036,17 @@ export function priceTrip(
   if (dvc) dvc.creditUsd = dvcCredit({ points: dvc.points, takeHomePerPointUsd: dvc.takeHomePerPointUsd });
 
   const membership: TripPrice["membership"] = passResult || dvc ? { pass: passResult, dvc } : null;
+
+  // Which lines the owner's price checks moved. A real cached fare is never
+  // moved (only an estimate is), so a flight only reports one when the
+  // estimate is what was shown.
+  const adjFlight = flightPick?.estimate?.checkAdjust;
+  const adjHotel = (hotelPick as HotelNight).checkAdjust;
+  const adjTickets = book.ticket(resort.id, start)?.checkAdjust;
+  const checkAdjust: TripPrice["checkAdjust"] = adjFlight || adjHotel || adjTickets
+    ? { ...(adjFlight ? { flight: adjFlight } : {}), ...(adjHotel ? { hotel: adjHotel } : {}),
+        ...(adjTickets ? { tickets: adjTickets } : {}) }
+    : null;
   // A ticket promo (ticket_pct_off) scales the ticket line after the split
   // was taken, so scale the split the same way — the lines must add up.
   const linesSum = ticketLines.reduce((a, l) => a + l.totalUsd, 0);
@@ -1025,7 +1065,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, checkAdjust,
       membership,
     },
   };

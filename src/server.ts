@@ -6,7 +6,7 @@
  */
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
-import { SETTINGS, loadSettings, setSetting, applySettings } from "./settings.js";
+import { SETTINGS, loadSettings, setSetting, applySettings, settingsMap } from "./settings.js";
 import { reseedForKeys } from "./reseed.js";
 import { csvCell, entriesFromCsv, parseCsv } from "./csv.js";
 import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
@@ -27,6 +27,8 @@ import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js"
 import { setDealEmailsByToken, setDealEmailsForUser, dealEmailsOn } from "./dealEmails.js";
 import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
+import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COLUMNS as CHECK_COLUMNS } from "./priceChecks.js";
+import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch } from "./routeDemand.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
@@ -490,6 +492,37 @@ async function ownerOf(db: Db, req: IncomingMessage) {
   if (!user || user.email.trim().toLowerCase() !== owner) return null;
   if (!user.emailVerified) return null;
   return user;
+}
+
+/**
+ * Everything the price-checks section of /admin shows: every row, what the
+ * checks are doing to estimates right now, and how far off we run by how far
+ * ahead a price was checked.
+ */
+async function checksReport() {
+  const checks = await listChecks(db);
+  const settings = await settingsMap(db);
+  const factors = computeFactors(await countedChecks(db), {
+    priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+    hotelBase: (id) => settings.get(`hotel.${id}.base`)
+      ?? RESORTS.flatMap((r) => r.hotels).find((h) => h.id === id)?.base,
+  });
+  return {
+    checks,
+    applying: (settings.get(CHECKS_USE_KEY) ?? 1) >= 1,
+    priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+    factors: [...factors.entries()].map(([key, f]) => {
+      const [category, ...rest] = key.split("|");
+      return { key, category, label: describeKey(category!, rest.join("|")), ...f,
+               pct: Math.round((f.factor - 1) * 100) };
+    }).sort((a, b) => a.label.localeCompare(b.label)),
+    // Counted rows only, one per hotel stay at its cheapest room — the same
+    // collapse the nudge uses, or a family room at twice the price would read
+    // as "hotels run double".
+    byLead: summarizeByLead(cheapestRoomPerStay(checks.filter((c) => !c.notCounted))),
+    columns: CHECK_COLUMNS,
+    resorts: RESORTS.map((r) => ({ id: r.id, name: r.name, currency: r.currency })),
+  };
 }
 
 const server = createServer(async (req, res) => {
@@ -1289,6 +1322,86 @@ const server = createServer(async (req, res) => {
       if (errors.length) return send(400, { error: "rejected", errors });
       for (const row of inputs) await addCorrection(db, row, owner.email);
       return send(200, { ok: true, added: inputs.length, corrections: await listCorrections(db) }, { cache: "no-store" });
+    }
+
+    /* --------------------------- your price checks ---------------------------
+     * Real prices the owner has seen while pricing whole trips. Every row is
+     * kept; the ones that match something we price nudge that estimate a
+     * little (checkFactors.ts). Nothing here writes a rate, fare or ticket.
+     * -------------------------------------------------------------------- */
+
+    if (url.pathname === "/api/admin/checks" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await checksReport(), { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/checks" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const v = validateCheck(body);
+      if (!v.ok) return send(400, { error: "rejected", message: v.reason });
+      const r = await addChecks(db, [v.value], owner.email);
+      return send(201, { ok: true, ...r, warnings: v.warnings, ...(await checksReport()) }, { cache: "no-store" });
+    }
+
+    const checkMatch = url.pathname.match(/^\/api\/admin\/checks\/([^/]+)$/);
+    if (checkMatch && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const gone = await deleteCheck(db, checkMatch[1]!);
+      return send(gone ? 200 : 404, gone ? { ok: true } : { error: "not found" }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/checks.csv" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      // Your columns first, exactly as uploaded, so this file can be edited
+      // and sent straight back (repeats are skipped). Then what the app
+      // worked out, which an upload ignores.
+      const head = [...CHECK_COLUMNS, "per_unit_usd", "unit", "our_price_that_day_usd",
+        "you_vs_us", "days_ahead", "counted", "id"];
+      const lines = [head.join(",")];
+      for (const c of await listChecks(db)) {
+        lines.push([c.trip, c.checkedOn, c.resortId, c.category, c.item, c.detail, c.fromAirport ?? "",
+          c.startDate ?? "", c.endDate ?? "", c.adults ?? "", c.seniors ?? "", c.childrenAges.join(", "),
+          c.amount, c.currency, c.priceIs, c.source, c.notes,
+          c.unitUsd ?? "", c.unit, c.modelUsd ?? "", c.ratio === null ? "" : `${Math.round((c.ratio - 1) * 100)}%`,
+          c.leadDays ?? "", c.notCounted ? `no: ${c.notCounted}` : "yes", c.id].map(csvCell).join(","));
+      }
+      res.writeHead(200, {
+        "content-type": "text/csv; charset=utf-8",
+        "content-disposition": `attachment; filename="parkfare-price-checks-${todayISO()}.csv"`,
+        "cache-control": "no-store",
+      });
+      return res.end(lines.join("\n") + "\n");
+    }
+
+    if (url.pathname === "/api/admin/checks.csv" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const parsed = parseCsv(String(body.csv ?? ""));
+      if (!parsed.length) return send(400, { error: "unreadable", message: "That file had no rows in it." });
+      const header = parsed[0]!.map((h) => h.trim().toLowerCase().replace(/\s+/g, "_"));
+      const need = ["resort", "category", "amount"];
+      const missing = need.filter((n) => !header.includes(n));
+      if (missing.length) {
+        return send(400, { error: "no_header", message:
+          `That file needs a header row with at least ${need.join(", ")} — missing: ${missing.join(", ")}. The sample in docs/price-checks/ has every column.` });
+      }
+      const rows = parsed.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? "").trim()])));
+      // All or nothing on anything unreadable, the same rule every sheet on
+      // this page follows. Rows that are readable but can't move an estimate
+      // are NOT errors: they are stored, and the list says why they don't count.
+      const errors: string[] = [], warnings: string[] = [];
+      const values = rows.map((row, i) => {
+        const v = validateCheck(row);
+        if (!v.ok) { errors.push(`row ${i + 2}: ${v.reason}`); return null; }
+        for (const w of v.warnings) warnings.push(`row ${i + 2}: ${w}`);
+        return v.value;
+      });
+      if (errors.length) return send(400, { error: "rejected", errors });
+      const r = await addChecks(db, values as NonNullable<typeof values[number]>[], owner.email);
+      return send(200, { ok: true, ...r, warnings, ...(await checksReport()) }, { cache: "no-store" });
     }
 
     /* ------------------------- the attraction list -------------------------
