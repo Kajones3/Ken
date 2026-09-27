@@ -12,17 +12,104 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-26 (end of session)
+## START HERE — state as of 2026-09-27 (end of session)
 
-**Live at https://pricingthemagic.com.** `master` is at `51125ff` (PR #75,
-merged — PRs #73 and #74 merged earlier the same session). **Ask whether
-Render has been redeployed before trusting what the live site shows** — the
-owner clicks that by hand and it has lagged `master` for days at a time.
+**Live at https://pricingthemagic.com.** `master` is at `71c2ca6` (PR #80).
+PRs #77, #78, #79 and #80 all merged 2026-09-26/27. **Ask whether Render has
+been redeployed before trusting what the live site shows.** The owner
+redeploys by hand, and the live site has lagged `master` for days at a time.
+None of #77-#80 is visible until Render redeploys (its build runs the
+migration that adds the new `users` and `owner_attractions` columns).
 
-Run `npm test` and `npm run typecheck` before you believe anything. 566
-tests, typecheck clean, `npm run smoke` clean.
+Run `npm test` and `npm run typecheck` before you believe anything. There are
+588 tests, and typecheck is clean.
 
-### 2026-09-26 session — supersedes anything below that disagrees
+### Pick up here — next session, in rough priority order
+
+**Waiting on the owner's click (Claude can't test these from the sandbox):**
+
+1. **Kayak hotel link.** Open a board row's off-property hotel card, click
+   "Kayak", and check that the area, dates and party came through. If they
+   did, delete the Booking.com fallback (`stayLink.alt` in
+   `prototype.html`). If not, the owner pastes the URL Kayak actually lands
+   on, and Claude fixes the shape. **Don't guess a second format.**
+2. **Upload the attractions sheet.** In /admin, upload
+   `docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv`. Before
+   or after uploading, the owner should:
+   - review the ~15 rows flagged in its `claude_check` column;
+   - merge the Frozen Ever After rows into one row for wdw, dlp and hkdl;
+   - add the missing Hollywood Studios lands.
+   Once a visible row exists, the `attraction-list` reminder leaves the
+   daily email on its own.
+3. **One real unsubscribe link.** The next real deal email should show a
+   "Stop these emails" link. It should open a page on the apex domain, not
+   `www`, and the button on that page should work.
+4. **Shanghai wait times.** Check the next "Parkfare wait times" run log
+   for Shanghai. If the park name is refused, the log prints the name
+   Queue-Times uses; put that name into `QUEUE_TIMES_PARKS`.
+
+**Decisions the owner hasn't made yet. Ask; don't build ahead:**
+
+5. **Screenshot scanner.** Planned only. The plan: Tesseract.js OCR running
+   in the owner's own browser inside /admin, with no AI service. It
+   pre-fills the EXISTING forms (hotel rates, fares, tickets, promos), and
+   nothing saves until the owner confirms each number. The owner asked for
+   this so they "don't have to depend on AI for everything". Build it only
+   once the owner says go.
+6. **Showing people the PDF is worth paying for.** Three options were
+   offered and none has been picked:
+   - clickable booking links inside the PDF;
+   - a "See a sample" PDF built from a real trip;
+   - an "email me this trip" option for Plus, with clickable links.
+7. **Legal blanks** (`docs/legal/README.md`): county, contact email, minimum
+   age (16 or 18), refund policy, how long to keep searched routes, and
+   account deletion. The code also needs a "not affiliated with Disney"
+   footer line on every page and on the PDF, and an affiliate disclosure
+   next to any affiliate link, **before** `/terms` and `/privacy` go live.
+   The drafts name the owner personally, since there is no LLC. The README
+   suggests forming an NC LLC ($125) before taking money.
+8. **Payments (Stripe).** Still stubbed. "Get Plus" emails the owner, who
+   runs `npm run grant-plus -- email <days>`; that email quotes the exact
+   number of days. Prices are fixed and never renew (see below). Stripe
+   Checkout in one-time `payment` mode fits this well, since there is no
+   subscription object. This is the last thing needed before Plus can be
+   sold, and the legal blanks should come first.
+
+**Still open from earlier sessions (details further down this section):**
+
+9. Restaurant examples under Food: the owner pushed back. Ask what they want
+   instead.
+10. The all-character-dining rate is Claude's own 1.5× guess.
+11. Crowd chip vs. the "typical day" picker at Thanksgiving: a known
+    limitation. Ask the owner what they want before fixing it.
+12. Promos for Tokyo, Hong Kong and Shanghai: none yet. Deal emails fire
+    only when the owner adds a promo.
+13. `/api/exact-fare` has been dead code since #75. Either delete it or
+    bring the live check back.
+14. SerpApi "phase 2": top up any unspent searches before the 17th, when
+    the plan renews, by checking the account API. An idea only; not built.
+
+**The owner is testing prices** against AI searches and real plans they
+make. `docs/numbers-to-verify.md` lists every number that is still a guess,
+biggest effect first, and says where each one is changed (/admin or code).
+When the owner sends a real number, update that file in the same commit
+that changes the number.
+
+### 2026-09-26/27 session (PRs #77-#80) — supersedes anything below that disagrees
+
+Which PR did what:
+- #77: hotel link, seniors, "why is X cheaper?" removed, wait-times viewer,
+  SerpApi budget, legal drafts.
+- #78: unsubscribe.
+- #79: Plus prices, and the calendar starting two months out.
+- #80: lands in the attraction sheet, daily-email reminders,
+  numbers-to-verify.
+
+**Making the GitHub repo private (the owner asked):**
+- Nothing in the code depends on the repo being public.
+- Actions minutes then count against the free 2,000 a month. These jobs use
+  roughly 800-1,000.
+- Render may need its GitHub connection re-authorized to see a private repo.
 
 - **Hotel link searches the AREA, not the hotel we priced.** Owner: Booking.com
   opened on our quoted hotel marked unavailable, every time. Structural —
@@ -174,7 +261,7 @@ would take to make these numbers real" footer. Crowd notes use the owner's
 wording. **No resort carries a `dataConfidence` badge any more** (Paris's
 removed — Good to know covers bundling; Hong Kong's removed — bands verified).
 
-### Today in one paragraph
+### 2026-09-25 (PRs #67-#71) in one paragraph
 
 Five pieces of original work (free/Plus regating, real WDW/Disneyland/Paris
 promos, a Shanghai hotel-tier bug, a flight-estimate blending fix, and named
@@ -189,7 +276,7 @@ seven categories. **The three things below are what's actually left open**
 used to live here has been folded into "Decisions already made" below,
 searchable by date if you need the blow-by-blow.
 
-### Three things to pick up next — in the owner's likely order
+### Three things left open on 2026-09-25 — still open (items 9-11 in "Pick up here")
 
 1. **The restaurant-example feature drew direct pushback and hasn't been
    revised yet.** PR #70 added named real restaurants (Sanaa, 'Ohana,
@@ -414,8 +501,9 @@ that every number is either real or labelled a guess.
 | **Hotels — Paris** | Claude draft. |
 | **Food** | Guesses from budget guides, all six resorts. ~40% of a typical total. NOT owner-editable yet. Seven styles as of 2026-09-25 (see "What actually shipped today" above); `character` (all-character-dining) is Claude's own unresearched multiplier on `ts`, weaker confidence than the original four — see "Three things to pick up next," item 2. |
 | **Promos** | **REAL for WDW, Disneyland, Disneyland Paris** (`seedPromos.ts`, found by web search of each resort's own official offers page, 2026-09-25). **Still illustrative-gap for Tokyo, Hong Kong, Shanghai** — nothing official found, see "Next work". Applying one is free for anyone signed in, not Plus. |
-| **Attractions** | Starter set, ~10 rows. |
-| `parkList` lands, `QUEUE_TIMES_PARKS` | Claude drafts. |
+| **Attractions** | **The owner's own list, with lands (2026-09-26)**, reviewed in `docs/attractions/`. It takes effect once uploaded in /admin; until then the ~10-row starter set ships. About 15 rows are flagged `claude_check` as likely factual slips. |
+| `parkList` lands | Claude draft. The owner's attraction sheet now carries real land names to check it against. |
+| `QUEUE_TIMES_PARKS` | Checked against Queue-Times' own names from the live log (2026-09-26), except Shanghai (id 30), whose name is a guess. |
 
 ### Open questions for the owner — do not decide these alone
 
@@ -587,7 +675,7 @@ new decision, not a reason to silently re-add gates this entry removed.
 
 | Piece | State |
 |---|---|
-| Backend (`src/`, `db/`) | **Working.** 566 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
+| Backend (`src/`, `db/`) | **Working.** 588 tests pass, typecheck clean. `npm run smoke` runs the whole pipeline — refresh, pricing, a saved trip, and now a sent (console) alert email — with no accounts or network. |
 | Multiple arrival airports | **Wired, free.** Five of six resorts (all but Hong Kong) have alternates (`altArrivalAirports` in `config.ts` — Tampa/WDW, LAX/Disneyland, Beauvais/DLP, Haneda/Tokyo, Hongqiao/Shanghai). Refresh fetches flights to each; a resort's detail view picks among only its own airports, never a bare code trusted from elsewhere. |
 | "Getting there" — mixed drive/fly, wear-and-tear | **Wired, free.** Five presets on the trip form (`src/gettingThere.ts`'s `resortTransportMode()`): Flying to all, Flying to all with miles (0-100% off the cash fare, no floor), Driving to WDW only, Driving to Disneyland only, Driving domestically (both) — each drive preset flies every other resort in the *same* six-resort comparison, so "drive to WDW, fly to Disneyland" is one board, not two searches. Driving cost includes wear-and-tear at the real IRS standard mileage rate (`irsMileageRate()` in `config.ts`, year-aware — see the decision note), with an "Include wear & tear?" opt-out for gas-only pricing. **The rental-car add-on was removed entirely 2026-09-25** (owner's call — it priced one flat rate identically across all six resorts, so it never changed which resort won). The gas-price alert was removed with all price monitoring on 2026-09-25. |
 | Park Hopper | **Wired, free, and now real where it exists.** An add-on that SCALES WITH TICKET LENGTH at WDW ($70-95) and Disneyland ($70-135) from published figures; a flat guess still at Paris. **Tokyo sells no hopper at all** (owner-confirmed) and neither do Hong Kong or Shanghai, which each have one park — asking for one there costs $0. |
