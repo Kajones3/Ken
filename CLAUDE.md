@@ -180,6 +180,15 @@ that changes the number.
   (`cqi`) so a 7-character total never clips. Checked 360-1300px.
 - Party dropdowns show "None" instead of 0. Two sentences cut on the owner's
   word (the "very cheapest days" line; "one year is a sample of one").
+- **The "Age bands at X" card is gone** (owner: "I don't want this
+  information in a box"). The party by that resort's bands is now one phrase
+  in the detail header line, only when there are children or seniors, e.g.
+  "Shanghai age bands: 2 seniors (child-price ticket), 1 child (3–11)". A
+  child old enough to pay adult there ("1 child aged 11 (adult price here,
+  10+)" at the US parks) is always named, never folded into adults.
+- **The header said "prices in CNY" while every number was in dollars.** It
+  printed the resort's currency code. It now says "prices in US dollars
+  (Shanghai charges in Chinese yuan)".
 
 ### 2026-09-26/27 session (PRs #77-#80) — supersedes anything below that disagrees
 

@@ -1300,6 +1300,8 @@ function foodRateFor(r, style){
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
+/* How the owner says each resort in a sentence. */
+const SHORT_NAME = { wdw:"Walt Disney World", dlr:"Disneyland", dlp:"Disneyland Paris", tdr:"Tokyo", shdr:"Shanghai", hkdl:"Hong Kong" };
 /** Escape for interpolation into markup, including quoted attributes like
  *  title="...". Config text is ours, not user input, but a stray quote or
  *  angle bracket in a hand-maintained note would otherwise break the tag it
@@ -2789,20 +2791,32 @@ async function renderDetail(){
     : "";
 
   // age bands at this resort
-  const bandRows = list.filter((a,i)=>i>=p.adults).map(age=>{
-    const b = bandOf(r, age);
-    return `<div class="li"><div class="l"><b>Age ${age}</b>
-      <small>${b==="infant" ? "Free admission · eats from an adult's plate"
-        : b==="child" ? "Child ticket · child dining rate"
-        : b==="junior" ? "Junior ticket · adult dining rate"
-        : "Adult ticket · adult dining rate"}</small></div>
-      <div class="p">${BANDNAME[b]}</div></div>`;
-  }).join("") + (p.seniors > 0 ? (() => {
-    const cheap = r.bands.senior !== undefined;
-    return `<div class="li"><div class="l"><b>Senior${p.seniors>1?"s":""} (60+) × ${p.seniors}</b>
-      <small>${cheap ? "Child-price ticket · adult dining rate" : `No senior ticket at ${r.name} · adult ticket and dining rate`}</small></div>
-      <div class="p">${cheap ? "child" : "adult"}</div></div>`;
-  })() : "");
+  /* The party by this resort's own age bands, as one phrase in the header
+     line — the owner didn't want it as a card of its own (2026-09-27). Only
+     said when there are children or seniors: "2 adults" is not news. */
+  const bandPhrase = (() => {
+    if(!p.ages.length && !(p.seniors > 0)) return "";
+    const b = r.bands, parts = [];
+    const plain = p.adults - (p.seniors || 0);
+    if(plain > 0) parts.push(`${plain} adult${plain>1?"s":""} (${b.adult}+)`);
+    if(p.seniors > 0) parts.push(`${p.seniors} senior${p.seniors>1?"s":""} (${b.senior !== undefined ? "child-price ticket" : "adult price"})`);
+    const count = band => p.ages.filter(a => bandOf(r, a) === band).length;
+    const nJ = count("junior"), nC = count("child"), nI = count("infant");
+    if(nJ) parts.push(`${nJ} junior${nJ>1?"s":""} (${b.junior[0]}–${b.junior[1]})`);
+    if(nC) parts.push(`${nC} child${nC>1?"ren":""} (${b.child[0]}–${b.child[1]})`);
+    if(nI) parts.push(`${nI} under ${b.freeUnder} (free)`);
+    // A child old enough to pay adult here (10+ at the US parks) is the most
+    // surprising line of all, so it's said, never folded into "adults".
+    const grown = p.ages.filter(a => bandOf(r, a) === "adult");
+    if(grown.length) parts.push(`${grown.length} child${grown.length>1?"ren":""} aged ${[...new Set(grown)].sort((x,y)=>x-y).join(" and ")} (adult price here, ${b.adult}+)`);
+    return `${SHORT_NAME[r.id] || r.name} age bands: ${parts.join(", ")}`;
+  })();
+  // Every price on this page is in US dollars. This used to print the
+  // resort's own currency code ("prices in CNY"), which read as though the
+  // numbers were in yuan.
+  const fx = FX_RATES[r.currency];
+  const currencyPhrase = r.currency === "USD" || !fx ? "prices in US dollars"
+    : `prices in US dollars (${SHORT_NAME[r.id] || r.name} charges in ${/(yen|yuan)$/.test(fx.name) ? fx.name : fx.name + "s"})`;
 
   // ---- your numbers: free to set, use, save and watch ----
   const ovR = ovOf(r.id);
@@ -2874,7 +2888,7 @@ async function renderDetail(){
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
         <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
-           prices in ${r.currency} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
+           ${bandPhrase ? esc(bandPhrase) + " · " : ""}${esc(currencyPhrase)} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
           <b>${item.priceBasis === "cheapest"
             ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, not a typical one.`
@@ -2978,15 +2992,6 @@ async function renderDetail(){
           </div>
         </div>
         ${membershipCard(x, p)}
-        ${bandRows ? `<div class="card">
-          <h5><i style="background:var(--s2)"></i>Age bands at ${r.name}</h5>
-          <p class="sub">${bandLine(r)}</p>
-          ${bandRows}
-          <div class="foot"><details class="why"><summary>Why this differs by resort</summary>
-            <div class="whybody">Every resort draws the lines in a different place. An 11-year-old is an adult in
-              Orlando and a child in Paris; a 15-year-old is a Junior at Tokyo alone. The ages above are priced by
-              each resort's own bands, not one shared rule.</div></details></div>
-        </div>` : ""}
         <div class="card">
           <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights${roomCount > 1 ? ` · ${roomCount} rooms` : ""}</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
