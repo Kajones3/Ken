@@ -59,6 +59,19 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 
 **Decisions the owner hasn't made yet. Ask; don't build ahead:**
 
+5. **Food from real menu prices (proposed 2026-09-27, not built).** The
+   owner wants menu and grocery prices to inform food. What Claude proposed:
+   build each dining style's daily rate from MEALS rather than budget-guide
+   guesses. Tag food price checks by meal type (kids/adult x quick service /
+   table service / character / snack / breakfast). Take the median per
+   resort. Then define a day per style, e.g. "Some QS, some TS" = 1 TS + 1 QS
+   + 1 breakfast + 1 snack. Add tax, plus gratuity on table service.
+   Scraping Disney menus was ruled out: the pages load their content with
+   JavaScript, the terms of use forbid automated access, and it would cover 2
+   of 6 resorts. The route is screenshots through the reader. Groceries:
+   Kroger's free API covers Ralphs near Disneyland only. Waiting on the
+   owner's go and on the day-shape per style.
+
 6. **Showing people the PDF is worth paying for.** Three options were
    offered and none has been picked:
    - clickable booking links inside the PDF (BUILT 2026-09-27, PR #82);
@@ -114,8 +127,10 @@ that changes the number.
   kept but not counted (a currency typo). `checks.use` = 0 switches it off.
   Applied in `loadBook` to: on-property hotel nightly (by hotel id), ticket
   rows (by resort), and flight ESTIMATES (by origin|resort), never to a real
-  cached fare or a vendor's off-property rate. `TripPrice.checkAdjust` feeds
-  a one-line note on the flight, hotel and ticket cards.
+  cached fare or a vendor's off-property rate. `TripPrice.checkAdjust` is
+  still in the API, but travelers are NOT told (the owner removed the card
+  note the same day: "I don't think we need it"). /admin is where the owner
+  sees what checks are doing.
 - **Hotels collapse room types:** one data point per hotel + stay + day
   checked, at the cheapest room (a family room is a different product).
   Hotel ratios are rescaled by base_now / base_then, so editing a base in
