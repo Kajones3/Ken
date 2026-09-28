@@ -33,6 +33,7 @@ and compare line by line: flights, hotel, tickets, food. When a line is off:
 | **Annual pass prices** | Found by web search 2026-09-21, not taken from Disney. | /admin → pass prices | Disney's pass pages (prices change about once a year) |
 | **DVC take-home per point** | $18. The traveler can type their own. | /admin → DVC | What a broker pays you |
 | **Promos: Tokyo, Hong Kong, Shanghai** | None. WDW, Disneyland and Paris have real ones. | code (`seedPromos.ts`); no admin screen yet | Each resort's own offers page, pasted in |
+| **Prices compared with Orlando** (Good to know, and the PDF) | World Bank price surveys for France, Japan, China and Hong Kong as a whole, at today's exchange rate, against Orlando (US government regional prices). Eating out: Tokyo about 30% less, Shanghai 50% less, Hong Kong 40% less, Paris about the same, Disneyland area 5% more. **Groceries are the doubtful part**: this source says Tokyo groceries cost 10% MORE than Orlando; the crowd-sourced site Numbeo says 24% less. | code (`src/priceLevels.ts`) | Your own receipts: a convenience-store or supermarket run, a casual dinner outside the parks |
 | **Lands and attraction list** | Yours now. See `docs/attractions/`. | /admin → attraction list | The resort maps |
 
 ## Real, and not worth re-testing unless something looks off

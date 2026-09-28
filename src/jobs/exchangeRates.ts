@@ -124,8 +124,9 @@ export function renderFile(asOf: string, rates: Record<string, number>): string 
  * Orlando — that depends on local prices, not on the rate. Converting a
  * price is a real use and the only one this table is for. Anything that
  * wants to claim one country is cheaper than another has to come from
- * per-resort price data (this project has some: \`food\` in config.ts), never
- * from here.
+ * per-resort price data (\`food\` in config.ts) or from measured price
+ * levels (priceLevels.ts, which uses this table only to convert its answer),
+ * never from the rate alone.
  */
 
 /** USD -> local. One US dollar buys this many units of the local currency. */
