@@ -120,8 +120,8 @@ jobs:
           # Every market row for the route: ItinID, MktFare, Passengers.
           awk -F',' -v o="${{ inputs.origin }}" -v d="${{ inputs.dest }}" '
             NR==1 { for (i=1;i<=NF;i++) { h=$i; gsub(/"/,"",h); c[h]=i } next }
-            { or=$c["Origin"]; de=$c["Dest"]; gsub(/"/,"",or); gsub(/"/,"",de)
-              if (or==o && de==d) { id=$c["ItinID"]; f=$c["MktFare"]; p=$c["Passengers"]
+            { og=$c["Origin"]; de=$c["Dest"]; gsub(/"/,"",og); gsub(/"/,"",de)
+              if (og==o && de==d) { id=$c["ItinID"]; f=$c["MktFare"]; p=$c["Passengers"]
                 gsub(/"/,"",id); gsub(/"/,"",f); gsub(/"/,"",p); print id","f","p } }
           ' "$csv" > route_markets.csv
           echo "Market rows for the route: $(wc -l < route_markets.csv)"
