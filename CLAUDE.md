@@ -22,7 +22,7 @@ None of #77-#80 is visible until Render redeploys (its build runs the
 migration that adds the new `users` and `owner_attractions` columns).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-615 tests, and typecheck is clean.
+622 tests, and typecheck is clean.
 
 ### Pick up here — next session, in rough priority order
 
@@ -153,6 +153,27 @@ that changes the number.
   proxy issue. The pure parsers are tested against verbatim OCR output.
 
 ### 2026-09-27 session — supersedes anything below that disagrees
+
+- **"Prices compared with Orlando" replaced the Money line** (owner: the
+  exchange-rate sentence was "awful... I want it all compared to Orlando.
+  Everyone is going to be comparing these trips to a Disney World trip").
+  `src/priceLevels.ts`: World Bank ICP 2021 price levels (groceries;
+  restaurants and hotels, shown as "eating out") for France, Japan, China and
+  Hong Kong, carried to 2025 by the World Bank's own household-consumption
+  PPP estimate, divided by TODAY'S exchange rate (so the monthly ECB job keeps
+  it current as the yen moves), and set against Orlando with BEA Regional
+  Price Parities 2024 (goods / other services). Disneyland is LA vs Orlando
+  from BEA alone. Shown in the on-screen Good to know card and the PDF, e.g.
+  "Eating out in Japan costs about 30% less than in Orlando: a dinner that's
+  $50 in Orlando is about $35 (¥5,500) here." Rounded to 5%; within 5% is
+  "about the same". Walt Disney World has no line (it's the yardstick).
+  Supersedes "An exchange rate is a conversion, never a cost-of-living claim"
+  below: the rate is still only a conversion, and the claim now comes from
+  measured price levels. **Numbeo was not used**: city-level and better, but
+  its terms forbid commercial display without a paid licence. **Groceries
+  are the shaky number**: for Tokyo the World Bank says 12% above Orlando and
+  Numbeo 24% below (different baskets). Flagged to the owner; ask before
+  changing. Nagged yearly (`price-levels` in ownerTasks.ts).
 
 - **A real fare wins only at or above the LEANED estimate, not the median**
   (owner: a JetBlue PHL-MCO fare at $129 was "NOT HELPFUL... surface that as
@@ -1651,7 +1672,8 @@ because the honest version does not exist yet:
   own per-resort figures, labelled as being about food prices.
 
 **An exchange rate is a conversion, never a cost-of-living claim**
-(2026-09-21). `src/exchangeData.ts` is generated from ECB reference rates
+(2026-09-21; >> the cost-of-living part is now done properly from measured
+price levels, `src/priceLevels.ts`, 2026-09-27 — see the top of this file). `src/exchangeData.ts` is generated from ECB reference rates
 via Frankfurter — free, no key, a thin wrapper over the ECB's own daily
 publication rather than an aggregator with opinions. It is SCHEDULED monthly
 where the climate generator is manual, and the difference is the data:

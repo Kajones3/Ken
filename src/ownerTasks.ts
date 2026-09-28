@@ -28,6 +28,7 @@
  */
 import { NEWS_FEEDS, RESORTS, mileageRateStatus, CROWDS_REVIEWED, CROWDS_ARE_PLACEHOLDER, CLIMATE_SOURCE } from "./config.js";
 import { EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
+import { PRICE_LEVELS_REVIEWED } from "./priceLevels.js";
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { requireVerifiedEmail } from "./verifyEmail.js";
@@ -147,6 +148,14 @@ const REVIEWABLE: ReviewableData[] = [
     why: "CROWDS in config.ts is how the app answers 'when should we go' — the free half of the product's promise. Walt Disney World and Disneyland are read off DVC points charts, which Disney republishes every year, and the four international resorts are judgment with no chart behind them at all. A band that is a year out is a confident recommendation to travel in a week that is no longer quiet. Bump CROWDS_REVIEWED in src/config.ts when you have looked.",
     side: "free",
     reviewedOn: CROWDS_REVIEWED,
+    everyDays: YEARLY,
+  },
+  {
+    id: "price-levels",
+    title: "Refresh the 'prices compared with Orlando' figures",
+    why: "src/priceLevels.ts holds the World Bank's price levels for France, Japan, China and Hong Kong and BEA's regional prices for Orlando and Los Angeles. The World Bank republishes its estimates each year and BEA each December; the exchange rate already updates itself monthly. Look the numbers up again and bump PRICE_LEVELS_REVIEWED.",
+    side: "free",
+    reviewedOn: PRICE_LEVELS_REVIEWED,
     everyDays: YEARLY,
   },
 ];

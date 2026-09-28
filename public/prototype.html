@@ -1272,6 +1272,7 @@ const FX_SYMBOL = { USD:"$", EUR:"€", JPY:"¥", CNY:"¥", HKD:"HK$" };
 let FX_RATES = { USD:{perUsd:1,name:"US dollar"} };  // replaced by /api/meta
 let FX_AS_OF = "";
 let FX_PLACEHOLDER = true;
+let PRICE_LEVELS = { source:"", byResort:{} };     // replaced by /api/meta
 
 const ON_TIERS  = ["value","moderate","deluxe"];
 const OFF_TIERS = ["budget","mid","upscale"];
@@ -1330,7 +1331,7 @@ function local(r, usdAmount){
   // as priceTrip never returning NaN.
   const rate = (FX_RATES[r.currency] || {}).perUsd || 1;
   const v = usdAmount*rate;
-  if(r.currency==="JPY") return sym+Math.round(v/100)*100;
+  if(r.currency==="JPY") return sym+(Math.round(v/100)*100).toLocaleString("en-US");
   if(r.currency==="CNY"||r.currency==="HKD") return sym+Math.round(v).toLocaleString("en-US");
   if(r.currency==="EUR") return sym+Math.round(v).toLocaleString("en-US");
   return "$"+Math.round(v).toLocaleString("en-US");
@@ -2916,7 +2917,8 @@ async function renderDetail(){
       <p style="margin:6px 0 0">${esc(r.dataConfidence.note)}</p>
       <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ${r.name} tickets →</a></div></div>` : ""}
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
-      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}</ul>
+      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}${
+        priceLevelHtml(r, false) ? `<li>${priceLevelHtml(r, false)}</li>` : ""}</ul>
       <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}
     <div class="dbody">
       <div class="cols">
@@ -4524,21 +4526,39 @@ function landsHtml(item){
 
 /* ----------------------------- good to know ----------------------------- */
 
+// The city a country-wide figure understates. Hong Kong is its own figure.
+const PRICE_LEVEL_CITY = { dlp:"Paris", tdr:"Tokyo", shdr:"Shanghai" };
+
+/**
+ * "Prices compared with Orlando" — the owner's ask: every resort against a
+ * Walt Disney World trip, since that is what everyone compares with. The
+ * numbers and their rounding come from the server (priceLevels.ts); the
+ * exchange rate only turns the answer into local money. Empty for Walt
+ * Disney World, which is the yardstick. `withSource` adds the source line,
+ * which the PDF needs and the screen keeps shorter.
+ */
+function priceLevelHtml(r, withSource){
+  const l = (PRICE_LEVELS.byResort || {})[r.id];
+  if(!l) return "";
+  const here = Math.round(50 * l.eatingOut);
+  const inLocal = r.currency !== "USD" && FX_RATES[r.currency] ? ` (${esc(local(r, here))})` : "";
+  const city = PRICE_LEVEL_CITY[r.id];
+  return `<b>Prices compared with Orlando.</b> Eating out in ${esc(l.place)} costs ${esc(l.eatingOutPhrase)} in Orlando:
+    a dinner that's $50 in Orlando is about $${here}${inLocal} here. Groceries cost ${esc(l.groceriesPhrase)} in Orlando.
+    That's the world outside the gates; food inside the parks is Disney's own price, and the food line covers it.${
+    city ? ` These figures are for ${esc(l.place)} as a whole, and ${city} itself usually runs a little higher.` : ""}${
+    withSource ? ` Source: ${esc(PRICE_LEVELS.source)}${
+      FX_AS_OF && inLocal ? `; exchange rate of ${esc(FX_AS_OF)}` : ""}.` : ""}${
+    FX_PLACEHOLDER && inLocal ? " <b>The exchange rate is a placeholder and has not been refreshed yet.</b>" : ""}`;
+}
+
 function goodToKnowHtml(item){
   const r = item.resort, out = [];
 
   for(const note of (r.goodToKnow || [])) out.push(`<li>${esc(note)}</li>`);
 
-  // Currency. A conversion, stated as a conversion — see exchangeData.ts for
-  // why this must never be dressed up as "your dollar goes further".
-  const fx = FX_RATES[r.currency];
-  if(fx && r.currency !== "USD" && fx.perUsd){
-    const example = 50;
-    out.push(`<li><b>Money.</b> One US dollar is about ${fx.perUsd} ${esc(fx.name)}${
-      FX_AS_OF ? ` (European Central Bank reference rate, ${esc(FX_AS_OF)})` : ""}. A $${example} dinner is roughly
-      ${esc(local(r, example))}. That converts a price; it does not tell you whether prices here are high or low.${
-      FX_PLACEHOLDER ? " <b>This rate is a placeholder and has not been refreshed yet.</b>" : ""}</li>`);
-  }
+  const money = priceLevelHtml(r, true);
+  if(money) out.push(`<li>${money}</li>`);
 
   // Age bands, but only when there is actually a child in the party — a rule
   // about 11-year-olds is noise to two adults traveling alone.
@@ -4864,6 +4884,9 @@ async function boot(){
     FX_RATES = meta.exchange.rates || FX_RATES;
     FX_AS_OF = meta.exchange.asOf || "";
     FX_PLACEHOLDER = !!meta.exchange.placeholder;
+  }
+  if(meta.priceLevels){
+    PRICE_LEVELS = meta.priceLevels;
   }
   PASS_PROGRAMS = meta.passPrograms || [];
   HOLIDAY_WINDOWS = meta.holidayWindows || {};

@@ -15,6 +15,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
+import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
@@ -609,6 +610,16 @@ const server = createServer(async (req, res) => {
       // to carry its own hardcoded copy of these five numbers, which nothing
       // could ever update.
       exchange: { rates: EXCHANGE_RATES, asOf: EXCHANGE_AS_OF, placeholder: EXCHANGE_IS_PLACEHOLDER },
+      // Each resort's everyday prices against Orlando (priceLevels.ts). The
+      // phrases are built here so the rounding rule has one home.
+      priceLevels: {
+        source: PRICE_LEVELS_SOURCE,
+        byResort: Object.fromEntries(Object.entries(priceLevelsVsOrlando()).map(([id, l]) => [id, {
+          ...l,
+          eatingOutPhrase: vsOrlandoPhrase(l.eatingOut),
+          groceriesPhrase: vsOrlandoPhrase(l.groceries),
+        }])),
+      },
       // Annual pass programs, and the default DVC take-home figure the
       // points box starts on. Sent from here so the catalog has one home
       // and the browser never carries its own copy of a price.
