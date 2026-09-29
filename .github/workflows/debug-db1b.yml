@@ -59,22 +59,14 @@ jobs:
           # answer it: five arbitrary rows are five different itineraries.
           # You need BOTH rows of ONE itinerary, side by side.
           #
-          # BTS's own documentation describes DB1BMarket as holding a
-          # "prorated market fare" for a "directional" market, which reads
-          # like one leg. The parser says the opposite: the same MktFare
-          # appears on both rows and is the WHOLE round trip. On 2026-09-22
-          # that was nearly "fixed" on the strength of the documentation
-          # alone, which would have doubled every domestic price in the app.
-          # What stopped it was the fare trend: across 74 routes, real
-          # round-trip fares sat at 0.58x-1.24x the baseline, and a one-leg
-          # baseline would have put every one of them near 2x.
-          #
-          # This prints the proof from the file itself so nobody has to
-          # re-run that argument. Read it like this:
-          #   two rows carrying the SAME fare, and that fare is a plausible
-          #   whole round trip                 -> the parser is right, leave it.
-          #   two rows, each ~half that sum    -> MktFare is one leg, and
-          #                                       the baseline needs doubling.
+          # SETTLED 2026-09-28: MktFare is ONE LEG, and btsBaseline.ts now
+          # doubles it. This section alone could not have settled it: equal
+          # rows are what a round trip split in half by miles ALSO looks like
+          # (the two directions are nearly the same distance). The ticket
+          # join further down is what settled it. For the record, the old
+          # argument "the fare trend sat near 1.0, so it can't be one leg"
+          # was measuring against the CHEAPEST Google itinerary, which is
+          # itself about half a typical fare.
           # ------------------------------------------------------------------
           echo ""
           echo "=== MktFare basis: every row of one round-trip itinerary ==="
@@ -91,8 +83,8 @@ jobs:
             echo ""
             echo "Sum of MktFare across that itinerary's markets:"
             awk -F',' -v id="$itin" '$1==id { s+=$35 } END { printf "  $%.2f\n", s }' "$csv"
-            echo "Both rows the same, and that IS the round trip -> parser is right."
-            echo "Each row about half the sum -> MktFare is one leg, and the baseline is halved."
+            echo "Rows split roughly by miles flown, adding up to the ticket: MktFare is one leg."
+            echo "(Settled 2026-09-28 by the ticket join below; the loader doubles it.)"
           fi
 
           # ------------------------------------------------------------------

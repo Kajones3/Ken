@@ -450,8 +450,10 @@ export async function addChecks(db: Db, values: CheckValue[], by = ""):
       `insert into price_checks
          (id, trip, checked_on, resort_id, category, item, detail, from_airport, start_date, end_date,
           adults, seniors, children_ages, amount, currency, price_is, source, notes,
-          unit_usd, unit, match_key, model_usd, model_base_usd, app_usd, not_counted, created_by, dedupe)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+          unit_usd, unit, match_key, model_usd, model_base_usd, app_usd, not_counted, created_by, dedupe,
+          model_round_trip)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,
+               true)
        on conflict (dedupe) do nothing
        returning id`,
       [randomUUID(), v.trip, v.checkedOn, v.resortId, v.category, v.item, v.detail, v.fromAirport,

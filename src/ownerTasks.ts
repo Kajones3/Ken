@@ -29,6 +29,7 @@
 import { NEWS_FEEDS, RESORTS, mileageRateStatus, CROWDS_REVIEWED, CROWDS_ARE_PLACEHOLDER, CLIMATE_SOURCE } from "./config.js";
 import { EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { PRICE_LEVELS_REVIEWED } from "./priceLevels.js";
+import { nationalBtsAverage, basisVerdict, trendAgeDays, BTS_PUBLISHED_AVG_USD, TREND_STALE_DAYS } from "./fareHealth.js";
 import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { requireVerifiedEmail } from "./verifyEmail.js";
@@ -271,6 +272,37 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
         + ' Look up "IRS standard mileage rates" at irs.gov, then add a row to IRS_MILEAGE_RATES in src/config.ts.',
       side: "free",
       blocking: mileage.pricingBroken,
+    });
+  }
+
+  // --- 2a. Flight estimates on the wrong basis, or not being corrected ----
+  // Both went unnoticed for weeks in 2026-09 (fareHealth.ts has the story),
+  // so they come to the owner instead of waiting in a report.
+  const nat = await nationalBtsAverage(db);
+  if (nat && basisVerdict(nat.avg) !== "ok") {
+    const low = basisVerdict(nat.avg) === "low";
+    checked({
+      id: "fare-basis",
+      title: low
+        ? "Domestic flight estimates look like HALF a round trip"
+        : "Domestic flight estimates look DOUBLE what they should be",
+      why: `Our average government fare is $${Math.round(nat.avg)}, and the government's own published average is about $${BTS_PUBLISHED_AVG_USD}. `
+        + (low
+          ? "That is the size of error you get when each fare is read as one leg instead of a round trip, and it halves every domestic flight on the board. Check that the database update has run (redeploy on Render, or run the 'Parkfare migrate' workflow)."
+          : "That is the size of error you get when the round-trip doubling happens twice. Tell Claude before trusting any domestic flight price.")
+        + " Details: src/jobs/btsBaseline.ts.",
+      side: "both",
+      blocking: true,
+    });
+  }
+  const trendAge = await trendAgeDays(db, new Date(today + "T12:00:00Z"));
+  if (trendAge !== null && trendAge > TREND_STALE_DAYS) {
+    checked({
+      id: "fare-trend-stale",
+      title: `The nightly flight-price correction hasn't updated in ${trendAge} days`,
+      why: "Each night the refresh compares the real fares we bought against the government's figures for the same routes and quarter, and moves every estimate by the difference. When it can't find three routes with both, the refresh log says \"trend skipped (too few routes)\" and estimates keep using the last correction. The usual cause is a quarter with no government data loaded: run the 'Parkfare BTS baseline' workflow for that quarter.",
+      side: "both",
+      blocking: false,
     });
   }
 
