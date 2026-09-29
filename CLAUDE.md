@@ -22,7 +22,37 @@ None of #77-#80 is visible until Render redeploys (its build runs the
 migration that adds the new `users` and `owner_attractions` columns).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-622 tests, and typecheck is clean.
+630 tests, and typecheck is clean.
+
+### 2026-09-29 — site locked, and the domestic flight bug is PROVEN
+
+- **The whole site is behind a password with a "coming soon" page**
+  (owner: "I don't want someone to stumble on it now"). `src/siteGate.ts`,
+  checked first in `server.ts`. On only when `SITE_PASSWORD` is set in
+  Render; delete the variable to launch. Open while locked: `/unsubscribe`
+  (deal-email recipients must always be able to stop them), `/health`,
+  `/robots.txt` (disallows everything). The API answers 401 `site_locked`.
+  The cookie is a hash of the password, so changing it signs every tester
+  out. 10 wrong guesses per IP = 15-minute wait. After the password, the
+  visitor lands where they were going (reset and verify links still work).
+- **Domestic flight estimates are HALF a round trip. Proven 2026-09-28, NOT
+  fixed yet — waiting on the owner's go** (owner: BNA->MCO showed $220
+  against Kayak's cheapest $372). The "Parkfare debug DB1B" workflow now
+  joins the DB1B Ticket file (ItinFare = whole ticket) to the Market file
+  (MktFare): for BNA->MCO 2025 Q2, 2,047 of 2,085 round-trip tickets have
+  MktFare = ItinFare / 2 and none equal it. MktFare is ItinYield x
+  MktMilesFlown, a per-leg share (a Southwest ORD-MCO-MDW trip splits
+  $283.62 / $279.38 in proportion to 1,005 / 990 miles). This SUPERSEDES
+  "Do not re-open this" in the 2026-09-22 lean note below: the x0.945
+  trend that "disproved" halving was measured against the CHEAPEST Google
+  itinerary (before the 2026-09-15 switch to the median), which is roughly
+  half a typical fare. The coverage check had already printed "SUSPICIOUS —
+  $204 vs $390" on 2026-09-22. Also: the fare trend has been "skipped (too
+  few routes)" every night since 2026-09-09, because only 2024 Q4 and 2025
+  Q2 BTS are loaded. Proposed fix, awaiting the owner: double the domestic
+  baseline; load Q1 and Q3; put the 2x sanity check and a stale-trend check
+  in the daily email; rescale flight price checks saved against the half
+  model; and the owner decides the lean (100 was partly compensating).
 
 ### Pick up here — next session, in rough priority order
 
