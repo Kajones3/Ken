@@ -41,8 +41,12 @@ import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPlus, signUp, signIn, AuthError,
-  setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, type SessionUser,
+  setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, secureCookies, type SessionUser,
 } from "./auth.js";
+import {
+  sitePassword, isUnlocked, gateOpenPath, gateCookieHeader, passwordMatches, safeNext,
+  comingSoonHtml, gateLocked, recordGateFailure, clearGateFailures,
+} from "./siteGate.js";
 import { pickEmailSender } from "./email/pick.js";
 import {
   scopesFor, clientIp as callerIp, checkSigninAllowed, recordSigninFailure, clearSigninFailures,
@@ -545,6 +549,40 @@ const server = createServer(async (req, res) => {
     res.end(html);
   };
   try {
+    // The site-wide password (siteGate.ts). Checked before anything else so
+    // no page, file or API answer gets out to a visitor without it. Off
+    // entirely when SITE_PASSWORD is unset.
+    const gatePw = sitePassword();
+    if (gatePw) {
+      if (url.pathname === "/robots.txt") {
+        res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
+        return res.end("User-agent: *\nDisallow: /\n");
+      }
+      if (url.pathname === "/site-unlock" && req.method === "POST") {
+        const form = await readForm(req);
+        const ip = clientIp(req);
+        if (gateLocked(ip)) {
+          return sendHtml(429, comingSoonHtml({ next: form.next, error: "Too many tries. Wait 15 minutes and try again." }));
+        }
+        if (!passwordMatches(String(form.password ?? ""), gatePw)) {
+          recordGateFailure(ip);
+          return sendHtml(401, comingSoonHtml({ next: form.next, error: "That isn't the password." }));
+        }
+        clearGateFailures(ip);
+        res.writeHead(303, {
+          location: safeNext(form.next),
+          "set-cookie": gateCookieHeader(gatePw, secureCookies()),
+          "cache-control": "no-store",
+        });
+        return res.end();
+      }
+      if (!gateOpenPath(url.pathname) && !isUnlocked(req.headers.cookie, gatePw)) {
+        res.setHeader("x-robots-tag", "noindex, nofollow");
+        if (url.pathname.startsWith("/api/")) return send(401, { error: "site_locked" });
+        return sendHtml(200, comingSoonHtml({ next: url.pathname + url.search }));
+      }
+      res.setHeader("x-robots-tag", "noindex, nofollow");
+    }
     if (url.pathname === "/" || url.pathname === "/prototype.html") {
       const file = await readFile(new URL("prototype.html", PUBLIC_DIR));
       res.writeHead(200, { "content-type": MIME[".html"] });

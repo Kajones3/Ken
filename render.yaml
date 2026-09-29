@@ -36,6 +36,11 @@ services:
       # working yet. See src/verifyEmail.ts.
       - key: REQUIRE_VERIFIED_EMAIL
         sync: false
+      # The whole site behind one password with a "coming soon" page in
+      # front (src/siteGate.ts). Set it to lock the site; delete it to launch.
+      # Changing it signs every tester out.
+      - key: SITE_PASSWORD
+        sync: false
       - key: MAX_REQUESTS_PER_MINUTE
         value: "240"
       - key: ALERT_MAX_PER_USER_PER_DAY
