@@ -4506,9 +4506,13 @@ function weatherHtml(item){
 function landsHtml(item){
   const r = item.resort, out = [];
   if(r.parkList && r.parkList.length){
+    // The server hands over the code's list corrected by the owner's
+    // attraction sheet (a hidden land is gone, a new one is in its park).
     const parts = r.parkList.map(k =>
-      `<li><b>${esc(k.name)}</b> &mdash; ${k.lands.map(l=>esc(l)).join(", ")}</li>`).join("");
-    out.push(`<p>${esc(r.name)} features these lands:</p><ul>${parts}</ul>`);
+      `<li><b>${esc(k.name)}</b>${k.lands.length ? ` &mdash; ${k.lands.map(l=>esc(l)).join(", ")}` : ""}</li>`).join("");
+    const also = (r.otherLands || []).length
+      ? `<li><b>Also</b> &mdash; ${r.otherLands.map(l=>esc(l)).join(", ")}</li>` : "";
+    out.push(`<p>${esc(r.name)} features these lands:</p><ul>${parts}${also}</ul>`);
   }
   const mine = (allAttractions || []).filter(a => (a.resortIds || []).includes(r.id));
   if(mine.length){

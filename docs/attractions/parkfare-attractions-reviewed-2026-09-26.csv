@@ -28,7 +28,7 @@ animal-kingdom-discovery-island,Discovery Island,wdw,wdw: Discovery Island,Walt 
 animal-kingdom-pandora,Pandora – The World of Avatar,wdw,wdw: Pandora – The World of Avatar,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
 animal-kingdom-africa,Africa,wdw,wdw: Africa,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
 animal-kingdom-asia,Asia,wdw,wdw: Asia,Walt Disney World — Animal Kingdom land.,,,expanded-2026,
-animal-kingdom-dino,DinoLand U.S.A.,wdw,wdw: DinoLand U.S.A.,Walt Disney World — Animal Kingdom area.,,,expanded-2026,Worth checking: DinoLand U.S.A. is being replaced by Tropical Americas.
+animal-kingdom-dino,DinoLand U.S.A.,wdw,wdw: DinoLand U.S.A.,Walt Disney World — Animal Kingdom area.,yes,,expanded-2026,Hidden 2026-09-29 (owner): DinoLand U.S.A. is being replaced by Tropical Americas. Hiding it takes it off the Animal Kingdom lands list too.
 disneyland-main-street,"Main Street, U.S.A.",dlr,"dlr: Main Street, U.S.A.",Disneyland Park land.,,,expanded-2026,
 disneyland-adventureland,Adventureland,dlr,dlr: Adventureland,Disneyland Park land.,,,expanded-2026,
 disneyland-new-orleans,New Orleans Square,dlr,dlr: New Orleans Square,Disneyland Park land.,,,expanded-2026,
@@ -72,7 +72,7 @@ hkdl-fantasyland,Fantasyland,hkdl,hkdl: Fantasyland,Hong Kong Disneyland land.,,
 hkdl-adventureland,Adventureland,hkdl,hkdl: Adventureland,Hong Kong Disneyland land.,,,expanded-2026,
 hkdl-tomorrowland,Tomorrowland,hkdl,hkdl: Tomorrowland,Hong Kong Disneyland land.,,,expanded-2026,
 hkdl-toy-story-land,Toy Story Land,hkdl,hkdl: Toy Story Land,Hong Kong Disneyland land.,yes,,expanded-2026,"Hidden: a repeat of ""hollywood-studios-toy-story"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
-hkdl-grizzly-gulch,Grizzly Gulch,hkdl,hkdl: Grizzly Gulch,World-exclusive themed land at Hong Kong Disneyland.,yes,yes,expanded-2026,"Hidden: a repeat of ""hkdl-big-grizzly"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
+hkdl-grizzly-gulch,Grizzly Gulch,hkdl,hkdl: Grizzly Gulch,World-exclusive themed land at Hong Kong Disneyland.,,yes,expanded-2026,"Un-hidden 2026-09-29: it had been hidden as a repeat of the Big Grizzly Mountain ride, but it is the land that ride sits in."
 hkdl-mystic-point,Mystic Point,hkdl,hkdl: Mystic Point,World-exclusive themed land at Hong Kong Disneyland.,,yes,expanded-2026,
 hkdl-world-of-frozen,World of Frozen,hkdl dlp,hkdl: World of Frozen; dlp: World of Frozen,Frozen-themed land at Hong Kong Disneyland and Disneyland Paris.,yes,,expanded-2026,"Hidden: a repeat of ""daw-world-of-frozen"", which already lists every resort this row does. Un-hide it if you'd rather keep this one."
 shdr-mickey-avenue,Mickey Avenue,shdr,shdr: Mickey Avenue,Shanghai Disneyland land.,,,expanded-2026,

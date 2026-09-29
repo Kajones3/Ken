@@ -65,6 +65,8 @@ export interface OwnerAttractionRow {
   note: string;
   kind: AttractionKind;
   lands: Record<string, string>;
+  /** For a land: the park it is in, per resort. See AttractionDef.parks. */
+  parks: Record<string, string>;
   hidden: boolean;
   /** False when this row cannot be applied — every resort it names has
    *  stopped existing, say. Listed anyway, marked, for the same reason an
@@ -85,11 +87,13 @@ export interface AttractionInput {
   kind?: unknown;
   /** "wdw: Tomorrowland; shdr: Tomorrowland", or an object of the same. */
   lands?: unknown;
+  /** For a land, which park: "wdw: Disney's Animal Kingdom". Same shape. */
+  parks?: unknown;
 }
 
 export interface AttractionValue {
   id: string; name: string; resortIds: string[]; note: string; hidden: boolean;
-  kind: AttractionKind; lands: Record<string, string>;
+  kind: AttractionKind; lands: Record<string, string>; parks: Record<string, string>;
 }
 
 export type ValidatedAttraction =
@@ -102,7 +106,7 @@ export type ValidatedAttraction =
  * Split on ";" between resorts and on the FIRST colon inside each part, since
  * land names carry colons of their own ("Star Wars: Galaxy's Edge").
  */
-export function parseLands(raw: unknown): { ok: true; lands: Record<string, string> } | { ok: false; reason: string } {
+export function parseLands(raw: unknown, what: "land" | "park" = "land"): { ok: true; lands: Record<string, string> } | { ok: false; reason: string } {
   const lands: Record<string, string> = {};
   if (raw && typeof raw === "object" && !Array.isArray(raw)) {
     for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
@@ -117,9 +121,10 @@ export function parseLands(raw: unknown): { ok: true; lands: Record<string, stri
     const piece = part.trim();
     if (!piece) continue;
     const m = /^([a-z]+)\s*:\s*(.+)$/i.exec(piece);
-    if (!m) return { ok: false, reason: `"${piece}" should look like "wdw: Tomorrowland" — a resort id, a colon, then the land.` };
+    const example = what === "park" ? "wdw: Disney's Animal Kingdom" : "wdw: Tomorrowland";
+    if (!m) return { ok: false, reason: `"${piece}" should look like "${example}" — a resort id, a colon, then the ${what}.` };
     const resort = m[1]!.toLowerCase();
-    if (lands[resort]) return { ok: false, reason: `the land column names ${resort} twice.` };
+    if (lands[resort]) return { ok: false, reason: `the ${what} column names ${resort} twice.` };
     lands[resort] = m[2]!.trim();
   }
   return { ok: true, lands };
@@ -190,10 +195,14 @@ export function validateAttraction(input: AttractionInput): ValidatedAttraction 
     const lands = parsed.ok
       ? Object.fromEntries(Object.entries(parsed.lands).filter(([r]) => resortIds.includes(r)))
       : {};
+    const parsedParks = parseLands(input.parks, "park");
+    const parks = parsedParks.ok
+      ? Object.fromEntries(Object.entries(parsedParks.lands).filter(([r]) => resortIds.includes(r)))
+      : {};
     const k = parseKind(input.kind);
     return { ok: true, value: {
       id, name, resortIds, note: String(input.note ?? "").trim().slice(0, MAX_NOTE), hidden: true,
-      kind: k === "land" || k === "attraction" ? k : inferKind(name, lands), lands,
+      kind: k === "land" || k === "attraction" ? k : inferKind(name, lands), lands, parks,
     } };
   }
 
@@ -226,7 +235,22 @@ export function validateAttraction(input: AttractionInput): ValidatedAttraction 
   if (k === "bad") return { ok: false, reason: `"${name}": the type should be "land" or "attraction" (or blank to work it out from the name).` };
   const kind = k ?? inferKind(name, parsed.lands);
 
-  return { ok: true, value: { id, name, resortIds, note, hidden: false, kind, lands: parsed.lands } };
+  // The park column only means something on a land: a ride's place is its
+  // land, and the lands list is the only thing that reads a park.
+  const parsedParks = parseLands(input.parks, "park");
+  if (!parsedParks.ok) return { ok: false, reason: `"${name}": ${parsedParks.reason}` };
+  const parks = parsedParks.lands;
+  if (Object.keys(parks).length && kind !== "land") {
+    return { ok: false, reason: `"${name}" gives a park, but it is a ride or show, not a land. Only lands need a park — leave that column blank, or set the type to land.` };
+  }
+  for (const [resort, park] of Object.entries(parks)) {
+    if (!resortIds.includes(resort)) {
+      return { ok: false, reason: `"${name}" gives a park for ${resort}, but ${resort} isn't in its resorts column. Add ${resort} to the resorts, or take it out of the park column.` };
+    }
+    if (park.length > MAX_LAND) return { ok: false, reason: `"${name}": the ${resort} park name is ${park.length} characters; keep it under ${MAX_LAND}.` };
+  }
+
+  return { ok: true, value: { id, name, resortIds, note, hidden: false, kind, lands: parsed.lands, parks } };
 }
 
 const SHIPPED_IDS = new Set(ATTRACTIONS.map((a) => a.id));
@@ -235,13 +259,15 @@ const SHIPPED_IDS = new Set(ATTRACTIONS.map((a) => a.id));
 export async function listOwnerAttractions(db: Db): Promise<OwnerAttractionRow[]> {
   const { rows } = await db.query<{
     id: string; name: string; resort_ids: string; note: string; hidden: boolean; updated_at: Date | null;
-    kind: string | null; lands: string | null;
-  }>(`select id, name, resort_ids, note, hidden, updated_at, kind, lands from owner_attractions order by id`);
+    kind: string | null; lands: string | null; parks: string | null;
+  }>(`select id, name, resort_ids, note, hidden, updated_at, kind, lands, parks from owner_attractions order by id`);
 
   return rows.map((r) => {
     const resortIds = parseResortIds(r.resort_ids);
     let lands: Record<string, string> = {};
     try { const j = JSON.parse(r.lands || "{}"); if (j && typeof j === "object") lands = j; } catch { /* unreadable: no lands */ }
+    let parks: Record<string, string> = {};
+    try { const j = JSON.parse(r.parks || "{}"); if (j && typeof j === "object") parks = j; } catch { /* unreadable: no parks */ }
     const kind: AttractionKind = r.kind === "land" ? "land" : "attraction";
     const usable = resortIds.filter((x) => KNOWN_RESORTS.has(x));
     let applied = true;
@@ -256,7 +282,7 @@ export async function listOwnerAttractions(db: Db): Promise<OwnerAttractionRow[]
       }
     }
     return {
-      id: r.id, name: r.name, resortIds, note: r.note, kind, lands, hidden: r.hidden,
+      id: r.id, name: r.name, resortIds, note: r.note, kind, lands, parks, hidden: r.hidden,
       applied, problem, overridesShipped: SHIPPED_IDS.has(r.id), updatedAt: r.updated_at,
     };
   });
@@ -284,6 +310,8 @@ export function overlay(shipped: readonly AttractionDef[], owner: readonly Owner
     if (o.kind === "land") def.kind = "land";
     const lands = Object.fromEntries(Object.entries(o.lands ?? {}).filter(([r]) => usable.includes(r)));
     if (Object.keys(lands).length) def.lands = lands;
+    const parks = Object.fromEntries(Object.entries(o.parks ?? {}).filter(([r]) => usable.includes(r)));
+    if (o.kind === "land" && Object.keys(parks).length) def.parks = parks;
     if (SHIPPED_IDS.has(o.id)) replacing.set(o.id, def);
     else added.push(def);
   }
@@ -331,6 +359,102 @@ export function markSameNames(list: readonly AttractionDef[]): AttractionDef[] {
   });
 }
 
+const normName = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+/** "Animal Kingdom" should find "Disney's Animal Kingdom": equal once
+ *  punctuation is gone, or one is the other with words in front. */
+function sameParkName(a: string, b: string): boolean {
+  const x = normName(a), y = normName(b);
+  if (!x || !y) return false;
+  return x === y || x.endsWith(` ${y}`) || y.endsWith(` ${x}`);
+}
+
+/** Which of a resort's parks a typed park name means, or null. */
+export function findPark(parkList: readonly { name: string }[], typed: string): string | null {
+  return parkList.find((p) => sameParkName(p.name, typed))?.name ?? null;
+}
+
+export interface ParkListView {
+  parkList: { name: string; lands: string[] }[];
+  /** Lands on the owner's list that no park claims — a new land with no
+   *  park written, or a park we do not recognise. Shown, not dropped: the
+   *  owner added it on purpose, and a typo in the park column should not
+   *  make a land silently disappear. */
+  otherLands: string[];
+}
+
+/**
+ * A resort's lands, park by park: the code's `parkList`, corrected by the
+ * owner's attraction sheet (2026-09-29, owner: "How does the admin panel
+ * allow me to fix this without AI" — it listed DinoLand U.S.A., which is
+ * being replaced, and the list lived only in code).
+ *
+ *  - A HIDDEN land row takes that land off this resort — unless another,
+ *    visible land row of the same name still covers the resort. The reviewed
+ *    sheet hides exact repeats (Toy Story Land listed once per resort and once
+ *    for all three), and hiding a repeat must not remove the land itself.
+ *  - A VISIBLE land row that the code doesn't list is ADDED, under the park
+ *    its `park` column names, or in `otherLands` if it names none we know.
+ *  - A visible land row with a park, for a land the code puts in a
+ *    DIFFERENT park, moves it. Without a park it stays where it is.
+ *  - To RENAME a land, hide the old row and add a new one. A renamed row
+ *    carries no memory of its old name, so there is nothing to match the
+ *    code's spelling against — saying so on the admin page beats guessing.
+ *
+ * Pure: the caller loads the rows. An empty sheet returns the code's list.
+ */
+export function effectiveParkList(
+  resort: { id: string; parkList: readonly { name: string; lands: readonly string[] }[] },
+  effective: readonly AttractionDef[],
+  owner: readonly OwnerAttractionRow[],
+): ParkListView {
+  const parkList = resort.parkList.map((p) => ({ name: p.name, lands: [...p.lands] }));
+  const otherLands: string[] = [];
+  const visible = effective.filter((a) => a.kind === "land" && a.resortIds.includes(resort.id));
+  const visibleNames = new Set(visible.map((a) => normName(a.name)));
+  const remove = (n: string) => {
+    for (const p of parkList) p.lands = p.lands.filter((l) => normName(l) !== n);
+    for (let i = otherLands.length - 1; i >= 0; i--) if (normName(otherLands[i]!) === n) otherLands.splice(i, 1);
+  };
+
+  for (const o of owner) {
+    if (!o.hidden || o.kind !== "land" || !o.resortIds.includes(resort.id)) continue;
+    const n = normName(o.name);
+    if (n && !visibleNames.has(n)) remove(n);
+  }
+
+  for (const a of visible) {
+    const n = normName(a.name);
+    if (!n) continue;
+    const typedPark = a.parks?.[resort.id];
+    const park = typedPark ? findPark(parkList, typedPark) : null;
+    const current = parkList.find((p) => p.lands.some((l) => normName(l) === n));
+    if (current) {
+      if (!park || park === current.name) continue;
+      remove(n);
+    } else if (otherLands.some((l) => normName(l) === n)) {
+      continue;
+    }
+    if (park) parkList.find((p) => p.name === park)!.lands.push(a.name);
+    else otherLands.push(a.name);
+  }
+  return { parkList, otherLands };
+}
+
+/** Every resort's land list, for /api/meta. Falls back to the code's lists
+ *  on any database trouble, the same rule as `effectiveAttractions`. */
+export async function effectiveParkLists<R extends { id: string; parkList: { name: string; lands: string[] }[] }>(
+  db: Db, resorts: readonly R[],
+): Promise<(R & { otherLands: string[] })[]> {
+  try {
+    const owner = await listOwnerAttractions(db);
+    const effective = overlay(ATTRACTIONS, owner);
+    return resorts.map((r) => ({ ...r, ...effectiveParkList(r, effective, owner) }));
+  } catch {
+    return resorts.map((r) => ({ ...r, otherLands: [] }));
+  }
+}
+
 /** The effective list, loaded. Falls back to the shipped list on any database
  *  trouble: the picker going empty because a query failed would be a far
  *  worse outcome than showing yesterday's list. */
@@ -348,7 +472,7 @@ function matchesShipped(v: AttractionValue): boolean {
   const ship = ATTRACTIONS.find((a) => a.id === v.id);
   if (!ship) return false;
   // Shipped rows carry no lands, so any land named is a real change.
-  if (Object.keys(v.lands).length || v.kind !== (ship.kind ?? "attraction")) return false;
+  if (Object.keys(v.lands).length || Object.keys(v.parks).length || v.kind !== (ship.kind ?? "attraction")) return false;
   return ship.name === v.name
     && (ship.note ?? "") === v.note
     && ship.resortIds.length === v.resortIds.length
@@ -375,15 +499,15 @@ export async function saveAttraction(
     return { ok: true, id: v.value.id };
   }
 
-  const { id, name, resortIds, note, hidden, kind, lands } = v.value;
+  const { id, name, resortIds, note, hidden, kind, lands, parks } = v.value;
   await db.query(
-    `insert into owner_attractions (id, name, resort_ids, note, hidden, kind, lands, updated_by, updated_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8, now())
+    `insert into owner_attractions (id, name, resort_ids, note, hidden, kind, lands, parks, updated_by, updated_at)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
      on conflict (id) do update set
        name = excluded.name, resort_ids = excluded.resort_ids, note = excluded.note,
        hidden = excluded.hidden, kind = excluded.kind, lands = excluded.lands,
-       updated_by = excluded.updated_by, updated_at = now()`,
-    [id, name, resortIds.join(","), note, hidden, kind, JSON.stringify(lands), by],
+       parks = excluded.parks, updated_by = excluded.updated_by, updated_at = now()`,
+    [id, name, resortIds.join(","), note, hidden, kind, JSON.stringify(lands), JSON.stringify(parks), by],
   );
   return { ok: true, id };
 }
@@ -419,6 +543,7 @@ export function sheetRows(effective: readonly AttractionDef[], owner: readonly O
     type: a.kind ?? "attraction",
     resorts: a.resortIds.join(" "),
     land: landsCell(a.lands, a.resortIds),
+    park: landsCell(a.parks, a.resortIds),
     note: a.note ?? "",
     hidden: "",
     only_here: isOnlyAt(a) ? "yes" : "",
@@ -434,6 +559,7 @@ export function sheetRows(effective: readonly AttractionDef[], owner: readonly O
     rows.push({
       id: o.id, name, type: o.kind, resorts: resortIds.join(" "),
       land: landsCell(o.lands, resortIds),
+      park: landsCell(o.parks, resortIds),
       note: o.note || ship?.note || "", hidden: "yes", only_here: "", source: "hidden by you",
     });
   }
@@ -465,6 +591,15 @@ export function sheetWarnings(rows: { row: number; value: AttractionValue; onlyH
         break;
       }
       byKey.set(key, row);
+    }
+  }
+  for (const { row, value } of rows) {
+    if (value.hidden) continue;
+    for (const [r, park] of Object.entries(value.parks)) {
+      const resort = RESORTS.find((x) => x.id === r);
+      if (resort && !findPark(resort.parkList, park)) {
+        out.push(`row ${row}: "${value.name}" names the park "${park}", which isn't one of ${resort.name}'s (${resort.parkList.map((p) => p.name).join(", ")}). It will show under "also" until the park column matches one of those.`);
+      }
     }
   }
   for (const { row, value, onlyHere } of rows) {
