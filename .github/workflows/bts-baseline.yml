@@ -38,6 +38,12 @@ jobs:
           unzip -o db1b.zip -d db1b_out
           csv=$(ls db1b_out/*.csv | head -1)
           echo "BTS_CSV_PATH=$csv" >> "$GITHUB_ENV"
+      # Render lags master, so bring the database up to date first: this job
+      # writes the round_trip column, and the update also doubles any older
+      # one-leg rows before new round-trip rows sit beside them.
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npm run bts-baseline
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
