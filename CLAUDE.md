@@ -12,19 +12,60 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-27 (end of session)
+## START HERE — state as of 2026-09-29 (end of session)
 
-**Live at https://pricingthemagic.com.** `master` is at `71c2ca6` (PR #80).
-PRs #77, #78, #79 and #80 all merged 2026-09-26/27. **Ask whether Render has
-been redeployed before trusting what the live site shows.** The owner
-redeploys by hand, and the live site has lagged `master` for days at a time.
-None of #77-#80 is visible until Render redeploys (its build runs the
-migration that adds the new `users` and `owner_attractions` columns).
+**Live at https://pricingthemagic.com, behind a password.** The owner set
+`SITE_PASSWORD` in Render on 2026-09-29, so visitors see "Coming soon".
+`master` is at the merge of PR #89 (plus this notes commit). Every PR through
+#89 is merged.
+
+**Ask whether Render has been redeployed before trusting the live site.** The
+owner redeploys by hand, and the live site has lagged `master` for days at a
+time. The DATABASE is ahead of Render: the migrate workflow ran on
+2026-09-29, so domestic flight baselines are already doubled in production
+(see below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 636 tests, and typecheck is clean.
 
-### 2026-09-29 — site locked, and the domestic flight bug is PROVEN
+### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
+
+| PR | What |
+|---|---|
+| #82 | "None" in the party dropdowns, two sentences cut, card tiles fixed at 560-940px, cheaper real fares shown as an option (not in the total), senior ticket lines everywhere, booking links in the PDF |
+| #83 | Price checks (`price_checks`, /admin), and the screenshot reader (Tesseract, in the owner's browser) |
+| #84 | The "Raised 16% using 1 real price" note removed from the travel site |
+| #85 | "Age bands" card turned into one phrase in the detail header; "prices in CNY" fixed to "prices in US dollars" |
+| #86 | The 100-mile rule is enforced in pricing (LAX -> Disneyland had been priced as a flight) |
+| #87 | "Prices compared with Orlando" (World Bank + BEA) replaced the Money line |
+| #88 | The whole site is behind a password with a coming-soon page |
+| #89 | Domestic flight estimates were half a round trip; fixed, and two new daily-email warnings added |
+
+### Pick up here — first thing next session
+
+1. **Has Render been redeployed since #89?** If not, ask the owner to do it
+   BEFORE saving any flight price checks. Code older than #89 inserts checks
+   without `model_round_trip`, and the next migrate would then double those
+   checks' `model_usd` a second time.
+2. **Did the fare trend recompute?** It had been "skipped" nightly since
+   2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
+   2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
+   Check the refresh log ("trend skipped" or not), or the daily email: the
+   `fare-trend-stale` line disappears when it works. If it still skips, find
+   out why before anything else. The stale x0.945 trend is still applied to
+   every domestic estimate until then.
+3. **The lean decision (the owner's call).** `flight.estimateLean` is 100 (the
+   top of each route's range). 100 was partly compensating for the halving
+   bug. Claude recommends 50. BNA->MCO at 100 reads about $440, against
+   Kayak's cheapest $372 and Delta's $445. Owner changes it in /admin.
+4. **Re-check domestic routes against real fares.** Every domestic estimate
+   roughly doubled on 2026-09-29. The owner's Nashville test is the first
+   one to repeat.
+5. **Groceries in "Prices compared with Orlando" are shaky** (World Bank says
+   Tokyo +12% vs Orlando, Numbeo -24%). Ask the owner whether to keep that
+   half of the line, drop it, or buy a Numbeo licence.
+
+### 2026-09-29 — site locked, and the domestic flight bug fixed (details)
 
 - **The whole site is behind a password with a "coming soon" page**
   (owner: "I don't want someone to stumble on it now"). `src/siteGate.ts`,
@@ -56,15 +97,20 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
     fires when our national BTS average is under $260 or over $620 against
     BTS's ~$390. `fare-trend-stale` fires when `fare_trend` is more than 7
     days old. The coverage report uses the same check.
-  - BTS quarters to load: 2024 Q3 and 2025 Q1 were missing (only 2024 Q4 and
-    2025 Q2 loaded), which is why the refresh logged "trend skipped (too few
-    routes)" every night since 2026-09-09. DB1B ended after 2025 Q2.
+  - BTS quarters: 2024 Q3 and 2025 Q1 had never been loaded (only 2024 Q4
+    and 2025 Q2), which is why the refresh logged "trend skipped (too few
+    routes)" every night since 2026-09-09. LOADED 2026-09-29, after the
+    migrate workflow ran on production. Coverage report straight after: our
+    national average $405.71 against BTS's ~$390, 465 routes, "Plausible"
+    (it read $204.52, "SUSPICIOUS", on 2026-09-22). DB1B ended after
+    2025 Q2, so these four quarters are all there is. The BTS workflow now
+    runs `npm run migrate` before loading.
   - **Not changed: the lean** (`flight.estimateLean`, 100 = the top of each
     route's range). 100 was partly compensating for the halving; Claude
     recommended 50 (the middle). The owner's call, in /admin.
   - The stale x0.945 trend still applies until a new one computes.
 
-### Pick up here — next session, in rough priority order
+### Still waiting — carried over from 2026-09-27, in rough priority order
 
 **Waiting on the owner's click (Claude can't test these from the sandbox):**
 
