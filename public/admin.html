@@ -334,6 +334,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       Zootopia) and <i>attraction</i> for a ride or show. The land column says where it sits at each resort, as
       <code>wdw: Liberty Square; dlr: New Orleans Square</code>. <b>Hide</b> keeps a row but takes it off the
       traveler's list, so you choose what's shown without losing anything you typed.</p>
+    <p><b>Each resort's list of lands follows this list too.</b> Hide a land and it comes off that resort's
+      &ldquo;features these lands&rdquo; list. Add a land and give it a <i>park</i>, as
+      <code>wdw: Animal Kingdom</code>, and it appears under that park; with no park it shows under
+      &ldquo;Also&rdquo;. To rename a land, hide the old row and add a new one.</p>
 
     <div class="arow arowhead">
       <span>Id</span><span>Name</span><span>Resorts that have it</span><span></span>
@@ -352,6 +356,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       </select>
       <input type="text" id="aLands" maxlength="400" aria-label="Land at each resort"
         placeholder="Land (optional) — wdw: Tomorrowland; shdr: Tomorrowland">
+    </div>
+    <div class="arow arow-2">
+      <input type="text" id="aParks" maxlength="400" aria-label="Park, for a land"
+        placeholder="Park (lands only, optional) — wdw: Animal Kingdom">
     </div>
     <div class="arow arow-2">
       <input type="text" id="aNote" maxlength="400" aria-label="Note"
@@ -688,6 +696,7 @@ function renderAttractions(d){
     const names = (a.resortIds || [])
       .map(id => (ATTR_RESORTS.find(r => r.id === id) || {}).name || id).join(", ");
     const lands = Object.entries(a.lands || {}).map(([r, l]) => `${r}: ${l}`).join(" · ");
+    const parks = Object.entries(a.parks || {}).map(([r, p]) => `${r}: ${p}`).join(" · ");
     return `<div class="aitem">
       <span class="an">${esc(a.name)}</span>
       <span class="ar">${esc(names)}</span>
@@ -702,6 +711,7 @@ function renderAttractions(d){
         ${mine ? `<button class="btn" data-revert="${esc(a.id)}">${shipped ? "Revert" : "Delete"}</button>` : ""}
       </span>
       ${lands ? `<span class="anote">In ${esc(lands)}</span>` : ""}
+      ${parks ? `<span class="anote">Park: ${esc(parks)}</span>` : ""}
       ${a.note ? `<span class="anote">${esc(a.note)}</span>` : ""}
     </div>`;
   });
@@ -762,6 +772,7 @@ $("#aAdd").addEventListener("click", async () => {
     note: $("#aNote").value.trim(),
     kind: $("#aKind").value,
     lands: $("#aLands").value.trim(),
+    parks: $("#aParks").value.trim(),
   };
   const r = await fetch("/api/admin/attractions", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
@@ -775,7 +786,7 @@ $("#aAdd").addEventListener("click", async () => {
   }
   attrSay(said, true, `Saved "${body.name || body.id}". It is live now.`);
   $("#aId").value = ""; $("#aName").value = ""; $("#aResorts").value = ""; $("#aNote").value = "";
-  $("#aKind").value = ""; $("#aLands").value = "";
+  $("#aKind").value = ""; $("#aLands").value = ""; $("#aParks").value = "";
   renderAttractions(d);
 });
 
@@ -792,6 +803,7 @@ document.addEventListener("click", async e => {
     $("#aNote").value = a.note || "";
     $("#aKind").value = a.kind === "land" ? "land" : "attraction";
     $("#aLands").value = Object.entries(a.lands || {}).map(([r, l]) => `${r}: ${l}`).join("; ");
+    $("#aParks").value = Object.entries(a.parks || {}).map(([r, p]) => `${r}: ${p}`).join("; ");
     $("#aId").scrollIntoView({ behavior: "smooth", block: "center" });
     $("#aName").focus();
     attrSay($("#aSaid"), true, "Loaded into the form above. Change it and press Save.");
@@ -810,7 +822,7 @@ document.addEventListener("click", async e => {
     const r = await fetch("/api/admin/attractions", {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({ id, hidden: hiding, name: a.name, resortIds: a.resortIds, note: a.note,
-        kind: a.kind, lands: a.lands }),
+        kind: a.kind, lands: a.lands, parks: a.parks }),
     });
     const d = await r.json().catch(() => ({}));
     if(r.ok) renderAttractions(d);

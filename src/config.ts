@@ -53,8 +53,14 @@ export interface Resort {
    *  HAND-MAINTAINED, and the shipped rows are a CLAUDE DRAFT the owner
    *  corrects — same standing as the four international hotel baselines and
    *  the visa notes. Lands are renamed and rebuilt (Shanghai gained Zootopia,
-   *  Hong Kong gained World of Frozen, Walt Disney World is rebuilding
-   *  DinoLand), so treat an unchecked row as plausible, not confirmed. */
+   *  Hong Kong gained World of Frozen, DinoLand U.S.A. is being replaced by
+   *  Tropical Americas), so treat an unchecked row as plausible, not confirmed.
+   *
+   *  THE OWNER'S ATTRACTION SHEET OVERRIDES THIS (2026-09-29), so a land can
+   *  be fixed in /admin without a code change: a hidden land row takes that
+   *  land off, a new land row adds one under the park its `park` column
+   *  names. See `effectiveParkList()` in ownerAttractions.ts. This list is
+   *  the skeleton that works with an empty sheet. */
   parkList: { name: string; lands: string[] }[];
   region: "dom" | "atl" | "pac";
   note: string;
@@ -190,7 +196,7 @@ export const RESORTS: Resort[] = [
       { name: "Magic Kingdom", lands: ["Main Street, U.S.A.", "Adventureland", "Frontierland", "Liberty Square", "Fantasyland", "Tomorrowland"] },
       { name: "EPCOT", lands: ["World Celebration", "World Discovery", "World Nature", "World Showcase"] },
       { name: "Disney's Hollywood Studios", lands: ["Hollywood Boulevard", "Echo Lake", "Grand Avenue", "Star Wars: Galaxy's Edge", "Toy Story Land", "Animation Courtyard", "Sunset Boulevard"] },
-      { name: "Disney's Animal Kingdom", lands: ["Discovery Island", "Pandora \u2013 The World of Avatar", "Africa", "Asia", "DinoLand U.S.A."] },
+      { name: "Disney's Animal Kingdom", lands: ["Discovery Island", "Pandora \u2013 The World of Avatar", "Africa", "Asia"] },
     ],
     goodToKnow: [
       "Park Hopper (same-day access to more than one park) and Genie+/Lightning Lane (paid line-skipping) are both sold separately from base admission and aren't priced here.",
@@ -653,6 +659,10 @@ export interface AttractionDef {
    *  Per resort because clones move — Haunted Mansion is in Liberty Square
    *  at Walt Disney World and New Orleans Square at Disneyland. */
   lands?: Record<string, string>;
+  /** For a LAND: which park it is in, per resort ({ wdw: "Disney's Animal
+   *  Kingdom" }). Only the owner's sheet sets it, and only a new land needs
+   *  it — one already in the resort's `parkList` keeps its place. */
+  parks?: Record<string, string>;
   /** Resorts where ANOTHER row of the same kind carries the same name —
    *  worked out when the owner's list is overlaid, never typed. An owner's
    *  sheet lists "Adventureland" once per resort, and each of those rows

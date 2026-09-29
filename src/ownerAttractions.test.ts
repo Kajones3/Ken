@@ -4,7 +4,10 @@ import { memoryDb } from "./db.js";
 import {
   validateAttraction, overlay, effectiveAttractions, saveAttraction,
   deleteOwnerAttraction, listOwnerAttractions, sheetRows,
+  effectiveParkList, effectiveParkLists, sheetWarnings, type OwnerAttractionRow,
 } from "./ownerAttractions.js";
+import { readFileSync } from "node:fs";
+import { parseCsv } from "./csv.js";
 import { ATTRACTIONS, RESORTS, isOnlyAt } from "./config.js";
 
 /** memoryDb applies db/schema.sql itself. */
@@ -170,7 +173,7 @@ test("a hidden attraction still appears in the sheet, flagged", async () => {
 test("overlay is pure and does not mutate the shipped list", () => {
   const snapshot = JSON.parse(JSON.stringify(ATTRACTIONS));
   overlay(ATTRACTIONS, [{
-    id: "zootopia", name: "Changed", resortIds: ["wdw"], note: "", hidden: false, kind: "attraction", lands: {},
+    id: "zootopia", name: "Changed", resortIds: ["wdw"], note: "", hidden: false, kind: "attraction", lands: {}, parks: {},
     applied: true, overridesShipped: true, updatedAt: null,
   }]);
   assert.deepEqual(ATTRACTIONS, snapshot);
@@ -324,4 +327,117 @@ test("a land listed once per resort never claims to be the only one", async () =
   assert.deepEqual(eff.find((a) => a.id === "wdw-adv")!.alsoAt, ["dlp"]);
   assert.equal(isOnlyAt(eff.find((a) => a.id === "cars")!), true, "a name nobody else uses is still only here");
   await db.close();
+});
+
+/* --------------------- lands per park (2026-09-29) --------------------- */
+
+const WDW = RESORTS.find((r) => r.id === "wdw")!;
+const HKDL = RESORTS.find((r) => r.id === "hkdl")!;
+const AK = "Disney's Animal Kingdom";
+const landsIn = (v: { parkList: { name: string; lands: string[] }[] }, park: string) =>
+  v.parkList.find((p) => p.name === park)!.lands;
+
+/** An owner row as listOwnerAttractions would hand it back. */
+function row(input: Parameters<typeof validateAttraction>[0]): OwnerAttractionRow {
+  const v = validateAttraction(input);
+  if (!v.ok) throw new Error(v.reason);
+  return { ...v.value, applied: true, overridesShipped: false, updatedAt: null };
+}
+const viewWith = (resort: typeof WDW, rows: OwnerAttractionRow[]) =>
+  effectiveParkList(resort, overlay(ATTRACTIONS, rows), rows);
+
+test("DinoLand U.S.A. is no longer listed at Animal Kingdom (owner, 2026-09-29)", () => {
+  assert.ok(!landsIn(WDW, AK).some((l) => /dinoland/i.test(l)));
+  assert.deepEqual(viewWith(WDW, []).parkList, WDW.parkList, "an empty sheet shows the code's list exactly");
+  assert.deepEqual(viewWith(WDW, []).otherLands, []);
+});
+
+test("hiding a land row takes that land off the resort's list", () => {
+  const v = viewWith(WDW, [row({ id: "ak-asia", name: "Asia", resortIds: "wdw", kind: "land", hidden: true })]);
+  assert.ok(!landsIn(v, AK).includes("Asia"));
+  assert.ok(landsIn(v, AK).includes("Africa"), "and nothing else");
+  // Only at that resort: Hong Kong's lists are untouched.
+  assert.deepEqual(viewWith(HKDL, [row({ id: "ak-asia", name: "Asia", resortIds: "wdw", kind: "land", hidden: true })]).parkList, HKDL.parkList);
+});
+
+test("hiding a REPEAT does not remove a land another visible row still covers", () => {
+  const rows = [
+    row({ id: "hs-toy-story", name: "Toy Story Land", resortIds: "wdw shdr hkdl", kind: "land" }),
+    row({ id: "hkdl-toy-story-land", name: "Toy Story Land", resortIds: "hkdl", kind: "land", hidden: true }),
+  ];
+  assert.ok(landsIn(viewWith(HKDL, rows), "Hong Kong Disneyland").includes("Toy Story Land"));
+});
+
+test("a new land goes under the park its park column names, spelled loosely", () => {
+  const v = viewWith(WDW, [row({
+    id: "ak-tropical-americas", name: "Tropical Americas", resortIds: "wdw", kind: "land", parks: "wdw: Animal Kingdom",
+  })]);
+  assert.ok(landsIn(v, AK).includes("Tropical Americas"), `"Animal Kingdom" finds "${AK}"`);
+  assert.deepEqual(v.otherLands, []);
+});
+
+test("a new land with no park, or a park we don't know, is shown under 'also' — never dropped", () => {
+  const none = viewWith(WDW, [row({ id: "x-new", name: "Brand New Land", resortIds: "wdw", kind: "land" })]);
+  assert.deepEqual(none.otherLands, ["Brand New Land"]);
+  const typo = viewWith(WDW, [row({ id: "x-new", name: "Brand New Land", resortIds: "wdw", kind: "land", parks: "wdw: Animl Kngdom" })]);
+  assert.deepEqual(typo.otherLands, ["Brand New Land"]);
+  assert.deepEqual(typo.parkList, WDW.parkList);
+});
+
+test("a park on a land the code already lists moves it; without one it stays put", () => {
+  const moved = viewWith(WDW, [row({ id: "x-asia", name: "Asia", resortIds: "wdw", kind: "land", parks: "wdw: EPCOT" })]);
+  assert.ok(!landsIn(moved, AK).includes("Asia"));
+  assert.ok(landsIn(moved, "EPCOT").includes("Asia"));
+  const stays = viewWith(WDW, [row({ id: "x-asia", name: "Asia", resortIds: "wdw", kind: "land" })]);
+  assert.deepEqual(stays.parkList, WDW.parkList);
+});
+
+test("the park column is refused on a ride, and for a resort the row doesn't list", () => {
+  const ride = validateAttraction({ id: "x-ride", name: "Some Ride", resortIds: "wdw", kind: "attraction", parks: "wdw: EPCOT" });
+  assert.equal(ride.ok, false);
+  const other = validateAttraction({ id: "x-land", name: "Some Land", resortIds: "wdw", kind: "land", parks: "dlr: Disneyland Park" });
+  assert.equal(other.ok, false);
+  const bad = validateAttraction({ id: "x-land", name: "Some Land", resortIds: "wdw", kind: "land", parks: "EPCOT" });
+  assert.ok(!bad.ok && /wdw: Disney's Animal Kingdom/.test(bad.reason), "the example names a park, not a land");
+});
+
+test("an unknown park is warned about on upload, not refused", () => {
+  const v = validateAttraction({ id: "x-land", name: "Some Land", resortIds: "wdw", kind: "land", parks: "wdw: Animl Kngdom" });
+  assert.ok(v.ok);
+  const w = sheetWarnings([{ row: 2, value: v.value, onlyHere: "" }]);
+  assert.equal(w.length, 1);
+  assert.match(w[0]!, /Animl Kngdom/);
+});
+
+test("a park is stored, read back and written to the sheet", async () => {
+  const d = await db();
+  const saved = await saveAttraction(d, { id: "ak-tropical-americas", name: "Tropical Americas", resortIds: "wdw", kind: "land", parks: "wdw: Animal Kingdom" });
+  assert.ok(saved.ok);
+  const owner = await listOwnerAttractions(d);
+  assert.deepEqual(owner[0]!.parks, { wdw: "Animal Kingdom" });
+  const sheet = sheetRows(await effectiveAttractions(d), owner);
+  assert.equal(sheet.find((r) => r.id === "ak-tropical-americas")!.park, "wdw: Animal Kingdom");
+  const all = await effectiveParkLists(d, RESORTS);
+  assert.ok(landsIn(all.find((r) => r.id === "wdw")!, AK).includes("Tropical Americas"));
+});
+
+test("uploading the reviewed sheet removes only DinoLand and adds nothing to 'also'", () => {
+  // The reviewed sheet hides exact repeats. A hide meant as "this is a
+  // duplicate" must not take a real land off a resort's list, so run the
+  // whole file through the same rules the app uses.
+  const text = readFileSync(new URL("../docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8");
+  const [head, ...body] = parseCsv(text);
+  const at = (r: string[], n: string) => (r[head!.indexOf(n)] ?? "").trim();
+  const rows = body.filter((r) => r.some((c) => c.trim())).map((r) => row({
+    id: at(r, "id"), name: at(r, "name"), resortIds: at(r, "resorts"), note: at(r, "note"),
+    hidden: /^(yes|true|1|y)$/i.test(at(r, "hidden")), kind: at(r, "type"), lands: at(r, "land"), parks: at(r, "park"),
+  }));
+  const effective = overlay(ATTRACTIONS, rows);
+  for (const resort of RESORTS) {
+    const v = effectiveParkList(resort, effective, rows);
+    const before = resort.parkList.flatMap((p) => p.lands).sort();
+    const after = v.parkList.flatMap((p) => p.lands).sort();
+    assert.deepEqual(after.filter((l) => !before.includes(l)), [], `${resort.id}: nothing new lands in a park`);
+    assert.deepEqual(before.filter((l) => !after.includes(l)), [], `${resort.id}: no land is lost`);
+  }
 });

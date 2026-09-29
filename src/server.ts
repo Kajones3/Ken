@@ -19,7 +19,7 @@ import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./pr
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
-  effectiveAttractions, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
+  effectiveAttractions, effectiveParkLists, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
   validateAttraction, sheetWarnings, type AttractionValue,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
@@ -621,7 +621,9 @@ const server = createServer(async (req, res) => {
       // Sent as codes rather than a third copy of the airports, so the rule
       // itself stays in config.ts and the browser only obeys it.
       originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
-      resorts: RESORTS,
+      // Each resort's lands come from the code's list corrected by the
+      // owner's attraction sheet, so a closed land can be taken off in /admin.
+      resorts: await effectiveParkLists(db, RESORTS),
       // Typical weather per resort per month. Its own key rather than folded
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
@@ -1516,12 +1518,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/admin/attractions.csv" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       const rows = sheetRows(await effectiveAttractions(db), await listOwnerAttractions(db));
-      // `type` and `land` added 2026-09-26. only_here and source are
-      // read-only: worked out from the rows, never read back.
-      const head = ["id", "name", "type", "resorts", "land", "note", "hidden", "only_here", "source"];
+      // `type` and `land` added 2026-09-26, `park` 2026-09-29. only_here and
+      // source are read-only: worked out from the rows, never read back.
+      const head = ["id", "name", "type", "resorts", "land", "park", "note", "hidden", "only_here", "source"];
       const lines = [head.join(",")];
       for (const r of rows) {
-        lines.push([r.id, r.name, r.type, r.resorts, r.land, r.note, r.hidden, r.only_here, r.source].map(csvCell).join(","));
+        lines.push([r.id, r.name, r.type, r.resorts, r.land, r.park, r.note, r.hidden, r.only_here, r.source].map(csvCell).join(","));
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
@@ -1556,6 +1558,7 @@ const server = createServer(async (req, res) => {
           // Older sheets have neither column; a blank type is worked out from
           // the name, and "lands" is accepted as well as "land".
           kind: cell(r, "type"), lands: cell(r, "land") || cell(r, "lands"),
+          parks: cell(r, "park") || cell(r, "parks"),
           onlyHere: cell(r, "only_here"),
         }));
 

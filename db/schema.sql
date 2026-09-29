@@ -509,6 +509,10 @@ create table if not exists owner_attractions (
 -- 'land' or 'attraction'; `lands` is JSON, resort id -> land name.
 alter table owner_attractions add column if not exists kind text not null default 'attraction';
 alter table owner_attractions add column if not exists lands text not null default '{}';
+-- 2026-09-29: for a LAND, which park it is in, per resort (JSON, resort id ->
+-- park name). Lets the owner add a land to a park's list from /admin; see
+-- effectiveParkList() in ownerAttractions.ts.
+alter table owner_attractions add column if not exists parks text not null default '{}';
 
 -- Wait-time observations, recorded and nothing else. NOTHING READS THIS YET
 -- and that is deliberate.

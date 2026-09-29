@@ -43,10 +43,8 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 
 ### Pick up here — first thing next session
 
-1. **Has Render been redeployed since #89?** If not, ask the owner to do it
-   BEFORE saving any flight price checks. Code older than #89 inserts checks
-   without `model_round_trip`, and the next migrate would then double those
-   checks' `model_usd` a second time.
+1. ~~**Has Render been redeployed since #89?**~~ **Yes** (owner, 2026-09-29).
+   Flight price checks are safe to save.
 2. **Did the fare trend recompute?** It had been "skipped" nightly since
    2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
    2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
@@ -64,6 +62,59 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 5. **Groceries in "Prices compared with Orlando" are shaky** (World Bank says
    Tokyo +12% vs Orlando, Numbeo -24%). Ask the owner whether to keep that
    half of the line, drop it, or buy a Numbeo licence.
+6. **Budget airlines: the owner is thinking. DON'T BUILD** (2026-09-29). The
+   owner asked about a button for people happy to fly Allegiant/Spirit/
+   Frontier (RDU->Orlando on Allegiant is far cheaper than Delta).
+   - *What exists:* "The cheapest day we can find" picks a cheaper DATE, not
+     a cheaper airline. `flightPick.cheaperFound` shows a cheaper real fare
+     as an option, only when we happen to hold one.
+   - *What we throw away:* each SerpApi Google Flights search returns dozens
+     of itineraries across airlines, and `serpapiFlights.ts` keeps only the
+     median one. Keeping the cheapest budget-carrier itinerary too would cost
+     no extra searches. The BTS DB1B file has carrier columns
+     (`TkCarrier`/`RPCarrier`) that `btsBaseline.ts` doesn't read, so a
+     budget-only baseline is free (but DB1B stops at 2025 Q2).
+   - *Sanford (SFB): NO* (owner's call). Allegiant's Orlando airport is SFB,
+     so Allegiant fares can't appear while we price only MCO/TPA. Don't add
+     it. Claude also believes, unverified, that Allegiant doesn't sell
+     through Google Flights/Kayak.
+   - *Bags:* a bare budget fare breaks "the number is what you'll pay". The
+     owner's own experience (Iceland): no carry-ons, one checked bag, still
+     cheaper than other airlines. They're leaning toward simply SURFACING
+     budget carriers rather than pricing them into the total. Wait for their
+     decision.
+
+### 2026-09-29, later — lands follow the attraction sheet (owner: DinoLand)
+
+The owner: "We incorrectly say Dinoland is in Animal Kingdom. How does the
+admin panel allow me to fix this without AI." It didn't: each resort's
+"features these lands" list was `parkList` in config.ts, code only.
+
+- **DinoLand U.S.A. removed** from WDW's `parkList` (being replaced by
+  Tropical Americas).
+- **The lands list now follows the owner's attraction sheet**
+  (`effectiveParkList()` in ownerAttractions.ts; /api/meta serves each
+  resort's list through it). `parkList` is the skeleton an empty sheet shows.
+  Hiding a LAND row takes it off that resort's list, unless another visible
+  land row of the same name covers the resort (the reviewed sheet hides exact
+  repeats). A land not in `parkList` is added under the park named in a new
+  **`park` column** (`wdw: Animal Kingdom`, matched loosely against the
+  resort's park names), or under "Also" if it names none we know; the upload
+  warns about an unknown park rather than refusing it. **To rename a land:
+  hide the old row and add a new one** (a renamed row has no memory of the
+  code's spelling). `owner_attractions.parks` is JSON, like `lands`.
+- **The reviewed sheet had one wrong hide:** Grizzly Gulch (the LAND) was
+  hidden as a "repeat" of the Big Grizzly Mountain RIDE. Un-hidden in
+  `docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv`, and the
+  DinoLand row is now hidden there. A test runs that whole file through the
+  new rules and pins that no land is lost at any resort.
+- **If the owner already uploaded the sheet before this**, Grizzly Gulch is
+  hidden in the live database and would now drop off Hong Kong's list. Ask;
+  if so, press "Show again" on it in /admin (and hide DinoLand there).
+- Browser note: this sandbox's headless Chromium would not run
+  prototype.html's script at all (base version too; no error reported), so
+  the render was checked by running `landsHtml()` in Node against the live
+  server's /api/meta instead.
 
 ### 2026-09-29 — site locked, and the domestic flight bug fixed (details)
 
@@ -905,7 +956,7 @@ new decision, not a reason to silently re-add gates this entry removed.
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Owner-maintained attractions | **Wired, owner-only.** `/admin` has a section for the attraction list, backed by `owner_attractions` as an OVERLAY on `config.ts` — replace, add or hide a row, with its own spreadsheet. An empty table ships exactly as the code does. See the decision note. |
 | Exchange rates | **Wired, free — and still a placeholder.** `src/exchangeData.ts` is generated from ECB reference rates by a monthly Actions job; the browser's five hardcoded numbers are gone. **The committed rows are Claude's seed and `EXCHANGE_IS_PLACEHOLDER` says so in the UI** — run the "Parkfare exchange rates" workflow. |
-| Lands per park | **Wired, free.** `parkList` names every park and its lands, pinned against the `parks` count by a test. **A Claude draft for the owner to correct**, same standing as the international hotels. |
+| Lands per park | **Wired, free, owner-editable since 2026-09-29.** `parkList` names every park and its lands, pinned against the `parks` count by a test; the owner's attraction sheet overrides it (hide a land row, or add one with a `park`). See "lands follow the attraction sheet" at the top. |
 | The shared PDF | **Rebuilt.** Written prose per resort, not a print stylesheet over the live board, and "Save as PDF" asks which resorts to include. See the decision note for the three things deliberately left out. |
 | Average wait times | **Recorded, shown to nobody.** `wait_time_samples` + a two-hourly Actions job reading Queue-Times, keeping only 9am-7pm local. No card, no API wiring, no aggregation — the card was dropped because every automated source records POSTED waits and that bias is not uniform across six operators. This exists so there is an archive to decide with in a year. Park ids are a draft until the probe runs. See the decision note. |
 | Flight estimate lean | **Wired, owner-editable.** `flight.estimateLean` picks a point between a route's own p25 / median / p75; ships at 100, the dear end. A BTS median is the median fare *paid* over a quarter and runs structurally below what you are quoted today. See the decision note, including the halving bug that was diagnosed, written, and turned out to be wrong. |
