@@ -43,10 +43,8 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 
 ### Pick up here — first thing next session
 
-1. **Has Render been redeployed since #89?** If not, ask the owner to do it
-   BEFORE saving any flight price checks. Code older than #89 inserts checks
-   without `model_round_trip`, and the next migrate would then double those
-   checks' `model_usd` a second time.
+1. ~~**Has Render been redeployed since #89?**~~ **Yes** (owner, 2026-09-29).
+   Flight price checks are safe to save.
 2. **Did the fare trend recompute?** It had been "skipped" nightly since
    2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
    2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
@@ -64,6 +62,27 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 5. **Groceries in "Prices compared with Orlando" are shaky** (World Bank says
    Tokyo +12% vs Orlando, Numbeo -24%). Ask the owner whether to keep that
    half of the line, drop it, or buy a Numbeo licence.
+6. **Budget airlines: the owner is thinking. DON'T BUILD** (2026-09-29). The
+   owner asked about a button for people happy to fly Allegiant/Spirit/
+   Frontier (RDU->Orlando on Allegiant is far cheaper than Delta).
+   - *What exists:* "The cheapest day we can find" picks a cheaper DATE, not
+     a cheaper airline. `flightPick.cheaperFound` shows a cheaper real fare
+     as an option, only when we happen to hold one.
+   - *What we throw away:* each SerpApi Google Flights search returns dozens
+     of itineraries across airlines, and `serpapiFlights.ts` keeps only the
+     median one. Keeping the cheapest budget-carrier itinerary too would cost
+     no extra searches. The BTS DB1B file has carrier columns
+     (`TkCarrier`/`RPCarrier`) that `btsBaseline.ts` doesn't read, so a
+     budget-only baseline is free (but DB1B stops at 2025 Q2).
+   - *Sanford (SFB): NO* (owner's call). Allegiant's Orlando airport is SFB,
+     so Allegiant fares can't appear while we price only MCO/TPA. Don't add
+     it. Claude also believes, unverified, that Allegiant doesn't sell
+     through Google Flights/Kayak.
+   - *Bags:* a bare budget fare breaks "the number is what you'll pay". The
+     owner's own experience (Iceland): no carry-ons, one checked bag, still
+     cheaper than other airlines. They're leaning toward simply SURFACING
+     budget carriers rather than pricing them into the total. Wait for their
+     decision.
 
 ### 2026-09-29 — site locked, and the domestic flight bug fixed (details)
 
