@@ -5,13 +5,28 @@
  * .github/workflows/bts-baseline.yml), and this module only ever touches
  * the already-extracted CSV.
  *
- * Confirmed against a real downloaded 2024 Q4 file (2026-09-08): the
- * header includes Origin, Dest, Passengers, MktFare, Year, Quarter, and
- * MktFare is the full round-trip fare per itinerary — each direction of a
- * round trip is a separate row sharing the same ItinID and the same
- * MktFare value, not half of it — so a route average is a straight
- * passenger-weighted average of MktFare, no halving/doubling needed. One
- * quarter's file is ~8.5 million rows, so this streams the CSV line by
+ * MktFare IS ONE LEG, AND WE DOUBLE IT (settled 2026-09-28, reversing what
+ * this comment used to say). BTS defines it as ItinYield x MktMilesFlown: the
+ * ticket's price shared out by the miles flown in each direction. A round
+ * trip is two rows whose fares ADD UP to the ticket; they only look equal
+ * because the two directions are nearly the same distance. The proof came
+ * from joining the Market file to the Ticket file, which carries ItinFare
+ * (the whole ticket): for BNA->MCO in 2025 Q2, 2,047 of 2,085 round-trip
+ * tickets had MktFare = ItinFare / 2, and not one had them equal. Southwest
+ * ORD->MCO->MDW splits $283.62 / $279.38, in exactly the ratio of 1,005 to
+ * 990 miles. The "Parkfare debug DB1B" workflow reprints that proof.
+ *
+ * So a round trip is 2 x MktFare. About a quarter of rows are one-way tickets,
+ * where MktFare is the whole one-way fare; twice that is the round trip at
+ * the same price, which is what we want. Rows are stored with
+ * round_trip = true; db/schema.sql doubles, once, any row written before.
+ *
+ * Why it took so long to see: the fare trend compared these baselines with
+ * the CHEAPEST Google Flights itinerary (before 2026-09-15), which is itself
+ * about half a typical fare, so the ratios sat near 1.0 and looked like proof
+ * the basis was right.
+ *
+ * One quarter's file is ~8.5 million rows, so this streams the CSV line by
  * line rather than ever loading it into memory.
  */
 import { randomUUID } from "node:crypto";
@@ -125,7 +140,8 @@ export async function aggregateDb1bFile(
     const dest = fields[cols["Dest"]!];
     if (!origin || !dest || !opts.origins.has(origin) || !opts.destinations.has(dest)) continue;
 
-    const fare = Number(fields[cols["MktFare"]!]);
+    // One leg in, a round trip out — see the header.
+    const fare = 2 * Number(fields[cols["MktFare"]!]);
     if (!Number.isFinite(fare) || fare <= 0) continue; // never write junk into the baseline
     // Passengers is BTS's own per-row sample weight; guard the rare
     // zero/missing case as weight 1 rather than dividing by zero.
@@ -170,12 +186,12 @@ export async function upsertHistoricalFares(
       const b = j * 10;
       vals.push(origin, destination, year, quarter, a.avgFareUsd,
         a.p25FareUsd, a.medianFareUsd, a.p75FareUsd, a.passengersSampled, a.itinCount);
-      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},now())`;
+      return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},now(),true)`;
     });
     await db.query(
       `insert into historical_fares
          (origin,destination,year,quarter,avg_fare_usd,
-          p25_fare_usd,median_fare_usd,p75_fare_usd,passengers_sampled,itin_count,fetched_at)
+          p25_fare_usd,median_fare_usd,p75_fare_usd,passengers_sampled,itin_count,fetched_at,round_trip)
        values ${tuples.join(",")}
        on conflict (origin,destination,year,quarter) do update set
          avg_fare_usd = excluded.avg_fare_usd,
@@ -183,7 +199,8 @@ export async function upsertHistoricalFares(
          median_fare_usd = excluded.median_fare_usd,
          p75_fare_usd = excluded.p75_fare_usd,
          passengers_sampled = excluded.passengers_sampled,
-         itin_count = excluded.itin_count, fetched_at = excluded.fetched_at`,
+         itin_count = excluded.itin_count, fetched_at = excluded.fetched_at,
+         round_trip = true`,
       vals,
     );
     written += chunk.length;

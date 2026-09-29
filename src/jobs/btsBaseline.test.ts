@@ -38,13 +38,18 @@ function csv(...lines: string[]): Readable {
   return Readable.from([HEADER, ...lines].join("\n") + "\n");
 }
 
-test("aggregateDb1bFile: a real ATL->MCO row aggregates to itself with no halving/doubling", async () => {
+// MktFare is one leg (proven 2026-09-28 against the DB1B Ticket file — see
+// btsBaseline.ts), so every stored fare is TWICE the row's MktFare. These
+// tests pinned "no doubling" for three weeks, which is how the halved
+// estimates survived; they now pin the opposite.
+test("aggregateDb1bFile: a real ATL->MCO one-leg fare of $105.04 becomes a $210.08 round trip", async () => {
   const agg = await aggregateDb1bFile(csv(REAL_ATL_MCO_ROW), {
     origins: new Set(["ATL"]), destinations: new Set(["MCO"]),
   });
   const route = agg.get("ATL|MCO");
   assert.ok(route);
-  assert.equal(route!.avgFareUsd, 105.04);
+  assert.equal(route!.avgFareUsd, 210.08);
+  assert.equal(route!.medianFareUsd, 210.08);
   assert.equal(route!.passengersSampled, 1);
   assert.equal(route!.itinCount, 1);
 });
@@ -64,8 +69,9 @@ test("aggregateDb1bFile: averages are passenger-weighted across multiple rows", 
     origins: new Set(["ATL"]), destinations: new Set(["MCO"]),
   });
   const route = agg.get("ATL|MCO")!;
-  // (1*100 + 3*300) / (1+3) = 250, not the plain average of 100 and 300 (200)
-  assert.equal(route.avgFareUsd, 250);
+  // (1*100 + 3*300) / (1+3) = 250 a leg, not the plain average (200);
+  // a round trip is twice that.
+  assert.equal(route.avgFareUsd, 500);
   assert.equal(route.passengersSampled, 4);
 });
 
@@ -83,6 +89,6 @@ test("aggregateDb1bFile: a missing/zero passenger count still counts as weight 1
     origins: new Set(["ATL"]), destinations: new Set(["MCO"]),
   });
   const route = agg.get("ATL|MCO")!;
-  assert.equal(route.avgFareUsd, 105.04);
+  assert.equal(route.avgFareUsd, 210.08);
   assert.equal(route.passengersSampled, 1);
 });

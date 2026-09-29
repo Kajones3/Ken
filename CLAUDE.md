@@ -22,7 +22,7 @@ None of #77-#80 is visible until Render redeploys (its build runs the
 migration that adds the new `users` and `owner_attractions` columns).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-630 tests, and typecheck is clean.
+636 tests, and typecheck is clean.
 
 ### 2026-09-29 — site locked, and the domestic flight bug is PROVEN
 
@@ -35,24 +35,34 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   The cookie is a hash of the password, so changing it signs every tester
   out. 10 wrong guesses per IP = 15-minute wait. After the password, the
   visitor lands where they were going (reset and verify links still work).
-- **Domestic flight estimates are HALF a round trip. Proven 2026-09-28, NOT
-  fixed yet — waiting on the owner's go** (owner: BNA->MCO showed $220
-  against Kayak's cheapest $372). The "Parkfare debug DB1B" workflow now
-  joins the DB1B Ticket file (ItinFare = whole ticket) to the Market file
-  (MktFare): for BNA->MCO 2025 Q2, 2,047 of 2,085 round-trip tickets have
-  MktFare = ItinFare / 2 and none equal it. MktFare is ItinYield x
-  MktMilesFlown, a per-leg share (a Southwest ORD-MCO-MDW trip splits
-  $283.62 / $279.38 in proportion to 1,005 / 990 miles). This SUPERSEDES
-  "Do not re-open this" in the 2026-09-22 lean note below: the x0.945
-  trend that "disproved" halving was measured against the CHEAPEST Google
-  itinerary (before the 2026-09-15 switch to the median), which is roughly
-  half a typical fare. The coverage check had already printed "SUSPICIOUS —
-  $204 vs $390" on 2026-09-22. Also: the fare trend has been "skipped (too
-  few routes)" every night since 2026-09-09, because only 2024 Q4 and 2025
-  Q2 BTS are loaded. Proposed fix, awaiting the owner: double the domestic
-  baseline; load Q1 and Q3; put the 2x sanity check and a stale-trend check
-  in the daily email; rescale flight price checks saved against the half
-  model; and the owner decides the lean (100 was partly compensating).
+- **Domestic flight estimates were HALF a round trip. FIXED 2026-09-29**
+  (owner: BNA->MCO showed $220 against Kayak's cheapest $372). DB1B's
+  MktFare is ItinYield x MktMilesFlown, one leg's share of the ticket: the
+  "Parkfare debug DB1B" workflow joins the Ticket file (ItinFare = whole
+  ticket), and for BNA->MCO 2025 Q2, 2,047 of 2,085 round trips had
+  MktFare = ItinFare / 2, none equal. SUPERSEDES "Do not re-open this" in
+  the 2026-09-22 lean note below; the x0.945 trend that "disproved" it was
+  measured against the CHEAPEST Google itinerary (pre-2026-09-15), itself
+  about half a typical fare. What changed:
+  - `btsBaseline.ts` stores 2 x MktFare and `round_trip = true`.
+    `db/schema.sql` doubles every older `bts_db1b` row ONCE (marked by
+    `round_trip`) and leaves `fetched_at` alone, because re-stamping it would
+    stop already-bought fares counting as route evidence (`observedSince`).
+  - Flight price checks for wdw/dlr saved before the fix get `model_usd`
+    doubled once (`price_checks.model_round_trip`), so the fix isn't counted
+    twice through the checks. `app_usd` was left alone: it is display-only
+    and may have been a real fare.
+  - `src/fareHealth.ts`: two new daily-email lines. `fare-basis` (BLOCKING)
+    fires when our national BTS average is under $260 or over $620 against
+    BTS's ~$390. `fare-trend-stale` fires when `fare_trend` is more than 7
+    days old. The coverage report uses the same check.
+  - BTS quarters to load: 2024 Q3 and 2025 Q1 were missing (only 2024 Q4 and
+    2025 Q2 loaded), which is why the refresh logged "trend skipped (too few
+    routes)" every night since 2026-09-09. DB1B ended after 2025 Q2.
+  - **Not changed: the lean** (`flight.estimateLean`, 100 = the top of each
+    route's range). 100 was partly compensating for the halving; Claude
+    recommended 50 (the middle). The owner's call, in /admin.
+  - The stale x0.945 trend still applies until a new one computes.
 
 ### Pick up here — next session, in rough priority order
 
@@ -1794,7 +1804,9 @@ baselines. Had the baseline been one leg, every one of those 74 ratios would
 have sat near 2.0 and not one reached 1.25. So `MktFare` really is the whole
 round trip, the parser's original claim was right, and doubling would have put
 every domestic price on the board at twice its value. **Do not re-open this on
-the strength of the documentation alone.**
+the strength of the documentation alone.** **>> REOPENED AND REVERSED 2026-09-29 on
+direct evidence (a join to the DB1B Ticket file), not documentation: MktFare
+IS one leg. See the top of this file.**
 
 Two guards so nobody re-runs that argument: `npm run coverage` prints our
 national passenger-weighted average beside BTS's published ~$390 average

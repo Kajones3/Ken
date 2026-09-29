@@ -41,9 +41,9 @@ test("weightedPercentile handles an empty route without dividing by zero", () =>
 });
 
 test("aggregateDb1bFile reports a median well above the mean when cheap fares are thin", () => {
-  // One $20 partial itinerary among four real $400 ones. The mean is dragged
-  // down to $324; the median stays at $400 — this is the exact shape of the
-  // bug that made a $700 real fare show as $200.
+  // One $20 partial itinerary among four real $400 ones (one-leg fares, so
+  // stored doubled). The mean is dragged down to $648; the median stays at
+  // $800 — the shape of the bug that made a $700 real fare show as $200.
   const csv = [
     '"Origin","Dest","Passengers","MktFare","Year","Quarter"',
     '"ATL","MCO","1","20","2026","1"',
@@ -56,10 +56,10 @@ test("aggregateDb1bFile reports a median well above the mean when cheap fares ar
     origins: new Set(["ATL"]), destinations: new Set(["MCO"]),
   }).then((agg) => {
     const r = agg.get("ATL|MCO")!;
-    assert.equal(r.medianFareUsd, 400);
+    assert.equal(r.medianFareUsd, 800);
     assert.ok(r.avgFareUsd < r.medianFareUsd, `mean ${r.avgFareUsd} should sit below median ${r.medianFareUsd}`);
-    assert.equal(r.p25FareUsd, 400);
-    assert.equal(r.p75FareUsd, 400);
+    assert.equal(r.p25FareUsd, 800);
+    assert.equal(r.p75FareUsd, 800);
   });
 });
 

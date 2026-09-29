@@ -3,8 +3,10 @@ name: Parkfare BTS baseline
 # Manual only — BTS DB1B is a quarterly historical survey, not something to
 # poll daily. Downloads one quarter's real fare data (~100MB zip) and
 # writes a passenger-weighted average fare per route into historical_fares.
-# See src/jobs/btsBaseline.ts for what this data is and why MktFare needs
-# no halving/doubling logic.
+# See src/jobs/btsBaseline.ts for what this data is, and why MktFare (one
+# leg) is doubled into a round trip. DB1B ended after 2025 Q2, so the four
+# newest quarters are 2024 Q3, 2024 Q4, 2025 Q1 and 2025 Q2; load all four,
+# or the nightly correction has nothing to compare half the year against.
 on:
   workflow_dispatch:
     inputs:
@@ -36,6 +38,12 @@ jobs:
           unzip -o db1b.zip -d db1b_out
           csv=$(ls db1b_out/*.csv | head -1)
           echo "BTS_CSV_PATH=$csv" >> "$GITHUB_ENV"
+      # Render lags master, so bring the database up to date first: this job
+      # writes the round_trip column, and the update also doubles any older
+      # one-leg rows before new round-trip rows sit beside them.
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npm run bts-baseline
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

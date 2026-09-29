@@ -226,6 +226,24 @@ alter table historical_fares add column if not exists p25_fare_usd    numeric(9,
 alter table historical_fares add column if not exists median_fare_usd numeric(9,2);
 alter table historical_fares add column if not exists p75_fare_usd    numeric(9,2);
 
+-- DB1B's MktFare is ONE LEG of a trip, not the round trip (proven
+-- 2026-09-28: joined to the DB1B Ticket file, 2,047 of 2,085 BNA->MCO round
+-- trips had MktFare = ItinFare / 2 and none had it equal). Every BTS row
+-- written before then holds half a round trip. `round_trip` marks rows that
+-- hold the whole thing; the update below doubles the old ones exactly once
+-- and marks them, so running this file again changes nothing. It leaves
+-- fetched_at alone on purpose: book.ts only lets fares bought AFTER a
+-- baseline correct it, and re-stamping would throw that evidence away.
+-- Only BTS rows: the international baselines are real round trips already.
+alter table historical_fares add column if not exists round_trip boolean not null default false;
+update historical_fares
+   set avg_fare_usd    = avg_fare_usd * 2,
+       p25_fare_usd    = p25_fare_usd * 2,
+       median_fare_usd = median_fare_usd * 2,
+       p75_fare_usd    = p75_fare_usd * 2,
+       round_trip      = true
+ where source = 'bts_db1b' and not round_trip;
+
 -- What people actually search. The nightly job spends its (paid, metered)
 -- real-fare lookups on the busiest routes rather than on all 209 possible
 -- ones, and every other route is estimated from its BTS median moved by the
@@ -605,3 +623,15 @@ create table if not exists price_checks (
   dedupe         text not null unique
 );
 create index if not exists price_checks_key on price_checks (category, match_key);
+
+-- Flight checks saved before 2026-09-29 measured the price against a
+-- domestic estimate that was half a round trip (see historical_fares above),
+-- so their ratios read about 2x. Double those snapshots once, so the fix
+-- isn't counted a second time through the checks. Only Walt Disney World
+-- and Disneyland: the international estimates were never halved. New rows
+-- are written with model_round_trip = true and never touched.
+alter table price_checks add column if not exists model_round_trip boolean not null default false;
+update price_checks
+   set model_usd = model_usd * 2, model_round_trip = true
+ where category = 'flight' and resort_id in ('wdw', 'dlr')
+   and model_usd is not null and not model_round_trip;
