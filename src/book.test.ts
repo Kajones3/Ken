@@ -62,3 +62,22 @@ test("flightEstimate: neither the alt airport nor its primary has a baseline sta
   assert.equal(est, undefined);
   await db.close();
 });
+
+test("an unlabeled flight row (the early placeholder prices) is never read as a real fare", async () => {
+  // 2026-10-02: 153,562 rows with no source, made up by the mock provider
+  // before any real feed was connected, were being priced as real fares
+  // ($98 on almost every ATL-MCO date).
+  const db = await memoryDb();
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops,source,fetched_at)
+     values ('ATL','MCO','2027-03-10',7,98,0,null,now()),
+            ('ATL','MCO','2027-03-11',7,312,0,'serpapi_flights',now())`,
+  );
+  const book = await loadBook(db, {
+    origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
+    from: "2027-03-01", to: "2027-03-31", tripLength: 7,
+  });
+  assert.equal(book.flight("ATL", "MCO", "2027-03-10", 7), undefined, "the placeholder is ignored");
+  assert.equal(book.flight("ATL", "MCO", "2027-03-11", 7)?.price, 312, "a real fare still counts");
+  await db.close();
+});
