@@ -26,7 +26,7 @@ time. The DATABASE is ahead of Render: the migrate workflow ran on
 (see below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-651 tests, and typecheck is clean.
+657 tests, and typecheck is clean.
 
 ### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
 
@@ -94,6 +94,28 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      cheaper than other airlines. They're leaning toward simply SURFACING
      budget carriers rather than pricing them into the total. Wait for their
      decision.
+
+### 2026-10-02, later — anonymous click counts, and /admin split into pages
+
+- **Counting what visitors do** (owner: "Build the click counter"), so the
+  Plus price can be judged on behavior. `src/siteEvents.ts` + `event_counts`
+  table: one row per day + action + resort + detail holding only a number.
+  NO user, session, cookie or IP column (a test pins the columns). Actions:
+  `compare`, `detail` (resort), `book` (resort + flights / tickets /
+  hotel_disney / hotel_kayak / hotel_booking), `paywall`, `plus` (pass id).
+  `POST /api/event` always answers 204, refuses anything not on that list,
+  skips the owner's own clicks, and has an in-memory per-IP brake (never
+  stored). The page sends with `track()` in prototype.html (sendBeacon);
+  booking links carry `data-track`. Counts begin once Render is redeployed,
+  and only testers past the site password can reach it while locked.
+- **Privacy draft updated** (`docs/legal/privacy-policy.md`): the anonymous
+  counts, "no other cookies, no Google Analytics", and the preview-password
+  cookie the old draft forgot. Background reasoning: `docs/plus-brainstorm.md`.
+- **/admin is now separate pages with a menu** (left on a laptop, swipeable
+  tabs on a phone): Visitors (the new stats, default), Prices you've checked,
+  Rates & settings (with its spreadsheet), Fares you've seen, Attractions,
+  Wait times. Pages are `#hash` addresses, so back and bookmarks work.
+  Everything still loads once; switching only shows a different page.
 
 ### 2026-10-02 — park days suggested per resort, and "?" help on the party form
 

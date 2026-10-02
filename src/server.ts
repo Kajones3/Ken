@@ -13,6 +13,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
          KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import { parseEvent, recordEvent, loadStats, eventRateLimiter } from "./siteEvents.js";
 import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
@@ -206,6 +207,9 @@ function destinationsFrom(q: URLSearchParams): Record<string, string> {
  *  Delegates to signinThrottle's version so the "take the FIRST entry" rule
  *  has one home and one set of tests; the sign-in lockout depends on it not
  *  being something a client can rotate at will. */
+/** One shared brake on the anonymous counter; see eventRateLimiter. */
+const allowEvent = eventRateLimiter();
+
 function clientIp(req: IncomingMessage): string {
   return callerIp(req.headers, req.socket.remoteAddress) ?? "";
 }
@@ -982,6 +986,20 @@ const server = createServer(async (req, res) => {
     // No payment processor yet — a Plus click from the paywall modal emails
     // the owner instead of charging anyone, so it does something real rather
     // than nothing. Granting Plus is still the one real mechanism: grantPlus.ts.
+    // Anonymous action counts (siteEvents.ts). Answers 204 whatever happens:
+    // a counter that breaks must never break the page that called it. The
+    // owner's own clicks are skipped so testing doesn't skew the numbers.
+    if (url.pathname === "/api/event" && req.method === "POST") {
+      try {
+        const ev = parseEvent(await readBody(req));
+        if (ev && allowEvent(clientIp(req)) && !await ownerOf(db, req)) await recordEvent(db, ev);
+      } catch (e) {
+        console.error("event count failed:", (e as Error).message);
+      }
+      res.writeHead(204, { "cache-control": "no-store" });
+      return res.end();
+    }
+
     if (url.pathname === "/api/plus/request" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign in first" });
@@ -1199,6 +1217,12 @@ const server = createServer(async (req, res) => {
       const file = await readFile(new URL("admin.html", PUBLIC_DIR));
       res.writeHead(200, { "content-type": MIME[".html"]!, "cache-control": "no-store" });
       return res.end(file);
+    }
+
+    if (url.pathname === "/api/admin/stats" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const days = clamp(Number(url.searchParams.get("days") ?? 30), 1, 366);
+      return send(200, await loadStats(db, days), { cache: "no-store" });
     }
 
     if (url.pathname === "/api/admin/settings" && req.method === "GET") {
