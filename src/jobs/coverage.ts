@@ -164,16 +164,15 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // where the bought fares went and which ones found no baseline to compare.
   out.push("## Fares the trend could use (serpapi_flights, last 21 days)");
   const bought = await db.query<{ origin: string; destination: string; quarter: number; fares: string; has_base: boolean }>(
-    `select f.origin, f.destination, extract(quarter from f.depart_date)::int as quarter,
-            count(*) as fares,
+    `select g.origin, g.destination, g.quarter, g.fares,
             exists (select 1 from historical_fares h
-                     where h.source = 'bts_db1b' and h.origin = f.origin
-                       and h.destination = f.destination
-                       and h.quarter = extract(quarter from f.depart_date)::int) as has_base
-       from flight_prices f
-      where f.source = 'serpapi_flights' and f.fetched_at > now() - interval '21 days'
-      group by f.origin, f.destination, quarter
-      order by has_base desc, f.destination, f.origin, quarter`,
+                     where h.source = 'bts_db1b' and h.origin = g.origin
+                       and h.destination = g.destination and h.quarter = g.quarter) as has_base
+       from (select origin, destination, extract(quarter from depart_date)::int as quarter, count(*) as fares
+               from flight_prices
+              where source = 'serpapi_flights' and fetched_at > now() - interval '21 days'
+              group by 1, 2, 3) g
+      order by has_base desc, g.destination, g.origin, g.quarter`,
   );
   const domestic = new Set(["MCO", "TPA", "SNA", "LAX"]);
   const dom = bought.rows.filter((r) => domestic.has(r.destination));
