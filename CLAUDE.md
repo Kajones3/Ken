@@ -95,6 +95,14 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-02, last — how to update lands, written into /admin
+
+The owner asked for instructions on updating lands. /admin's Attractions page
+now has a "How to update lands, step by step" box (add, remove a closed land,
+rename, move to another park, one land at several resorts, which land a ride
+is in, undo, the spreadsheet columns). Every step follows the rules in
+`effectiveParkList()`; if those rules change, update the box too.
+
 ### 2026-10-02, latest — 153,562 placeholder flight fares were priced as real
 
 - **Found from the owner's own Neon query** (ATL->MCO read $98 on almost every
