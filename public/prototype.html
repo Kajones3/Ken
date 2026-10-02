@@ -216,6 +216,13 @@ a{color:var(--ink)}
 @media (max-width:460px){ .party{grid-template-columns:1fr} }
 .f{display:flex; flex-direction:column; gap:5px; min-width:0}
 .f label{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2)}
+/* A label with a "?" beside it. The answer opens as a full-width strip under
+ * the row, never inside the column, so the dropdowns stay on one line. */
+.labrow{display:flex; align-items:center; gap:6px}
+.qhelp{width:18px; height:18px; flex:none; padding:0; border-radius:50%; border:1px solid var(--rule);
+  background:var(--surface); color:var(--ink-2); font:700 11px/1 "Karla",sans-serif; cursor:pointer}
+.qhelp[aria-expanded="true"]{background:var(--ink-2); color:var(--surface); border-color:var(--ink-2)}
+.helpnote{font-size:12px; color:var(--ink-2); margin:6px 0 10px; padding:8px 10px; border-left:3px solid var(--rule-strong); background:var(--surface-2)}
 .f select,.f input{
   width:100%; background:var(--surface-2); color:var(--ink);
   border:1px solid var(--rule-strong); border-radius:8px; padding:9px 10px;
@@ -627,7 +634,8 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .ovcell{display:grid; gap:7px; align-content:start; margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--rule-strong)}
 .ovcell .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
 .ovcell .lab b{font-family:"JetBrains Mono",monospace; font-size:15px; color:var(--ink); letter-spacing:0}
-.ovcell input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink)}
+.ovcell input[type=number], .ovcell select{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink)}
+.ovcell select{font-size:16px; font-family:inherit}
 .ovcell input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:99px; background:var(--rule-strong); outline:none; margin:7px 0 2px; cursor:pointer}
 .ovcell input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); box-shadow:0 1px 5px rgba(0,0,0,.32); cursor:pointer}
 .ovcell input[type=range]::-moz-range-thumb{width:16px; height:16px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); cursor:pointer}
@@ -771,15 +779,18 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <select id="adults"></select>
       </div>
       <div class="f">
-        <label for="seniors">Seniors (60+)</label>
+        <div class="labrow"><label for="seniors">Seniors (60+)</label>
+          <button type="button" class="qhelp" data-help="seniorsHelp" aria-expanded="false" aria-controls="seniorsHelp" aria-label="About senior tickets">?</button></div>
         <select id="seniors"></select>
       </div>
       <div class="f">
-        <label for="kids">Children (0-17)</label>
+        <div class="labrow"><label for="kids">Children (0-17)</label>
+          <button type="button" class="qhelp" data-help="kidsHelp" aria-expanded="false" aria-controls="kidsHelp" aria-label="About children's tickets">?</button></div>
         <select id="kids"></select>
       </div>
     </div>
-    <p class="hint" style="margin:6px 0 12px">Hong Kong and Shanghai sell seniors the cheaper child ticket; everywhere else they pay the adult price. Add children with their ages — each resort decides for itself which of them pay as adults.</p>
+    <p class="helpnote" id="seniorsHelp" hidden>Hong Kong and Shanghai sell seniors the cheaper child ticket; everywhere else they pay the adult price.</p>
+    <p class="helpnote" id="kidsHelp" hidden>At Disney World and Disneyland, the child ticket is for kids 3 to 9; from 10 they pay the adult price. Tokyo also sells a cheaper junior ticket for ages 12 to 17. Paris, Hong Kong and Shanghai charge the child price up to age 11. Add each child's age and every resort applies its own rule.</p>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
 
     <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
@@ -891,7 +902,8 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
     <div class="fields">
       <div class="f">
-        <label for="parkdays">Park days</label>
+        <div class="labrow"><label for="parkdays">Park days</label>
+          <button type="button" class="qhelp" data-help="parkdaysHelp" aria-expanded="false" aria-controls="parkdaysHelp" aria-label="About park days">?</button></div>
         <select id="parkdays"></select>
       </div>
       <div class="f" id="hopperField">
@@ -917,6 +929,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         </select>
       </div>
     </div>
+    <p class="helpnote" id="parkdaysHelp" hidden>Our suggestion prices a different ticket length at each resort, because the parks aren't the same size. You can change any one resort's days on its own card in the results.</p>
 
     <div class="fields" id="hotelDetailFields">
       <div class="f">
@@ -1014,6 +1027,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div>
       <h2 id="resTitle">Six resorts, cheapest first</h2>
       <p class="res-sub" id="resSub"></p>
+      <p class="hint" id="parkDaysNote" hidden></p>
     </div>
     <div class="legend">
       <span class="lg"><i class="sw" style="background:var(--s1)"></i>Flights</span>
@@ -1261,6 +1275,11 @@ let CLIMATE = {};        // resortId -> twelve {highF, lowF, rainDays, note?} ro
 let PASS_PROGRAMS = [];  // annual pass / Magic Key tiers, from /api/meta
 let HOLIDAY_WINDOWS = {};  // "YYYY-MM" -> [{id,label,from,to}], only for months with one
 let DVC_DEFAULT_PER_POINT = 18;
+/* Each resort's suggested ticket length and why, from /api/meta. */
+let SUGGESTED_DAYS = {};
+/* Park days actually priced at one resort — its own number, the search's,
+ * or its suggestion. The server decides; this only reads it. */
+const daysOf = pr => (pr && pr.parkDays && pr.parkDays.days) || params.parkDays || 1;
 let RESORT_BY_ID = new Map();
 
 /* Currency symbols are editorial — the ECB publishes codes and rates, not
@@ -1399,7 +1418,7 @@ const store = {
 const OV = {};
 try{ localStorage.removeItem("pf_ov"); }catch(e){}
 const ovOf = id => OV[id] || {};
-const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.excludeHotel || o.excludeFlights); };
+const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.parkDays || o.excludeHotel || o.excludeFlights); };
 
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
@@ -1486,7 +1505,8 @@ function fillFormOptions(){
   fillSelect($("#kids"), [0,1,2,3,4,5,6].map(n=>[n,n?String(n):"None"]));
   fillSelect($("#nights"), Array.from({length:13},(_,i)=>i+2).map(n=>[n,n+" nights"]));  // 2-14 nights
   fillSelect($("#overnightNights"), [1,2,3,4,5].map(n=>[n,n+" night"+(n>1?"s":"")]));
-  fillSelect($("#parkdays"), [1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")]));
+  // "" = each resort's own suggestion (SUGGESTED_PARK_DAYS on the server).
+  fillSelect($("#parkdays"), [["", "Our suggestion for each park"], ...[1,2,3,4,5,6,7,8].map(n=>[n,n+" park "+(n===1?"day":"days")+" everywhere"])]);
   fillSelect($("#month"), monthOpts);
 
   $("#origin").value = "ATL";
@@ -1494,7 +1514,7 @@ function fillFormOptions(){
   $("#kids").value = "0";
   $("#nights").value = "6";
   $("#overnightNights").value = "1";
-  $("#parkdays").value = "4";
+  $("#parkdays").value = "";
   // About six months out: the middle of the usual 6-9 month planning window.
   $("#month").value = monthOpts[Math.min(4, monthOpts.length-1)][0];
   syncWindowUi();
@@ -1583,7 +1603,8 @@ function readParams(){
       const el = document.getElementById("age"+i); return el ? +el.value : 7;
     }),
     nights,
-    parkDays: Math.min(+$("#parkdays").value, nights + 1),
+    // null = each resort's own suggestion; a number applies to all six.
+    parkDays: $("#parkdays").value ? Math.min(+$("#parkdays").value, nights + 1) : null,
     needHotel,
     stay: needHotel === "no" ? "none" : $("#stay").value,
     tier: $("#tier").value,
@@ -1704,8 +1725,9 @@ $("#needHotel").addEventListener("change", syncNeedHotel);
 function tripQuery(){
   const q = {
     origin: params.origin, adults: params.adults, childAges: params.ages.join(","),
-    nights: params.nights, parkDays: params.parkDays, stay: params.stay, tier: params.tier, food: params.food,
+    nights: params.nights, stay: params.stay, tier: params.tier, food: params.food,
   };
+  if(params.parkDays) q.parkDays = params.parkDays;
   if(params.hopper) q.hopper = "1";
   if(params.seniors > 0) q.seniors = params.seniors;
   if(params.stay === "off"){
@@ -2315,7 +2337,7 @@ function membershipCard(x, p){
         <div class="v">${usd(pass.savedUsd)}</div><div class="s">already taken off</div></div>
     </div>
     <div class="li"><div class="l"><b>Without your ${pass.label}${pass.used>1?"es":""}</b>
-      <small>What ${p.parkDays} park day${p.parkDays>1?"s":""} at the gate would have cost these ${pass.used} ${pass.used===1?"person":"people"}</small></div>
+      <small>What ${daysOf(x)} park day${daysOf(x)>1?"s":""} at the gate would have cost these ${pass.used} ${pass.used===1?"person":"people"}</small></div>
       <div class="p">${usd(pass.ticketsWithoutPassUsd)}</div></div>
     ${pass.count > pass.used ? `<div class="li"><div class="l"><b>${pass.count - pass.used} pass${pass.count-pass.used>1?"es":""} unused</b>
       <small>Your party is ${x.partySize} ${x.partySize===1?"person":"people"} on this trip</small></div>
@@ -2686,9 +2708,9 @@ async function renderDetail(){
     const detail = l.group === "infant" ? "No admission charged"
       : l.group === "pass" ? "Your pass covers the gate"
       : l.group === "senior" ? (l.seniorPrice
-          ? `Senior ticket, the child price here · ${p.parkDays}-day ticket × ${n}`
-          : `${esc(r.name)} sells no senior ticket, so adult price · ${p.parkDays}-day ticket × ${n}`)
-      : `${p.parkDays}-day ticket × ${n}`;
+          ? `Senior ticket, the child price here · ${daysOf(x)}-day ticket × ${n}`
+          : `${esc(r.name)} sells no senior ticket, so adult price · ${daysOf(x)}-day ticket × ${n}`)
+      : `${daysOf(x)}-day ticket × ${n}`;
     return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
       <div class="p">${l.group==="infant"?"Free":usd(l.totalUsd)}</div></div>`;
   }).join("")
@@ -2882,6 +2904,27 @@ async function renderDetail(){
     `}
   </div>`;
 
+  /* Park days at THIS resort. Picking the number it already uses is a no-op;
+   * "Back to our suggestion" clears the resort's own number. */
+  const pd = x.parkDays || { days: daysOf(x), source: "search", suggested: daysOf(x), capped: false };
+  const sug = SUGGESTED_DAYS[r.id];
+  const maxDays = p.nights + 1;
+  const ticketDaysCtl = `<div class="ovcell">
+    <div class="lab"><span>Ticket days at ${esc(SHORT_NAME[r.id] || r.name)}</span><b>${pd.days}</b></div>
+    <select id="parkDaysOv" aria-label="Park days at ${esc(r.name)}">
+      ${Array.from({length: Math.min(10, maxDays)}, (_,i)=>i+1).map(n=>
+        `<option value="${n}"${n===pd.days?" selected":""}>${n} day${n>1?"s":""}${n===pd.suggested?" (our suggestion)":""}</option>`).join("")}
+    </select>
+    <div class="ovhint">${pd.source === "yours"
+      ? `Your number for this resort only. We'd suggest ${pd.suggested}.`
+      : pd.source === "search"
+      ? `Set for every resort by your search. We'd suggest ${pd.suggested} here${sug ? `: ${esc(sug.why)}` : ""}.`
+      : `Our suggestion${sug ? `: ${esc(sug.why)}` : ""}. Change it to price more or fewer days here only.`}${
+      pd.capped ? ` Trimmed to ${pd.days}, since a ${p.nights}-night trip has ${maxDays} days at most.` : ""}</div>
+    ${pd.source === "yours" ? `<div class="ovacts"><button class="btn btn-sm" data-reset="parkDays">Back to ${p.parkDays ? "your search's days" : "our suggestion"}</button>
+      <span class="yourchip">Your number</span></div>` : ""}
+  </div>`;
+
   const { kayakLink, stayLink, area, checkout } = tripLinks(item, p);
   const sd = new Date(x.start+"T00:00:00Z");
 
@@ -2889,7 +2932,7 @@ async function renderDetail(){
     <div class="dhead">
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
-        <p>${p.nights} nights, ${p.parkDays} park days, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
+        <p>${p.nights} nights, ${daysOf(x)} park day${daysOf(x)===1?"":"s"}, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
            ${bandPhrase ? esc(bandPhrase) + " · " : ""}${esc(currencyPhrase)} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
           <b>${item.priceBasis === "cheapest"
@@ -2981,7 +3024,8 @@ async function renderDetail(){
         </div>`}
         <div class="card">
           <h5><i style="background:var(--s2)"></i>Park tickets</h5>
-          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${p.parkDays}-day ticket</p>
+          <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${daysOf(x)}-day ticket</p>
+          ${ticketDaysCtl}
           <div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">estimate</div></div>
@@ -3151,6 +3195,33 @@ async function renderDetail(){
 
 /* ============================ render ============================ */
 
+/* One line under the results title saying what "our suggestion" priced at
+ * each resort and why. Shown only when the search left park days on the
+ * suggestion, since otherwise every resort carries the number you picked. */
+function renderParkDaysNote(){
+  const el = $("#parkDaysNote");
+  if(!el) return;
+  const ok = results.filter(it => it.ok && it.price && it.price.parkDays);
+  if(params.parkDays || !ok.length){ el.hidden = true; el.innerHTML = ""; return; }
+  // Grouped by day count, so "3 at Tokyo, Disneyland Paris and Disneyland"
+  // reads as one clause rather than three near-identical ones.
+  const groups = new Map();
+  for(const it of ok){
+    const pd = it.price.parkDays, sug = SUGGESTED_DAYS[it.resortId] || {};
+    const key = pd.source === "yours" ? `${pd.days}|yours` : `${pd.days}|${sug.short || ""}`;
+    if(!groups.has(key)) groups.set(key, { days: pd.days, yours: pd.source === "yours", short: sug.short, names: [] });
+    groups.get(key).names.push(SHORT_NAME[it.resortId] || it.resort.name);
+  }
+  const andList = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length-1];
+  const parts = [...groups.values()].sort((a, b) => b.days - a.days).map((g, i) => {
+    const why = g.yours ? "your number" : (g.names.length === 1 ? (g.short || "").replace(/ each$/, "") : g.short);
+    return `<b>${g.days}${i === 0 ? ` day${g.days===1?"":"s"}` : ""} at ${esc(andList(g.names))}</b>${why ? ` (${esc(why)})` : ""}`;
+  });
+  el.innerHTML = `Park tickets are priced for what each resort needs: ${parts.join("; ")}. `
+    + `Change any resort's days on its card, or pick one number for all of them under "Park days".`;
+  el.hidden = false;
+}
+
 function render(){
   const p = params;
   const pax = paxList(p).length;
@@ -3160,7 +3231,8 @@ function render(){
     ? `${winDef.label}, ${p.month.split("-")[0]}`
     : `arriving ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]}`;
   $("#resSub").textContent =
-    `${partyParts({ ...p, ages: [] }).join(", ")}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays} park days · ${whenStr}`;
+    `${partyParts({ ...p, ages: [] }).join(", ")}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays ? `${p.parkDays} park days` : "park days suggested per resort"} · ${whenStr}`;
+  renderParkDaysNote();
   $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
   $("#planChip").className = "chip" + (session.plus?" plus":"");
   syncWindowUi();
@@ -3931,7 +4003,9 @@ async function openSavedTrip(trip){
   const q = trip.params || {};
   const setIf = (sel, v) => { if(v !== undefined && v !== null && v !== "") $(sel).value = String(v); };
   setIf("#origin", q.origin); setIf("#nights", q.nights);
-  setIf("#parkdays", q.parkDays); setIf("#tier", q.tier); setIf("#food", q.food);
+  // A search saved on "our suggestion" carries no parkDays.
+  $("#parkdays").value = q.parkDays ? String(q.parkDays) : "";
+  setIf("#tier", q.tier); setIf("#food", q.food);
   setIf("#gettingThere", q.gettingThere);
   // A search saved months ago can name a month that is now too close to plan
   // (or already past). It moves to the first month the form offers, and says
@@ -4189,7 +4263,7 @@ function coverHtml(lead, chosen){
     <h1>Let's go to ${esc(lead.resort.name)}!</h1>
     <p>This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${esc(whenPhrase(p))} &mdash;
     ${esc(partyPhrase(p))}, ${travelPhrase(p, lead)}, ${p.nights} night${p.nights===1?"":"s"}
-    with ${p.parkDays} park day${p.parkDays===1?"":"s"}.
+    with ${daysOf(lead.price)} park day${daysOf(lead.price)===1?"":"s"} at ${esc(lead.resort.name)}.
     The estimated cost is <b>${usd(lead.price.total)}</b>.${alsoLine}</p>
     <p class="psub">Prepared with Parkfare on ${esc(prepared)}.
     Flights and hotel rates are estimates from cached prices, not quotes &mdash; check them before booking.</p>
@@ -4315,11 +4389,12 @@ function gettingThereHtml(item){
 function ticketsHtml(item){
   const r = item.resort, pr = item.price, out = [];
   const parkWord = r.parks === 1 ? "1 park" : `${r.parks} parks`;
-  const perDay = params.parkDays ? Math.round(pr.tickets / params.parkDays / Math.max(1, pr.partySize)) : 0;
+  const nDays = daysOf(pr);
+  const perDay = Math.round(pr.tickets / nDays / Math.max(1, pr.partySize));
 
   out.push(`<p>${esc(r.name)} has <b>${parkWord}</b>${
     r.parkList.length ? ` &mdash; ${r.parkList.map(k=>esc(k.name)).join(", ")}` : ""}.
-    ${params.parkDays} park day${params.parkDays===1?"":"s"} for ${esc(partyPhrase(params))} comes to
+    ${nDays} park day${nDays===1?"":"s"} for ${esc(partyPhrase(params))} comes to
     <b>${usd(pr.tickets)}</b>${perDay ? `, roughly ${usd(perDay)} per person per day` : ""}.</p>`);
 
   const tl = (pr.ticketLines || []).filter(l => l.group !== "infant");
@@ -4747,7 +4822,7 @@ document.addEventListener("click", async (e) => {
 
 /* your-numbers controls */
 function ovEmpty(o){
-  return !o.nightly && !o.farePerSeat && !o.foodPerDayUsd && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
+  return !o.nightly && !o.farePerSeat && !o.foodPerDayUsd && !o.parkDays && !o.excludeHotel && !o.excludeFlights && !o.promoId && !o.personalPromo;
 }
 
 function setOv(id, key, val){
@@ -4810,6 +4885,7 @@ document.addEventListener("change", e=>{
     if(e.target.id === "foodOv"){
       setOv(rid, "foodPerDayUsd", Math.max(0, +e.target.value) || 0);
     }
+    if(e.target.id === "parkDaysOv") setOv(rid, "parkDays", Math.max(1, +e.target.value) || 0);
     if(e.target.id === "excludeHotelCk")   setExclude(rid, "excludeHotel", e.target.checked);
     if(e.target.id === "excludeFlightsCk") setExclude(rid, "excludeFlights", e.target.checked);
   }
@@ -4818,6 +4894,17 @@ document.addEventListener("change", e=>{
   }
 });
 document.addEventListener("click", e=>{
+  // "?" beside a form label: shows or hides its note under the row.
+  const qh = e.target.closest(".qhelp");
+  if(qh){
+    const note = document.getElementById(qh.dataset.help);
+    if(note){
+      const open = note.hidden;
+      note.hidden = !open;
+      qh.setAttribute("aria-expanded", String(open));
+    }
+    return;
+  }
   const rs = e.target.closest("[data-reset]");
   if(rs){
     const rid = results[selected] && results[selected].resortId;
@@ -4904,6 +4991,11 @@ async function boot(){
   apiGet("/api/attractions", {}).then(a => { if(Array.isArray(a) && !allAttractions.length) allAttractions = a; })
     .catch(()=>{});
   DVC_DEFAULT_PER_POINT = meta.dvcTakeHomePerPoint || 18;
+  SUGGESTED_DAYS = meta.suggestedParkDays || {};
+  const sugList = Object.entries(SUGGESTED_DAYS).map(([id, v]) => `${v.days} at ${SHORT_NAME[id] || id}`);
+  if(sugList.length) $("#parkdaysHelp").textContent =
+    `Our suggestion prices a different ticket length at each resort, because the parks aren't the same size: ${sugList.join(", ")}. `
+    + `You can change any one resort's days on its own card in the results.`;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
   fillPassFields();

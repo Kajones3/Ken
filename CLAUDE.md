@@ -26,7 +26,7 @@ time. The DATABASE is ahead of Render: the migrate workflow ran on
 (see below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-636 tests, and typecheck is clean.
+650 tests, and typecheck is clean.
 
 ### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
 
@@ -83,6 +83,26 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      cheaper than other airlines. They're leaning toward simply SURFACING
      budget carriers rather than pricing them into the total. Wait for their
      decision.
+
+### 2026-10-02 — park days suggested per resort, and "?" help on the party form
+
+- **Park days now default to each resort's own suggestion** (owner: "4 days
+  at Disney World will get you 1 day in each park... 4 days in Disneyland is
+  enough to experience both parks really well"). `SUGGESTED_PARK_DAYS` in
+  config.ts: **WDW 5; Disneyland, Tokyo, Paris 3; Hong Kong, Shanghai 2**
+  (water parks not counted). Owner-editable in /admin ("Park tickets",
+  `tickets.<id>.suggestedDays`). `TripParams.parkDays` is now OPTIONAL:
+  unset = suggestion; a number from the search form applies to all six; a
+  per-resort `ResortOverride.parkDays` (the new "Ticket days" picker on each
+  resort's Park tickets card) beats both. `parkDaysFor()` in pricing.ts is
+  the one rule, capped at nights + 1; `TripPrice.parkDays` reports days,
+  source ("suggested"/"search"/"yours") and whether it was capped. The
+  results show one line (`#parkDaysNote`) saying what was priced where and
+  why, only while the search is on the suggestion.
+- **The form's age hint became "?" buttons** beside Seniors, Children and
+  Park days. Each opens a full-width note under the row (never inside the
+  column, so the dropdowns stay aligned).
+- Old saved searches carry `parkDays: 4` and reopen as "4 everywhere".
 
 ### 2026-09-29, later — lands follow the attraction sheet (owner: DinoLand)
 

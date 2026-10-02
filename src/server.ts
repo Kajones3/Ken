@@ -13,7 +13,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
          KNOWN_ORIGINS, KNOWN_DESTINATIONS, DEFAULT_CORRECTION_DAYS } from "./fareCorrections.js";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
@@ -126,7 +126,9 @@ function paramsFrom(q: URLSearchParams): TripParams {
     adults: clamp(Number(q.get("adults") ?? 2), 1, 12),
     childAges: ages.filter((a) => Number.isFinite(a) && a >= 0 && a <= 17).slice(0, 8),
     nights,
-    parkDays: clamp(Number(q.get("parkDays") ?? 4), 1, nights + 1),
+    // Blank or "auto" = each resort's own suggestion (SUGGESTED_PARK_DAYS).
+    parkDays: Number.isFinite(Number(q.get("parkDays"))) && Number(q.get("parkDays")) >= 1
+      ? clamp(Number(q.get("parkDays")), 1, nights + 1) : undefined,
     stay: (["on", "off", "none"].includes(q.get("stay") ?? "") ? q.get("stay") : "on") as Stay,
     tier: clamp(Number(q.get("tier") ?? 1), 0, 2) as TierIndex,
     food: (["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character", "plan"].includes(q.get("food") ?? "")
@@ -612,7 +614,8 @@ const server = createServer(async (req, res) => {
       // Read live rather than from the module default: the owner can change
       // the take-home figure, and the box travelers type into should start
       // on their number, not the one this app shipped with.
-      const dvcDefault = (await loadSettings(db)).find((v) => v.key === DVC_TAKE_HOME_KEY)?.value
+      const settingsNow = await loadSettings(db);
+      const dvcDefault = settingsNow.find((v) => v.key === DVC_TAKE_HOME_KEY)?.value
         ?? DVC_TAKE_HOME_PER_POINT;
       return send(200, {
       origins: withSuggestedMode(ORIGINS),
@@ -665,6 +668,13 @@ const server = createServer(async (req, res) => {
       // and the browser never carries its own copy of a price.
       passPrograms: PASS_RESORTS,
       dvcTakeHomePerPoint: dvcDefault,
+      // Each resort's suggested ticket length (the owner's number if set)
+      // and the reason, so the "Park days" picker and the results can say
+      // what "our suggestion" means without a copy of the table.
+      suggestedParkDays: Object.fromEntries(Object.entries(SUGGESTED_PARK_DAYS).map(([id, s]) => [id, {
+        days: Math.round(settingsNow.find((v) => v.key === suggestedParkDaysKey(id))?.value ?? s.days),
+        why: s.why, short: s.short,
+      }])),
       // Named holiday sub-weeks (December, Thanksgiving) for every month the
       // month picker offers, keyed by "YYYY-MM" — empty for a month with
       // none. Computed here, once, so the picker's labels can never drift

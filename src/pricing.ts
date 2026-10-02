@@ -13,6 +13,7 @@ import {
   ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
   type MileageRateLookup,
+  SUGGESTED_PARK_DAYS, suggestedParkDaysKey,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
@@ -33,7 +34,10 @@ export interface TripParams {
   adults: number;
   childAges: number[];
   nights: number;
-  parkDays: number;
+  /** How many park days to ticket at EVERY resort. Undefined = each resort's
+   *  own suggestion (SUGGESTED_PARK_DAYS), which is the default since
+   *  2026-10-02. A per-resort `ResortOverride.parkDays` beats both. */
+  parkDays?: number;
   stay: Stay;
   tier: TierIndex;
   food: FoodStyle;
@@ -134,6 +138,9 @@ export interface ResortOverride {
    *  detail card says so. Part-days are still applied, so it is multiplied by
    *  nights + FOOD_DAY_ALLOWANCE, not by nights. */
   foodPerDayUsd?: number;
+  /** Ticket days at THIS resort only, set from its detail card. Beats both
+   *  the search-wide `TripParams.parkDays` and the resort's suggestion. */
+  parkDays?: number;
   /** "I've already got this sorted — don't count it in the total" (a free
    *  family/points room, flights already booked separately, etc.). Not a
    *  price claim like nightly/farePerSeat — it says the line doesn't belong
@@ -364,6 +371,9 @@ export interface TripPrice {
    *  show it as its own line rather than folding it silently into the base
    *  ticket number. */
   hopperUsd: number;
+  /** Park days actually ticketed at this resort, where that number came from,
+   *  the resort's own suggestion, and whether nights + 1 cut it short. */
+  parkDays: { days: number; source: ParkDaysSource; suggested: number; capped: boolean };
   /** The ticket line split by who buys which ticket, straight from the
    *  per-traveler prices above — so the card never has to re-derive a split.
    *  `senior` is its own group wherever the party has seniors, INCLUDING
@@ -616,16 +626,40 @@ export function foodRate(resort: Resort, style: FoodStyle): number {
 
 const FOOD_DAY_ALLOWANCE = 0.4;             // arrival and departure are part-days
 
+/** Where a resort's ticket length came from, for the card to say so. */
+export type ParkDaysSource = "suggested" | "search" | "yours";
+
+/**
+ * How many park days to ticket at this resort: the traveler's own number for
+ * this resort, else the search-wide number, else the resort's suggestion
+ * (owner-editable). Never more than nights + 1 — you cannot use a park day you
+ * are not there for — and `capped` says when that cut it short.
+ */
+export function parkDaysFor(
+  book: Pick<PriceBook, "setting">, resort: Resort, params: Pick<TripParams, "parkDays" | "nights">,
+  ov: ResortOverride = {},
+): { days: number; source: ParkDaysSource; suggested: number; capped: boolean } {
+  const shipped = SUGGESTED_PARK_DAYS[resort.id]?.days ?? 3;
+  const suggested = Math.max(1, Math.round(book.setting?.(suggestedParkDaysKey(resort.id)) ?? shipped));
+  const own = ov.parkDays !== undefined && ov.parkDays >= 1 ? Math.round(ov.parkDays) : undefined;
+  const wanted = own ?? params.parkDays ?? suggested;
+  const source: ParkDaysSource = own !== undefined ? "yours" : params.parkDays !== undefined ? "search" : "suggested";
+  const max = Math.max(1, params.nights + 1);
+  return { days: Math.min(Math.max(1, wanted), max), source, suggested, capped: wanted > max };
+}
+
 export function priceTrip(
   book: PriceBook, resort: Resort, params: TripParams,
   overrides: Overrides, start: ISODate,
 ): PriceResult {
   if (params.nights < 1) return { ok: false, reason: "nights must be at least 1" };
-  if (params.parkDays < 1) return { ok: false, reason: "park days must be at least 1" };
+  if (params.parkDays !== undefined && params.parkDays < 1) return { ok: false, reason: "park days must be at least 1" };
   if (params.adults < 1) return { ok: false, reason: "a trip needs at least one adult" };
 
   const ages = partyAges(params);
   const ov = overrides[resort.id] ?? {};
+  const days = parkDaysFor(book, resort, params, ov);
+  const parkDays = days.days;
   const bucket = bucketFor(params.nights);
 
   // --- flights, or driving instead of flying ------------------------------
@@ -782,13 +816,13 @@ export function priceTrip(
   }
 
   // --- tickets -----------------------------------------------------------
-  const multiDay = ticketMultiDay(resort, params.parkDays);
+  const multiDay = ticketMultiDay(resort, parkDays);
   // Per traveler, not one running total, because an annual pass covers
   // PEOPLE. Zeroing a share of one lump sum would be arithmetic that happens
   // to land near the right answer for a party that is all adults and be
   // wrong for every other party.
   const ticketPerHead = ages.map(() => 0);
-  for (let i = 0; i < params.parkDays; i++) {
+  for (let i = 0; i < parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
     const t = book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
@@ -815,8 +849,8 @@ export function priceTrip(
   // by trip length would be the app overruling them.
   const ownerAdult = book.setting?.(`hopper.${resort.id}.adult`);
   const ownerChild = book.setting?.(`hopper.${resort.id}.child`);
-  const hopperAdult = ownerAdult ?? hopperPerTicket(resort, params.parkDays, resort.ticket.hopperAdultUsd);
-  const hopperChild = ownerChild ?? hopperPerTicket(resort, params.parkDays, resort.ticket.hopperChildUsd);
+  const hopperAdult = ownerAdult ?? hopperPerTicket(resort, parkDays, resort.ticket.hopperAdultUsd);
+  const hopperChild = ownerChild ?? hopperPerTicket(resort, parkDays, resort.ticket.hopperChildUsd);
   const hopperPerHead = ages.map((age) => {
     if (!params.hopper || !hopperAdult) return 0;
     const band = ticketBandOf(resort, age);
@@ -1066,7 +1100,7 @@ export function priceTrip(
       hotelPick, hotelTier, foodPlan, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd, ticketLines, checkAdjust,
-      membership,
+      membership, parkDays: days,
     },
   };
 }
