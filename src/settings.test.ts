@@ -187,7 +187,7 @@ test("an override for Park Hopper moves the ticket line", async () => {
   // World publishes a hopper that grows with ticket length, and a typed
   // number is a decision — silently scaling it would be the app overruling
   // the owner.
-  const effective = hopperPerTicket(wdw, p.parkDays, wdw.ticket.hopperAdultUsd);
+  const effective = hopperPerTicket(wdw, p.parkDays!, wdw.ticket.hopperAdultUsd);
   const ownerValue = effective + 25;
   const raised = priceTrip(bookWith({ "hopper.wdw.adult": ownerValue }), wdw, p, {}, START);
   assert.ok(shipped.ok && raised.ok);

@@ -32,7 +32,7 @@
  * December, and the owner's nightly job list already warns about it.
  */
 import type { Db } from "./db.js";
-import { RESORTS, IRS_MILEAGE_RATES } from "./config.js";
+import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
@@ -91,6 +91,14 @@ export const SETTINGS: SettingDef[] = [
         + "hopper as an adult; leaving this alone keeps the published figures."),
     ]),
   ]),
+  // How many park days a search prices at each resort when the traveler
+  // hasn't picked a number. A judgement about what a first visit needs, so
+  // it belongs to the owner, not the code.
+  ...RESORTS.filter((r) => SUGGESTED_PARK_DAYS[r.id]).map((r): SettingDef => ({
+    key: suggestedParkDaysKey(r.id), label: `${r.name} — park days we suggest`, group: "Park tickets",
+    kind: "number", default: SUGGESTED_PARK_DAYS[r.id]!.days, min: 1, max: 10,
+    help: `Ticket days priced when a traveler leaves "Park days" on our suggestion. Shipped as ${SUGGESTED_PARK_DAYS[r.id]!.days}: ${SUGGESTED_PARK_DAYS[r.id]!.why}. Travelers can still change it for any resort on its detail card.`,
+  })),
   // Annual passes. Every tier is here because Disney raises them roughly once
   // a year and the owner should never have to wait for a code change to be
   // right about a number a traveler can look up in thirty seconds.

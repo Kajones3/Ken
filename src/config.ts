@@ -1623,3 +1623,25 @@ export const CROWDS: Record<string, CrowdYear> = {
  * placeholder bands rather than the owner's own chart reading.
  */
 export const CROWDS_ARE_PLACEHOLDER = false;
+
+/**
+ * How many park days we price at each resort when the traveler hasn't picked
+ * a number (owner, 2026-10-02). One flat "4 days" everywhere compared unlike
+ * things: four days at Walt Disney World is one day in each of its four parks
+ * with nothing to spare, while four days at Disneyland is a lot for two parks
+ * side by side, and Hong Kong and Shanghai have one park each. So each resort
+ * gets the length a first visit actually needs, and the board says so.
+ *
+ * Water parks are not counted at Walt Disney World. Owner-editable in /admin
+ * (`tickets.<id>.suggestedDays`); `why` is the sentence the results show.
+ */
+export const SUGGESTED_PARK_DAYS: Record<string, { days: number; why: string; short: string }> = {
+  wdw:  { days: 5, short: "four theme parks: a day in each plus a spare, water parks not included",
+          why: "four theme parks, so a day in each plus one to go back to a favorite (water parks aren't included)" },
+  dlr:  { days: 3, short: "two parks each", why: "two parks side by side, and three days covers both well" },
+  tdr:  { days: 3, short: "two parks each", why: "two parks, Disneyland and DisneySea, and three days covers both well" },
+  dlp:  { days: 3, short: "two parks each", why: "two parks side by side, and three days covers both well" },
+  hkdl: { days: 2, short: "one park each", why: "one park, and two days is enough to see it at an easy pace" },
+  shdr: { days: 2, short: "one park each", why: "one park, and two days is enough to see it at an easy pace" },
+};
+export const suggestedParkDaysKey = (resortId: string) => `tickets.${resortId}.suggestedDays`;

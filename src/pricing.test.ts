@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
-import { bandOf, cheapestIn, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, foodRate, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
+import { bandOf, cheapestIn, parkDaysFor, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, foodRate, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
 import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS, type FoodStyle } from "./config.js";
 
@@ -1166,4 +1166,41 @@ test("Tokyo charges no Park Hopper even when one is asked for", () => {
   if (!on.ok || !off.ok) return;
   assert.equal(on.price.hopperUsd, 0);
   assert.equal(on.price.total, off.price.total, "asking for a hopper must cost nothing here");
+});
+
+test("each resort suggests its own ticket length when the search leaves park days blank", () => {
+  const p = { nights: 6 };
+  const want: Record<string, number> = { wdw: 5, dlr: 3, tdr: 3, dlp: 3, hkdl: 2, shdr: 2 };
+  for (const [id, days] of Object.entries(want)) {
+    const r = parkDaysFor({}, resortById(id), p);
+    assert.deepEqual(r, { days, source: "suggested", suggested: days, capped: false }, id);
+  }
+});
+
+test("park days: a resort's own number beats the search's, which beats the suggestion", () => {
+  const wdw = resortById("wdw");
+  assert.equal(parkDaysFor({}, wdw, { nights: 6, parkDays: 2 }).source, "search");
+  assert.equal(parkDaysFor({}, wdw, { nights: 6, parkDays: 2 }).days, 2);
+  const own = parkDaysFor({}, wdw, { nights: 6, parkDays: 2 }, { parkDays: 4 });
+  assert.deepEqual([own.days, own.source], [4, "yours"]);
+  // The owner's suggestion in /admin replaces the shipped one.
+  const book = { setting: (k: string) => (k === "tickets.wdw.suggestedDays" ? 6 : undefined) };
+  assert.equal(parkDaysFor(book, wdw, { nights: 6 }).days, 6);
+});
+
+test("park days never exceed nights + 1, and say when they were cut", () => {
+  const r = parkDaysFor({}, resortById("wdw"), { nights: 2 });
+  assert.deepEqual([r.days, r.capped], [3, true]);
+});
+
+test("a resort's own park days change only that resort's ticket line", () => {
+  const book = fullBook("wdw", "MCO");
+  const wdw = resortById("wdw");
+  const auto = priceTrip(book, wdw, { ...base, parkDays: undefined }, {}, START);
+  const two = priceTrip(book, wdw, { ...base, parkDays: undefined }, { wdw: { parkDays: 2 } }, START);
+  assert.ok(auto.ok && two.ok);
+  assert.equal(auto.price.parkDays.days, 5);
+  assert.equal(two.price.parkDays.days, 2);
+  assert.ok(two.price.tickets < auto.price.tickets);
+  assert.equal(two.price.flights, auto.price.flights);
 });
