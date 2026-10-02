@@ -263,6 +263,19 @@ create table if not exists route_searches (
 create index if not exists route_searches_popular
   on route_searches (searches desc, last_searched_at desc);
 
+-- Comparisons per day, by home airport and travel month (2026-10-02, owner:
+-- "make sure we have a way to track what routes people use most").
+-- route_searches only keeps a running total, which can't say "this week";
+-- this can. Same privacy rule: counts only, no user, session, cookie or IP.
+-- The owner's own searches are left out so testing doesn't skew it.
+create table if not exists search_days (
+  day           date        not null,
+  origin        char(3)     not null,
+  depart_month  char(7)     not null,
+  searches      integer     not null default 0,
+  primary key (day, origin, depart_month)
+);
+
 -- Which provider wrote a fare row. The trend multiplier that moves every
 -- estimated route is only as good as the real fares it is measured from, so
 -- it must be able to exclude a source it does not trust: Travelpayouts'

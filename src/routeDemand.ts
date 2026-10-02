@@ -14,7 +14,7 @@
  * nightly job only ever needs "how many people asked about ATL-MCO in
  * March", never who they were.
  */
-import { ORIGINS, RESORTS, isLocalRoute, firstPlannableMonth } from "./config.js";
+import { ORIGINS, ALL_ORIGINS, RESORTS, isLocalRoute, firstPlannableMonth } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface PopularRoute {
@@ -37,6 +37,10 @@ function arrivalAirports(): string[] {
  */
 export async function recordSearch(
   db: Db, origin: string, destinations: string[], departMonth: string,
+  /** False for the owner's own searches: they still steer which fares get
+   *  bought (the owner checks those routes), but stay out of the daily
+   *  counts /admin shows, so testing doesn't look like visitors. */
+  countInStats = true,
 ): Promise<void> {
   if (!origin || !departMonth) return;
   try {
@@ -52,6 +56,19 @@ export async function recordSearch(
     }
   } catch (e) {
     console.error("recordSearch failed (ignored):", (e as Error).message);
+  }
+  // Its own try: if the database hasn't been migrated yet, the daily count
+  // failing must not stop the route totals above (the nightly buying job
+  // reads those).
+  if (!countInStats) return;
+  try {
+    await db.query(
+      `insert into search_days (day, origin, depart_month, searches) values (current_date, $1, $2, 1)
+       on conflict (day, origin, depart_month) do update set searches = search_days.searches + 1`,
+      [origin, departMonth],
+    );
+  } catch (e) {
+    console.error("recordSearch daily count failed (ignored):", (e as Error).message);
   }
 }
 
@@ -179,4 +196,81 @@ export async function rotationRoutes(
   return candidates.slice(0, limit).map((c) => ({
     origin: c.origin, destination: c.destination, departMonth, searches: 0,
   }));
+}
+
+export interface RouteDemandReport {
+  days: number;
+  /** Comparisons in the window (owner's own left out). */
+  total: number;
+  byOrigin: { origin: string; city: string; searches: number; boughtFares: number }[];
+  byMonth: { month: string; searches: number }[];
+  /** Busiest home airport + month pairs (running totals, owner included),
+   *  with how many real fares we hold per resort. One row per pair, since a
+   *  comparison asks about all six resorts at once. */
+  routes: { origin: string; month: string; searches: number; fares: Record<string, number> }[];
+}
+
+/**
+ * What /admin's "Routes people search" shows. Read-only.
+ *
+ * Every comparison prices all six resorts, so it counts once per home
+ * airport and month here; which RESORT people care about is better read from
+ * the "details opened" counts on the Visitors page.
+ */
+export async function loadRouteDemand(db: Db, days = 30): Promise<RouteDemandReport> {
+  const o = await db.query<{ origin: string; searches: string }>(
+    `select origin, sum(searches) as searches from search_days
+      where day > current_date - $1::int group by origin order by sum(searches) desc, origin`,
+    [days],
+  );
+  const m = await db.query<{ depart_month: string; searches: string }>(
+    `select depart_month, sum(searches) as searches from search_days
+      where day > current_date - $1::int group by depart_month order by depart_month`,
+    [days],
+  );
+  const bought = await db.query<{ origin: string; destination: string; month: string; n: string }>(
+    `select origin, destination, to_char(depart_date, 'YYYY-MM') as month, count(*) as n
+       from flight_prices
+      where source = 'serpapi_flights' and fetched_at > now() - interval '45 days'
+      group by origin, destination, to_char(depart_date, 'YYYY-MM')`,
+  );
+  const boughtByOrigin = new Map<string, number>();
+  const boughtByRoute = new Map<string, number>();
+  for (const r of bought.rows) {
+    const n = Number(r.n);
+    boughtByOrigin.set(r.origin.trim(), (boughtByOrigin.get(r.origin.trim()) ?? 0) + n);
+    boughtByRoute.set(`${r.origin.trim()}|${r.destination.trim()}|${r.month}`, n);
+  }
+  const rs = await db.query<{ origin: string; depart_month: string; searches: number }>(
+    `select origin, depart_month, max(searches) as searches from route_searches
+      where last_searched_at > now() - ($1 || ' days')::interval
+      group by origin, depart_month
+      order by max(searches) desc, origin, depart_month limit 30`,
+    [String(days)],
+  );
+  const city = new Map(ALL_ORIGINS.map((x) => [x.iata, x.name] as const));
+  const resortOf = new Map(RESORTS.flatMap((r) => [[r.iata, r.id] as const, ...r.altArrivalAirports.map((a) => [a.iata, r.id] as const)]));
+  const faresFor = (origin: string, month: string) => {
+    const out: Record<string, number> = Object.fromEntries(RESORTS.map((r) => [r.id, 0]));
+    for (const [key, n] of boughtByRoute) {
+      const [o, dest, m2] = key.split("|");
+      const id = resortOf.get(dest!);
+      if (o === origin && m2 === month && id) out[id]! += n;
+    }
+    return out;
+  };
+  const byOrigin = o.rows.map((r) => ({
+    origin: r.origin.trim(), city: city.get(r.origin.trim()) ?? "", searches: Number(r.searches),
+    boughtFares: boughtByOrigin.get(r.origin.trim()) ?? 0,
+  }));
+  return {
+    days,
+    total: byOrigin.reduce((t, r) => t + r.searches, 0),
+    byOrigin,
+    byMonth: m.rows.map((r) => ({ month: r.depart_month, searches: Number(r.searches) })),
+    routes: rs.rows.map((r) => ({
+      origin: r.origin.trim(), month: r.depart_month, searches: Number(r.searches),
+      fares: faresFor(r.origin.trim(), r.depart_month),
+    })),
+  };
 }

@@ -240,6 +240,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 <div class="shell">
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
+    <a href="#flights">Flights</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -279,6 +280,54 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
       <h3>Day by day</h3>
       <div id="stDaily"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="flights">
+    <section class="sheet">
+      <h2>How close our flight estimates are</h2>
+      <p>Every night we buy about 18 real Google Flights fares, each the middle-priced flight for one route and
+        date. Each one is a test: what would our <b>estimate</b> have said for that same route and date, if we
+        hadn't bought it? This page grades the estimate a traveler sees on routes we <b>haven't</b> bought.</p>
+      <div class="seg" id="flDays">
+        <button data-days="14">Last 14 days</button>
+        <button data-days="30" aria-pressed="true">Last 30 days</button>
+        <button data-days="90">Last 90 days</button>
+      </div>
+      <div class="tiles" id="flTiles"><p class="count">Loading…</p></div>
+
+      <h3>Which lean fits best</h3>
+      <p>&ldquo;Lean&rdquo; is the setting in Rates &amp; settings (<code>flight.estimateLean</code>): 0 shows the cheap
+        end of a route's usual range, 50 the middle, 100 the dear end. &ldquo;Typically off by&rdquo; is how far a typical
+        estimate missed; the smallest number in each row is the best fit. <b>Reads high/low</b>: + means our number
+        was above the real fare.</p>
+      <div id="flLean"></div>
+
+      <h3>Routes, furthest off first</h3>
+      <div id="flRoutes"></div>
+      <p class="count" style="margin-top:8px">Honest limits: for US routes, the overall high/low reading is
+        partly built in, because the trend that moves every US estimate is measured from these same fares. The
+        &ldquo;typically off by&rdquo; spread is the trustworthy number. A route with 1 or 2 fares is a hint, not a
+        verdict.</p>
+      <p class="count" id="flSkipped"></p>
+    </section>
+
+    <section class="sheet">
+      <h2>Routes people search</h2>
+      <p>Counts only: no names, cookies or addresses, the same as the Visitors page. Your own searches aren't
+        counted here (they do still steer which fares get bought). Each comparison prices all six resorts, so it
+        counts once for its home airport and month; to see which <b>resort</b> people care about, use
+        &ldquo;details opened&rdquo; on the Visitors page.</p>
+      <div class="tiles" id="rdTiles"></div>
+      <h3>Home airports</h3>
+      <div id="rdOrigins"></div>
+      <h3>Travel months</h3>
+      <div id="rdMonths"></div>
+      <h3>Busiest searches, and the real fares we hold for each resort</h3>
+      <p>One row per home airport and travel month. The resort columns count the real fares we've bought for
+        that trip in the last 45 days; a 0 (in red) is a resort that's priced from an estimate there. The nightly
+        job already favors routes people search.</p>
+      <div id="rdRoutes"></div>
     </section>
   </div>
 
@@ -1424,6 +1473,70 @@ const barTable = (rows, cols) => {
       <td style="width:30%"><div class="bar" style="width:${Math.round((r._bar || 0) / max * 100)}%"></div></td></tr>`).join("")}</tbody></table>`;
 };
 let statDays = 30;
+/* ------------------------------- flights ------------------------------- */
+let flDays = 30;
+const signed = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + v + "%";
+const offBy = v => v === null || v === undefined ? "—" : v + "%";
+async function loadFlights(){
+  const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
+  if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
+  const { scoreboard: s, demand: d } = await r.json();
+  const g = (x, name) => x.n
+    ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
+    : tile(name, "—", "no fares to test yet");
+  $("#flTiles").innerHTML = s.tested
+    ? g(s.domestic, "US routes") + g(s.international, "International") + tile("Lean now", String(s.lean), "0 cheap end · 100 dear end")
+    : `<p class="count">No real fares bought in this period to test against yet.</p>`;
+  const leanRow = (x, name) => x.n ? `<tr><td>${esc(name)} (${num(x.n)})</td>${x.byLean.map(b =>
+      `<td class="n"${b.lean === x.bestLean ? ' style="font-weight:700"' : ""}>${offBy(b.typicalOffPct)}<br><span class="count">${signed(b.medianPct)}</span></td>`).join("")}</tr>` : "";
+  $("#flLean").innerHTML = s.tested
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Typically off by / reads</th>${s.all.byLean.map(b =>
+        `<th class="n">Lean ${b.lean}${b.lean === s.lean ? " (now)" : ""}</th>`).join("")}</tr></thead>
+      <tbody>${leanRow(s.domestic, "US routes")}${leanRow(s.international, "International")}${leanRow(s.all, "All")}</tbody></table></div>
+      <p class="count" style="margin-top:8px">Best fit in bold. It's only a recommendation; the setting is yours to change.</p>`
+    : "";
+  $("#flRoutes").innerHTML = s.routes.length
+    ? `<table class="ctab"><thead><tr><th>Route</th><th class="n">Fares</th><th class="n">Real (middle)</th>
+        <th class="n">Our estimate</th><th class="n">Reads</th></tr></thead><tbody>${s.routes.slice(0, 25).map(x =>
+        `<tr><td>${esc(x.origin)} → ${esc(x.destination)}</td><td class="n">${num(x.n)}</td><td class="n">$${num(x.realMedian)}</td>
+         <td class="n">$${num(x.estMedian)}</td><td class="n">${signed(x.medianPct)}</td></tr>`).join("")}</tbody></table>
+      ${s.routes.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(s.routes.length)} routes.</p>` : ""}`
+    : "";
+  const k = s.skipped;
+  $("#flSkipped").textContent = (k.noBaseline || k.noTrend || k.builtFromIt)
+    ? `Not tested: ${k.noBaseline} with no estimate for that route, ${k.builtFromIt} international fares the estimate was built from, ${k.noTrend} waiting on a trend.`
+    : "";
+
+  $("#rdTiles").innerHTML = tile("Comparisons", num(d.total), `last ${d.days} days`)
+    + tile("Home airports used", num(d.byOrigin.length));
+  $("#rdOrigins").innerHTML = d.byOrigin.length
+    ? barTable(d.byOrigin.map(x => ({ ...x, _bar: x.searches })), [
+        { h: "From", f: x => `${esc(x.origin)}${x.city ? " · " + esc(x.city) : ""}` },
+        { h: "Comparisons", n: true, f: x => num(x.searches) },
+        { h: "Real fares held", n: true, f: x => num(x.boughtFares) },
+      ])
+    : `<p class="count">No searches counted in this period yet. (Counting started with this update.)</p>`;
+  $("#rdMonths").innerHTML = d.byMonth.length
+    ? barTable(d.byMonth.map(x => ({ ...x, _bar: x.searches })), [
+        { h: "Month", f: x => esc(x.month) }, { h: "Comparisons", n: true, f: x => num(x.searches) },
+      ]) : "";
+  const SHORT = { wdw: "WDW", dlr: "DLR", dlp: "Paris", tdr: "Tokyo", shdr: "Shanghai", hkdl: "HK" };
+  $("#rdRoutes").innerHTML = d.routes.length
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>From</th><th>Month</th><th class="n">Searches</th>
+        ${Object.values(SHORT).map(h => `<th class="n">${h}</th>`).join("")}</tr></thead>
+      <tbody>${d.routes.map(x => `<tr><td>${esc(x.origin)}</td><td>${esc(x.month)}</td><td class="n">${num(x.searches)}</td>
+        ${Object.keys(SHORT).map(id => `<td class="n"${x.fares[id] ? "" : ' style="color:var(--bad)"'}>${num(x.fares[id])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+      <p class="count" style="margin-top:8px">These are running totals and include your own searches, because the nightly buying job reads them.</p>`
+    : `<p class="count">No routes searched in this period yet.</p>`;
+}
+$("#flDays").addEventListener("click", e => {
+  const b = e.target.closest("[data-days]");
+  if(!b) return;
+  flDays = Number(b.dataset.days);
+  document.querySelectorAll("#flDays [data-days]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  loadFlights();
+});
+
 async function loadStats(){
   const r = await fetch(`/api/admin/stats?days=${statDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#stTiles").innerHTML = `<p class="count">Couldn't load the visitor counts.</p>`; return; }
@@ -1475,6 +1588,7 @@ route();
 load();
 loadFares();
 loadAttractions();
+loadFlights();
 loadWaits();
 loadChecks();
 loadStats();
