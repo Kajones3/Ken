@@ -2,7 +2,8 @@
 
 > **Draft for the owner, not yet published.** `[BRACKETS]` are your
 > decisions — see `docs/legal/README.md`. Every statement below was checked
-> against the code on 2026-09-26; if the app starts collecting something new
+> against the code on 2026-09-26, and the anonymous counting below was added
+> 2026-10-02; if the app starts collecting something new
 > (payments, analytics, a newsletter), this page has to change the same day.
 
 **Last updated: [DATE]**
@@ -20,12 +21,23 @@ don't sell it, and there are no ad trackers on the Site.**
   overnight, so popular routes get better prices.
 - **Your preferences in your own browser** (the last options you picked),
   kept in your browser's local storage. They never leave your device.
+- **Anonymous counts of what people do on the Site**, for example "a
+  comparison was run", "Tokyo's details were opened", "someone clicked the
+  Kayak link" or "someone picked the one-month Plus pass". We store only the
+  day, the action and a running total. There is **no cookie, no name, no
+  email, no account and no IP address** in them, so they can't tell one
+  visitor from another or follow anyone between visits. To stop someone
+  inflating the counts, we briefly note how many requests came from an IP
+  address; that is held in memory for a few minutes and never saved.
 
 **If you create an account:**
 - Your **email address** and a **scrambled (hashed) version of your
   password** — we can't read your actual password.
-- A **sign-in cookie** that keeps you signed in. It's the only cookie we set,
-  and it's needed for the Site to work.
+- A **sign-in cookie** that keeps you signed in. It's needed for the Site to
+  work. [While the Site is in preview behind a password, a second cookie
+  remembers that you entered it. Delete this sentence at launch.] We set no
+  other cookies: no advertising or tracking cookies, and no third-party
+  analytics such as Google Analytics.
 - Anything you choose to save: **home airport, saved searches (including
   numbers you typed in), extra trip costs, attraction picks, and any
   pass/points details** you enter.
@@ -53,6 +65,8 @@ don't sell it, and there are no ad trackers on the Site.**
   password) and, if you're a Plus member with a confirmed address, about
   new Disney deals.
 - To keep the Site secure.
+- To see, in total, which resorts people look at, which booking links they
+  use and whether Plus is worth offering (the anonymous counts above).
 
 We **don't** sell your information, share it with advertisers, or use it to
 build an advertising profile.
@@ -78,6 +92,7 @@ affiliate links, which tell that site you came from us.
 
 - Account information: until you delete your account.
 - Searched routes (anonymous): [up to 2 years] for pricing.
+- Anonymous action counts: [up to 2 years].
 - Sign-in attempt records: minutes.
 - Server logs: [as long as Render keeps them].
 

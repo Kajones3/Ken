@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Parkfare numbers</title>
+<title>Parkfare admin</title>
 <style>
 /* Built phone-first on purpose. The owner's own words were that downloading
    and uploading a spreadsheet from a phone "doesn't seem easy" — so the
@@ -61,7 +61,7 @@ details.group>summary{cursor:pointer; list-style:none; padding:13px 15px; font-w
 details.group>summary::-webkit-details-marker{display:none}
 details.group>summary::after{content:"▸"; color:var(--muted); font-size:12px; transition:transform .12s}
 details.group[open]>summary::after{transform:rotate(90deg)}
-.gcount{font-weight:600; font-size:12px; color:var(--muted)}
+.gcount{font-weight:600; font-size:12px; color:var(--muted); margin-left:auto}
 .gbody{padding:0 15px 6px}
 
 .row{padding:14px 0; border-top:1px solid var(--rule)}
@@ -87,6 +87,41 @@ details.group[open]>summary::after{transform:rotate(90deg)}
 .errs{margin:12px 0 0; padding:10px 12px; border-radius:9px; background:var(--bad-bg); color:var(--bad); font-size:13px}
 .errs ul{margin:6px 0 0; padding-left:18px}
 .hidden{display:none!important}
+[hidden]{display:none!important}
+
+/* Admin pages. One page shows at a time; the menu says where you are. On a
+   laptop the menu sits down the left; on a phone it's a row of tabs you can
+   swipe, pinned to the top so it never scrolls away. */
+.shell{display:block}
+.adminnav{position:sticky; top:0; z-index:5; background:var(--bg); margin:0 -16px 16px; padding:8px 16px;
+  border-bottom:1px solid var(--rule); display:flex; gap:6px; overflow-x:auto; scrollbar-width:none}
+.adminnav::-webkit-scrollbar{display:none}
+.adminnav a{flex:none; text-decoration:none; font-size:13.5px; font-weight:600; color:var(--ink-2);
+  padding:8px 12px; border-radius:9px; border:1px solid transparent; white-space:nowrap}
+.adminnav a:hover{background:var(--surface)}
+.adminnav a[aria-current="page"]{background:var(--accent-bg); border-color:var(--accent-line); color:var(--ink)}
+.adminnav .navnote{display:none}
+@media (min-width:900px){
+  .wrap.wide{max-width:1080px}
+  .shell{display:grid; grid-template-columns:200px minmax(0,1fr); gap:28px; align-items:start}
+  .adminnav{position:sticky; top:16px; flex-direction:column; margin:0; padding:0; border:none; overflow:visible; background:none}
+  .adminnav a{white-space:normal}
+  .adminnav .navnote{display:block; font-size:11.5px; color:var(--muted); padding:10px 12px 0; line-height:1.4}
+}
+.page>.sheet:first-child{margin-top:0}
+.pagehead{margin:0 0 14px}
+.pagehead h2{margin:0; font-size:17px}
+.pagehead p{margin:6px 0 0; color:var(--muted); font-size:13px; max-width:62ch}
+
+/* Visitors page */
+.seg{display:flex; gap:6px; margin:4px 0 16px; flex-wrap:wrap}
+.seg button[aria-pressed="true"]{background:var(--accent-bg); border-color:var(--accent-line)}
+.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:6px}
+.tile{border:1px solid var(--rule); border-radius:10px; background:var(--surface); padding:11px 12px}
+.tile .k{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+.tile .v{font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px}
+.tile .s{font-size:12px; color:var(--muted)}
+.bar{height:6px; border-radius:99px; background:var(--accent-line); min-width:2px}
 
 /* One fare, one line — on a laptop. On a phone it stacks, because six boxes
    across a 390px screen is six unusable boxes. */
@@ -175,17 +210,62 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap wide">
   <header>
     <div>
-      <h1>The numbers this site runs on</h1>
-      <p class="lede">Change one here and it applies to every price straight away. Leave a box
-        empty to go back to the figure the app shipped with.</p>
+      <h1>Parkfare admin</h1>
+      <p class="lede">Only you can see this. Pick a section from the menu.</p>
     </div>
     <a class="btn" href="/">← Back to Parkfare</a>
   </header>
 
-  <section class="sheet" id="checks" style="margin-top:0; margin-bottom:22px">
+<div class="shell">
+  <nav class="adminnav" aria-label="Admin sections">
+    <a href="#visitors">Visitors</a>
+    <a href="#checks">Prices you've checked</a>
+    <a href="#numbers">Rates &amp; settings</a>
+    <a href="#fares">Fares you've seen</a>
+    <a href="#attractions">Attractions</a>
+    <a href="#waits">Wait times</a>
+    <span class="navnote">Every section keeps its own spreadsheet download and upload.</span>
+  </nav>
+  <main>
+
+  <div class="page" data-page="visitors">
+    <section class="sheet">
+      <h2>Visitors</h2>
+      <p>What people did on the site, counted <b>anonymously</b>: no cookies, no names, no addresses, nothing
+        that tells one visitor from another. So these are counts of <b>actions</b>, not people &mdash; one person
+        clicking Kayak three times counts three. Your own clicks aren't counted while you're signed in as you.</p>
+      <div class="seg" id="stDays">
+        <button data-days="7">Last 7 days</button>
+        <button data-days="30" aria-pressed="true">Last 30 days</button>
+        <button data-days="90">Last 90 days</button>
+      </div>
+      <div class="tiles" id="stTiles"><p class="count">Loading…</p></div>
+
+      <h3>Out of every 100 times someone opened a resort's details</h3>
+      <p>The number that matters for Plus is the last one: of every 100 people looking closely at a trip,
+        how many pick a pass. Keep one price for a few hundred detail views before judging it.</p>
+      <div class="tiles" id="stRates"></div>
+
+      <h3>By resort</h3>
+      <div id="stResorts"></div>
+
+      <h3>Where booking clicks went</h3>
+      <div id="stBook"></div>
+
+      <h3>Plus passes picked</h3>
+      <div id="stPlus"></div>
+
+      <h3>Day by day</h3>
+      <div id="stDaily"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="checks">
+
+  <section class="sheet" id="checks">
     <h2>Prices you've checked</h2>
     <p>Every real price you bring in is kept, with the day you saw it and the dates it's for, next to
       what we were quoting for the same thing that day. <b>Nothing here replaces a rate.</b> A check that
@@ -273,11 +353,34 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div id="cList"></div>
   </section>
 
+  </div>
+
+  <div class="page" data-page="numbers">
+  <div class="pagehead">
+    <h2>Rates &amp; settings</h2>
+    <p>The numbers every price is built from. Change one and it applies straight away; leave a box
+      empty to go back to the figure the app shipped with.</p>
+  </div>
   <input type="search" id="q" placeholder="Search — hotel name, resort, “mileage”…" aria-label="Search settings">
   <p class="count" id="count">Loading…</p>
 
   <div id="groups"></div>
+  <section class="sheet">
+    <h2>Change a lot of them at once</h2>
+    <p>Download the spreadsheet, edit the <b>value</b> column, and send it back. Everything else in
+      the file is there to read. A file with a mistake in it is refused whole — nothing is changed
+      until every row is right — so you fix them in one pass rather than discovering them one at a time.</p>
+    <div class="tools">
+      <a class="btn" href="/api/admin/settings.csv" download>Download spreadsheet</a>
+      <button class="btn" id="pick">Upload a filled-in one</button>
+      <input type="file" id="file" accept=".csv,text/csv" class="hidden">
+    </div>
+    <div class="said" id="csvSaid"></div>
+    <div class="errs hidden" id="csvErrs"></div>
+  </section>
+  </div>
 
+  <div class="page" data-page="fares">
   <section class="sheet" id="fares">
     <h2>Fares you've seen yourself</h2>
     <p>A fare you type here does <b>not</b> become the price on the board. It joins the evidence the
@@ -321,6 +424,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div class="errs hidden" id="fCsvErrs"></div>
   </section>
 
+  </div>
+
+  <div class="page" data-page="attractions">
   <section class="sheet" id="attractions">
     <h2>The attraction list</h2>
     <p>What each resort has, which is how the board can tell somebody that only Shanghai has Zootopia.
@@ -383,6 +489,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div class="errs hidden" id="aCsvErrs"></div>
   </section>
 
+  </div>
+
+  <div class="page" data-page="waits">
   <section class="sheet" id="waits">
     <h2>Wait times we've recorded</h2>
     <p>Every two hours a job reads each park's <b>posted</b> waits from Queue-Times and keeps the ones
@@ -400,20 +509,11 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     </div>
   </section>
 
-  <section class="sheet">
-    <h2>Change a lot of them at once</h2>
-    <p>Download the spreadsheet, edit the <b>value</b> column, and send it back. Everything else in
-      the file is there to read. A file with a mistake in it is refused whole — nothing is changed
-      until every row is right — so you fix them in one pass rather than discovering them one at a time.</p>
-    <div class="tools">
-      <a class="btn" href="/api/admin/settings.csv" download>Download spreadsheet</a>
-      <button class="btn" id="pick">Upload a filled-in one</button>
-      <input type="file" id="file" accept=".csv,text/csv" class="hidden">
-    </div>
-    <div class="said" id="csvSaid"></div>
-    <div class="errs hidden" id="csvErrs"></div>
-  </section>
+  </div>
+  </main>
 </div>
+</div>
+
 
 <script>
 const $ = s => document.querySelector(s);
@@ -1126,11 +1226,91 @@ document.addEventListener("click", e => {
   const en = e.target.closest("[data-useend]"); if(en){ fill("#cEnd", en.dataset.useend); }
 });
 
+/* --------------------------- pages and menu ---------------------------
+ * Each section is its own page, picked by the address (#visitors, #numbers,
+ * ...), so the browser's back button works and a page can be bookmarked.
+ * Everything still loads once at the start; switching pages just shows a
+ * different one. */
+const PAGES = [...document.querySelectorAll("[data-page]")].map(el => el.dataset.page);
+function route(){
+  const want = location.hash.slice(1);
+  const page = PAGES.includes(want) ? want : "visitors";
+  document.querySelectorAll("[data-page]").forEach(el => { el.hidden = el.dataset.page !== page; });
+  document.querySelectorAll(".adminnav a").forEach(a => {
+    const on = a.getAttribute("href") === "#" + page;
+    if(on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    if(on && a.scrollIntoView) a.scrollIntoView({ block: "nearest", inline: "nearest" });
+  });
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+
+/* ------------------------------- visitors ------------------------------ */
+const BOOK_LABEL = { flights: "Kayak flights", tickets: "Official ticket page", hotel_disney: "Disney hotel page",
+  hotel_kayak: "Kayak hotels", hotel_booking: "Booking.com hotels" };
+const num = n => Number(n || 0).toLocaleString("en-US");
+const tile = (k, v, sub) => `<div class="tile"><div class="k">${esc(k)}</div><div class="v">${v}</div>${sub ? `<div class="s">${esc(sub)}</div>` : ""}</div>`;
+const barTable = (rows, cols) => {
+  const max = Math.max(1, ...rows.map(r => r._bar || 0));
+  return `<table class="ctab"><thead><tr>${cols.map(c => `<th class="${c.n ? "n" : ""}">${esc(c.h)}</th>`).join("")}<th></th></tr></thead>
+    <tbody>${rows.map(r => `<tr>${cols.map(c => `<td class="${c.n ? "n" : ""}">${c.f(r)}</td>`).join("")}
+      <td style="width:30%"><div class="bar" style="width:${Math.round((r._bar || 0) / max * 100)}%"></div></td></tr>`).join("")}</tbody></table>`;
+};
+let statDays = 30;
+async function loadStats(){
+  const r = await fetch(`/api/admin/stats?days=${statDays}`, { headers: { accept: "application/json" } });
+  if(!r.ok){ $("#stTiles").innerHTML = `<p class="count">Couldn't load the visitor counts.</p>`; return; }
+  const d = await r.json(), t = d.totals, p = d.perHundredDetails;
+  const rate = v => v === null ? "—" : String(v);
+  $("#stTiles").innerHTML = tile("Comparisons run", num(t.compare))
+    + tile("Resort details opened", num(t.detail))
+    + tile("Booking links clicked", num(t.book))
+    + tile("Plus window shown", num(t.paywall))
+    + tile("Plus passes picked", num(t.plus));
+  $("#stRates").innerHTML = t.detail
+    ? tile("Clicked a booking link", rate(p.book), "per 100 detail views")
+      + tile("Saw the Plus window", rate(p.paywall), "per 100 detail views")
+      + tile("Picked a Plus pass", rate(p.plus), "per 100 detail views")
+    : `<p class="count">No resort details opened in this period yet.</p>`;
+  $("#stResorts").innerHTML = barTable(d.byResort.map(x => ({ ...x, _bar: x.details })), [
+    { h: "Resort", f: x => esc(x.name) },
+    { h: "Details opened", n: true, f: x => num(x.details) },
+    { h: "Booking clicks", n: true, f: x => num(x.book) },
+  ]);
+  $("#stBook").innerHTML = barTable(d.bookBy.map(x => ({ ...x, _bar: x.n })), [
+    { h: "Link", f: x => esc(BOOK_LABEL[x.detail] || x.detail) },
+    { h: "Clicks", n: true, f: x => num(x.n) },
+  ]);
+  $("#stPlus").innerHTML = barTable(d.plusBy.map(x => ({ ...x, _bar: x.n })), [
+    { h: "Pass", f: x => `${esc(x.label)} ($${x.priceUsd})` },
+    { h: "Picked", n: true, f: x => num(x.n) },
+  ]);
+  // Only days something happened: thirty rows of zeros hide the few that matter.
+  const busy = d.daily.filter(x => x.compare || x.detail || x.book || x.paywall || x.plus);
+  $("#stDaily").innerHTML = busy.length
+    ? `<table class="ctab"><thead><tr><th>Day</th><th class="n">Comparisons</th>
+        <th class="n">Details</th><th class="n">Bookings</th><th class="n">Plus window</th><th class="n">Plus picked</th></tr></thead>
+      <tbody>${busy.map(x => `<tr><td>${esc(fmtD(x.day))}</td><td class="n">${num(x.compare)}</td>
+        <td class="n">${num(x.detail)}</td><td class="n">${num(x.book)}</td><td class="n">${num(x.paywall)}</td>
+        <td class="n">${num(x.plus)}</td></tr>`).join("")}</tbody></table>
+      <p class="count" style="margin-top:8px">Days with nothing counted are left out.</p>`
+    : `<p class="count">Nothing counted in this period yet.</p>`;
+}
+$("#stDays").addEventListener("click", e => {
+  const b = e.target.closest("[data-days]");
+  if(!b) return;
+  statDays = +b.dataset.days;
+  $("#stDays").querySelectorAll("[data-days]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  loadStats();
+});
+
+route();
 load();
 loadFares();
 loadAttractions();
 loadWaits();
 loadChecks();
+loadStats();
 </script>
 </body>
 </html>

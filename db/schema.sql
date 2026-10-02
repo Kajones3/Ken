@@ -639,3 +639,17 @@ update price_checks
    set model_usd = model_usd * 2, model_round_trip = true
  where category = 'flight' and resort_id in ('wdw', 'dlr')
    and model_usd is not null and not model_round_trip;
+
+-- Anonymous action counts (2026-10-02, src/siteEvents.ts): how many
+-- comparisons were run, which resorts' details were opened, which booking
+-- links were clicked and which Plus passes were picked. One row per day +
+-- action + resort + detail, holding only a number. Deliberately NO user,
+-- session, cookie or IP column: this counts actions, never people.
+create table if not exists event_counts (
+  day       date not null,
+  kind      text not null,
+  resort_id text not null default '',
+  detail    text not null default '',
+  n         integer not null default 0,
+  primary key (day, kind, resort_id, detail)
+);

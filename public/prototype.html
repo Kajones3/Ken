@@ -1422,6 +1422,22 @@ try{ localStorage.removeItem("pf_ov"); }catch(e){}
 const ovOf = id => OV[id] || {};
 const hasOv = id => { const o = ovOf(id); return !!(o.nightly || o.farePerSeat || o.foodPerDayUsd || o.parkDays || o.excludeHotel || o.excludeFlights); };
 
+/* Anonymous counts for the owner's Visitors page in /admin: "a comparison
+ * was run", "Tokyo's details were opened", "someone clicked Kayak". No
+ * cookie, no id, nothing about who; see src/siteEvents.ts. Fire and forget:
+ * a counter must never slow down or break the page. */
+function track(kind, resort, detail){
+  try{
+    const body = JSON.stringify({ kind, resort: resort || "", detail: detail || "" });
+    if(navigator.sendBeacon && navigator.sendBeacon("/api/event", new Blob([body], { type: "application/json" }))) return;
+    fetch("/api/event", { method:"POST", headers:{ "content-type":"application/json" }, body, keepalive:true }).catch(()=>{});
+  }catch(e){}
+}
+document.addEventListener("click", e=>{
+  const a = e.target.closest("a[data-track]");
+  if(a && results[selected]) track("book", results[selected].resortId, a.dataset.track);
+}, true);
+
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
@@ -2960,7 +2976,7 @@ async function renderDetail(){
     ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
       <div><b>${esc(r.dataConfidence.level)} at ${r.name}</b>
       <p style="margin:6px 0 0">${esc(r.dataConfidence.note)}</p>
-      <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ${r.name} tickets →</a></div></div>` : ""}
+      <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ${r.name} tickets →</a></div></div>` : ""}
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
       <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}${
         priceLevelHtml(r, false) ? `<li>${priceLevelHtml(r, false)}</li>` : ""}</ul>
@@ -3021,7 +3037,7 @@ async function renderDetail(){
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
           <div class="foot">
-            ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener">See live fares on Kayak →</a>` : ""}
+            ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener" data-track="flights">See live fares on Kayak →</a>` : ""}
           </div>
         </div>`}
         <div class="card">
@@ -3038,7 +3054,7 @@ async function renderDetail(){
           </div>
           ${ticketRowsHtml}
           <div class="foot">
-            <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener">Official ticket page →</a>
+            <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ticket page →</a>
           </div>
         </div>
         ${membershipCard(x, p)}
@@ -3058,10 +3074,10 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
-          <a class="book" href="${stayLink.href}" target="_blank" rel="noopener">${stayLink.label} →</a>
+          <a class="book" href="${stayLink.href}" target="_blank" rel="noopener" data-track="${stayNow ? "hotel_disney" : "hotel_kayak"}">${stayLink.label} →</a>
           ${stayLink.alt ? `<p class="sub" style="margin:8px 0 0">Opens a search of hotels in ${esc(area)} for ${fmtDate(x.start)} to ${fmtDate(checkout)}${(x.roomCount||1) > 1 ? ` — set ${x.roomCount} rooms once you're there` : ""}.
             The hotel named above is a sample price from one night, so it may not have a room on your dates.
-            Or <a href="${stayLink.alt}" target="_blank" rel="noopener">search the same area on Booking.com</a>.</p>` : ""}
+            Or <a href="${stayLink.alt}" target="_blank" rel="noopener" data-track="hotel_booking">search the same area on Booking.com</a>.</p>` : ""}
           ${stayNow ? `<p class="sub" style="margin:8px 0 0">Disney's own booking page${p.ages.length ? "" : `, opening on ${p.adults} adult${p.adults>1?"s":""}`}.
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
@@ -3257,7 +3273,7 @@ function render(){
 
 /* ============================ events ============================ */
 
-$("#run").addEventListener("click", ()=>runSearch(null));
+$("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
 
 document.addEventListener("click", e=>{
   const o = e.target.closest("[data-open]");
@@ -3272,6 +3288,7 @@ document.addEventListener("click", e=>{
       renderBoard();
     } else {
       selected = i; detailOpen = true;
+      if(results[i]) track("detail", results[i].resortId);
       // renderBoard() first: it's what creates the empty #detail slot
       // inside this row. renderDetail() then fills it — the other order
       // would have nothing to fill, or get overwritten by the next
@@ -3320,6 +3337,8 @@ document.addEventListener("click", async e=>{
   // while re-running the identical six-resort search. Open the row first.
   view = "board";
   detailOpen = true;
+  track("compare");
+  track("detail", j.dataset.jump);
   await runSearch(j.dataset.jump);
   const box = $("#detail");
   if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
@@ -3658,6 +3677,7 @@ function openPw(){
   else if(session.plus) msg.textContent = "You already have Plus on this account — thanks!";
   else msg.textContent = `Signed in as ${session.email}. Pick a plan below — there's no payment yet, just a demo, so it lets the owner know you want in.`;
   $("#paywall").classList.add("on");
+  track("paywall");
 }
 function closePw(){ $("#paywall").classList.remove("on"); }
 $("#closePw").addEventListener("click", closePw);
@@ -3707,6 +3727,9 @@ $("#plusPlans").addEventListener("click", e=>{
   const b = e.target.closest("[data-plan]");
   if(!b) return;
   $("#plusPlans").querySelectorAll("[data-plan]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  // Counted whether or not they're signed in: picking a pass is the
+  // interest the owner wants to measure, even if sign-up stops them.
+  track("plus", null, b.dataset.plan);
   requestPlus(b.dataset.plan);
 });
 
