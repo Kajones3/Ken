@@ -185,6 +185,10 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
   color:var(--muted); margin-bottom:3px}
 .cgrid .filled{border-color:var(--accent-line); background:var(--accent-bg)}
 .sheet h3{margin:20px 0 6px; font-size:13.5px}
+.howto .howtobody{padding:0 15px 6px}
+.howto ol{margin:0 0 12px; padding-left:20px; color:var(--muted); font-size:13px}
+.howto li{margin-bottom:4px}
+.howto h3:first-of-type{margin-top:8px}
 .chips{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
 .chip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--rule-strong); border-radius:99px;
   padding:4px 5px 4px 11px; font-size:13px; background:var(--surface)}
@@ -444,6 +448,64 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       &ldquo;features these lands&rdquo; list. Add a land and give it a <i>park</i>, as
       <code>wdw: Animal Kingdom</code>, and it appears under that park; with no park it shows under
       &ldquo;Also&rdquo;. To rename a land, hide the old row and add a new one.</p>
+
+    <details class="group howto">
+      <summary>How to update lands, step by step</summary>
+      <div class="howtobody">
+        <p>A resort's lands are the &ldquo;features these lands&rdquo; list travelers see. Every change below
+          takes effect the moment you press Save or Hide. Resorts are written by their short names:
+          <code>wdw</code> Walt Disney World, <code>dlr</code> Disneyland, <code>dlp</code> Paris,
+          <code>tdr</code> Tokyo, <code>shdr</code> Shanghai, <code>hkdl</code> Hong Kong.</p>
+
+        <h3>Add a new land</h3>
+        <ol>
+          <li><b>Id:</b> a short name with dashes, never used before, e.g. <code>tropical-americas</code>.</li>
+          <li><b>Name:</b> the land as travelers should read it, e.g. <code>Tropical Americas</code>.</li>
+          <li><b>Resorts:</b> the resort, e.g. <code>wdw</code>.</li>
+          <li><b>Type:</b> Land.</li>
+          <li><b>Park:</b> which park it's in, e.g. <code>wdw: Animal Kingdom</code>. Leave it empty, or name a
+            park we don't know, and it shows under &ldquo;Also&rdquo; instead.</li>
+          <li>Press <b>Save</b>.</li>
+        </ol>
+
+        <h3>Remove a land that closed (like DinoLand)</h3>
+        <ol>
+          <li>Look for its row in the list below (your browser's Find, Ctrl+F or &ldquo;Find on page&rdquo;, helps). If it has one, press <b>Hide</b> on it. Done.</li>
+          <li>If it has no row, add one: any new Id, the land's name spelled as it appears on the site, the
+            resort, Type Land. Press <b>Save</b>, then press <b>Hide</b> on the new row.</li>
+        </ol>
+        <p>A hidden land only drops off if no other land row with the same name, still showing, covers that
+          resort. If it won't go away, look for a second row with the same name.</p>
+
+        <h3>Rename a land</h3>
+        <p>Hide the old row, then add a new row with the new name (steps above). Editing the name in place
+          doesn't work, because the app can't tell the new name was meant to replace the old one.</p>
+
+        <h3>Move a land to a different park</h3>
+        <p>Press <b>Edit</b> on the land's row, change <b>Park</b> (e.g. <code>wdw: Hollywood Studios</code>), and Save.</p>
+
+        <h3>One land at several resorts</h3>
+        <p>Use one row. Put every resort in <b>Resorts</b> (<code>wdw dlr</code>), and give each its park,
+          separated by a semicolon: <code>wdw: Magic Kingdom; dlr: Disneyland Park</code>.</p>
+
+        <h3>Say which land a ride is in</h3>
+        <p>That goes on the ride's row, not the land's. Edit the ride, fill <b>Land</b> with
+          <code>wdw: Tomorrowland; shdr: Tomorrowland</code>, and Save. The board then says
+          &ldquo;Space Mountain in Tomorrowland&rdquo;.</p>
+
+        <h3>Undo</h3>
+        <p>A hidden row stays in the list, marked <b>Hidden</b>. Press <b>Show again</b> on it to bring it back.</p>
+
+        <h3>In the spreadsheet</h3>
+        <p>The same three columns: <code>type</code> (land or attraction), <code>land</code> and
+          <code>park</code>. For land and park, write each resort as <code>resort: name</code> and separate
+          resorts with <code>;</code>. Only the first colon counts, so <code>Star Wars: Galaxy's Edge</code> is fine.</p>
+
+        <p><b>Spelling:</b> capitals and punctuation don't matter when the app matches names
+          (<code>Star Wars Galaxy's Edge</code> matches <code>Star Wars: Galaxy's Edge</code>), and park names match loosely
+          (<code>Animal Kingdom</code> finds Disney's Animal Kingdom). The words themselves must match.</p>
+      </div>
+    </details>
 
     <div class="arow arowhead">
       <span>Id</span><span>Name</span><span>Resorts that have it</span><span></span>
