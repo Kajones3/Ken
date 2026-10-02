@@ -105,3 +105,32 @@ test("a resort/month is never asked about twice in one run", async () => {
   assert.deepEqual(p.hotels, ["wdw|2027-03"]);
   await db.close();
 });
+
+test("the free nightly feed never overwrites a fare we paid for", async () => {
+  // 2026-10-02: 189 of 208 paid fares were replaced by Travelpayouts rows on
+  // the same route, date and trip length, shrinking the fare trend to 7 routes.
+  const db = await memoryDb();
+  await db.query(
+    `insert into flight_prices (origin,destination,depart_date,trip_length,price_usd,stops,source,fetched_at)
+     values ('ATL','MCO','2027-03-15',7,412,0,'serpapi_flights',now()),
+            ('ATL','MCO','2027-03-16',7,300,0,'travelpayouts',now())`,
+  );
+  const p = {
+    ...recordingProvider(),
+    async flightMonth(origin: string, destination: string) {
+      return [
+        { origin, destination, departDate: "2027-03-15", tripLength: 7, priceUsd: 129, stops: 1 },
+        { origin, destination, departDate: "2027-03-16", tripLength: 7, priceUsd: 150, stops: 1 },
+      ];
+    },
+  };
+  await runRefresh(db, { months: ["2027-03"], origins: ["ATL"], resorts: ["wdw"], provider: p, hotelSlots: null });
+  const r = await db.query<{ depart_date: unknown; price_usd: string; source: string }>(
+    `select depart_date, price_usd, source from flight_prices
+      where origin = 'ATL' and destination = 'MCO' and trip_length = 7 order by depart_date`,
+  );
+  assert.equal(Number(r.rows[0]!.price_usd), 412, "the paid fare stands");
+  assert.equal(r.rows[0]!.source, "serpapi_flights");
+  assert.equal(Number(r.rows[1]!.price_usd), 150, "an unpaid row is still refreshed as before");
+  await db.close();
+});

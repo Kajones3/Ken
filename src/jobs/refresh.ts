@@ -118,7 +118,14 @@ async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promi
      values ${tuples.join(",")}
      on conflict (origin,destination,depart_date,trip_length) do update set
        price_usd = excluded.price_usd, carrier = excluded.carrier, stops = excluded.stops,
-       deep_link = excluded.deep_link, source = excluded.source, fetched_at = excluded.fetched_at`,
+       deep_link = excluded.deep_link, source = excluded.source, fetched_at = excluded.fetched_at
+     -- A fare we PAID for (popular-routes, intl-sweep, exact-fare) is never
+     -- replaced by this free nightly feed. Found 2026-10-02: 189 of the 208
+     -- paid fares bought in three weeks had been overwritten by Travelpayouts
+     -- "cheapest someone found" rows on the same date and trip length, which
+     -- shrank the fare trend's sample from 74 routes to 7 and threw away the
+     -- money spent on them.
+     where flight_prices.source is distinct from 'serpapi_flights'`,
     vals,
   );
   return rows.length;

@@ -26,7 +26,7 @@ time. The DATABASE is ahead of Render: the migrate workflow ran on
 (see below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-650 tests, and typecheck is clean.
+651 tests, and typecheck is clean.
 
 ### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
 
@@ -48,7 +48,15 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 2. ~~**Did the fare trend recompute?**~~ **YES** (checked 2026-10-02 in the
    refresh logs): Sept 30 and Oct 2 both end "trend from 7 routes". Only 7
    routes, against 74 in the old x0.945 row, so the trend is now built from a
-   thinner sample. Worth watching. Old note: It had been "skipped" nightly since
+   thinner sample. **WHY only 7, found and FIXED 2026-10-02:** the free
+   nightly refresh (Travelpayouts) was overwriting the fares popular-routes
+   PAID for whenever both landed on the same route, date and trip length.
+   The coverage report (now with a "Fares the trend could use" section)
+   showed popular-routes wrote 208 paid fares in 21 days and only 19 still
+   carried the `serpapi_flights` tag. `upsertFlights` in refresh.ts now
+   never replaces a `serpapi_flights` row (test pins it). The trend should
+   climb back toward ~100+ routes over the next three weeks as bought fares
+   stop vanishing; re-run "Parkfare debug coverage" to watch it. Old note: It had been "skipped" nightly since
    2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
    2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
    Check the refresh log ("trend skipped" or not), or the daily email: the
