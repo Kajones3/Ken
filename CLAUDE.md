@@ -45,7 +45,10 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 
 1. ~~**Has Render been redeployed since #89?**~~ **Yes** (owner, 2026-09-29).
    Flight price checks are safe to save.
-2. **Did the fare trend recompute?** It had been "skipped" nightly since
+2. ~~**Did the fare trend recompute?**~~ **YES** (checked 2026-10-02 in the
+   refresh logs): Sept 30 and Oct 2 both end "trend from 7 routes". Only 7
+   routes, against 74 in the old x0.945 row, so the trend is now built from a
+   thinner sample. Worth watching. Old note: It had been "skipped" nightly since
    2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
    2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
    Check the refresh log ("trend skipped" or not), or the daily email: the
