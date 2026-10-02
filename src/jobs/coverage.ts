@@ -192,6 +192,21 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   );
   out.push("Bought per day (domestic / international):");
   for (const r of byDay.rows) out.push(`   ${r.day}: ${r.dom} / ${r.intl}`);
+  // fetch_runs keeps what each paid job WROTE, so a gap between that and
+  // what is still tagged serpapi_flights means rows were overwritten since.
+  const wrote = await db.query<{ job: string; rows: string; runs: string }>(
+    `select job, coalesce(sum(rows_written), 0)::text as rows, count(*)::text as runs
+       from fetch_runs
+      where started_at > now() - interval '21 days' and job in ('popular_routes', 'intl_sweep', 'exact_fare')
+      group by job`,
+  ).catch(() => ({ rows: [] as { job: string; rows: string; runs: string }[] }));
+  for (const r of wrote.rows) out.push(`Paid job ${r.job} wrote ${r.rows} fare(s) in ${r.runs} run(s); ${sum(bought.rows)} still carry the serpapi_flights tag`);
+  const bySource = await db.query<{ source: string; n: string }>(
+    `select coalesce(source, '(none)') as source, count(*)::text as n from flight_prices
+      where fetched_at > now() - interval '21 days' group by 1 order by 2 desc`,
+  );
+  out.push("All flight rows written in the last 21 days, by source: "
+    + bySource.rows.map((r) => `${r.source} ${r.n}`).join(", "));
   out.push("");
 
   // --- 4. BTS baseline coverage across every origin, not just this one ---
