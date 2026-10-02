@@ -158,6 +158,43 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // --- 3b. What the trend can see: why it has the sample it has ---
+  // Mirrors computeFareTrend's own filters (serpapi_flights, last 21 days,
+  // same route + quarter as a bts_db1b baseline), split so the owner can see
+  // where the bought fares went and which ones found no baseline to compare.
+  out.push("## Fares the trend could use (serpapi_flights, last 21 days)");
+  const bought = await db.query<{ origin: string; destination: string; quarter: number; fares: string; has_base: boolean }>(
+    `select f.origin, f.destination, extract(quarter from f.depart_date)::int as quarter,
+            count(*) as fares,
+            exists (select 1 from historical_fares h
+                     where h.source = 'bts_db1b' and h.origin = f.origin
+                       and h.destination = f.destination
+                       and h.quarter = extract(quarter from f.depart_date)::int) as has_base
+       from flight_prices f
+      where f.source = 'serpapi_flights' and f.fetched_at > now() - interval '21 days'
+      group by f.origin, f.destination, quarter
+      order by has_base desc, f.destination, f.origin, quarter`,
+  );
+  const domestic = new Set(["MCO", "TPA", "SNA", "LAX"]);
+  const dom = bought.rows.filter((r) => domestic.has(r.destination));
+  const intl = bought.rows.filter((r) => !domestic.has(r.destination));
+  const sum = (rows: typeof bought.rows) => rows.reduce((n, r) => n + Number(r.fares), 0);
+  out.push(`International: ${sum(intl)} fares across ${intl.length} route+quarter pairs (no government baseline exists, so never counted)`);
+  out.push(`Domestic: ${sum(dom)} fares across ${dom.length} route+quarter pairs, ${dom.filter((r) => r.has_base).length} with a matching baseline`);
+  for (const r of dom) out.push(`   ${r.origin}->${r.destination} Q${r.quarter}: ${r.fares} fare(s)${r.has_base ? "" : "  NO BASELINE for this quarter"}`);
+  const byDay = await db.query<{ day: string; dom: string; intl: string }>(
+    `select fetched_at::date::text as day,
+            count(*) filter (where destination = any($1)) as dom,
+            count(*) filter (where not destination = any($1)) as intl
+       from flight_prices
+      where source = 'serpapi_flights' and fetched_at > now() - interval '21 days'
+      group by 1 order by 1`,
+    [[...domestic]],
+  );
+  out.push("Bought per day (domestic / international):");
+  for (const r of byDay.rows) out.push(`   ${r.day}: ${r.dom} / ${r.intl}`);
+  out.push("");
+
   // --- 4. BTS baseline coverage across every origin, not just this one ---
   const cov = await db.query<{ destination: string; origins: string; routes: string }>(
     `select destination, count(*) as routes, string_agg(distinct origin, ',' order by origin) as origins
