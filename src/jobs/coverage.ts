@@ -158,6 +158,57 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // --- 3b. What the trend can see: why it has the sample it has ---
+  // Mirrors computeFareTrend's own filters (serpapi_flights, last 21 days,
+  // same route + quarter as a bts_db1b baseline), split so the owner can see
+  // where the bought fares went and which ones found no baseline to compare.
+  out.push("## Fares the trend could use (serpapi_flights, last 21 days)");
+  const bought = await db.query<{ origin: string; destination: string; quarter: number; fares: string; has_base: boolean }>(
+    `select g.origin, g.destination, g.quarter, g.fares,
+            exists (select 1 from historical_fares h
+                     where h.source = 'bts_db1b' and h.origin = g.origin
+                       and h.destination = g.destination and h.quarter = g.quarter) as has_base
+       from (select origin, destination, extract(quarter from depart_date)::int as quarter, count(*) as fares
+               from flight_prices
+              where source = 'serpapi_flights' and fetched_at > now() - interval '21 days'
+              group by 1, 2, 3) g
+      order by has_base desc, g.destination, g.origin, g.quarter`,
+  );
+  const domestic = new Set(["MCO", "TPA", "SNA", "LAX"]);
+  const dom = bought.rows.filter((r) => domestic.has(r.destination));
+  const intl = bought.rows.filter((r) => !domestic.has(r.destination));
+  const sum = (rows: typeof bought.rows) => rows.reduce((n, r) => n + Number(r.fares), 0);
+  out.push(`International: ${sum(intl)} fares across ${intl.length} route+quarter pairs (no government baseline exists, so never counted)`);
+  out.push(`Domestic: ${sum(dom)} fares across ${dom.length} route+quarter pairs, ${dom.filter((r) => r.has_base).length} with a matching baseline`);
+  for (const r of dom) out.push(`   ${r.origin}->${r.destination} Q${r.quarter}: ${r.fares} fare(s)${r.has_base ? "" : "  NO BASELINE for this quarter"}`);
+  const byDay = await db.query<{ day: string; dom: string; intl: string }>(
+    `select fetched_at::date::text as day,
+            count(*) filter (where destination = any($1)) as dom,
+            count(*) filter (where not destination = any($1)) as intl
+       from flight_prices
+      where source = 'serpapi_flights' and fetched_at > now() - interval '21 days'
+      group by 1 order by 1`,
+    [[...domestic]],
+  );
+  out.push("Bought per day (domestic / international):");
+  for (const r of byDay.rows) out.push(`   ${r.day}: ${r.dom} / ${r.intl}`);
+  // fetch_runs keeps what each paid job WROTE, so a gap between that and
+  // what is still tagged serpapi_flights means rows were overwritten since.
+  const wrote = await db.query<{ job: string; rows: string; runs: string }>(
+    `select job, coalesce(sum(rows_written), 0)::text as rows, count(*)::text as runs
+       from fetch_runs
+      where started_at > now() - interval '21 days' and job in ('popular_routes', 'intl_sweep', 'exact_fare')
+      group by job`,
+  ).catch(() => ({ rows: [] as { job: string; rows: string; runs: string }[] }));
+  for (const r of wrote.rows) out.push(`Paid job ${r.job} wrote ${r.rows} fare(s) in ${r.runs} run(s); ${sum(bought.rows)} still carry the serpapi_flights tag`);
+  const bySource = await db.query<{ source: string; n: string }>(
+    `select coalesce(source, '(none)') as source, count(*)::text as n from flight_prices
+      where fetched_at > now() - interval '21 days' group by 1 order by 2 desc`,
+  );
+  out.push("All flight rows written in the last 21 days, by source: "
+    + bySource.rows.map((r) => `${r.source} ${r.n}`).join(", "));
+  out.push("");
+
   // --- 4. BTS baseline coverage across every origin, not just this one ---
   const cov = await db.query<{ destination: string; origins: string; routes: string }>(
     `select destination, count(*) as routes, string_agg(distinct origin, ',' order by origin) as origins

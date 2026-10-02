@@ -929,7 +929,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         </select>
       </div>
     </div>
-    <p class="helpnote" id="parkdaysHelp" hidden>Our suggestion prices a different ticket length at each resort, because the parks aren't the same size. You can change any one resort's days on its own card in the results.</p>
+    <p class="helpnote" id="parkdaysHelp" hidden>Our suggestion prices a different ticket length at each resort, based on average visit length. You can change any one resort's days by clicking into the details.</p>
 
     <div class="fields" id="hotelDetailFields">
       <div class="f">
@@ -1321,6 +1321,8 @@ const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
 /* How the owner says each resort in a sentence. */
+/* Shortest names, for sentences that list several resorts at once. */
+const SHORT_HELP_NAME = { wdw:"Walt Disney World", dlr:"Disneyland", dlp:"Paris", tdr:"Tokyo", shdr:"Shanghai", hkdl:"Hong Kong" };
 const SHORT_NAME = { wdw:"Walt Disney World", dlr:"Disneyland", dlp:"Disneyland Paris", tdr:"Tokyo", shdr:"Shanghai", hkdl:"Hong Kong" };
 /** Escape for interpolation into markup, including quoted attributes like
  *  title="...". Config text is ours, not user input, but a stray quote or
@@ -4992,10 +4994,15 @@ async function boot(){
     .catch(()=>{});
   DVC_DEFAULT_PER_POINT = meta.dvcTakeHomePerPoint || 18;
   SUGGESTED_DAYS = meta.suggestedParkDays || {};
-  const sugList = Object.entries(SUGGESTED_DAYS).map(([id, v]) => `${v.days} at ${SHORT_NAME[id] || id}`);
+  // Grouped by day count ("3 at Disneyland, Tokyo and Paris"), largest
+  // first, so an owner edit in /admin shows up here without a code change.
+  const sugGroups = {};
+  for(const [id, v] of Object.entries(SUGGESTED_DAYS)) (sugGroups[v.days] = sugGroups[v.days] || []).push(SHORT_HELP_NAME[id] || SHORT_NAME[id] || id);
+  const andJoin = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length-1];
+  const sugList = Object.keys(sugGroups).map(Number).sort((a,b)=>b-a).map(d => `${d} at ${andJoin(sugGroups[d])}`);
   if(sugList.length) $("#parkdaysHelp").textContent =
-    `Our suggestion prices a different ticket length at each resort, because the parks aren't the same size: ${sugList.join(", ")}. `
-    + `You can change any one resort's days on its own card in the results.`;
+    `Our suggestion prices a different ticket length at each resort, based on average visit length: ${sugList.length < 2 ? sugList.join("") : sugList.slice(0,-1).join(", ") + ", and " + sugList[sugList.length-1]}. `
+    + `You can change any one resort's days by clicking into the details.`;
   RESORT_BY_ID = new Map(RESORTS.map(r=>[r.id, r]));
   fillFormOptions();
   fillPassFields();
