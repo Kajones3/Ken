@@ -205,6 +205,25 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     `select coalesce(source, '(none)') as source, count(*)::text as n from flight_prices
       where fetched_at > now() - interval '21 days' group by 1 order by 2 desc`,
   );
+  const allSources = await db.query<{ source: string; n: string; oldest: unknown; newest: unknown; from_day: unknown; to_day: unknown }>(
+    `select coalesce(source, '(none)') as source, count(*)::text as n,
+            min(fetched_at) as oldest, max(fetched_at) as newest,
+            min(depart_date) as from_day, max(depart_date) as to_day
+       from flight_prices group by 1 order by 2 desc`,
+  );
+  out.push("All flight rows ever stored, by source (fetched oldest..newest; departure dates covered):");
+  for (const r of allSources.rows) {
+    out.push(`   ${r.source}: ${r.n} rows, fetched ${String(r.oldest).slice(4, 15)} .. ${String(r.newest).slice(4, 15)}, departing ${String(r.from_day).slice(4, 15)} .. ${String(r.to_day).slice(4, 15)}`);
+  }
+  const hotelSources = await db.query<{ source: string; on_property: boolean; n: string; oldest: unknown; newest: unknown; hotels: string }>(
+    `select coalesce(source, '(none)') as source, on_property, count(*)::text as n,
+            min(fetched_at) as oldest, max(fetched_at) as newest, count(distinct hotel_id)::text as hotels
+       from hotel_rates group by 1, 2 order by 1, 2`,
+  );
+  out.push("All hotel rows ever stored, by source:");
+  for (const r of hotelSources.rows) {
+    out.push(`   ${r.source} ${r.on_property ? "on property" : "off property"}: ${r.n} rows, ${r.hotels} hotels, fetched ${String(r.oldest).slice(4, 15)} .. ${String(r.newest).slice(4, 15)}`);
+  }
   out.push("All flight rows written in the last 21 days, by source: "
     + bySource.rows.map((r) => `${r.source} ${r.n}`).join(", "));
   out.push("");

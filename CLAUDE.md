@@ -26,7 +26,7 @@ time. The DATABASE is ahead of Render: the migrate workflow ran on
 (see below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-657 tests, and typecheck is clean.
+658 tests, and typecheck is clean.
 
 ### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
 
@@ -94,6 +94,25 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      cheaper than other airlines. They're leaning toward simply SURFACING
      budget carriers rather than pricing them into the total. Wait for their
      decision.
+
+### 2026-10-02, latest — 153,562 placeholder flight fares were priced as real
+
+- **Found from the owner's own Neon query** (ATL->MCO read $98 on almost every
+  date). $98 is the mock provider's floor for a short domestic hop. The live
+  `flight_prices` table held **153,562 rows with source NULL, fetched
+  2026-09-07..09** (before any real feed and before the source column), one
+  for every date through 2027-09. `loadBook()` read every row regardless of
+  source, so they were priced as REAL fares (and, since 2026-09-27, offered
+  as "a cheaper real fare we found"). The trend, bought-fare evidence,
+  intl baselines and the pulls digest already skipped unlabeled rows.
+- **Fix:** `book.ts` now reads only rows with a source (test pins it). The
+  rows are left in place, ignored, not deleted. Dates without a real fare now
+  fall back to the labeled estimate, which is the honest number.
+- **Hotels were checked too and left alone:** 18,198 unlabeled off-property
+  rows (Sep 7-14) cover 206 distinct hotels, far more than the mock
+  provider's list, so they look like real SerpApi results from before the
+  source column. Older, not fake.
+- The coverage report now lists every flight and hotel source with its dates.
 
 ### 2026-10-02, later — anonymous click counts, and /admin split into pages
 

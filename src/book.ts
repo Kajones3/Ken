@@ -115,7 +115,16 @@ export async function loadBook(
     `select destination, depart_date, price_usd, carrier, stops, deep_link, fetched_at
        from flight_prices
       where origin = $1 and destination = any($2) and trip_length = $3
-        and depart_date between $4 and $5`,
+        and depart_date between $4 and $5
+        -- Rows with no source are the placeholder prices written on
+        -- 2026-09-07..09, before any real feed was connected and before the
+        -- source column existed: 153,562 of them, one for every date through
+        -- 2027-09, made up by the mock provider (a $98 floor on every short
+        -- domestic hop). Found 2026-10-02 when ATL-MCO read $98 on almost
+        -- every date. They were being priced as REAL fares. Unlabeled means
+        -- untrusted: the trend, the bought-fare evidence and the real-pulls
+        -- digest already skip them; this is the one place that didn't.
+        and source is not null`,
     [req.origin, req.destinations, req.tripLength, req.from, req.to],
   );
   for (const r of f.rows) {
