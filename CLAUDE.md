@@ -113,10 +113,30 @@ the bottom instead of listing them with the live ones. Checked in Chromium,
 laptop and phone widths. 662 tests.
 
 **Flights (owner: "our Achilles heel ... the easiest thing for me to
-check").** Claude answered with options, nothing built yet. Recommended
-first step: a free scoreboard comparing the ~18 real fares bought each
-night against what the estimate said for the same route and date, so the
-lean and every other fix is judged on numbers. Wait for the owner's pick.
+check"). BUILT 2026-10-02: /admin -> Flights** (owner: "Start with the
+scoreboard. Also make sure we have a way to track what routes people use
+most").
+- *Scoreboard* (`src/fareScoreboard.ts`, `scoreFares()` pure + tested): every
+  `serpapi_flights` fare bought in the window is graded against the estimate
+  rebuilt BLIND (route baseline for that quarter x global trend for BTS rows,
+  leaned, + holiday premium; NO route-specific bought-fare correction, owner
+  corrections or price checks). Shows "typically off by" (median absolute
+  miss), "reads" (median signed, + = we're high), share within 15%, split
+  US / international, the same at leans 0/25/50/75/100 with the best fit in
+  bold, and routes furthest off. Honest limits printed: the trend is measured
+  from these same fares, so the domestic high/low reading is pulled toward 0;
+  the spread is the trustworthy number. An international fare only counts if
+  bought after its sampled baseline. **Use it to settle the lean decision
+  (item 3 above) on evidence.**
+- *Route tracking*: new `search_days` table (day, home airport, travel
+  month, count; no person data; the owner's own searches skipped).
+  `recordSearch()` writes it in its own try so a missing table can't stop
+  `route_searches`. `loadRouteDemand()` shows home airports, months, and
+  busiest airport+month pairs with real fares held per resort (0 in red).
+  Counting starts at the next Render deploy (build runs migrate).
+  GET `/api/admin/flights?days=`.
+- Not yet: the price range on estimates, and the bigger SerpApi plan. Both
+  wait on what the scoreboard shows.
 
 ### 2026-10-02, last — how to update lands, written into /admin
 

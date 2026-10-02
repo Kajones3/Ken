@@ -31,7 +31,8 @@ import { getDb, type Db } from "./db.js";
 import { loadBook, dateStr } from "./book.js";
 import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COLUMNS as CHECK_COLUMNS } from "./priceChecks.js";
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
-import { recordSearch } from "./routeDemand.js";
+import { recordSearch, loadRouteDemand } from "./routeDemand.js";
+import { loadScoreboard } from "./fareScoreboard.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
@@ -281,7 +282,9 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // Log what was asked for, so tonight's paid real-fare lookups go to the
   // routes people actually search. Fire-and-forget: recordSearch swallows
   // its own errors, and nothing below reads the result.
-  void recordSearch(db, params.origin, [...destinationByResort.values()], month);
+  const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  const byOwner = !!user && !!ownerEmail && user.email.trim().toLowerCase() === ownerEmail;
+  void recordSearch(db, params.origin, [...destinationByResort.values()], month, !byOwner);
 
   // A signed-in traveler's attraction picks, read from their own row —
   // never from the query string, so the client can say which account it is
@@ -1546,6 +1549,18 @@ const server = createServer(async (req, res) => {
         ok: true,
         effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
         owner: await listOwnerAttractions(db),
+      }, { cache: "no-store" });
+    }
+
+    /* The Flights page: how far off our estimates run against the real fares
+     * we buy (fareScoreboard.ts), and which routes people search
+     * (routeDemand.ts). Both read-only, no provider calls. */
+    if (url.pathname === "/api/admin/flights" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const days = Math.max(1, Math.min(120, Number(url.searchParams.get("days") ?? 30) || 30));
+      return send(200, {
+        scoreboard: await loadScoreboard(db, days),
+        demand: await loadRouteDemand(db, days),
       }, { cache: "no-store" });
     }
 
