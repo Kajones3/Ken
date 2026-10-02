@@ -95,6 +95,29 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-02, very last — a Lands page in /admin
+
+Owner: "an easier [way] to delete a land? Dinoland is never coming back ...
+certainly not on the /admin panel. Also, I need to be able to see the lands
+... in the PDF". /admin now has a **Lands** page (`#lands`): each resort's
+lands exactly as the PDF and details print them (`adminLandLists()`, built
+on `effectiveParkList()`), a Remove button on every land, an Add box per
+resort (name + park dropdown, or "Also"), and a Removed line with Put back.
+`removeLand()` hides a one-resort land row, takes the resort off a shared
+row, or writes a hidden `land-off-<resort>-<slug>` marker row (its note
+records "(was on: ids)" so `restoreLand()` can give the resort back). Add
+refuses a land already listed, and adding a removed one is a Put back.
+POST `/api/admin/lands` {action: remove|restore|add, resort, name, park}.
+The Attractions page now folds hidden rows into a closed "Hidden (N)" box at
+the bottom instead of listing them with the live ones. Checked in Chromium,
+laptop and phone widths. 662 tests.
+
+**Flights (owner: "our Achilles heel ... the easiest thing for me to
+check").** Claude answered with options, nothing built yet. Recommended
+first step: a free scoreboard comparing the ~18 real fares bought each
+night against what the estimate said for the same route and date, so the
+lean and every other fix is judged on numbers. Wait for the owner's pick.
+
 ### 2026-10-02, last — how to update lands, written into /admin
 
 The owner asked for instructions on updating lands. /admin's Attractions page

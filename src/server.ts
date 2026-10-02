@@ -20,7 +20,7 @@ import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./pr
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
-  effectiveAttractions, effectiveParkLists, listOwnerAttractions, saveAttraction, deleteOwnerAttraction, sheetRows,
+  effectiveAttractions, effectiveParkLists, listOwnerAttractions, adminLandLists, removeLand, restoreLand, addLand, saveAttraction, deleteOwnerAttraction, sheetRows,
   validateAttraction, sheetWarnings, type AttractionValue,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
@@ -1547,6 +1547,29 @@ const server = createServer(async (req, res) => {
         effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
         owner: await listOwnerAttractions(db),
       }, { cache: "no-store" });
+    }
+
+    /* The Lands page: each resort's lands exactly as the PDF prints them,
+     * with Remove, Put back and Add. See adminLandLists in ownerAttractions.ts. */
+    if (url.pathname === "/api/admin/lands" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { resorts: await adminLandLists(db, RESORTS) }, { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/lands" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req) as { action?: unknown; resort?: unknown; name?: unknown; park?: unknown };
+      const resort = RESORTS.find((r) => r.id === String(body.resort ?? ""));
+      if (!resort) return send(400, { error: "rejected", message: "Which resort?" });
+      const name = String(body.name ?? "");
+      const action = String(body.action ?? "");
+      const r = action === "remove" ? await removeLand(db, resort.id, name, owner.email)
+        : action === "restore" ? await restoreLand(db, resort.id, name, owner.email)
+        : action === "add" ? await addLand(db, resort, name, String(body.park ?? ""), owner.email)
+        : { ok: false as const, reason: "Unknown action." };
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, resorts: await adminLandLists(db, RESORTS) }, { cache: "no-store" });
     }
 
     if (url.pathname === "/api/admin/attractions.csv" && req.method === "GET") {
