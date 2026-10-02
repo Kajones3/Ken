@@ -5,6 +5,7 @@ import {
   validateAttraction, overlay, effectiveAttractions, saveAttraction,
   deleteOwnerAttraction, listOwnerAttractions, sheetRows,
   effectiveParkList, effectiveParkLists, sheetWarnings, type OwnerAttractionRow,
+  adminLandLists, removeLand, restoreLand, addLand,
 } from "./ownerAttractions.js";
 import { readFileSync } from "node:fs";
 import { parseCsv } from "./csv.js";
@@ -440,4 +441,65 @@ test("uploading the reviewed sheet removes only DinoLand and adds nothing to 'al
     assert.deepEqual(after.filter((l) => !before.includes(l)), [], `${resort.id}: nothing new lands in a park`);
     assert.deepEqual(before.filter((l) => !after.includes(l)), [], `${resort.id}: no land is lost`);
   }
+});
+
+/* ------------------------------ the Lands page ------------------------------ */
+
+const wdwLands = async (d: Awaited<ReturnType<typeof db>>) => (await adminLandLists(d, [WDW]))[0]!;
+
+test("Remove takes a code-only land off one resort, and Put back returns it", async () => {
+  const d = await db();
+  assert.ok((await removeLand(d, "wdw", "Discovery Island")).ok);
+  let v = await wdwLands(d);
+  assert.ok(!landsIn(v, AK).includes("Discovery Island"));
+  assert.deepEqual(v.removed, ["Discovery Island"]);
+  // The removal is a hidden row, so the attraction picker is untouched.
+  assert.deepEqual(await effectiveAttractions(d), [...ATTRACTIONS]);
+  assert.ok((await restoreLand(d, "wdw", "Discovery Island")).ok);
+  v = await wdwLands(d);
+  assert.ok(landsIn(v, AK).includes("Discovery Island"));
+  assert.deepEqual(v.removed, []);
+  assert.equal((await listOwnerAttractions(d)).length, 0, "Put back leaves nothing behind");
+});
+
+test("Remove hides a one-resort land row instead of adding a second row", async () => {
+  const d = await db();
+  await addLand(d, WDW, "Tropical Americas", "Animal Kingdom");
+  assert.ok(landsIn(await wdwLands(d), AK).includes("Tropical Americas"));
+  await removeLand(d, "wdw", "tropical americas");
+  const owner = await listOwnerAttractions(d);
+  assert.equal(owner.length, 1);
+  assert.ok(owner[0]!.hidden);
+  assert.ok(!landsIn(await wdwLands(d), AK).includes("Tropical Americas"));
+  // Adding it again is a Put back, not a duplicate.
+  await addLand(d, WDW, "Tropical Americas", "Animal Kingdom");
+  const after = await listOwnerAttractions(d);
+  assert.equal(after.length, 1);
+  assert.ok(!after[0]!.hidden);
+});
+
+test("Remove at one resort leaves a shared land row at the others, and Put back restores it", async () => {
+  const d = await db();
+  await saveAttraction(d, { id: "tsl", name: "Toy Story Land", resortIds: "wdw hkdl", kind: "land", parks: "wdw: Hollywood Studios" });
+  await removeLand(d, "wdw", "Toy Story Land");
+  const all = await adminLandLists(d, RESORTS);
+  const has = (id: string) => { const r = all.find((x) => x.id === id)!; return [...r.parkList.flatMap((p) => p.lands), ...r.otherLands].includes("Toy Story Land"); };
+  assert.ok(!has("wdw"));
+  assert.ok(has("hkdl"));
+  await restoreLand(d, "wdw", "Toy Story Land");
+  const row = (await listOwnerAttractions(d)).find((o) => o.id === "tsl")!;
+  assert.deepEqual([...row.resortIds].sort(), ["hkdl", "wdw"]);
+});
+
+test("Add refuses a park the resort doesn't have, and a blank name", async () => {
+  const d = await db();
+  assert.ok(!(await addLand(d, WDW, "Somewhere", "Tokyo DisneySea")).ok);
+  assert.ok(!(await addLand(d, WDW, "  ", "")).ok);
+  const r = await addLand(d, WDW, "Somewhere", "");
+  assert.ok(r.ok);
+  assert.deepEqual((await wdwLands(d)).otherLands, ["Somewhere"]);
+  // Adding one that is already listed makes no second row.
+  assert.ok(!(await addLand(d, WDW, "somewhere", "")).ok);
+  assert.ok(!(await addLand(d, WDW, "Asia", "")).ok);
+  assert.equal((await listOwnerAttractions(d)).length, 1);
 });

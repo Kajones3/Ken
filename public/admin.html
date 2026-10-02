@@ -185,6 +185,20 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
   color:var(--muted); margin-bottom:3px}
 .cgrid .filled{border-color:var(--accent-line); background:var(--accent-bg)}
 .sheet h3{margin:20px 0 6px; font-size:13.5px}
+.lbody{padding:2px 15px 14px}
+.lpark{margin:0 0 12px}
+.lpark .pn{font-weight:700; font-size:13.5px; margin-bottom:6px}
+.lchips{display:flex; flex-wrap:wrap; gap:6px}
+.lchip{display:inline-flex; align-items:center; gap:4px; border:1px solid var(--rule); border-radius:999px;
+  padding:3px 4px 3px 11px; font-size:14px; background:var(--surface)}
+.lchip button{border:0; background:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px;
+  border-radius:999px; min-height:32px}
+.lchip button:hover{color:var(--ink); background:var(--surface-2)}
+.ladd{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:8px; margin-top:6px}
+.ladd input,.ladd select{font-size:16px}
+@media (max-width:560px){ .ladd{grid-template-columns:1fr} }
+.lremoved{margin-top:10px; font-size:13px; color:var(--muted)}
+.lremoved button{margin-left:4px}
 .howto .howtobody{padding:0 15px 6px}
 .howto ol{margin:0 0 12px; padding-left:20px; color:var(--muted); font-size:13px}
 .howto li{margin-bottom:4px}
@@ -229,6 +243,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
+    <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
     <a href="#waits">Wait times</a>
     <span class="navnote">Every section keeps its own spreadsheet download and upload.</span>
@@ -430,6 +445,18 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
   </div>
 
+  <div class="page" data-page="lands">
+  <section class="sheet" id="lands">
+    <h2>Lands at each resort</h2>
+    <p>This is exactly what travelers see under &ldquo;What's there&rdquo;, in a resort's details and in the PDF.
+      Changes take effect the moment you press a button.</p>
+    <p><b>Remove</b> takes a land off that one resort. It's tucked away under &ldquo;Removed&rdquo;, not
+      deleted, so <b>Put back</b> undoes it. <b>Add</b> puts a new land under the park you pick.</p>
+    <div class="said" id="lSaid"></div>
+    <div id="landList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
   <div class="page" data-page="attractions">
   <section class="sheet" id="attractions">
     <h2>The attraction list</h2>
@@ -457,6 +484,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
           <code>wdw</code> Walt Disney World, <code>dlr</code> Disneyland, <code>dlp</code> Paris,
           <code>tdr</code> Tokyo, <code>shdr</code> Shanghai, <code>hkdl</code> Hong Kong.</p>
 
+        <p><b>The easy way is the <a href="#lands">Lands</a> page</b>: every resort's lands as travelers see
+          them, with Remove and Put back beside each one and an Add box under each resort. The steps below do
+          the same thing from this page, and are what you'd use for the spreadsheet.</p>
+
         <h3>Add a new land</h3>
         <ol>
           <li><b>Id:</b> a short name with dashes, never used before, e.g. <code>tropical-americas</code>.</li>
@@ -469,13 +500,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         </ol>
 
         <h3>Remove a land that closed (like DinoLand)</h3>
-        <ol>
-          <li>Look for its row in the list below (your browser's Find, Ctrl+F or &ldquo;Find on page&rdquo;, helps). If it has one, press <b>Hide</b> on it. Done.</li>
-          <li>If it has no row, add one: any new Id, the land's name spelled as it appears on the site, the
-            resort, Type Land. Press <b>Save</b>, then press <b>Hide</b> on the new row.</li>
-        </ol>
-        <p>A hidden land only drops off if no other land row with the same name, still showing, covers that
-          resort. If it won't go away, look for a second row with the same name.</p>
+        <p>Easiest: press <b>Remove</b> beside it on the <a href="#lands">Lands</a> page. From here, press
+          <b>Hide</b> on its row; if it has no row, add one with the land's exact name, the resort and Type Land,
+          Save, then Hide it. Hidden rows fold away under &ldquo;Hidden&rdquo; at the bottom of the list.</p>
 
         <h3>Rename a land</h3>
         <p>Hide the old row, then add a new row with the new name (steps above). Editing the name in place
@@ -494,7 +521,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
           &ldquo;Space Mountain in Tomorrowland&rdquo;.</p>
 
         <h3>Undo</h3>
-        <p>A hidden row stays in the list, marked <b>Hidden</b>. Press <b>Show again</b> on it to bring it back.</p>
+        <p>Hidden rows are kept, folded away under &ldquo;Hidden&rdquo; at the bottom of the list. Press <b>Show again</b> on one to bring it back.</p>
 
         <h3>In the spreadsheet</h3>
         <p>The same three columns: <code>type</code> (land or attraction), <code>land</code> and
@@ -878,6 +905,9 @@ function renderAttractions(d){
     </div>`;
   });
 
+  // Hidden rows are kept but folded away at the bottom (owner: DinoLand "is
+  // never coming back ... certainly not on the /admin panel").
+  const hiddenRows = [];
   // Rows that cannot be applied are listed anyway, marked. "Where did my row
   // go?" is a worse question than seeing it greyed out.
   for(const o of (d.owner || [])){
@@ -886,7 +916,7 @@ function renderAttractions(d){
       // reverting; one of the owner's own rows comes back by un-hiding it,
       // details intact — deleting it would lose what was typed.
       const plainShippedHide = ATTR_SHIPPED.has(o.id) && !o.name;
-      rows.push(`<div class="aitem">
+      hiddenRows.push(`<div class="aitem">
         <span class="an">${esc(o.name || o.id)}</span>
         <span class="ar">${esc((o.resortIds || []).join(", "))}</span>
         <span class="atags"><span class="atag bad">Hidden</span></span>
@@ -909,10 +939,85 @@ function renderAttractions(d){
     }
   }
   $("#attrList").className = "alist";
-  $("#attrList").innerHTML = rows.join("");
+  $("#attrList").innerHTML = rows.join("") + (hiddenRows.length
+    ? `<details class="group" style="margin-top:12px"><summary>Hidden (${hiddenRows.length}) — kept, but travelers don't see them</summary>
+        <div class="alist" style="padding:0 10px 10px">${hiddenRows.join("")}</div></details>`
+    : "");
   window.__attrEffective = eff;
   window.__attrOwner = d.owner || [];
+  loadLands();   // the Lands page is drawn from these same rows
 }
+
+/* -------------------------------- lands --------------------------------
+ * Each resort's lands exactly as the PDF prints them, with Remove, Put back
+ * and Add. The server decides what a resort's lands are (adminLandLists);
+ * this only draws it. */
+const ALSO = "__also";
+function renderLands(d){
+  const html = (d.resorts || []).map((r, i) => {
+    const chip = l => `<span class="lchip">${esc(l)}<button type="button" data-lremove="${esc(r.id)}" data-land="${esc(l)}"
+      aria-label="Remove ${esc(l)} from ${esc(r.name)}">Remove</button></span>`;
+    const parks = r.parkList.map(p => `<div class="lpark"><div class="pn">${esc(p.name)}</div>
+      <div class="lchips">${p.lands.length ? p.lands.map(chip).join("") : `<span class="count">No lands listed.</span>`}</div></div>`).join("");
+    const also = r.otherLands.length
+      ? `<div class="lpark"><div class="pn">Also</div><div class="lchips">${r.otherLands.map(chip).join("")}</div></div>` : "";
+    const removed = r.removed.length
+      ? `<p class="lremoved">Removed: ${r.removed.map(l => `${esc(l)} <button type="button" class="btn" data-lrestore="${esc(r.id)}"
+          data-land="${esc(l)}">Put back</button>`).join(" &middot; ")}</p>` : "";
+    const opts = r.parkList.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
+      + `<option value="${ALSO}">Also (no park)</option>`;
+    const n = r.parkList.reduce((t, p) => t + p.lands.length, 0) + r.otherLands.length;
+    return `<details class="group"${i === 0 ? " open" : ""}><summary>${esc(r.name)} &middot; ${n} land${n === 1 ? "" : "s"}</summary>
+      <div class="lbody">${parks}${also}
+        <div class="ladd"><input type="text" maxlength="80" placeholder="New land's name" aria-label="New land at ${esc(r.name)}" data-lname="${esc(r.id)}">
+          <select aria-label="Park" data-lpark="${esc(r.id)}">${opts}</select>
+          <button type="button" class="btn primary" data-ladd="${esc(r.id)}">Add</button></div>
+        ${removed}</div></details>`;
+  }).join("");
+  // Keep whichever resorts were open across a redraw.
+  const open = new Set([...document.querySelectorAll("#landList details[open] summary")].map(x => x.textContent.split(" · ")[0]));
+  $("#landList").innerHTML = html;
+  if(open.size) document.querySelectorAll("#landList details").forEach(el => {
+    el.open = open.has(el.querySelector("summary").textContent.split(" · ")[0]);
+  });
+}
+
+async function loadLands(){
+  const r = await fetch("/api/admin/lands");
+  if(!r.ok){ $("#landList").innerHTML = `<p class="count">Couldn't load the lands.</p>`; return; }
+  renderLands(await r.json());
+}
+
+async function landAction(btn, body, done){
+  btn.disabled = true;
+  const r = await fetch("/api/admin/lands", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ btn.disabled = false; attrSay($("#lSaid"), false, d.message || "That didn't save."); return; }
+  attrSay($("#lSaid"), true, done);
+  renderLands(d);
+  // The Attractions page shows the same rows. Its redraw also redraws this
+  // page, which is harmless.
+  loadAttractions();
+}
+
+document.addEventListener("click", e => {
+  const rm = e.target.closest("[data-lremove]");
+  if(rm){ landAction(rm, { action: "remove", resort: rm.dataset.lremove, name: rm.dataset.land },
+    `Removed ${rm.dataset.land}. Put back is under that resort if you change your mind.`); return; }
+  const back = e.target.closest("[data-lrestore]");
+  if(back){ landAction(back, { action: "restore", resort: back.dataset.lrestore, name: back.dataset.land },
+    `Put back ${back.dataset.land}.`); return; }
+  const add = e.target.closest("[data-ladd]");
+  if(add){
+    const id = add.dataset.ladd;
+    const name = document.querySelector(`[data-lname="${id}"]`).value.trim();
+    const park = document.querySelector(`[data-lpark="${id}"]`).value;
+    if(!name){ attrSay($("#lSaid"), false, "Type the land's name first."); return; }
+    landAction(add, { action: "add", resort: id, name, park: park === ALSO ? "" : park }, `Added ${name}.`);
+  }
+});
 
 async function loadAttractions(){
   const r = await fetch("/api/admin/attractions");

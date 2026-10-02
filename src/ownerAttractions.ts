@@ -612,3 +612,167 @@ export function sheetWarnings(rows: { row: number; value: AttractionValue; onlyH
   }
   return out;
 }
+
+/* ------------------------------ the Lands page ------------------------------
+ * Owner, 2026-10-02: "Can you add an easier [way] to delete a land? Dinoland
+ * is never coming back ... I need to be able to see the lands. We are putting
+ * these in the PDF, but I have no way to know they are in the PDF unless I
+ * download it."
+ *
+ * The Lands page in /admin shows exactly the list the PDF and the resort
+ * details print (effectiveParkList), with Remove and Add beside it. Both are
+ * built from the same owner rows the attraction sheet uses, so nothing new
+ * decides what a resort's lands are.
+ * ------------------------------------------------------------------------- */
+
+const slug = (x: string) => normName(x).replace(/ /g, "-").slice(0, 40).replace(/-+$/, "");
+
+/** The marker a Remove writes when no single-resort row could simply be
+ *  hidden. "(was on: id1, id2)" names rows the resort was taken off, so
+ *  Put back can return it. */
+const REMOVED_NOTE = "Removed on the Lands page in /admin.";
+const WAS_ON = /\(was on: ([^)]+)\)/;
+
+export interface AdminLandList {
+  id: string;
+  name: string;
+  parkList: { name: string; lands: string[] }[];
+  otherLands: string[];
+  /** Lands taken off this resort, so they can be put back. */
+  removed: string[];
+}
+
+/** Every resort's lands as travelers see them, plus what was removed. */
+export async function adminLandLists(
+  db: Db, resorts: readonly { id: string; name: string; parkList: readonly { name: string; lands: readonly string[] }[] }[],
+): Promise<AdminLandList[]> {
+  const owner = await listOwnerAttractions(db);
+  const effective = overlay(ATTRACTIONS, owner);
+  return resorts.map((r) => {
+    const view = effectiveParkList(r, effective, owner);
+    const showing = new Set([...view.parkList.flatMap((p) => p.lands), ...view.otherLands].map(normName));
+    const removed: string[] = [];
+    const seen = new Set<string>();
+    for (const o of owner) {
+      if (!o.hidden || o.kind !== "land" || !o.resortIds.includes(r.id)) continue;
+      const n = normName(o.name);
+      if (!n || showing.has(n) || seen.has(n)) continue;
+      seen.add(n);
+      removed.push(o.name);
+    }
+    removed.sort((a, b) => a.localeCompare(b));
+    return { id: r.id, name: r.name, parkList: view.parkList, otherLands: view.otherLands, removed };
+  });
+}
+
+/** A land's row data in the shape saveAttraction takes. */
+function asInput(a: AttractionDef | OwnerAttractionRow, patch: Partial<AttractionInput> = {}): AttractionInput {
+  return {
+    id: a.id, name: a.name, resortIds: a.resortIds, note: a.note ?? "", kind: "land",
+    lands: a.lands ?? {}, parks: a.parks ?? {}, ...patch,
+  };
+}
+
+/**
+ * Take one land off one resort.
+ *
+ *  - A visible land row naming only this resort is HIDDEN (its details kept,
+ *    so Put back restores it whole).
+ *  - A visible row naming several resorts loses only this one.
+ *  - If no row was hidden — a land that lives only in the code's list, or one
+ *    that was shared — a hidden marker row does the removing, the same thing
+ *    hiding a sheet row has always done.
+ */
+export async function removeLand(
+  db: Db, resortId: string, name: string, by = "",
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const n = normName(name);
+  if (!KNOWN_RESORTS.has(resortId) || !n) return { ok: false, reason: "Which land, at which resort?" };
+  const owner = await listOwnerAttractions(db);
+  const effective = overlay(ATTRACTIONS, owner);
+  const rows = effective.filter((a) => a.kind === "land" && a.resortIds.includes(resortId) && normName(a.name) === n);
+  let hid = false;
+  const strippedFrom: string[] = [];
+  for (const a of rows) {
+    if (a.resortIds.length === 1) {
+      const r = await saveAttraction(db, asInput(a, { hidden: true }), by);
+      if (!r.ok) return r;
+      hid = true;
+    } else {
+      const keep = a.resortIds.filter((x) => x !== resortId);
+      const lands = Object.fromEntries(Object.entries(a.lands ?? {}).filter(([k]) => k !== resortId));
+      const parks = Object.fromEntries(Object.entries(a.parks ?? {}).filter(([k]) => k !== resortId));
+      const r = await saveAttraction(db, asInput(a, { resortIds: keep, lands, parks }), by);
+      if (!r.ok) return r;
+      strippedFrom.push(a.id);
+    }
+  }
+  if (!hid) {
+    const note = strippedFrom.length ? `${REMOVED_NOTE} (was on: ${strippedFrom.join(", ")})` : REMOVED_NOTE;
+    const r = await saveAttraction(db, {
+      id: `land-off-${resortId}-${slug(name)}`, name: name.trim(), resortIds: [resortId],
+      kind: "land", hidden: true, note,
+    }, by);
+    if (!r.ok) return r;
+  }
+  return { ok: true };
+}
+
+/** Undo a Remove: un-hide the land's hidden rows at this resort, give the
+ *  resort back to any shared row it was taken off, and drop the markers. */
+export async function restoreLand(
+  db: Db, resortId: string, name: string, by = "",
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const n = normName(name);
+  if (!KNOWN_RESORTS.has(resortId) || !n) return { ok: false, reason: "Which land, at which resort?" };
+  const owner = await listOwnerAttractions(db);
+  const effective = overlay(ATTRACTIONS, owner);
+  for (const o of owner) {
+    if (!o.hidden || o.kind !== "land" || !o.resortIds.includes(resortId) || normName(o.name) !== n) continue;
+    if (o.id.startsWith("land-off-")) {
+      for (const id of (WAS_ON.exec(o.note)?.[1] ?? "").split(",").map((x) => x.trim()).filter(Boolean)) {
+        const a = effective.find((x) => x.id === id);
+        if (a && !a.resortIds.includes(resortId)) {
+          const r = await saveAttraction(db, asInput(a, { resortIds: [...a.resortIds, resortId] }), by);
+          if (!r.ok) return r;
+        }
+      }
+      await deleteOwnerAttraction(db, o.id);
+    } else {
+      const r = await saveAttraction(db, asInput(o, { hidden: false }), by);
+      if (!r.ok) return r;
+    }
+  }
+  return { ok: true };
+}
+
+/** Add a land to one resort, under one of its parks (or "Also" with none). */
+export async function addLand(
+  db: Db, resort: { id: string; name: string; parkList: readonly { name: string; lands: readonly string[] }[] }, name: string, park: string, by = "",
+): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  const clean = name.trim();
+  if (!clean) return { ok: false, reason: "Type the land's name." };
+  if (park && !findPark(resort.parkList, park)) return { ok: false, reason: `"${park}" isn't one of this resort's parks.` };
+  const owner = await listOwnerAttractions(db);
+  const taken = new Set([...ATTRACTIONS.map((a) => a.id), ...owner.map((o) => o.id)]);
+  // A land that was removed here comes back with Put back, keeping its row.
+  const wasRemoved = owner.some((o) => o.hidden && o.kind === "land" && o.resortIds.includes(resort.id) && normName(o.name) === normName(clean));
+  if (wasRemoved) {
+    const r = await restoreLand(db, resort.id, clean, by);
+    if (!r.ok) return r;
+    const back = (await adminLandLists(db, [resort]))[0]!;
+    if ([...back.parkList.flatMap((p) => p.lands), ...back.otherLands].some((l) => normName(l) === normName(clean))) {
+      return { ok: true, id: "" };
+    }
+  }
+  const now = (await adminLandLists(db, [resort]))[0]!;
+  if ([...now.parkList.flatMap((p) => p.lands), ...now.otherLands].some((l) => normName(l) === normName(clean))) {
+    return { ok: false, reason: `${clean} is already on the list.` };
+  }
+  const base = `${resort.id}-${slug(clean)}`;
+  let id = base;
+  for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
+  return saveAttraction(db, {
+    id, name: clean, resortIds: [resort.id], kind: "land", parks: park ? { [resort.id]: park } : {},
+  }, by);
+}
