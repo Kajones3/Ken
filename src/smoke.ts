@@ -71,8 +71,9 @@ await db.query(
 );
 await db.query(
   `insert into promos (id,resort_id,label,effect_kind,effect_value,starts_on,ends_on,active)
-   values ($1,$2,'Smoke-test room offer','room_pct_off',15,current_date,current_date + 60,true)`,
-  [randomUUID(), top.resort.id]);
+   values ($1,$2,'Smoke-test room offer','room_pct_off',15,$3::date,$3::date + 30,true)`,
+  // Inside the month the smoke trip prices, so the email can measure a saving.
+  [randomUUID(), top.resort.id, `${MONTH}-01`]);
 const alertResult = await runAlerts(db);
 console.log(`   ${alertResult.checked} Plus member checked, ${alertResult.fired} deal alert(s), ${alertResult.sent} emailed, 0 provider calls`);
 for (const c of alertResult.candidates) console.log(`   -> [${c.kind}] ${c.detail}`);

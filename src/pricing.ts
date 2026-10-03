@@ -151,7 +151,9 @@ export interface ResortOverride {
    *  partially applied. */
   excludeHotel?: boolean;
   excludeFlights?: boolean;
-  /** Picks a row from the curated promos table — its effect is always looked up server-side, never trusted from the client. */
+  /** Picks a row from the curated promos table — its effect is always looked up server-side, never trusted from the client.
+   *  Unset = the best real deal for the arrival date is applied AUTOMATICALLY
+   *  (owner, 2026-10-03); "none" = the traveler turned deals off here. */
   promoId?: string;
   /** The user's own claim (Annual Passholder, DVC, a code they found) — unverified, affects only their own price. */
   personalPromo?: { kind: PromoEffectKind; value: number; label: string };
@@ -291,6 +293,12 @@ export interface PromoRow {
 export interface AppliedPromo {
   source: "global" | "personal"; label: string; kind: PromoEffectKind;
   amountUsd: number; historical: boolean; skipped?: string;
+  /** Applied because the arrival date falls in the deal's dates, not because
+   *  the traveler picked it. The total RELIES on it, and the page says so. */
+  auto?: boolean;
+  /** Who or what qualifies (Perks members, packages...), never checked. */
+  conditions?: string;
+  promoId?: string;
 }
 
 export interface PriceBook {
@@ -1034,12 +1042,50 @@ export function priceTrip(
     }
   };
 
-  if (ov.promoId) {
+  // No pick = apply the deal automatically when the arrival date falls in
+  // a real deal's travel dates (owner, 2026-10-03: "The card should take the
+  // date the person searches and see if it is in the deal period and apply
+  // the deal to our numbers, but we need to mark that it relies on a deal").
+  // Only real, dated deals (never a "historical pattern" row), only one, the
+  // one worth the most to this trip, and never one whose shortest stay this
+  // trip doesn't meet.
+  if (!ov.promoId) {
+    const roomBlocked = ov.nightly !== undefined || ov.excludeHotel;
+    const worth = (p: PromoRow): number => {
+      const v = p.effectValue;
+      switch (p.effectKind) {
+        case "room_pct_off": return roomBlocked ? 0 : rooms * clampPct(v) / 100;
+        case "room_flat_off": return roomBlocked ? 0 : Math.min(rooms, v);
+        case "room_night_off": return roomBlocked ? 0 : Math.min(rooms, v * params.nights * roomCountOf(params));
+        case "ticket_pct_off": return tickets * clampPct(v) / 100;
+        case "free_dining": return foodPlan ? food : 0;
+        case "flat_off_total": return Math.max(0, v);
+        default: return 0;
+      }
+    };
+    const best = book.promosFor(resort.id, start)
+      .filter((p) => !p.historical && !(p.minNights && params.nights < p.minNights))
+      .map((p) => ({ p, w: worth(p) }))
+      .filter((x) => x.w > 0)
+      .sort((a, b) => b.w - a.w || (a.p.id < b.p.id ? -1 : 1))[0];
+    if (best) {
+      applyPromoEffect("global", best.p.label, best.p.effectKind, best.p.effectValue, false);
+      const last = appliedPromos[appliedPromos.length - 1]!;
+      last.auto = true;
+      last.promoId = best.p.id;
+      if (best.p.conditions) last.conditions = best.p.conditions;
+    }
+  } else if (ov.promoId !== "none") {
     const promo = book.promosFor(resort.id, start).find((candidate) => candidate.id === ov.promoId);
     if (promo && promo.minNights && params.nights < promo.minNights) {
       appliedPromos.push({ source: "global", label: promo.label, kind: promo.effectKind, amountUsd: 0, historical: promo.historical,
         skipped: `needs a stay of at least ${promo.minNights} nights` });
-    } else if (promo) applyPromoEffect("global", promo.label, promo.effectKind, promo.effectValue, promo.historical);
+    } else if (promo) {
+      applyPromoEffect("global", promo.label, promo.effectKind, promo.effectValue, promo.historical);
+      const last = appliedPromos[appliedPromos.length - 1]!;
+      last.promoId = promo.id;
+      if (promo.conditions) last.conditions = promo.conditions;
+    }
     // An unknown/expired promoId is silently ignored — never a hard failure over a stale id.
   }
   if (ov.personalPromo) {

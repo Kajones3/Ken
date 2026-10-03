@@ -302,6 +302,10 @@ a{color:var(--ink)}
 .crowdc{display:inline-block; font-size:11px; font-weight:650; padding:2px 8px;
   border-radius:999px; background:var(--surface-2); color:var(--muted)}
 .crowdc-peak{background:color-mix(in srgb, var(--s6) 18%, transparent); color:var(--s6)}
+/* "Includes a deal": the total relies on a Disney offer (applied on its own
+   when the arrival date is inside the deal's dates). */
+.dealc{display:inline-block; font-size:11px; font-weight:650; padding:2px 8px; border-radius:999px;
+  background:color-mix(in srgb, var(--accent) 16%, transparent); color:var(--accent)}
 .crowdbar{display:block; width:100%; height:10px; border-radius:5px;
   background:var(--surface-2); overflow:hidden; margin-top:6px}
 .crowdbar>span{display:block; height:100%; border-radius:5px}
@@ -2132,6 +2136,15 @@ function foodExamplesLine(r, style){
  *
  * It never reorders anything. Same rule as attractionChip.
  */
+/* A total that relies on a deal says so on the board, not only in Details:
+   the deal may have conditions (members only, packages) the traveler doesn't
+   meet, and the dates may move. */
+function autoDeals(x){ return ((x && x.appliedPromos) || []).filter(a => a.auto && !a.skipped && a.amountUsd > 0); }
+function dealChip(item){
+  const d = autoDeals(item.price)[0];
+  if(!d) return "";
+  return `<div class="attrline"><span class="dealc" title="${esc(d.label + (d.conditions ? " · " + d.conditions : ""))}">Includes a deal: &minus;${usd(d.amountUsd)}</span></div>`;
+}
 function crowdChip(item){
   const w = item.crowdWarning;
   if(!w) return "";
@@ -2238,6 +2251,7 @@ function renderBoard(){
         </div>
         ${attractionChip(item)}
         ${crowdChip(item)}
+        ${dealChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
       ${session.plus ? sparkSVG(spark) : gatedSpark()}
@@ -2384,13 +2398,17 @@ function membershipCard(x, p){
 
 function promosCard(item, x, promoList){
   const ov = ovOf(item.resortId);
+  const autoId = (autoDeals(x)[0] || {}).promoId;
+  const dealsOff = ov.promoId === "none";
   const rows = promoList.map(promo=>{
-    const applied = ov.promoId === promo.id;
+    const auto = !ov.promoId && promo.id === autoId;
+    const applied = ov.promoId === promo.id || auto;
     return `<div class="li"><div class="l"><b>${promo.label}</b>
       <small>${describePromoEffect(promo.effectKind, promo.effectValue)} · ${promo.startsOn} to ${promo.endsOn}
       ${promo.minNights?` · stays of ${promo.minNights}+ nights`:""}${promo.conditions?` · ${esc(promo.conditions)}`:""}
       ${promo.historical?" · historical pattern, not confirmed for your dates":""}</small></div>
-      <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
+      ${auto?`<br><b style="color:var(--accent)">Applied for you: your arrival date is in this deal's dates.</b>`:""}</small></div>
+      <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"none":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
 
   const personalForm = `
@@ -2405,12 +2423,14 @@ function promosCard(item, x, promoList){
     </div></div>`;
 
   const appliedNote = x.appliedPromos.length
-    ? x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label}: ${usd(a.amountUsd)} off${a.historical?" (historical, not confirmed)":""}`).join(" · ")
+    ? x.appliedPromos.filter(a=>!a.skipped).map(a=>`${esc(a.label)}: ${usd(a.amountUsd)} off${a.auto?" (applied for your dates)":""}${a.historical?" (historical, not confirmed)":""}`).join(" · ")
     : "";
 
   return `<div class="card">
     <h5>Promos &amp; discounts</h5>
-    <p class="sub">Historical patterns, not guarantees — plus your own codes</p>
+    <p class="sub">Disney's own offers for these dates, plus your own codes. A deal is taken off on its own when your arrival date is inside its dates.</p>
+    ${dealsOff?`<div class="li"><div class="l"><b>Deals are off for ${esc(item.resort.name)}</b><small>You turned them off, so no deal is in this total.</small></div>
+      <div class="p"><button class="btn btn-sm" data-applypromo="" data-resort="${item.resortId}">Turn back on</button></div></div>`:""}
     ${rows}${personalForm}
     ${appliedNote?`<p class="sub" style="margin:10px 0 0; color:var(--accent)">Applied: ${appliedNote}</p>`:""}
     ${x.appliedPromos.filter(a=>a.skipped).map(a=>`<p class="sub" style="margin:6px 0 0">Not applied: ${esc(a.label)} (${esc(a.skipped)}).</p>`).join("")}
@@ -2969,8 +2989,11 @@ async function renderDetail(){
         </p>` : ""}
         ${item.noFlightsYet ? `<p class="spreadnote"><b>${esc(item.noFlightsYet)}.</b> We'll look up real flight prices for this route tonight.</p>` : ""}
         ${item.drivenBecauseClose ? `<p class="spreadnote"><b>${esc(item.drivenBecauseClose)}.</b></p>` : ""}
-        ${x.appliedPromos.some(a=>!a.skipped) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
-          Promos applied: ${x.appliedPromos.filter(a=>!a.skipped).map(a=>`${a.label} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
+        ${autoDeals(x).length ? `<p class="spreadnote" style="color:var(--accent)"><b>This total relies on a deal:</b>
+          ${autoDeals(x).map(a=>`${esc(a.label)} (&minus;${usd(a.amountUsd)})${a.conditions?`. Only if you qualify: ${esc(a.conditions)}`:""}`).join(" · ")}.
+          Your arrival date is inside the deal's travel dates, so we took it off. Disney can end a deal early; turn it off under Promos &amp; discounts to see the price without it.</p>` : ""}
+        ${x.appliedPromos.some(a=>!a.skipped && !a.auto) ? `<p style="margin:4px 0 0; color:var(--accent); font-size:12px; font-weight:600">
+          Promos applied: ${x.appliedPromos.filter(a=>!a.skipped && !a.auto).map(a=>`${esc(a.label)} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
         <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Save this search (Plus)"}</button>
@@ -4319,7 +4342,7 @@ function costTableHtml(item){
   line("Food", pr.food);
   for(const promo of (pr.appliedPromos || [])){
     if(promo.skipped || !promo.amountUsd) continue;
-    rows.push(`<tr class="sub"><td>${esc(promo.label)}</td><td class="n">&minus;${usd(promo.amountUsd)}</td></tr>`);
+    rows.push(`<tr class="sub"><td>${esc(promo.label)}${promo.auto ? " (a Disney deal for these dates" + (promo.conditions ? "; only if you qualify: " + esc(promo.conditions) : "") + ")" : ""}</td><td class="n">&minus;${usd(promo.amountUsd)}</td></tr>`);
   }
   const dvc = pr.membership && pr.membership.dvc;
   if(dvc && dvc.creditUsd){

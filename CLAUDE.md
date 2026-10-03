@@ -95,6 +95,34 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-03, end — deals apply themselves; the email names a dollar figure
+
+Owner: the email should say "A Deal May Save You $X on your Disney Trip",
+and "the card should take the date the person searches and see if it is in
+the deal period and apply the deal to our numbers, but we need to mark that
+it relies on a deal."
+- **Auto-apply lives in `priceTrip`** (so board, calendar, typical-day pick
+  and PDF agree). `ResortOverride.promoId` unset = the ONE real deal
+  (`historical = false`) whose dates include the ARRIVAL date, meeting
+  `min_nights`, worth the most to this trip; `"none"` = traveler turned
+  deals off for that resort; an id = picked by hand (as before). The applied
+  entry carries `auto`, `promoId`, `conditions`. Applies to everyone, signed
+  in or not. Deals now move which resort ranks cheapest.
+- **Marked**: board chip "Includes a deal: -$X" (`dealChip`), a detail
+  header line "This total relies on a deal ... Only if you qualify: ...",
+  the Promos card says "Applied for you" with Remove (-> "none") and a
+  "Deals are off ... Turn back on" row; the PDF line says "(a Disney deal
+  for these dates; only if you qualify: ...)".
+- **The email** (`src/dealSavings.ts`): prices one trip on a typical arrival
+  day inside the deal's dates (and the plannable months) with deals off vs
+  with this deal, flights excluded; the member's most recent saved search if
+  any, else a standard trip (ATL, 2 adults, 6 nights, Moderate, mix food);
+  stretched to `min_nights`, food "plan" for free dining. Subject: "A Deal
+  May Save You $X on your Disney Trip"; body shows the working ("$A without,
+  $B with, arriving ..."). Saving stored in `price_alerts.old_total/new_total`
+  so retries rebuild it. No cached rates = no figure, plain old wording.
+  693 tests; smoke shows the new email; checked in Chromium.
+
 ### 2026-10-03, very last — reading a whole offers PAGE (owner's daily routine)
 
 Owner: "These are the kind of deals I would check daily and screenshot to

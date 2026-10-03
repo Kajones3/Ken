@@ -804,6 +804,43 @@ test("promos: $X off per night comes off every night of every room, and a minimu
   assert.match(short.price.appliedPromos[0]!.skipped ?? "", new RegExp(`at least ${base.nights + 1} nights`));
 });
 
+test("deals: a real deal whose dates include the arrival day is applied on its own, and marked", () => {
+  const plain = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), base, {}, START);
+  const real = { historical: false, conditions: "Disney+ Perks members" };
+  const book = fullBook("wdw", "MCO", { promos: [
+    promo({ id: "small", effectKind: "room_pct_off", effectValue: 10, ...real }),
+    promo({ id: "big", effectKind: "room_pct_off", effectValue: 30, ...real }),
+  ] });
+  const r = priceTrip(book, resortById("wdw"), base, {}, START);
+  assert.ok(plain.ok && r.ok);
+  const a = r.price.appliedPromos;
+  assert.equal(a.length, 1, "one deal, never stacked");
+  assert.equal(a[0]!.promoId, "big", "the one worth most to this trip");
+  assert.equal(a[0]!.auto, true);
+  assert.equal(a[0]!.conditions, "Disney+ Perks members");
+  assert.equal(Math.round(r.price.rooms), Math.round(plain.price.rooms * 0.7));
+  // "none" = the traveler turned deals off for this resort.
+  const off = priceTrip(book, resortById("wdw"), base, { wdw: { promoId: "none" } }, START);
+  assert.ok(off.ok && off.price.appliedPromos.length === 0 && off.price.total === plain.price.total);
+  // A picked deal is not "auto".
+  const picked = priceTrip(book, resortById("wdw"), base, { wdw: { promoId: "small" } }, START);
+  assert.ok(picked.ok && picked.price.appliedPromos[0]!.promoId === "small" && !picked.price.appliedPromos[0]!.auto);
+});
+
+test("deals: never applied on their own outside their dates, as a 'historical pattern', or below the shortest stay", () => {
+  const plain = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), base, {}, START);
+  for (const p of [
+    promo({ historical: false, startsOn: "2099-01-01", endsOn: "2099-02-01" }),
+    promo({ historical: true }),
+    promo({ historical: false, minNights: base.nights + 1 }),
+  ]) {
+    const r = priceTrip(fullBook("wdw", "MCO", { promos: [p] }), resortById("wdw"), base, {}, START);
+    assert.ok(plain.ok && r.ok);
+    assert.equal(r.price.appliedPromos.length, 0, JSON.stringify(p));
+    assert.equal(r.price.total, plain.price.total);
+  }
+});
+
 test("promos: a ticket discount applies regardless of any hotel override", () => {
   const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "ticket_pct_off", effectValue: 10 })] });
   const without = priceTrip(book, resortById("wdw"), base, { wdw: { nightly: 150 } }, START);

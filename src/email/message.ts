@@ -13,13 +13,20 @@ export interface AlertContent {
  *  is exactly what CAN-SPAM forbids, so the type won't let one be built. */
 export function buildAlertEmail(a: AlertContent, to: string, unsubscribeLink: string): EmailMessage {
   // The only alert left is a Plus member's deal email (price-drop monitoring
-  // was removed 2026-09-25). A row from before then can still be sitting in
-  // the retry queue, so it gets the same honest, total-free wording.
-  const subject = "Parkfare: a new Disney deal";
+  // was removed 2026-09-25). When the job could measure what the deal is
+  // worth on a real trip, the subject says so in the owner's words
+  // (2026-10-03): "A Deal May Save You $X on your Disney Trip". A row it
+  // couldn't measure (or one from before then, in the retry queue) keeps the
+  // plain wording rather than inventing a figure.
+  const saving = Math.round(a.oldTotal - a.newTotal);
+  const subject = saving > 0
+    ? `A Deal May Save You $${saving.toLocaleString("en-US")} on your Disney Trip`
+    : "Parkfare: a new Disney deal";
   const text = [
+    ...(saving > 0 ? [subject + ".", ""] : []),
     a.detail,
     "",
-    "Open Parkfare to see what it does to your trip — deals can be applied to any resort's total.",
+    "Open Parkfare: any search whose arrival date falls in the deal's dates already has it taken off, marked \"Includes a deal\".",
     "",
     "— Parkfare",
     "",
