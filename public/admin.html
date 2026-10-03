@@ -240,7 +240,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 <div class="shell">
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
-    <a href="#flights">Flights</a>
+    <a href="#flights">Flights &amp; hotels</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -310,6 +310,31 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         &ldquo;typically off by&rdquo; spread is the trustworthy number. A route with 1 or 2 fares is a hint, not a
         verdict.</p>
       <p class="count" id="flSkipped"></p>
+    </section>
+
+    <section class="sheet">
+      <h2>How close our hotel numbers are</h2>
+      <p>Hotels have no single real price we buy, so this grades them three ways. Same signs as flights:
+        <b>+</b> means our number was above the real one.</p>
+      <div class="tiles" id="htTiles"><p class="count">Loading…</p></div>
+
+      <h3>Disney's own hotels, priced by Google</h3>
+      <p>Our nightly &ldquo;hotels near the resort&rdquo; search also returns Disney's own hotels. Their real rate grades
+        the Disney hotel prices we otherwise estimate. Both are before taxes and fees, for the same month, and ours is
+        before your price checks adjust it.</p>
+      <div id="htDisney"></div>
+      <div id="htInList"></div>
+
+      <h3>Off-property: what we showed, then the next real price</h3>
+      <p>An off-property rate is one real night stretched across the month until the next search about 10 days later.
+        This compares what we were showing for that next night with what Google then said. History starts with this
+        update, so it fills in over the next couple of weeks.</p>
+      <div id="htPulls"></div>
+
+      <h3>Prices you've checked</h3>
+      <p>Your own hotel and ticket checks, against what our model said that day. More detail is on the
+        <a href="#checks">Prices you've checked</a> page.</p>
+      <div id="htChecks"></div>
     </section>
 
     <section class="sheet">
@@ -1473,6 +1498,47 @@ const barTable = (rows, cols) => {
       <td style="width:30%"><div class="bar" style="width:${Math.round((r._bar || 0) / max * 100)}%"></div></td></tr>`).join("")}</tbody></table>`;
 };
 let statDays = 30;
+/* -------------------------------- hotels -------------------------------- */
+const RESORT_NAME = { wdw: "Walt Disney World", dlr: "Disneyland Resort", dlp: "Disneyland Paris",
+  tdr: "Tokyo Disney Resort", shdr: "Shanghai Disney Resort", hkdl: "Hong Kong Disneyland" };
+function renderHotelScore(h){
+  const st = (x, name, sub) => x.n
+    ? tile(name, offBy(x.typicalOffPct), `${num(x.n)} ${x.n === 1 ? sub.replace(/s$/, "") : sub} · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
+    : tile(name, "—", "nothing to grade yet");
+  $("#htTiles").innerHTML = st(h.disney.all, "Disney hotels: typically off by", "hotel-months")
+    + st(h.offProperty.all, "Off-property: typically off by", "re-checks")
+    + st(h.checks.hotels, "Your hotel checks: off by", "checks")
+    + st(h.checks.tickets, "Your ticket checks: off by", "checks");
+  const resortRows = list => list.length
+    ? `<table class="ctab"><thead><tr><th>Resort</th><th class="n">Graded</th><th class="n">Typically off by</th><th class="n">Reads</th></tr></thead>
+      <tbody>${list.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${num(x.summary.n)}</td><td class="n">${offBy(x.summary.typicalOffPct)}</td>
+        <td class="n">${signed(x.summary.medianPct)}</td></tr>`).join("")}</tbody></table>` : "";
+  $("#htDisney").innerHTML = h.disney.rows.length
+    ? resortRows(h.disney.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Hotel</th><th>Month</th>
+        <th class="n">Google</th><th class="n">Ours</th><th class="n">Reads</th></tr></thead><tbody>${h.disney.rows.slice(0, 25).map(x =>
+        `<tr><td>${esc(x.hotel)} <span class="count">${esc(x.googleName)}</span></td><td>${esc(x.month)}</td><td class="n">$${num(x.google)}</td>
+         <td class="n">$${num(x.ours)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>
+      ${h.disney.rows.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(h.disney.rows.length)}.</p>` : ""}`
+    : `<p class="count">No Disney hotels found in Google's results yet.</p>`;
+  $("#htInList").innerHTML = h.disney.inOffPropertyList.length
+    ? `<p class="said bad" style="margin-top:10px">Worth knowing: these Disney hotels came back in the &ldquo;hotels near&rdquo; search, so
+        they're also in the <b>off-property</b> list travelers can be shown (with off-property parking added).
+        ${h.disney.inOffPropertyList.map(x => `<b>${esc(x.name)}</b>: ${x.hotels.map(esc).join(", ")}`).join(" · ")}.
+        Say the word and they'll be kept out of the off-property list.</p>` : "";
+  $("#htPulls").innerHTML = h.offProperty.pairs.length
+    ? resortRows(h.offProperty.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
+        <th>Night</th><th class="n">We showed</th><th class="n">Then real</th><th class="n">Reads</th></tr></thead><tbody>${h.offProperty.pairs.slice(0, 20).map(x =>
+        `<tr><td>${esc(RESORT_NAME[x.resort] || x.resort)}</td><td>${esc(x.month)}</td><td>${esc(x.to)}</td><td class="n">$${num(x.shown)}</td>
+         <td class="n">$${num(x.real)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="count">${h.offProperty.pullsRecorded ? `${num(h.offProperty.pullsRecorded)} searches recorded so far; a month needs two before it can be graded.`
+        : "Nothing recorded yet. It starts with the next nightly refresh after this update."}</p>`;
+  $("#htChecks").innerHTML = h.checks.rows.length
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Checked</th><th>What</th><th class="n">Ours</th><th class="n">You saw</th><th class="n">Reads</th></tr></thead>
+      <tbody>${h.checks.rows.slice(0, 20).map(x => `<tr><td>${esc(x.checkedOn)}</td><td>${esc(x.category)} · ${esc(RESORT_NAME[x.resort] || x.resort)}${x.item ? " · " + esc(x.item) : ""}</td>
+        <td class="n">$${num(x.ours)}</td><td class="n">$${num(x.real)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="count">No hotel or ticket checks with a model price yet.</p>`;
+}
+
 /* ------------------------------- flights ------------------------------- */
 let flDays = 30;
 const signed = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + v + "%";
@@ -1480,7 +1546,8 @@ const offBy = v => v === null || v === undefined ? "—" : v + "%";
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
-  const { scoreboard: s, demand: d } = await r.json();
+  const { scoreboard: s, demand: d, hotels: h } = await r.json();
+  renderHotelScore(h);
   const g = (x, name) => x.n
     ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
     : tile(name, "—", "no fares to test yet");

@@ -145,6 +145,8 @@ export class SerpApiHotelProvider {
   }
 
   get callsSpent(): number { return this.spent; }
+  /** Every off-property pull this run, as Google returned it (see hotelScoreboard.ts). */
+  readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number }[] }[] = [];
   get budgetRemaining(): number { return Math.max(0, this.budget - this.spent); }
 
   /**
@@ -245,6 +247,7 @@ export class SerpApiHotelProvider {
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
+    this.pulls.push({ resort: resortId, month, checkIn, rates: rawAnchors.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly })) });
     // Tiered by price, not star class — see tiersByPrice()'s doc comment for
     // why: it guarantees budget <= mid <= upscale, which star class did not.
     const anchors = tiersByPrice(rawAnchors);

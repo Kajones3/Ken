@@ -16,6 +16,7 @@ import { getDb, type Db } from "../db.js";
 import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import { SerpApiHotelProvider } from "../providers/serpapi.js";
+import { recordHotelSamples } from "../hotelScoreboard.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
@@ -39,6 +40,7 @@ export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null):
     hotelSource: hotels.name,
     flightMonth: flights.flightMonth.bind(flights),
     hotelMonth: hotels.hotelMonth.bind(hotels),
+    hotelPulls: () => hotels.pulls,
   };
 }
 
@@ -292,6 +294,14 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
       errors++;
       console.error(`hotels ${resortId} ${month}:`, (e as Error).message);
     }
+  }
+
+  // Keep each off-property pull as Google returned it, for the hotel
+  // scorecard. Its own try: a missing table must not fail the refresh.
+  try {
+    await recordHotelSamples(db, provider.hotelPulls?.() ?? []);
+  } catch (e) {
+    console.error("hotel samples not recorded (ignored):", (e as Error).message);
   }
 
   rows += await seedTickets(db, months);

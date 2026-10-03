@@ -24,4 +24,7 @@ export interface Provider {
   readonly hotelSource?: string;
   flightMonth(origin: string, destination: string, month: string, tripLength: number): Promise<FlightQuote[]>;
   hotelMonth(resortId: string, month: string): Promise<HotelQuote[]>;
+  /** Off-property pulls made so far this run, each with its own night and
+   *  the real rates returned — kept by the hotel scorecard (hotel_samples). */
+  hotelPulls?(): { resort: string; month: string; checkIn: string; rates: { name: string; nightly: number }[] }[];
 }

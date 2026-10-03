@@ -263,6 +263,21 @@ create table if not exists route_searches (
 create index if not exists route_searches_popular
   on route_searches (searches desc, last_searched_at desc);
 
+-- Every off-property hotel pull, as Google returned it (2026-10-03, the
+-- hotel scorecard). hotel_rates keeps only the latest pull, stretched across
+-- the month by a season curve; this keeps each pull's own night and rates so
+-- the next pull can grade what we were showing in between. ~10 rows a pull,
+-- ~12 pulls a night.
+create table if not exists hotel_samples (
+  resort_id    text        not null,
+  month        char(7)     not null,
+  check_in     date        not null,
+  pulled_at    timestamptz not null default now(),
+  hotel_name   text        not null,
+  nightly_usd  numeric(9,2) not null
+);
+create index if not exists hotel_samples_lookup on hotel_samples (resort_id, month, pulled_at);
+
 -- Comparisons per day, by home airport and travel month (2026-10-02, owner:
 -- "make sure we have a way to track what routes people use most").
 -- route_searches only keeps a running total, which can't say "this week";
