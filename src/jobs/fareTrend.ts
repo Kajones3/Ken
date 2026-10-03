@@ -39,7 +39,14 @@ export function trimmedMultiplier(ratios: number[]): TrendResult | null {
   };
 }
 
-export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRoutes: number } | null> {
+/**
+ * kind 'domestic' measures bought fares against BTS DB1B baselines; kind
+ * 'intl' measures bought international fares against the seeded
+ * international guesses (2026-10-03: those read ~30% low against the first
+ * real fares, and nothing was correcting them). Each moves only its own
+ * baselines — see book.ts.
+ */
+export async function computeFareTrend(db: Db, kind: "domestic" | "intl" = "domestic"): Promise<{ id: string; sampleRoutes: number } | null> {
   // Like for like, on both axes that matter:
   //   - MEDIAN vs MEDIAN, because the estimate this multiplier scales is a
   //     median. Comparing a current mean against a historical median would
@@ -79,8 +86,9 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
     `select distinct on (origin, destination, quarter)
             origin, destination, median_fare_usd, avg_fare_usd, year, quarter
        from historical_fares
-      where source = 'bts_db1b'
+      where source = $1
       order by origin, destination, quarter, year desc`,
+    [kind === "intl" ? "seed_guess" : "bts_db1b"],
   );
   const baselineMap = new Map(
     baseline.rows.map((r) => [`${r.origin}|${r.destination}|${r.quarter}`, r]),
@@ -101,14 +109,16 @@ export async function computeFareTrend(db: Db): Promise<{ id: string; sampleRout
     }
   }
 
-  const result = trimmedMultiplier(ratios);
+  // International starts from a flat guess, so it waits for a few more fares
+  // than domestic before saying anything.
+  const result = ratios.length >= (kind === "intl" ? 5 : 3) ? trimmedMultiplier(ratios) : null;
   if (!result) return null; // too few overlapping routes — leave fare_trend as-is, not junk
 
   const id = randomUUID();
   await db.query(
-    `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter)
-     values ($1,$2,$3,$4,$5,$6)`,
-    [id, result.multiplier, result.low, result.high, ratios.length, `${newestYear}Q${newestQuarter}`],
+    `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter, kind)
+     values ($1,$2,$3,$4,$5,$6,$7)`,
+    [id, result.multiplier, result.low, result.high, ratios.length, `${newestYear}Q${newestQuarter}`, kind],
   );
   return { id, sampleRoutes: ratios.length };
 }

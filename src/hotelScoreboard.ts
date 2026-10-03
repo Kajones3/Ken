@@ -29,39 +29,8 @@ import { dateStr } from "./book.js";
 import { hotelSeasonFactor } from "./seasonality.js";
 import type { ISODate } from "./dates.js";
 
-/* ----------------------------- name matching ----------------------------- */
-
-/** Words that say nothing about WHICH hotel it is. */
-const FILLER = new Set(["disney", "disneys", "s", "resort", "resorts", "hotel", "spa", "the", "and", "at", "a", "walt", "world"]);
-/** Place words Google adds in front of a name ("Tokyo DisneySea Hotel MiraCosta"). */
-const PLACE = new Set(["tokyo", "disneysea", "disneyland", "paris", "hong", "kong", "shanghai", "orlando", "anaheim", "california", "florida", "lake", "buena", "vista"]);
-
-const tokens = (name: string) =>
-  name.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[’']/g, "")
-    .split(/[^a-z0-9]+/).filter((t) => t && !FILLER.has(t));
-
-/**
- * Which of a resort's on-property Disney hotels a vendor's hotel name is, or
- * null. Strict on purpose: the same words exactly, or ours plus only place
- * words in front. "Copper Creek Villas at Disney's Wilderness Lodge" is NOT
- * Wilderness Lodge, and "Hotel near Disneyland Park" is not the Disneyland
- * Hotel. A miss leaves a Disney hotel ungraded; a false match grades the
- * wrong hotel, which is worse.
- */
-export function matchDisneyHotel(resortId: string, vendorName: string): { id: string; name: string } | null {
-  const resort = RESORT_BY_ID.get(resortId);
-  if (!resort) return null;
-  const v = tokens(vendorName);
-  for (const h of resort.hotels) {
-    if (!h.onProperty) continue;
-    // "Coronado Springs · Gran Destino" is the resort, then the tower we price.
-    const ours = tokens(h.name.split("·")[0]!);
-    if (!ours.length) continue;
-    const extra = v.filter((t) => !ours.includes(t));
-    if (ours.every((t) => v.includes(t)) && extra.every((t) => PLACE.has(t))) return { id: h.id, name: h.name };
-  }
-  return null;
-}
+import { matchDisneyHotel } from "./disneyHotels.js";
+export { matchDisneyHotel };
 
 /* ------------------------------- the report ------------------------------ */
 
@@ -95,7 +64,9 @@ export interface CheckRow { resort: string; category: string; item: string; chec
 
 export interface HotelScoreboard {
   disney: { all: Summary; byResort: { resort: string; name: string; summary: Summary }[]; rows: DisneyMatchRow[];
-    /** Disney hotels found sitting in the off-property list, per resort. */
+    /** Disney hotels Google returned, per resort. Kept out of the
+     *  off-property list since 2026-10-03 (searches skip them, and loadBook
+     *  ignores any cached before then). */
     inOffPropertyList: { resort: string; name: string; hotels: string[] }[] };
   offProperty: { all: Summary; byResort: { resort: string; name: string; summary: Summary }[]; pairs: PullPair[]; pullsRecorded: number };
   checks: { hotels: Summary; tickets: Summary; byResort: { resort: string; name: string; summary: Summary }[]; rows: CheckRow[] };
@@ -164,6 +135,39 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
     if (!o || !(g > 0)) continue;
     disneyRows.push({ resort: r.resort_id, hotelId: hit.id, hotel: hit.name, googleName: r.hotel_name, month: r.m,
       google: Math.round(g), ours: Math.round(o), pct: pct1(o / g - 1)! });
+  }
+  // From 2026-10-03 new searches no longer write Disney hotels into
+  // hotel_rates (they are kept out of the off-property list), so their rates
+  // come from the recorded searches: Google's rate for the searched night
+  // against ours for the same hotel and night. A search beats an older
+  // cached row for the same hotel and month.
+  const smp = await db.query<{ resort_id: string; hotel_name: string; check_in: unknown; nightly_usd: string; pulled_at: unknown }>(
+    `select resort_id, hotel_name, check_in, nightly_usd, pulled_at from hotel_samples
+      where check_in >= current_date order by pulled_at`,
+  );
+  const latest = new Map<string, { resort: string; name: string; date: string; nightly: number; id: string; hotel: string }>();
+  for (const r of smp.rows) {
+    const hit = matchDisneyHotel(r.resort_id, r.hotel_name);
+    if (!hit) continue;
+    const date = dateStr(r.check_in);
+    inList.set(r.resort_id, (inList.get(r.resort_id) ?? new Set()).add(r.hotel_name));
+    latest.set(`${hit.id}|${date.slice(0, 7)}`, { resort: r.resort_id, name: r.hotel_name, date, nightly: Number(r.nightly_usd), id: hit.id, hotel: hit.name });
+  }
+  if (latest.size) {
+    const nights = await db.query<{ hotel_id: string; stay_date: unknown; nightly_usd: string }>(
+      `select hotel_id, stay_date, nightly_usd from hotel_rates
+        where on_property and hotel_id = any($1) and stay_date = any($2::date[])`,
+      [[...new Set([...latest.values()].map((x) => x.id))], [...new Set([...latest.values()].map((x) => x.date))]],
+    );
+    const ourNight = new Map(nights.rows.map((r) => [`${r.hotel_id}|${dateStr(r.stay_date)}`, Number(r.nightly_usd)]));
+    for (const [key, x] of latest) {
+      const o = ourNight.get(`${x.id}|${x.date}`);
+      if (!o || !(x.nightly > 0)) continue;
+      const i = disneyRows.findIndex((d) => `${d.hotelId}|${d.month}` === key);
+      if (i >= 0) disneyRows.splice(i, 1);
+      disneyRows.push({ resort: x.resort, hotelId: x.id, hotel: x.hotel, googleName: x.name, month: key.split("|")[1]!,
+        google: Math.round(x.nightly), ours: Math.round(o), pct: pct1(o / x.nightly - 1)! });
+    }
   }
   disneyRows.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
 

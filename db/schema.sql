@@ -214,6 +214,20 @@ create table if not exists fare_trend (
   computed_at      timestamptz  not null default now()
 );
 create index if not exists fare_trend_latest on fare_trend (computed_at desc);
+-- Which baselines a trend row moves (2026-10-03): 'domestic' = BTS DB1B,
+-- 'intl' = the seeded international guesses (seed_guess below).
+alter table fare_trend add column if not exists kind text not null default 'domestic';
+
+-- The international "baselines" written on 2026-09-15 by seedInternational.ts
+-- were never sampled: one flat guess per region ($754 Europe, $1,087 Asia,
+-- times a season factor), the same for every US city, but tagged
+-- 'sampled_live'. Relabeled ONCE so nothing treats them as real fares and so
+-- an international trend can correct them. Real baselines from
+-- jobs/intlBaseline.ts count their own fares (a handful), never the seed's
+-- 450-549 made-up passengers with itin_count = passengers / 5.
+update historical_fares set source = 'seed_guess'
+ where source = 'sampled_live' and passengers_sampled between 450 and 549
+   and itin_count = passengers_sampled / 5;
 
 -- A route average hides the thing a traveller actually cares about: the
 -- spread. DB1B holds every itinerary's fare, so store real percentiles per

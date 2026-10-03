@@ -142,7 +142,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // --- 3. The trend multiplier every estimate is scaled by ---
   const ft = await db.query<{ multiplier: string; low_multiplier: string; high_multiplier: string; sample_routes: number; computed_at: string }>(
     `select multiplier, low_multiplier, high_multiplier, sample_routes, computed_at
-       from fare_trend order by computed_at desc limit 3`,
+       from fare_trend where kind = 'domestic' order by computed_at desc limit 3`,
   );
   out.push("## fare_trend (multiplies every BTS baseline into a shown estimate)");
   if (!ft.rows.length) {
@@ -252,6 +252,28 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // doubling was lost; double means it happened twice. The same check now
   // rides the owner's daily email (fareHealth.ts), because this report
   // printed "SUSPICIOUS" for a week with nobody reading it.
+  // International baselines are rebuilt only when intl-sweep runs. Fares
+  // bought before 2026-09-15 were the CHEAPEST itinerary, not the median,
+  // so a baseline built from them reads low (2026-10-03 scorecard question).
+  out.push("## International baselines (sampled_live) — when built, from what");
+  const ib = await db.query<{ n: string; oldest: unknown; newest: unknown; med: string }>(
+    `select count(*) as n, min(fetched_at) as oldest, max(fetched_at) as newest,
+            percentile_cont(0.5) within group (order by median_fare_usd) as med
+       from historical_fares where source = 'sampled_live'`,
+  );
+  const ibr = ib.rows[0];
+  out.push(`  ${ibr?.n ?? 0} rows, built ${String(ibr?.oldest ?? "-").slice(0, 24)} .. ${String(ibr?.newest ?? "-").slice(0, 24)}, median of medians $${Math.round(Number(ibr?.med ?? 0))}`);
+  const iff = await db.query<{ era: string; n: string; med: string }>(
+    `select case when fetched_at < '2026-09-15' then 'before 09-15 (cheapest itinerary)' else 'since 09-15 (median itinerary)' end as era,
+            count(*) as n, percentile_cont(0.5) within group (order by price_usd) as med
+       from flight_prices
+      where source = 'serpapi_flights' and depart_date >= current_date
+        and destination in ('CDG','NRT','HND','PVG','HKG')
+      group by 1 order by 1`,
+  );
+  for (const r of iff.rows) out.push(`  future intl fares bought ${r.era}: ${r.n}, median $${Math.round(Number(r.med))}`);
+  out.push("");
+
   out.push("## Baseline sanity — are these round trips?");
   const nat = await nationalBtsAverage(db);
   if (!nat) {

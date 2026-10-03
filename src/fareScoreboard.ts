@@ -52,6 +52,8 @@ export interface ScoreInputs {
   fares: BoughtFare[];
   baselines: Baseline[];
   trend: number | null;
+  /** The international trend, for seeded guesses (seed_guess). Null = none yet, so 1. */
+  intlTrend?: number | null;
   lean: number;
   /** Holiday premium percent by setting key (missing = the shipped default). */
   premiumPct: (key: string, fallback: number) => number;
@@ -120,11 +122,12 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     const h = list ? pickBaseline(list, q) : undefined;
     if (!h) { skipped.noBaseline++; continue; }
     const bts = h.source === "bts_db1b";
+    const seed = h.source === "seed_guess";
     if (bts && inp.trend === null) { skipped.noTrend++; continue; }
     // A baseline made from sampled fares can't be tested by a fare it was
-    // made from, or bought before it.
-    if (!bts && h.fetchedAt && f.fetchedAt <= h.fetchedAt) { skipped.builtFromIt++; continue; }
-    const m = bts ? inp.trend! : 1;
+    // made from, or bought before it. (A seeded guess was made from none.)
+    if (!bts && !seed && h.fetchedAt && f.fetchedAt <= h.fetchedAt) { skipped.builtFromIt++; continue; }
+    const m = bts ? inp.trend! : seed ? (inp.intlTrend ?? 1) : 1;
     const hol = holidayFlightPremium(f.departDate);
     const prem = hol ? 1 + inp.premiumPct(hol.settingKey, hol.defaultPct) / 100 : 1;
     const band = { low: h.p25 * m, med: h.med * m, high: h.p75 * m };
@@ -208,11 +211,16 @@ export async function loadScoreboard(db: Db, days = 30): Promise<Scoreboard & { 
       fetchedAt: r.fetched_at ? (r.fetched_at instanceof Date ? r.fetched_at : new Date(String(r.fetched_at))) : null,
     });
   }
-  const t = await db.query<{ multiplier: string }>(`select multiplier from fare_trend order by computed_at desc limit 1`);
+  const latest = async (kind: string) => {
+    const t = await db.query<{ multiplier: string }>(
+      `select multiplier from fare_trend where kind = $1 order by computed_at desc limit 1`, [kind]);
+    return t.rows[0] ? Number(t.rows[0].multiplier) : null;
+  };
   const settings = await settingsMap(db);
   const board = scoreFares({
     fares, baselines,
-    trend: t.rows[0] ? Number(t.rows[0].multiplier) : null,
+    trend: await latest("domestic"),
+    intlTrend: await latest("intl"),
     lean: settings.get(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN,
     premiumPct: (key, fallback) => settings.get(key) ?? fallback,
   });

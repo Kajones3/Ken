@@ -95,6 +95,35 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-03 — international estimates were a flat guess; Disney hotels out of off-property
+
+- **International flight "baselines" were never real.** Found from the
+  owner's scorecard screenshot (international read ~30% low at EVERY lean)
+  and confirmed in the live database via the coverage report: all 2,460
+  `sampled_live` rows were written in 3 minutes on 2026-09-15 by
+  `seedInternational.ts`: $754 Europe / $1,087 Asia x a season factor, the
+  SAME for every US city, mislabeled 'sampled_live'. Real median-itinerary
+  intl fares bought since: 12, median $1,333 vs the seed's typical $978.
+  (intl-sweep has written 0 fares in 2 runs.) Fix: `schema.sql` relabels
+  those rows `seed_guess` once (pattern: 450-549 fake passengers,
+  itin_count = passengers/5); `fare_trend.kind` ('domestic' | 'intl');
+  `computeFareTrend(db, "intl")` (refresh, nightly, needs 5 routes) measures
+  bought intl fares against the seed and moves every seeded route, exactly
+  like the domestic trend. book.ts picks the trend by baseline kind; a seed
+  with no trend yet still prices at the raw guess. The estimate carries
+  `seedGuess`, and the PDF no longer says "what people actually paid on this
+  route in 2027Q4" for it. Readers of fare_trend (coverage, fareHealth)
+  filter kind = 'domestic'. The flight scorecard applies the intl trend too.
+  Coverage report gained "International baselines (sampled_live)".
+- **Lean, on the 19-fare evidence:** US best at 25-50, international can't
+  be judged until its trend applies (tonight's refresh). Claude recommends
+  **50** (owner had moved it to 75). Revisit after ~2 weeks of fares.
+- **Disney's own hotels are OUT of the off-property list** (owner: "Disney
+  hotels should be out of the off property list"). `src/disneyHotels.ts`
+  `matchDisneyHotel()`; `offPropertyMonth()` drops them before tiering but
+  still RECORDS them in the pull (the scorecard grades on-property from
+  them, now via `hotel_samples`); `loadBook()` skips any already cached.
+
 ### 2026-10-02, very last — a Lands page in /admin
 
 Owner: "an easier [way] to delete a land? Dinoland is never coming back ...

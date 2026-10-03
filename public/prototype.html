@@ -4364,8 +4364,9 @@ function gettingThereHtml(item){
       out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} usually run
         ${usd(est.low)} to ${usd(est.high)} a seat. We've priced them at <b>${usd(f.price)}</b>${
         f.price > est.med + 1 ? ", toward the expensive end on purpose, because an estimate that comes in low is the one that hurts when you book" : ""}.
-        That is an <b>estimate</b>, not a quote: it is built from what people actually paid on this route in
-        ${esc(est.basisQuarter)}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
+        That is an <b>estimate</b>, not a quote: ${est.seedGuess
+          ? "it is built from typical fares from the US to this part of the world, corrected against real fares we've bought"
+          : `it is built from what people actually paid on this route in ${esc(est.basisQuarter)}`}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
       if(f.cheaperFound){
         const c = f.cheaperFound;
         out.push(`<p>We also found a real fare of <b>${usd(c.price)}</b>${c.carrier ? ` on ${esc(c.carrier)}` : ""}${

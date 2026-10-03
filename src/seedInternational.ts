@@ -64,7 +64,7 @@ export async function seedInternationalBaselines(db: Db): Promise<number> {
             `insert into historical_fares
                (origin,destination,year,quarter,avg_fare_usd,
                 p25_fare_usd,median_fare_usd,p75_fare_usd,passengers_sampled,itin_count,source,fetched_at)
-             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'sampled_live',now())
+             values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'seed_guess',now())
              on conflict (origin,destination,year,quarter) do update set
                avg_fare_usd = excluded.avg_fare_usd,
                p25_fare_usd = excluded.p25_fare_usd,

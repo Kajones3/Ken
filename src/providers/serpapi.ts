@@ -25,6 +25,7 @@ import { RESORT_BY_ID } from "../config.js";
 import { monthBounds, range, addDaysISO, todayISO, type ISODate } from "../dates.js";
 import { hotelSeasonFactor } from "../seasonality.js";
 import { onPropertyQuotesFor } from "../onProperty.js";
+import { matchDisneyHotel } from "../disneyHotels.js";
 import type { HotelQuote } from "./types.js";
 
 const BASE = "https://serpapi.com/search.json";
@@ -247,10 +248,17 @@ export class SerpApiHotelProvider {
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
+    // Recorded as Google returned it, Disney hotels included: their real
+    // rates grade our on-property estimates (hotelScoreboard.ts).
     this.pulls.push({ resort: resortId, month, checkIn, rates: rawAnchors.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly })) });
+    // But Disney's own hotels are not OFF-property picks (owner, 2026-10-03).
+    // "Hotels near Walt Disney World" returns Pop Century and the Grand
+    // Floridian too, which were being offered as "Off property" with
+    // off-property parking added.
+    const offOnly = rawAnchors.filter((a) => !matchDisneyHotel(resortId, a.hotelName));
     // Tiered by price, not star class — see tiersByPrice()'s doc comment for
     // why: it guarantees budget <= mid <= upscale, which star class did not.
-    const anchors = tiersByPrice(rawAnchors);
+    const anchors = tiersByPrice(offOnly);
 
     const anchorFactor = hotelSeasonFactor(resortId, checkIn);
     const [monthFrom, monthTo] = monthBounds(month);

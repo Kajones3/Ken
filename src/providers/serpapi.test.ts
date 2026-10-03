@@ -143,3 +143,16 @@ test("an unpriceable month costs nothing even when it holds a slot", () => {
     assert.equal(p.callsSpent, 0);
   })();
 });
+
+test("Disney's own hotels in Google's results are kept out of off-property, but recorded", async () => {
+  globalThis.fetch = (async () => new Response(JSON.stringify({ properties: [
+    { name: "Disney's Pop Century Resort", rate_per_night: { extracted_lowest: 268 } },
+    { name: "Hampton Inn Lake Buena Vista", rate_per_night: { extracted_lowest: 150 } },
+  ] }), { status: 200 })) as typeof fetch;
+  const p = new SerpApiHotelProvider("key", 999, 5, null, "2026-10-03");
+  const quotes = await p.hotelMonth(RESORT, "2027-03");
+  const off = new Set(quotes.filter((q) => !q.onProperty).map((q) => q.hotelName));
+  assert.deepEqual([...off], ["Hampton Inn Lake Buena Vista"]);
+  // The scorecard still sees Google's rate for Pop Century.
+  assert.deepEqual(p.pulls[0]!.rates.map((r) => r.name), ["Disney's Pop Century Resort", "Hampton Inn Lake Buena Vista"]);
+});
