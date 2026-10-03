@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findAmounts, findDates, guessCategory, guessResort, findAirports, guessName } from "../public/screenshot-reader.js";
+import { findAmounts, findDates, guessCategory, guessResort, findAirports, guessName, splitOffers, cleanLabel } from "../public/screenshot-reader.js";
 
 // Text shaped like what OCR hands back from real booking pages: line breaks
 // in odd places, a ¥ read as Y, a stray flight number.
@@ -85,4 +85,62 @@ test("ticket, free dining and dollars-off offers", () => {
 test("a headline that wrapped onto two lines is joined back up, but not into the dates", () => {
   assert.equal(guessDealLabel("Save up to 25% on Rooms at Select Disney\nResort Hotels\nValid Feb 22 - Apr 30, 2027"),
     "Save up to 25% on Rooms at Select Disney Resort Hotels");
+});
+
+// The owner's own daily screenshot of disneyworld.com's offers page
+// (2026-10-03): three offers on one page. One form full of all three mixed
+// together ("$250" headline, 25% from another offer, Sep 25 2027) was what
+// prompted this.
+const WDW_OFFERS = `Special Offers
+3 Save Up to $250 Per Night on Select
+4-Night, 4-Day Room-
+and-Ticket Packages
+For stays most nights Jan 3 to Jul 28, 2027
+Location: Disney Resorts Collection
+Offer Type: Room-and-Ticket Package
+Learn More
+Save Up to 25% on Rooms This Spring
+For stays most nights Jan 3 to Apr 29, 2027
+Location: Disney Resorts Collection
+Learn More
+Disney+ Perks Members: Save on Select
+Packages This Holiday Season
+Save up to 25% on rooms plus get a FREE Park
+Hopper option with a 4-night, 4-day package.
+For stays most nights Sept 25 to Dec 24, 2026
+Offer Type: Room-and-Ticket Package
+Learn More`;
+
+test("an offers page splits into its offers, each with its own saving, dates and conditions", () => {
+  for (const text of [WDW_OFFERS, WDW_OFFERS.replace(/Learn More\n?/g, "")]) {
+    const o = splitOffers(text, "2026-10-03");
+    assert.equal(o.length, 3);
+    assert.deepEqual(o.map((x) => x.label), [
+      "Save Up to $250 Per Night on Select 4-Night, 4-Day Room-and-Ticket Packages",
+      "Save Up to 25% on Rooms This Spring",
+      "Disney+ Perks Members: Save on Select Packages This Holiday Season",
+    ]);
+    assert.deepEqual(o.map((x) => [x.kind, x.value]), [["room_night_off", 250], ["room_pct_off", 25], ["room_pct_off", 25]]);
+    assert.deepEqual(o.map((x) => [x.startsOn, x.endsOn]),
+      [["2027-01-03", "2027-07-28"], ["2027-01-03", "2027-04-29"], ["2026-09-25", "2026-12-24"]]);
+    assert.deepEqual(o.map((x) => x.minNights), [4, null, 4]);
+    assert.ok(o.every((x) => x.resort === "wdw" && x.upTo));
+    assert.match(o[2]!.conditions, /Disney\+ Perks members/);
+    assert.match(o[2]!.conditions, /Park Hopper \(not counted/);
+    assert.match(o[0]!.conditions, /package only/);
+  }
+});
+
+test("a range names its year once: the first date takes it, even when already past", () => {
+  // Read alone, "Sept 25" on Oct 3 2026 would be next year's.
+  assert.deepEqual(findDates("Sept 25 to Dec 24, 2026", "2026-10-03"), ["2026-09-25", "2026-12-24"]);
+  assert.deepEqual(findDates("Nov 15 – Jan 5, 2027", "2026-10-03"), ["2026-11-15", "2027-01-05"]);
+  assert.deepEqual(findDates("Jan 3 – 29, 2027", "2026-10-03"), ["2027-01-03", "2027-01-29"]);
+});
+
+test("stray OCR marks come off a headline, real amounts stay", () => {
+  assert.equal(cleanLabel("3 Save Up to $250"), "Save Up to $250");
+  assert.equal(cleanLabel("• \"Save 20%"), "Save 20%");
+  assert.equal(cleanLabel("25% Off Rooms"), "25% Off Rooms");
+  assert.equal(cleanLabel("$300 off"), "$300 off");
 });

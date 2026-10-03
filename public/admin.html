@@ -204,6 +204,16 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
 .howto li{margin-bottom:4px}
 .howto h3:first-of-type{margin-top:8px}
 .chips{display:flex; flex-wrap:wrap; gap:6px; margin:8px 0}
+/* One card per offer read from a screenshot of an offers page. */
+.offers{display:grid; gap:8px; margin:10px 0}
+.offer{display:grid; gap:4px; padding:10px 12px; border:1px solid var(--rule); border-radius:10px; font-size:13px}
+.offer.on{border-color:var(--accent-line); background:var(--accent-bg)}
+.offer.dup{opacity:.75}
+.offer .ar,.offer .anote{color:var(--muted); font-size:12px}
+.offer .aacts{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.offer .atag{font-size:10px; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+  padding:1px 6px; border-radius:99px; border:1px solid var(--ok); color:var(--ok)}
+.offer .btn{padding:4px 9px; font-size:12px}
 .chip{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--rule-strong); border-radius:99px;
   padding:4px 5px 4px 11px; font-size:13px; background:var(--surface)}
 .chip small{color:var(--muted)}
@@ -558,10 +568,16 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div class="cgrid">
       <div><label for="dStart">First travel date</label><input type="date" id="dStart"></div>
       <div><label for="dEnd">Last travel date</label><input type="date" id="dEnd"></div>
-      <div><label for="dNote">Where it's from (optional)</label><input type="text" id="dNote" maxlength="400" placeholder="disneyworld.com, Oct 3"></div>
+      <div><label for="dMin">Shortest stay, nights (optional)</label><input type="text" id="dMin" inputmode="numeric" placeholder="any"></div>
     </div>
-    <p class="count">Use the dates you can <b>travel</b>, not the &ldquo;book by&rdquo; date. If it's only some nights or
-      some hotels, say so in the name (&ldquo;Sun–Thu nights&rdquo;, &ldquo;select hotels&rdquo;): the app applies it to the whole stay.</p>
+    <div class="cgrid one">
+      <div><label for="dCond">Who or what qualifies (optional, travelers see this)</label><input type="text" id="dCond" maxlength="200" placeholder="Disney+ Perks members; room-and-ticket package only"></div>
+      <div><label for="dNote">Where it's from (optional, only you see this)</label><input type="text" id="dNote" maxlength="400" placeholder="disneyworld.com, Oct 3"></div>
+    </div>
+    <p class="count">Use the dates you can <b>travel</b>, not the &ldquo;book by&rdquo; date. A stay shorter than the
+      shortest stay gets nothing off. Conditions are shown beside the deal but not checked: the app can't tell if
+      a traveler is a Perks member or booking a package, and a free Park Hopper isn't taken off the price.
+      <b>&ldquo;Up to&rdquo;</b> means only some rooms or nights get the full amount: a smaller number is the careful choice.</p>
     <div class="tools">
       <button class="btn primary" id="dSave">Save deal</button>
       <button class="btn hidden" id="dCancel">Cancel editing</button>
@@ -1590,7 +1606,7 @@ let statDays = 30;
 /* -------------------------------- deals --------------------------------- */
 let DEAL_KINDS = [], dealEditing = null;
 const dealUnit = k => (DEAL_KINDS.find(x => x.kind === k) || {}).unit;
-const dealAmount = d => dealUnit(d.effectKind) === "pct" ? `${d.effectValue}% off` : dealUnit(d.effectKind) === "usd" ? `$${num(d.effectValue)} off` : "";
+const dealAmount = d => dealUnit(d.effectKind) === "pct" ? `${d.effectValue}% off` : dealUnit(d.effectKind) === "usd" ? `$${num(d.effectValue)} off${d.effectKind === "room_night_off" ? " a night" : ""}` : "";
 const DEAL_STATUS = { live: "Live now", upcoming: "Upcoming", ended: "Ended", off: "Turned off" };
 function syncDealValue(){
   const u = dealUnit($("#dKind").value);
@@ -1611,13 +1627,14 @@ function renderDeals(d){
   $("#dList").innerHTML = d.deals.length
     ? `<div class="alist">${d.deals.map(x => `<div class="aitem">
         <span class="an">${esc(x.label)}</span>
-        <span class="ar">${esc(rname(x.resortId))} · ${esc(fmtD(x.startsOn))} – ${esc(fmtD(x.endsOn))}${dealAmount(x) ? " · " + esc(dealAmount(x)) : ""}</span>
+        <span class="ar">${esc(rname(x.resortId))} · ${esc(fmtD(x.startsOn))} – ${esc(fmtD(x.endsOn))}${dealAmount(x) ? " · " + esc(dealAmount(x)) : ""}${x.minNights ? ` · ${x.minNights}+ nights` : ""}</span>
         <span class="atags"><span class="atag${x.status === "live" ? "" : x.status === "upcoming" ? "" : " bad"}">${DEAL_STATUS[x.status]}</span></span>
         <span class="aacts">
           <button class="btn" data-dedit="${esc(x.id)}">Edit</button>
           ${x.active ? `<button class="btn" data-doff="${esc(x.id)}">Turn off</button>` : `<button class="btn" data-don="${esc(x.id)}">Turn on</button>`}
           <button class="btn" data-ddel="${esc(x.id)}">Delete</button>
         </span>
+        ${x.conditions ? `<span class="anote">Travelers see: ${esc(x.conditions)}</span>` : ""}
         ${x.sourceNote ? `<span class="anote">${esc(x.sourceNote)}</span>` : ""}
       </div>`).join("")}</div>`
     : `<p class="count">No deals yet.</p>`;
@@ -1629,7 +1646,7 @@ async function loadDeals(){
 }
 function clearDealForm(){
   dealEditing = null;
-  ["#dLabel", "#dValue", "#dStart", "#dEnd", "#dNote"].forEach(s => { $(s).value = ""; $(s).classList.remove("filled"); });
+  ["#dLabel", "#dValue", "#dStart", "#dEnd", "#dNote", "#dMin", "#dCond"].forEach(s => { $(s).value = ""; $(s).classList.remove("filled"); });
   ["#dResort", "#dKind"].forEach(s => $(s).classList.remove("filled"));
   $("#dFormTitle").textContent = "Add a deal"; $("#dCancel").classList.add("hidden");
 }
@@ -1637,13 +1654,19 @@ $("#dKind").addEventListener("change", syncDealValue);
 $("#dCancel").addEventListener("click", () => { clearDealForm(); attrSay($("#dSaid"), true, "Editing cancelled."); });
 $("#dSave").addEventListener("click", async () => {
   const body = { id: dealEditing || undefined, resortId: $("#dResort").value, label: $("#dLabel").value, effectKind: $("#dKind").value,
-    effectValue: $("#dValue").value, startsOn: $("#dStart").value, endsOn: $("#dEnd").value, sourceNote: $("#dNote").value };
+    effectValue: $("#dValue").value, startsOn: $("#dStart").value, endsOn: $("#dEnd").value, sourceNote: $("#dNote").value,
+    minNights: $("#dMin").value, conditions: $("#dCond").value };
+  const twin = !dealEditing && dealAlreadyAdded({ resort: body.resortId === "all" ? null : body.resortId, label: body.label,
+    kind: body.effectKind, startsOn: body.startsOn, endsOn: body.endsOn });
+  if(twin && !confirm(`"${twin.label}" is already in your deals with these details. Add it again anyway?`)) return;
   const r = await fetch("/api/admin/deals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ attrSay($("#dSaid"), false, d.message || "That wasn't saved."); return; }
+  rememberDealResort(body.resortId);
   attrSay($("#dSaid"), true, dealEditing ? `Updated "${body.label}".` : `Saved "${body.label}". Travelers can apply it on the resort's card, and Plus members hear about it tomorrow morning.`);
   clearDealForm();
   renderDeals(d);
+  if((window.__offers || []).length) renderOffers();
 });
 document.addEventListener("click", async e => {
   const ed = e.target.closest("[data-dedit]");
@@ -1653,6 +1676,7 @@ document.addEventListener("click", async e => {
     $("#dResort").value = x.resortId || "all"; $("#dKind").value = x.effectKind; syncDealValue();
     $("#dValue").value = dealUnit(x.effectKind) === "none" ? "" : x.effectValue;
     $("#dLabel").value = x.label; $("#dStart").value = x.startsOn; $("#dEnd").value = x.endsOn; $("#dNote").value = x.sourceNote;
+    $("#dMin").value = x.minNights || ""; $("#dCond").value = x.conditions || "";
     $("#dFormTitle").textContent = "Edit this deal"; $("#dCancel").classList.remove("hidden");
     $("#dFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
     return;
@@ -1685,27 +1709,70 @@ async function readDealShot(file){
   let R, text;
   try {
     R = await getReader();
-    text = await R.readImage(file, { onProgress: (p, st) => { status.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(p * 100)}%` : "Getting the reader ready…"; } });
+    text = await R.readImage(file, { columns: true, onProgress: (p, st) => { status.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(p * 100)}%` : "Getting the reader ready…"; } });
   } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; return; }
   $("#dText").textContent = text; $("#dTextBox").classList.remove("hidden");
-  clearDealForm();
-  const resort = R.guessResort(text); if(resort) dfill("#dResort", resort);
-  const kind = R.guessDealKind(text); if(kind){ dfill("#dKind", kind); syncDealValue(); }
-  const pcts = R.findPercents(text), dollars = R.findDollarsOff(text);
-  const u = dealUnit($("#dKind").value);
-  if(u === "pct" && pcts[0]) dfill("#dValue", pcts[0]);
-  if(u === "usd" && dollars[0]) dfill("#dValue", dollars[0]);
-  dfill("#dLabel", R.guessDealLabel(text));
-  const dates = R.findDates(text, todayLocal());
-  if(dates[0]) dfill("#dStart", dates[0]);
-  if(dates[1] && dates[1] > dates[0]) dfill("#dEnd", dates[1]);
-  dfill("#dNote", ("Screenshot " + (file.name && file.name !== "image.png" ? file.name : "") + " · read " + todayLocal()).replace(/\s+/g, " ").trim());
-  $("#dFound").innerHTML = dates.length ? `<div class="chips">${dates.map(iso => `<span class="chip">${esc(fmtD(iso))}
-      <button data-dstart="${iso}">First</button><button data-dend="${iso}">Last</button></span>`).join("")}</div>` : "";
-  status.textContent = (pcts.length || dollars.length || kind)
-    ? "The highlighted boxes are its best guess. Check them against the picture (the First / Last buttons swap in another date), then save."
-    : "Couldn't find a saving in that picture. Try a tighter crop of the offer's headline and dates.";
+  const offers = R.splitOffers(text, todayLocal());
+  const src = (file.name && !/^(image|screenshot)/i.test(file.name) ? file.name + ", " : "") + "screenshot read " + todayLocal();
+  window.__offers = offers.map(o => ({ ...o, src, resort: o.resort || lastDealResort() }));
+  if(!offers.length){
+    clearDealForm();
+    status.textContent = "Couldn't find an offer in that picture. Try a tighter crop of one offer's headline and dates.";
+    $("#dFound").innerHTML = ""; return;
+  }
+  renderOffers();
+  useOffer(window.__offers.findIndex(o => !dealAlreadyAdded(o)) >= 0 ? window.__offers.findIndex(o => !dealAlreadyAdded(o)) : 0);
+  status.textContent = offers.length > 1
+    ? `Found ${offers.length} offers. The first new one is in the form below; "Use this one" swaps in another. Check the highlighted boxes against the picture, then save.`
+    : "The highlighted boxes are its best guess. Check them against the picture, then save.";
 }
+/* The resort from the last deal saved or read, for a screenshot that
+   doesn't name one (a cropped offer card rarely says "Walt Disney World"). */
+function lastDealResort(){ try { return localStorage.getItem("pf.lastDealResort") || null; } catch { return null; } }
+function rememberDealResort(id){ try { if(id && id !== "all") localStorage.setItem("pf.lastDealResort", id); } catch {} }
+const normLabel = s => String(s || "").toLowerCase().replace(/[^a-z0-9%$]+/g, " ").trim();
+/* Already in the list: same resort, and the same name or the same kind
+   and dates. A daily screenshot shows yesterday's offers again. */
+function dealAlreadyAdded(o){
+  return (window.__deals || []).find(d => (d.resortId || null) === (o.resort || null)
+    && (normLabel(d.label) === normLabel(o.label) || (d.effectKind === o.kind && d.startsOn === o.startsOn && d.endsOn === o.endsOn)));
+}
+function renderOffers(){
+  const offers = window.__offers || [];
+  const kindLabel = k => (DEAL_KINDS.find(x => x.kind === k) || {}).label || "not sure";
+  $("#dFound").innerHTML = `<div class="offers">${offers.map((o, i) => {
+    const dup = dealAlreadyAdded(o);
+    return `<div class="offer${dup ? " dup" : ""}" data-offer="${i}">
+      <b>${esc(o.label || "(no headline found)")}</b>
+      <span class="ar">${esc(kindLabel(o.kind))}${o.value ? ` · ${o.kind && /pct/.test(o.kind) ? o.value + "%" : "$" + num(o.value)}${o.upTo ? " (up to)" : ""}` : ""}
+        · ${o.startsOn ? esc(fmtD(o.startsOn)) : "?"} – ${o.endsOn ? esc(fmtD(o.endsOn)) : "?"}${o.minNights ? ` · ${o.minNights}+ nights` : ""}</span>
+      ${o.conditions ? `<span class="anote">${esc(o.conditions)}</span>` : ""}
+      <span class="aacts">${dup ? `<span class="atag">Already added${dup.status === "off" ? " (turned off)" : ""}</span>` : ""}
+        <button class="btn" data-useoffer="${i}">Use this one</button></span>
+    </div>`;
+  }).join("")}</div>`;
+}
+function useOffer(i){
+  const o = (window.__offers || [])[i]; if(!o) return;
+  clearDealForm();
+  if(o.resort) dfill("#dResort", o.resort);
+  if(o.kind){ dfill("#dKind", o.kind); syncDealValue(); }
+  if(o.value && dealUnit($("#dKind").value) !== "none") dfill("#dValue", o.value);
+  dfill("#dLabel", o.label);
+  dfill("#dStart", o.startsOn); dfill("#dEnd", o.endsOn);
+  if(o.minNights) dfill("#dMin", o.minNights);
+  dfill("#dCond", o.conditions);
+  dfill("#dNote", o.src);
+  document.querySelectorAll("[data-offer]").forEach(el => el.classList.toggle("on", el.dataset.offer === String(i)));
+  const chips = o.dates.length > 2 ? `<div class="chips">${o.dates.map(iso => `<span class="chip">${esc(fmtD(iso))}
+      <button data-dstart="${iso}">First</button><button data-dend="${iso}">Last</button></span>`).join("")}</div>` : "";
+  const old = $("#dChips"); if(old) old.remove();
+  if(chips) $("#dFound").insertAdjacentHTML("beforeend", `<div id="dChips">${chips}</div>`);
+}
+document.addEventListener("click", e => {
+  const u = e.target.closest("[data-useoffer]");
+  if(u){ useOffer(Number(u.dataset.useoffer)); $("#dFormTitle").scrollIntoView({ behavior: "smooth", block: "start" }); }
+});
 $("#dPick").addEventListener("click", () => $("#dFile").click());
 $("#dFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(f) readDealShot(f); });
 document.addEventListener("click", e => {

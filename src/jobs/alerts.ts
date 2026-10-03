@@ -58,6 +58,7 @@ function describePromoEffectForEmail(kind: string, value: number): string {
   switch (kind) {
     case "room_pct_off": return `${Math.round(value)}% off the room rate`;
     case "room_flat_off": return `$${Math.round(value)} off the room rate`;
+    case "room_night_off": return `$${Math.round(value)} off per night`;
     case "free_dining": return "free dining plan";
     case "ticket_pct_off": return `${Math.round(value)}% off tickets`;
     case "flat_off_total": return `$${Math.round(value)} off the total`;
@@ -89,7 +90,7 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
   const candidates: Candidate[] = [];
   for (const m of members) {
     const { rows: promos } = await db.query(
-      `select resort_id, label, effect_kind, effect_value
+      `select resort_id, label, effect_kind, effect_value, min_nights, conditions
          from promos
         where active and ends_on >= current_date and created_at > $1
         order by created_at desc limit 3`,
@@ -97,7 +98,11 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
     );
     for (const promo of promos) {
       const where = promo.resort_id ? RESORT_BY_ID.get(promo.resort_id)?.name ?? promo.resort_id : "Every resort";
-      const effect = describePromoEffectForEmail(promo.effect_kind, Number(promo.effect_value));
+      const effect = [
+        describePromoEffectForEmail(promo.effect_kind, Number(promo.effect_value)),
+        promo.min_nights ? `stays of ${promo.min_nights}+ nights` : "",
+        promo.conditions ?? "",
+      ].filter(Boolean).join("; ");
       candidates.push({
         userId: m.id, email: m.email, resortId: promo.resort_id ?? null,
         oldTotal: 0, newTotal: 0, dropPct: 0, kind: "new_promo",

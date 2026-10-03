@@ -789,6 +789,21 @@ test("promos: a curated room discount is suppressed once you've typed your own n
   assert.match(r.price.appliedPromos[0]!.skipped ?? "", /own nightly rate/);
 });
 
+test("promos: $X off per night comes off every night of every room, and a minimum stay is respected", () => {
+  const plain = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), base, {}, START);
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_night_off", effectValue: 20 })] });
+  const r = priceTrip(book, resortById("wdw"), { ...base, hotelRooms: 2 }, { wdw: { promoId: "p1" } }, START);
+  const r2 = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), { ...base, hotelRooms: 2 }, {}, START);
+  assert.ok(plain.ok && r.ok && r2.ok);
+  assert.equal(Math.round(r2.price.rooms - r.price.rooms), 20 * base.nights * 2);
+  // "Select 4-night packages": a shorter stay gets nothing, and says why.
+  const longer = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_night_off", effectValue: 20, minNights: base.nights + 1 })] });
+  const short = priceTrip(longer, resortById("wdw"), base, { wdw: { promoId: "p1" } }, START);
+  assert.ok(short.ok);
+  assert.equal(short.price.rooms, plain.price.rooms);
+  assert.match(short.price.appliedPromos[0]!.skipped ?? "", new RegExp(`at least ${base.nights + 1} nights`));
+});
+
 test("promos: a ticket discount applies regardless of any hotel override", () => {
   const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "ticket_pct_off", effectValue: 10 })] });
   const without = priceTrip(book, resortById("wdw"), base, { wdw: { nightly: 150 } }, START);

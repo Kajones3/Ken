@@ -185,7 +185,7 @@ export async function loadBook(
 
   // Owner-curated table, tiny — cheap to load in full for the requested window.
   const pr = await db.query(
-    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note
+    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note, min_nights, conditions
        from promos
       where active and (resort_id = any($1) or resort_id is null)
         and starts_on <= $2 and ends_on >= $3`,
@@ -196,6 +196,8 @@ export async function loadBook(
     effectKind: r.effect_kind, effectValue: Number(r.effect_value),
     startsOn: dateStr(r.starts_on), endsOn: dateStr(r.ends_on),
     historical: Boolean(r.historical), sourceNote: r.source_note ?? "",
+    minNights: r.min_nights === null || r.min_nights === undefined ? null : Number(r.min_nights),
+    conditions: r.conditions ?? "",
   }));
 
   // Small time series, one row a day — just read the latest.

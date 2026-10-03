@@ -22,6 +22,25 @@ test("a deal must make sense before it is stored", () => {
   // Free dining has no amount; "All resorts" is stored as no resort.
   const fd = validateDeal({ ...good, resortId: "all", effectKind: "free_dining", effectValue: "" }, TODAY);
   assert.ok(fd.ok && fd.value.effectValue === 0 && fd.value.resortId === null);
+  // Shortest stay and conditions are optional; a blank stay means any length.
+  const pkg = validateDeal({ ...good, effectKind: "room_night_off", effectValue: "$250", minNights: "4",
+    conditions: "  Disney+ Perks members;  room-and-ticket package only " }, TODAY);
+  assert.ok(pkg.ok && pkg.value.minNights === 4 && pkg.value.effectValue === 250
+    && pkg.value.conditions === "Disney+ Perks members; room-and-ticket package only");
+  assert.ok(validateDeal({ ...good, minNights: "" }, TODAY).ok);
+  bad({ minNights: "2.5" }, /whole number/);
+  bad({ conditions: "x".repeat(201) }, /under 200/);
+});
+
+test("the shortest stay and conditions are stored and read back, and the new kind passes the database check", async () => {
+  const d = await memoryDb();
+  const r = await saveDeal(d, { ...good, effectKind: "room_night_off", effectValue: "250", minNights: "4",
+    conditions: "Room-and-ticket package only" }, TODAY);
+  assert.ok(r.ok);
+  const [x] = await listDeals(d, TODAY);
+  assert.equal(x!.effectKind, "room_night_off");
+  assert.equal(x!.minNights, 4);
+  assert.equal(x!.conditions, "Room-and-ticket package only");
 });
 
 test("added, listed live/upcoming, turned off and back, edited, deleted", async () => {
