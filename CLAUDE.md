@@ -135,8 +135,33 @@ most").
   busiest airport+month pairs with real fares held per resort (0 in red).
   Counting starts at the next Render deploy (build runs migrate).
   GET `/api/admin/flights?days=`.
-- Not yet: the price range on estimates, and the bigger SerpApi plan. Both
-  wait on what the scoreboard shows.
+- **No price range on the board card** (owner, 2026-10-03: the details
+  section already shows the estimate range, "I don't want to put that up in
+  the card"). Don't re-propose it. The bigger SerpApi plan still waits on
+  what the scoreboard shows.
+- **Hotel scorecard, same page (2026-10-03, owner: "I need to keep an eye on
+  both flights and hotels. The tickets might be easier kinda").** /admin nav
+  is now "Flights & hotels". `src/hotelScoreboard.ts`, read-only, three
+  sources:
+  1. *Disney hotels Google returned.* The "hotels near <resort>" search
+     includes Disney's own hotels; `matchDisneyHotel()` (strict: same words,
+     or ours plus only place words like "Tokyo DisneySea"; tests pin Copper
+     Creek, Bay Lake Tower and "near Disneyland Park" as NON-matches) pairs
+     them with our on-property hotel, month by month, and grades our rate
+     (before price checks). **Side finding the page shows in red: those
+     Disney hotels also sit in the OFF-property pool** (tagged "Off
+     property", parking added). Not fixed yet; the page asks the owner to say
+     the word. Excluding them = skip `matchDisneyHotel` hits in
+     `offPropertyMonth()`.
+  2. *Off-property pull to pull.* New `hotel_samples` table records every
+     off-property pull as Google returned it (resort, month, check-in, one
+     timestamp per pull, hotel name, nightly), written by refresh.ts from
+     `provider.hotelPulls()` in its own try. `pullPairs()` grades the old
+     pull's typical non-Disney rate, moved by the season curve, against the
+     next pull. Fills in over ~2 weeks after deploy.
+  3. *Owner price checks* for hotels and tickets (model_usd vs unit_usd,
+     counted rows only). Tickets ride along here; no separate ticket card.
+  672 tests.
 
 ### 2026-10-02, last — how to update lands, written into /admin
 

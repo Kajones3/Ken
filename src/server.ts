@@ -33,6 +33,7 @@ import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COL
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
+import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
@@ -1561,6 +1562,7 @@ const server = createServer(async (req, res) => {
       return send(200, {
         scoreboard: await loadScoreboard(db, days),
         demand: await loadRouteDemand(db, days),
+        hotels: await loadHotelScoreboard(db),
       }, { cache: "no-store" });
     }
 
