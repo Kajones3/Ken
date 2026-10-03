@@ -114,6 +114,15 @@ test("every resort has at least one Queue-Times park", () => {
   }
 });
 
+test("Shanghai's id 30 matches the name Queue-Times actually returns", () => {
+  // Refused for weeks as "Shanghai Disney Resort"; the live log (2026-10-03)
+  // showed Queue-Times says "Shanghai Disneyland" for id 30.
+  const shdr = QUEUE_TIMES_PARKS.shdr?.[0];
+  assert.ok(shdr);
+  assert.equal(shdr.id, 30);
+  assert.ok(namesAgree(shdr.name, "Shanghai Disneyland"));
+});
+
 test("park ids are unique across resorts", () => {
   const ids = trackedParks().map((p) => p.id);
   assert.equal(new Set(ids).size, ids.length, "an id is listed twice");
