@@ -11,8 +11,11 @@ import { RESORTS, type Tier } from "./config.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
 import {
   computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
+  GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, type CountedCheck,
   type CheckFactor,
 } from "./checkFactors.js";
+import { blendFares, flightSourceWeight, type SourcedFare } from "./observations.js";
+import { asEvidence, cachedGoogleDisneyRates } from "./disneyEvidence.js";
 
 /** Every on-property hotel's shipped base, for rescaling hotel checks. */
 const HOTEL_BASE = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
@@ -112,29 +115,49 @@ export async function loadBook(
     if (!Number.isNaN(t.getTime()) && (!oldest || t < oldest)) oldest = t;
   };
 
+  // Real fares: the latest observation PER SOURCE for each date, from the
+  // record (flight_observations) and the working copy (flight_prices), then
+  // blended by the owner's source weights (observations.ts). One source never
+  // replaces another here; that is the governing rule at the top of CLAUDE.md.
+  //
+  // Rows with no source are the placeholder prices written on 2026-09-07..09,
+  // before any real feed was connected and before the source column existed:
+  // 153,562 of them, made up by the mock provider (a $98 floor on every short
+  // domestic hop). Found 2026-10-02 when ATL-MCO read $98 on almost every
+  // date. Unlabeled means untrusted, so they are never read.
+  const settingsForSources = await settingsMap(db);
   const f = await db.query(
-    `select destination, depart_date, price_usd, carrier, stops, deep_link, fetched_at
-       from flight_prices
-      where origin = $1 and destination = any($2) and trip_length = $3
-        and depart_date between $4 and $5
-        -- Rows with no source are the placeholder prices written on
-        -- 2026-09-07..09, before any real feed was connected and before the
-        -- source column existed: 153,562 of them, one for every date through
-        -- 2027-09, made up by the mock provider (a $98 floor on every short
-        -- domestic hop). Found 2026-10-02 when ATL-MCO read $98 on almost
-        -- every date. They were being priced as REAL fares. Unlabeled means
-        -- untrusted: the trend, the bought-fare evidence and the real-pulls
-        -- digest already skip them; this is the one place that didn't.
-        and source is not null`,
+    `select distinct on (destination, depart_date, source)
+            destination, depart_date, source, price_usd, carrier, stops, deep_link, at
+       from (
+         select destination, depart_date, source, price_usd, carrier, stops, deep_link, fetched_at as at
+           from flight_prices
+          where origin = $1 and destination = any($2) and trip_length = $3
+            and depart_date between $4 and $5 and source is not null
+         union all
+         select destination, depart_date, source, price_usd, carrier, stops, deep_link, observed_at as at
+           from flight_observations
+          where origin = $1 and destination = any($2) and trip_length = $3
+            and depart_date between $4 and $5
+       ) x
+      order by destination, depart_date, source, at desc`,
     [req.origin, req.destinations, req.tripLength, req.from, req.to],
   );
+  const byDate = new Map<string, SourcedFare[]>();
   for (const r of f.rows) {
-    const date = dateStr(r.depart_date);
-    flights.set(`${r.destination}|${date}`, {
-      price: Number(r.price_usd), carrier: r.carrier ?? undefined,
-      stops: Number(r.stops ?? 0), deepLink: r.deep_link ?? undefined,
+    const key = `${r.destination}|${dateStr(r.depart_date)}`;
+    const list = byDate.get(key) ?? [];
+    list.push({
+      source: String(r.source), price: Number(r.price_usd), carrier: r.carrier ?? undefined,
+      stops: Number(r.stops ?? 0), deepLink: r.deep_link ?? undefined, at: tsOf(r.at),
     });
-    seen(r.fetched_at);
+    byDate.set(key, list);
+    seen(r.at);
+  }
+  const weightOf = (src: string) => flightSourceWeight(src, (k) => settingsForSources.get(k));
+  for (const [key, list] of byDate) {
+    const b = blendFares(list, weightOf);
+    if (b) flights.set(key, { price: b.price, carrier: b.carrier, stops: b.stops, deepLink: b.deepLink, sources: b.sources });
   }
 
   const h = await db.query(
@@ -365,7 +388,7 @@ export async function loadBook(
   // beside the prices, so pricing.ts can stay pure and synchronous — see
   // PriceBook.setting. An empty table leaves every lookup undefined and every
   // caller on the value in config.ts, which is the shipped behavior.
-  const settings = await settingsMap(db);
+  const settings = settingsForSources;
 
   /* The owner's price checks (checkFactors.ts). Each one is a ratio of what
    * they saw to what our model said that day; together they nudge the same
@@ -374,8 +397,19 @@ export async function loadBook(
    * see one set of numbers. Only ever our own model's numbers: a vendor's
    * off-property rate and a real cached fare are real prices already, and are
    * never nudged. */
-  const factors = opts.applyChecks !== false && (settings.get(CHECKS_USE_KEY) ?? 1) >= 1
-    ? computeFactors(await countedChecks(db), {
+  //
+  // Google's own rates for Disney's hotels join the same pool (2026-10-03,
+  // disneyEvidence.ts), weighted by the owner's `sources.hotel.googleDisney`.
+  // `applyChecks: false` leaves out both, so a new check or a scorecard is
+  // always measured against our raw model, never against itself.
+  let evidence: CountedCheck[] = [];
+  if (opts.applyChecks !== false) {
+    if ((settings.get(CHECKS_USE_KEY) ?? 1) >= 1) evidence = await countedChecks(db);
+    const gw = settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT;
+    if (gw > 0) evidence = evidence.concat(asEvidence(await cachedGoogleDisneyRates(db), gw));
+  }
+  const factors = evidence.length
+    ? computeFactors(evidence, {
         priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
         hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? HOTEL_BASE.get(id),
       })

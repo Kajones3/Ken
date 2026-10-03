@@ -17,6 +17,7 @@ import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import { SerpApiHotelProvider } from "../providers/serpapi.js";
 import { recordHotelSamples } from "../hotelScoreboard.js";
+import { recordFlightObservations } from "../observations.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
@@ -105,8 +106,11 @@ function dayNumber(): number {
   return Math.floor(Date.now() / 86_400_000);
 }
 
-async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promise<number> {
+export async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promise<number> {
   if (!rows.length) return 0;
+  // The record first (observations.ts): every fare the free feed hands us is
+  // kept with its source, whatever happens to the working copy below.
+  await recordFlightObservations(db, rows, source);
   const vals: unknown[] = [];
   const tuples = rows.map((r, i) => {
     const b = i * 9;
@@ -133,6 +137,9 @@ async function upsertFlights(db: Db, rows: FlightQuote[], source: string): Promi
   return rows.length;
 }
 
+/** Source label for on-property rates we generate from the owner's base rates. */
+export const OWNER_BASE_SOURCE = "owner_base";
+
 export async function upsertHotels(db: Db, rows: HotelQuote[], source: string): Promise<number> {
   if (!rows.length) return 0;
   let written = 0;
@@ -141,7 +148,10 @@ export async function upsertHotels(db: Db, rows: HotelQuote[], source: string): 
     const vals: unknown[] = [];
     const tuples = chunk.map((r, j) => {
       const b = j * 10;
-      vals.push(r.hotelId, r.resortId, r.hotelName, r.descriptor, r.stayDate, r.nightlyUsd, r.tier, r.onProperty, r.deepLink ?? null, source);
+      // On-property rates are generated from the owner's base rates, not
+      // returned by a vendor, so they are labelled as such (2026-10-03).
+      vals.push(r.hotelId, r.resortId, r.hotelName, r.descriptor, r.stayDate, r.nightlyUsd, r.tier, r.onProperty, r.deepLink ?? null,
+        r.onProperty ? OWNER_BASE_SOURCE : source);
       return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8},$${b+9},$${b+10},now())`;
     });
     await db.query(
@@ -274,11 +284,8 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // due tonight still gets its call — that is the whole point of rotating
   // over the full year.
   //
-  // NOTE: both kinds of row are written with the provider's hotelSource, so
-  // an on-property row also ends up tagged `serpapi_hotels` even though no
-  // vendor returned it. That mislabelling predates this change and the
-  // rotation works around it by counting only `on_property = false` rows;
-  // worth fixing properly, since the real-pulls digest reads the same tag.
+  // On-property rows are labelled `owner_base` by upsertHotels (fixed
+  // 2026-10-03; they used to carry the vendor's `serpapi_hotels` tag).
   const hotelWork = new Map<string, { resortId: string; month: string }>();
   for (const month of months) {
     for (const resort of resorts) hotelWork.set(`${resort.id}|${month}`, { resortId: resort.id, month });
@@ -296,13 +303,12 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
     }
   }
 
-  // Keep each off-property pull as Google returned it, for the hotel
-  // scorecard. Its own try: a missing table must not fail the refresh.
-  try {
-    await recordHotelSamples(db, provider.hotelPulls?.() ?? []);
-  } catch (e) {
-    console.error("hotel samples not recorded (ignored):", (e as Error).message);
-  }
+  // Keep each off-property pull as Google returned it, Disney's own hotels
+  // included. This is the hotel RECORD (append-only, see observations.ts):
+  // the Disney rates in it keep on-property pricing honest (disneyEvidence.ts)
+  // and the rest feed the scorecard and the /admin hotel list. Not ignored on
+  // failure any more: losing a paid pull should fail the job loudly.
+  await recordHotelSamples(db, provider.hotelPulls?.() ?? [], provider.hotelSource ?? provider.name);
 
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);

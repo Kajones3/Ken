@@ -36,15 +36,18 @@ test("news digest: emails the owner about genuinely new items, and only once", a
   assert.match(sent[0]!.text, /Test Closure/);
   assert.match(sent[0]!.text, /Test Promo/);
 
-  // Same feed, same items, run again — nothing new, no second email.
+  // Same feed, same items, run again — nothing new. The daily data check
+  // still goes out (2026-10-03), but the news items are not repeated.
   const second = await runNewsDigest(db, {
     sender, ownerEmail: "owner@example.com",
     fetchImpl: fakeFetch({ "https://feed.example/a": FEED_XML }),
     feeds,
   });
   assert.equal(second.newItems, 0);
-  assert.equal(second.sent, 0);
-  assert.equal(sent.length, 1, "no duplicate email for items already seen");
+  assert.equal(second.sent, 1, "the daily data check goes out every day");
+  assert.equal(sent.length, 2);
+  assert.doesNotMatch(sent[1]!.text, /Test Closure/, "no duplicate news for items already seen");
+  assert.match(sent[1]!.text, /Did the data stick/);
 
   await db.close();
 });

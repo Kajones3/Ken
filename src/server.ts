@@ -34,6 +34,7 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
+import { loadHotelList } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
@@ -1591,6 +1592,7 @@ const server = createServer(async (req, res) => {
         scoreboard: await loadScoreboard(db, days),
         demand: await loadRouteDemand(db, days),
         hotels: await loadHotelScoreboard(db),
+        hotelList: await loadHotelList(db),
       }, { cache: "no-store" });
     }
 

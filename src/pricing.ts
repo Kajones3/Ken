@@ -164,6 +164,8 @@ export type Overrides = Record<string, ResortOverride | undefined>;
 
 export interface FlightRow {
   price: number; carrier?: string; stops?: number; deepLink?: string;
+  /** Which sources this real fare was blended from (observations.ts). */
+  sources?: string[];
   /** Only set when this row came from PriceBook.flightEstimate() rather than
    *  a real flight_prices cache hit: this route's real BTS median fare for
    *  the same quarter, moved by the percentage that the routes we *do* price

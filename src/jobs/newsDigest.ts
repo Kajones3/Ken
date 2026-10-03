@@ -18,6 +18,7 @@ import { pickEmailSender } from "../email/pick.js";
 import { parseRssItems } from "../rss.js";
 import { todayISO } from "../dates.js";
 import { ownerTasks, renderOwnerTasks, type OwnerTask } from "../ownerTasks.js";
+import { dataIntake, type IntakeReport } from "../dataIntake.js";
 
 export interface NewsDigestOptions {
   sender?: EmailSender;
@@ -29,6 +30,8 @@ export interface NewsDigestOptions {
   /** Injected by tests so the chore list can be exercised without staging a
    *  whole database's worth of stale rows. */
   tasks?: OwnerTask[];
+  /** Injected by tests; normally read from the database (dataIntake.ts). */
+  intake?: IntakeReport;
 }
 
 export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
@@ -76,8 +79,16 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   // It supersedes the standalone IRS note that used to live in this function:
   // the mileage rate is now just one task among several, with the same
   // urgency marker and the same irs.gov instruction.
-  const tasks = opts.tasks ?? await ownerTasks(db, { today: opts.todayISO ?? todayISO() });
+  // "Did the data stick?" (dataIntake.ts, 2026-10-03). Its problems join the
+  // chore list, and its summary is in every email, because keeping flight and
+  // hotel data is one of the app's governing priorities (top of CLAUDE.md).
+  const intake = opts.intake ?? await dataIntake(db);
+  const tasks = [
+    ...(opts.tasks ?? await ownerTasks(db, { today: opts.todayISO ?? todayISO() })),
+    ...intake.problems.map((t) => ({ ...t, source: "checked" as const })),
+  ].sort((a, b) => Number(b.blocking) - Number(a.blocking));
   const taskNote = renderOwnerTasks(tasks);
+  const intakeNote = "Did the data stick? (daily check)\n\n" + intake.lines.join("\n");
 
   // A blocking task is worth an email on a week with no news — that was
   // already true of an unpriceable mileage year and is just as true of
@@ -88,9 +99,11 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const tasksForceSend = blocking.length > 0;
 
   let sent = 0;
-  const shouldSend = Boolean(ownerEmail) && (newItems.length > 0 || tasksForceSend);
+  // Every day, not only on news days: the data check is worth reading daily
+  // (owner, 2026-10-03), and a quiet day is itself the signal.
+  const shouldSend = Boolean(ownerEmail);
   if (shouldSend) {
-    const parts: string[] = [taskNote];
+    const parts: string[] = [taskNote, intakeNote];
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")
         + "\n\n— Review and hand-add anything worth surfacing to a resort's goodToKnow in config.ts.");
@@ -105,7 +118,9 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
       : tasks.length ? ` + ${tasks.length} job${tasks.length === 1 ? "" : "s"} for you` : "";
     const subject = newItems.length
       ? `Parkfare: ${newItems.length} new Disney news item${newItems.length === 1 ? "" : "s"}${jobTag}`
-      : `Parkfare: ${blocking.length} job${blocking.length === 1 ? "" : "s"} need${blocking.length === 1 ? "s" : ""} you`;
+      : blocking.length
+        ? `Parkfare: ${blocking.length} job${blocking.length === 1 ? "" : "s"} need${blocking.length === 1 ? "s" : ""} you`
+        : `Parkfare: daily data check${jobTag}`;
     try {
       await sender.send({ to: ownerEmail, subject, text: parts.join("\n\n———\n\n") });
       sent = 1;
@@ -116,7 +131,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
 
   const mileageSuffix = (years.length ? `; IRS mileage rate missing for ${years.join(", ")}` : "")
     + `; ${tasks.length} manual job(s) outstanding`;
-  const note = (!newItems.length && !tasksForceSend) ? `nothing new${mileageSuffix}`
+  const note = !ownerEmail && !newItems.length && !tasksForceSend ? `nothing new${mileageSuffix}`
     : !ownerEmail ? `${newItems.length} new item(s) found but OWNER_EMAIL is not set — not sent${mileageSuffix}`
     : `${newItems.length} new item(s), ${sent ? "sent" : "send failed"}${mileageSuffix}`;
   await db.query(

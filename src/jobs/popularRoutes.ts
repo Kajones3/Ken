@@ -28,6 +28,7 @@ import { getDb, type Db } from "../db.js";
 import { popularRoutes, recentlyBought, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth } from "../config.js";
+import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
@@ -145,6 +146,9 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
             if (!q) { misses++; continue; }
             // Same upsert contract as the main refresh: on success only. A
             // failed lookup leaves yesterday's real fare in place.
+            // The record first (observations.ts): every paid fare is kept,
+            // even if the working copy below is later replaced.
+            await recordFlightObservations(db, [q], SERPAPI_FLIGHTS);
             await db.query(
               `insert into flight_prices
                  (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)
