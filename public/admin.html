@@ -244,6 +244,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
+    <a href="#deals">Deals</a>
     <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
     <a href="#waits">Wait times</a>
@@ -517,6 +518,53 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div class="errs hidden" id="fCsvErrs"></div>
   </section>
 
+  </div>
+
+  <div class="page" data-page="deals">
+  <section class="sheet" id="deals">
+    <h2>Deals</h2>
+    <p>Disney's own offers, like &ldquo;Save up to 25% on rooms&rdquo;. A live deal shows on that resort's card, where
+      a traveler can apply it to their total. <b>Adding a deal also emails it to Plus members</b> the next
+      morning (only those with a confirmed email who haven't turned deal emails off).</p>
+
+    <h3>Read a screenshot of the offer</h3>
+    <p>Read on this device, like the price-check reader: nothing is sent anywhere. It only fills in the form
+      below, so check every box before you save.</p>
+    <div class="tools" style="margin:6px 0 4px">
+      <button class="btn" id="dPick">Choose a screenshot</button>
+      <input type="file" id="dFile" accept="image/*" class="hidden">
+    </div>
+    <p class="count" id="dStatus">Or paste a screenshot anywhere on this page.</p>
+    <img id="dImg" class="shot hidden" alt="The offer being read">
+    <div id="dFound"></div>
+    <details id="dTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
+      <pre class="ocr" id="dText"></pre></details>
+
+    <h3 id="dFormTitle">Add a deal</h3>
+    <div class="cgrid">
+      <div><label for="dResort">Resort</label><select id="dResort"></select></div>
+      <div><label for="dKind">What it takes off</label><select id="dKind"></select></div>
+      <div><label for="dValue" id="dValueLabel">How much</label><input type="text" id="dValue" inputmode="decimal" placeholder="25"></div>
+    </div>
+    <div class="cgrid one">
+      <div><label for="dLabel">Name travelers see</label><input type="text" id="dLabel" maxlength="120" placeholder="Save up to 25% on rooms (Feb–Apr)"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="dStart">First travel date</label><input type="date" id="dStart"></div>
+      <div><label for="dEnd">Last travel date</label><input type="date" id="dEnd"></div>
+      <div><label for="dNote">Where it's from (optional)</label><input type="text" id="dNote" maxlength="400" placeholder="disneyworld.com, Oct 3"></div>
+    </div>
+    <p class="count">Use the dates you can <b>travel</b>, not the &ldquo;book by&rdquo; date. If it's only some nights or
+      some hotels, say so in the name (&ldquo;Sun–Thu nights&rdquo;, &ldquo;select hotels&rdquo;): the app applies it to the whole stay.</p>
+    <div class="tools">
+      <button class="btn primary" id="dSave">Save deal</button>
+      <button class="btn hidden" id="dCancel">Cancel editing</button>
+    </div>
+    <div class="said" id="dSaid"></div>
+
+    <h3>All deals</h3>
+    <div id="dList"><p class="count">Loading…</p></div>
+  </section>
   </div>
 
   <div class="page" data-page="lands">
@@ -1458,7 +1506,9 @@ document.addEventListener("paste", e => {
   const item = [...((e.clipboardData && e.clipboardData.items) || [])].find(i => i.type.startsWith("image/"));
   if(!item) return;
   e.preventDefault();
-  readShot(item.getAsFile());
+  // A pasted picture goes to whichever reader is on screen.
+  if(location.hash === "#deals") readDealShot(item.getAsFile());
+  else readShot(item.getAsFile());
 });
 document.addEventListener("click", e => {
   const a = e.target.closest("[data-useamt]");
@@ -1498,6 +1548,132 @@ const barTable = (rows, cols) => {
       <td style="width:30%"><div class="bar" style="width:${Math.round((r._bar || 0) / max * 100)}%"></div></td></tr>`).join("")}</tbody></table>`;
 };
 let statDays = 30;
+/* -------------------------------- deals --------------------------------- */
+let DEAL_KINDS = [], dealEditing = null;
+const dealUnit = k => (DEAL_KINDS.find(x => x.kind === k) || {}).unit;
+const dealAmount = d => dealUnit(d.effectKind) === "pct" ? `${d.effectValue}% off` : dealUnit(d.effectKind) === "usd" ? `$${num(d.effectValue)} off` : "";
+const DEAL_STATUS = { live: "Live now", upcoming: "Upcoming", ended: "Ended", off: "Turned off" };
+function syncDealValue(){
+  const u = dealUnit($("#dKind").value);
+  $("#dValue").disabled = u === "none";
+  $("#dValueLabel").textContent = u === "pct" ? "Percent off" : u === "usd" ? "Dollars off" : "How much (none needed)";
+  if(u === "none") $("#dValue").value = "";
+}
+function renderDeals(d){
+  if(d.kinds){
+    DEAL_KINDS = d.kinds;
+    $("#dKind").innerHTML = d.kinds.map(k => `<option value="${esc(k.kind)}">${esc(k.label)}</option>`).join("");
+    $("#dResort").innerHTML = `<option value="all">All resorts</option>` + d.resorts.map(r => `<option value="${esc(r.id)}">${esc(r.name)}</option>`).join("");
+    window.__dealResorts = d.resorts;
+    syncDealValue();
+  }
+  window.__deals = d.deals;
+  const rname = id => id ? ((window.__dealResorts || []).find(r => r.id === id) || {}).name || id : "All resorts";
+  $("#dList").innerHTML = d.deals.length
+    ? `<div class="alist">${d.deals.map(x => `<div class="aitem">
+        <span class="an">${esc(x.label)}</span>
+        <span class="ar">${esc(rname(x.resortId))} · ${esc(fmtD(x.startsOn))} – ${esc(fmtD(x.endsOn))}${dealAmount(x) ? " · " + esc(dealAmount(x)) : ""}</span>
+        <span class="atags"><span class="atag${x.status === "live" ? "" : x.status === "upcoming" ? "" : " bad"}">${DEAL_STATUS[x.status]}</span></span>
+        <span class="aacts">
+          <button class="btn" data-dedit="${esc(x.id)}">Edit</button>
+          ${x.active ? `<button class="btn" data-doff="${esc(x.id)}">Turn off</button>` : `<button class="btn" data-don="${esc(x.id)}">Turn on</button>`}
+          <button class="btn" data-ddel="${esc(x.id)}">Delete</button>
+        </span>
+        ${x.sourceNote ? `<span class="anote">${esc(x.sourceNote)}</span>` : ""}
+      </div>`).join("")}</div>`
+    : `<p class="count">No deals yet.</p>`;
+}
+async function loadDeals(){
+  const r = await fetch("/api/admin/deals");
+  if(!r.ok){ $("#dList").innerHTML = `<p class="count">Couldn't load the deals.</p>`; return; }
+  renderDeals(await r.json());
+}
+function clearDealForm(){
+  dealEditing = null;
+  ["#dLabel", "#dValue", "#dStart", "#dEnd", "#dNote"].forEach(s => { $(s).value = ""; $(s).classList.remove("filled"); });
+  ["#dResort", "#dKind"].forEach(s => $(s).classList.remove("filled"));
+  $("#dFormTitle").textContent = "Add a deal"; $("#dCancel").classList.add("hidden");
+}
+$("#dKind").addEventListener("change", syncDealValue);
+$("#dCancel").addEventListener("click", () => { clearDealForm(); attrSay($("#dSaid"), true, "Editing cancelled."); });
+$("#dSave").addEventListener("click", async () => {
+  const body = { id: dealEditing || undefined, resortId: $("#dResort").value, label: $("#dLabel").value, effectKind: $("#dKind").value,
+    effectValue: $("#dValue").value, startsOn: $("#dStart").value, endsOn: $("#dEnd").value, sourceNote: $("#dNote").value };
+  const r = await fetch("/api/admin/deals", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ attrSay($("#dSaid"), false, d.message || "That wasn't saved."); return; }
+  attrSay($("#dSaid"), true, dealEditing ? `Updated "${body.label}".` : `Saved "${body.label}". Travelers can apply it on the resort's card, and Plus members hear about it tomorrow morning.`);
+  clearDealForm();
+  renderDeals(d);
+});
+document.addEventListener("click", async e => {
+  const ed = e.target.closest("[data-dedit]");
+  if(ed){
+    const x = (window.__deals || []).find(d => d.id === ed.dataset.dedit); if(!x) return;
+    dealEditing = x.id;
+    $("#dResort").value = x.resortId || "all"; $("#dKind").value = x.effectKind; syncDealValue();
+    $("#dValue").value = dealUnit(x.effectKind) === "none" ? "" : x.effectValue;
+    $("#dLabel").value = x.label; $("#dStart").value = x.startsOn; $("#dEnd").value = x.endsOn; $("#dNote").value = x.sourceNote;
+    $("#dFormTitle").textContent = "Edit this deal"; $("#dCancel").classList.remove("hidden");
+    $("#dFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const t = e.target.closest("[data-doff],[data-don]");
+  if(t){
+    const id = t.dataset.doff || t.dataset.don;
+    t.disabled = true;
+    const r = await fetch(`/api/admin/deals/${id}/active`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active: !!t.dataset.don }) });
+    if(r.ok) renderDeals(await r.json()); else t.disabled = false;
+    return;
+  }
+  const del = e.target.closest("[data-ddel]");
+  if(del){
+    const x = (window.__deals || []).find(d => d.id === del.dataset.ddel);
+    if(!confirm(`Delete "${x ? x.label : "this deal"}"? Use Turn off instead if it was a real deal, so it stays on record.`)) return;
+    const r = await fetch(`/api/admin/deals/${del.dataset.ddel}`, { method: "DELETE" });
+    if(r.ok) renderDeals(await r.json());
+  }
+});
+
+/* Read an offer screenshot into the deal form. Same reader as price checks. */
+const dfill = (sel, value) => { if(value === undefined || value === null || value === "") return; $(sel).value = value; $(sel).classList.add("filled"); };
+async function readDealShot(file){
+  const status = $("#dStatus");
+  $("#dImg").src = URL.createObjectURL(file); $("#dImg").classList.remove("hidden");
+  $("#dFound").innerHTML = ""; $("#dTextBox").classList.add("hidden");
+  status.textContent = "Reading… the first time, the reader downloads itself (a few seconds).";
+  let R, text;
+  try {
+    R = await getReader();
+    text = await R.readImage(file, { onProgress: (p, st) => { status.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(p * 100)}%` : "Getting the reader ready…"; } });
+  } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; return; }
+  $("#dText").textContent = text; $("#dTextBox").classList.remove("hidden");
+  clearDealForm();
+  const resort = R.guessResort(text); if(resort) dfill("#dResort", resort);
+  const kind = R.guessDealKind(text); if(kind){ dfill("#dKind", kind); syncDealValue(); }
+  const pcts = R.findPercents(text), dollars = R.findDollarsOff(text);
+  const u = dealUnit($("#dKind").value);
+  if(u === "pct" && pcts[0]) dfill("#dValue", pcts[0]);
+  if(u === "usd" && dollars[0]) dfill("#dValue", dollars[0]);
+  dfill("#dLabel", R.guessDealLabel(text));
+  const dates = R.findDates(text, todayLocal());
+  if(dates[0]) dfill("#dStart", dates[0]);
+  if(dates[1] && dates[1] > dates[0]) dfill("#dEnd", dates[1]);
+  dfill("#dNote", ("Screenshot " + (file.name && file.name !== "image.png" ? file.name : "") + " · read " + todayLocal()).replace(/\s+/g, " ").trim());
+  $("#dFound").innerHTML = dates.length ? `<div class="chips">${dates.map(iso => `<span class="chip">${esc(fmtD(iso))}
+      <button data-dstart="${iso}">First</button><button data-dend="${iso}">Last</button></span>`).join("")}</div>` : "";
+  status.textContent = (pcts.length || dollars.length || kind)
+    ? "The highlighted boxes are its best guess. Check them against the picture (the First / Last buttons swap in another date), then save."
+    : "Couldn't find a saving in that picture. Try a tighter crop of the offer's headline and dates.";
+}
+$("#dPick").addEventListener("click", () => $("#dFile").click());
+$("#dFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(f) readDealShot(f); });
+document.addEventListener("click", e => {
+  const s = e.target.closest("[data-dstart]"); if(s){ dfill("#dStart", s.dataset.dstart); return; }
+  const n = e.target.closest("[data-dend]"); if(n){ dfill("#dEnd", n.dataset.dend); }
+});
+
 /* -------------------------------- hotels -------------------------------- */
 const RESORT_NAME = { wdw: "Walt Disney World", dlr: "Disneyland Resort", dlp: "Disneyland Paris",
   tdr: "Tokyo Disney Resort", shdr: "Shanghai Disney Resort", hkdl: "Hong Kong Disneyland" };
@@ -1653,6 +1829,7 @@ route();
 load();
 loadFares();
 loadAttractions();
+loadDeals();
 loadFlights();
 loadWaits();
 loadChecks();

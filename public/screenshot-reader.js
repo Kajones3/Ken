@@ -172,6 +172,66 @@ export function findAirports(text) {
   return out;
 }
 
+/* ------------------------------------------------------------ deals */
+
+/**
+ * What a Disney offer page says, read for the Deals page in /admin
+ * (2026-10-03). Offer pages read "Save up to 25% on rooms at select Disney
+ * Resort hotels" and "Valid for most nights Feb 22 – Apr 30, 2026". Like
+ * everything here these are guesses the form highlights, never saved alone.
+ */
+export function findPercents(text) {
+  const out = [];
+  const re = /(\d{1,2}(?:\.\d)?)\s*%/g;
+  let m;
+  while ((m = re.exec(text))) { const v = Number(m[1]); if (v > 0 && v <= 100 && !out.includes(v)) out.push(v); }
+  return out;
+}
+
+/** "free dining" -> free_dining; a percent about tickets -> ticket_pct_off;
+ *  a percent otherwise -> room_pct_off (Disney's offers are mostly rooms);
+ *  "$X off" about rooms -> room_flat_off, otherwise flat_off_total. */
+export function guessDealKind(text) {
+  const s = text.toLowerCase();
+  if (/free\s+dining|dining\s+plan/.test(s)) return "free_dining";
+  const ticket = /\btickets?\b|park hopper|admission|theme park/.test(s);
+  const room = /\brooms?\b|resort hotels?|\bstay\b|\bnights?\b|accommodation/.test(s);
+  if (findPercents(text).length) return ticket && !room ? "ticket_pct_off" : "room_pct_off";
+  if (/[$€£¥]\s?\d[\d,]*\s*(?:off|discount|savings)|save\s+[$€£¥]\s?\d/.test(s)) return room ? "room_flat_off" : "flat_off_total";
+  return null;
+}
+
+/** The headline, usually the line that says what you save. */
+export function guessDealLabel(text) {
+  const lines = text.split("\n").map((x) => x.replace(/\s+/g, " ").trim());
+  for (let i = 0; i < lines.length; i++) {
+    let l = lines[i];
+    // Not a bare page heading like "Special Offers": the headline names a saving.
+    if (l.length >= 8 && l.length <= 100 && /save|%|\boff\b|free\s|discount/i.test(l)) {
+      // A big headline often wraps: "...at Select Disney" / "Resort Hotels".
+      // Join a short next line with no numbers in it (dates and prices have them).
+      const next = lines[i + 1] || "";
+      if (next && !/\d/.test(next) && !/[.!:]$/.test(l) && (l + " " + next).length <= 100) l = l + " " + next;
+      return l;
+    }
+  }
+  return guessName(text);
+}
+
+/** "$300 off" / "save $200" -> 300 / 200 (the number after a dollar sign
+ *  next to "off" or "save"). */
+export function findDollarsOff(text) {
+  const out = [];
+  const re = /(?:save\s+)?\$\s?(\d[\d,]*)(?:\s*(?:off|discount|savings))?/gi;
+  let m;
+  while ((m = re.exec(text))) {
+    const near = /save|off|discount|savings/i.test(text.slice(Math.max(0, m.index - 6), m.index + m[0].length + 10));
+    const v = Number(m[1].replace(/,/g, ""));
+    if (near && v > 0 && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------ the OCR */
 
 let loading = null;

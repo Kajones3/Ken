@@ -95,6 +95,25 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-03, later — a Deals page in /admin, with the screenshot reader
+
+Owner: "I couldn't find the place to put screenshots in the admin panel. I
+have some deals I want to try to put in." There was no deals UI at all
+(promos lived only in seedPromos.ts). /admin -> **Deals** (`#deals`):
+`src/adminPromos.ts` (validate / list with live-upcoming-ended-off status /
+save / turn off-on / delete, tests) over the SAME `promos` table travelers
+apply and the deal email reads, so **a new active deal emails Plus members
+the next alert run**; the page says so. Kinds: % off room, $ off whole room
+bill (pricing subtracts it from the stay total, not per night), % off
+tickets, free dining plan, $ off whole trip. Dates are TRAVEL dates; a
+deal that has already ended is refused. Saved deals are `historical =
+false`. The screenshot reader got `findPercents`, `guessDealKind`,
+`guessDealLabel` (joins a headline wrapped onto two lines) and
+`findDollarsOff` (pure, tested); a pasted picture goes to whichever reader
+is on screen. Checked end to end in Chromium with real OCR of a rendered
+offer: resort, kind, 25%, Feb 22 / Apr 30 all filled. Still no "$ off one
+ticket" kind (Paris's EUR 20 offer). 682 tests.
+
 ### 2026-10-03 — international estimates were a flat guess; Disney hotels out of off-property
 
 - **International flight "baselines" were never real.** Found from the
