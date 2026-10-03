@@ -34,6 +34,7 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
+import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
@@ -1551,6 +1552,31 @@ const server = createServer(async (req, res) => {
         effective: effective.map((a) => ({ ...a, onlyAt: isOnlyAt(a) ? a.resortIds[0] : null })),
         owner: await listOwnerAttractions(db),
       }, { cache: "no-store" });
+    }
+
+    /* The Deals page: the owner adds, edits and turns off curated deals
+     * (adminPromos.ts). The same rows travelers apply and the deal email
+     * announces. */
+    if (url.pathname === "/api/admin/deals" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { deals: await listDeals(db, todayISO()), kinds: DEAL_KINDS,
+        resorts: RESORTS.map((r) => ({ id: r.id, name: r.name })) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/deals" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await saveDeal(db, body, todayISO(), typeof body?.id === "string" && body.id ? body.id : undefined);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, id: r.id, deals: await listDeals(db, todayISO()) }, { cache: "no-store" });
+    }
+    const dealMatch = url.pathname.match(/^\/api\/admin\/deals\/([0-9a-f-]{36})(\/active)?$/);
+    if (dealMatch && (req.method === "DELETE" || req.method === "POST")) {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const done = dealMatch[2]
+        ? await setDealActive(db, dealMatch[1]!, Boolean((await readBody(req))?.active))
+        : req.method === "DELETE" ? await deleteDeal(db, dealMatch[1]!) : false;
+      if (!done) return send(404, { error: "not found" });
+      return send(200, { ok: true, deals: await listDeals(db, todayISO()) }, { cache: "no-store" });
     }
 
     /* The Flights page: how far off our estimates run against the real fares

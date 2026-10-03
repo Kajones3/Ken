@@ -59,3 +59,30 @@ test("what real OCR produced from a booking screenshot: a missing space, a stray
   assert.equal(guessResort(ocr), "tdr");
   assert.equal(guessCategory(ocr), "hotel");
 });
+
+/* ---------------- deals (the Deals page in /admin) ---------------- */
+import { findPercents, guessDealKind, guessDealLabel, findDollarsOff } from "../public/screenshot-reader.js";
+
+const WDW_OFFER = `Special Offers
+Save up to 25% on Rooms at Select Disney Resort Hotels
+Valid for most nights Feb 22 – Apr 30, 2026
+Book by Jan 5, 2026. Limited availability.`;
+
+test("a room offer: percent, kind, headline and dates", () => {
+  assert.deepEqual(findPercents(WDW_OFFER), [25]);
+  assert.equal(guessDealKind(WDW_OFFER), "room_pct_off");
+  assert.equal(guessDealLabel(WDW_OFFER), "Save up to 25% on Rooms at Select Disney Resort Hotels");
+  assert.deepEqual(findDates(WDW_OFFER, "2025-10-03").slice(0, 2), ["2026-02-22", "2026-04-30"]);
+});
+
+test("ticket, free dining and dollars-off offers", () => {
+  assert.equal(guessDealKind("Save 20% on 3-day theme park tickets"), "ticket_pct_off");
+  assert.equal(guessDealKind("Free Dining Plan with a room and ticket package"), "free_dining");
+  assert.equal(guessDealKind("Save $300 off your stay of 4 nights or more"), "room_flat_off");
+  assert.deepEqual(findDollarsOff("Save $300 off your stay. Rooms from $129."), [300]);
+});
+
+test("a headline that wrapped onto two lines is joined back up, but not into the dates", () => {
+  assert.equal(guessDealLabel("Save up to 25% on Rooms at Select Disney\nResort Hotels\nValid Feb 22 - Apr 30, 2027"),
+    "Save up to 25% on Rooms at Select Disney Resort Hotels");
+});

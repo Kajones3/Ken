@@ -8,3 +8,7 @@ export function guessCategory(text: string): "hotel" | "flight" | "ticket" | "fo
 export function guessResort(text: string): string | null;
 export function findAirports(text: string): string[];
 export function guessName(text: string): string | null;
+export function findPercents(text: string): number[];
+export function guessDealKind(text: string): "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total" | null;
+export function guessDealLabel(text: string): string | null;
+export function findDollarsOff(text: string): number[];
