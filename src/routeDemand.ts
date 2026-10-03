@@ -100,6 +100,30 @@ export async function popularRoutes(
   }));
 }
 
+/** How long a bought fare for a route+month stays fresh enough not to re-buy. */
+export const REBUY_AFTER_DAYS = 10;
+
+/**
+ * Route+month pairs ("ATL|MCO|2027-03") with a paid fare bought in the last
+ * `days` days.
+ *
+ * Found 2026-10-03: demand filled every nightly slot with the same 18
+ * route+months (the owner's own test searches), sampleDates() picks the same
+ * day each time, so each night's 18 paid lookups overwrote the night
+ * before's. 226 fares bought in 22 nights; 19 left in the table. Skipping a
+ * pair bought recently hands its slot to rotation, so coverage widens.
+ */
+export async function recentlyBought(db: Db, days = REBUY_AFTER_DAYS): Promise<Set<string>> {
+  const r = await db.query<{ origin: string; destination: string; m: string }>(
+    `select distinct origin, destination, to_char(depart_date, 'YYYY-MM') as m
+       from flight_prices
+      where source = 'serpapi_flights'
+        and fetched_at > now() - ($1 || ' days')::interval`,
+    [String(days)],
+  );
+  return new Set(r.rows.map((x) => `${x.origin}|${x.destination}|${x.m}`));
+}
+
 /**
  * Routes bought purely to keep the trend measurable.
  *

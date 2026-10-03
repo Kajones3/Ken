@@ -1834,12 +1834,12 @@ async function loadFlights(){
   $("#flTiles").innerHTML = s.tested
     ? g(s.domestic, "US routes") + g(s.international, "International") + tile("Lean now", String(s.lean), "0 cheap end · 100 dear end")
     : `<p class="count">No real fares bought in this period to test against yet.</p>`;
-  const leanRow = (x, name) => x.n ? `<tr><td>${esc(name)} (${num(x.n)})</td>${x.byLean.map(b =>
+  const leanRow = (x, name) => x.n ? `<tr><td>${esc(name)} (${num(x.n)} ${x.n === 1 ? "fare" : "fares"})</td>${x.byLean.map(b =>
       `<td class="n"${b.lean === x.bestLean ? ' style="font-weight:700"' : ""}>${offBy(b.typicalOffPct)}<br><span class="count">${signed(b.medianPct)}</span></td>`).join("")}</tr>` : "";
   $("#flLean").innerHTML = s.tested
     ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Typically off by / reads</th>${s.all.byLean.map(b =>
         `<th class="n">Lean ${b.lean}${b.lean === s.lean ? " (now)" : ""}</th>`).join("")}</tr></thead>
-      <tbody>${leanRow(s.domestic, "US routes")}${leanRow(s.international, "International")}${leanRow(s.all, "All")}</tbody></table></div>
+      <tbody>${leanRow(s.domestic, "US")}${leanRow(s.international, "International")}${leanRow(s.all, "All")}</tbody></table></div>
       <p class="count" style="margin-top:8px">Best fit in bold. It's only a recommendation; the setting is yours to change.</p>`
     : "";
   $("#flRoutes").innerHTML = s.routes.length

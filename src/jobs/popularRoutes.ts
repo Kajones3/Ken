@@ -25,7 +25,7 @@
 import { randomUUID } from "node:crypto";
 import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates.js";
 import { getDb, type Db } from "../db.js";
-import { popularRoutes, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
+import { popularRoutes, recentlyBought, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth } from "../config.js";
 
@@ -69,7 +69,14 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   await db.query(`insert into fetch_runs (id, job, note) values ($1,'popular_routes',$2)`,
     [runId, `limit ${limit} x ${datesPerMonth} dates x ${buckets.length} bucket(s)`]);
 
-  let routes = opts.routes ?? await popularRoutes(db, limit);
+  // A route+month bought in the last few days is skipped: re-buying it
+  // lands on the same date and only overwrites last night's fare. See
+  // recentlyBought(). Read more demand than the limit so skipped ones leave
+  // room for the next busiest before rotation fills the rest.
+  const fresh = opts.routes ? new Set<string>() : await recentlyBought(db);
+  const notFresh = (r: PopularRoute) => !fresh.has(`${r.origin}|${r.destination}|${r.departMonth}`);
+  let routes = opts.routes
+    ?? (await popularRoutes(db, limit * 4)).filter(notFresh).slice(0, limit);
 
   // Fill the rest of tonight's slots by rotation, stalest route first.
   // Demand still wins where it exists — someone actually asking about a
@@ -99,7 +106,7 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   // estimated route in the app showing "no cached price".
   if (!opts.routes) {
     const anchorMonth = (routes[0]?.departMonth) ?? addDaysISO(todayISO(), 90).slice(0, 7);
-    const anchors = await trendAnchorRoutes(db, quarterOf(`${anchorMonth}-01`), anchorMonth);
+    const anchors = (await trendAnchorRoutes(db, quarterOf(`${anchorMonth}-01`), anchorMonth)).filter(notFresh);
     const seen = new Set(routes.map((r) => `${r.origin}|${r.destination}|${r.departMonth}`));
     for (const a of anchors) {
       const key = `${a.origin}|${a.destination}|${a.departMonth}`;

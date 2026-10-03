@@ -26,7 +26,7 @@ and columns (`search_days`, `hotel_samples`, `fare_trend.kind`,
 the migrate workflow.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**694 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
+**695 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
 email with its dollar figure.
 
 ### Last session in one table (2026-10-02 to 10-03, PRs #90-#107)
@@ -117,6 +117,26 @@ email with its dollar figure.
      cheaper than other airlines. They're leaning toward simply SURFACING
      budget carriers rather than pricing them into the total. Wait for their
      decision.
+
+### 2026-10-03, later still — paid fares were re-buying themselves every night
+
+Owner: the Flights scoreboard "still says we only have 7 routes" after a
+redeploy. (The redeploy was never the lever: the paid job runs in Actions.)
+The coverage report showed popular-routes had written 226 paid fares in 22
+nights and only **19** existed, 18 of them bought that same morning. Cause:
+route demand (the owner's own RDU/CLT/ATL test searches, which count on
+purpose) filled all 18 nightly slots with the same 18 route+months, and
+`sampleDates()` picks the same day each night, so every night's fares
+OVERWROTE the night before's. Rotation never got a slot. The 2026-10-02
+Travelpayouts fix was real but was not the whole story.
+- **Fix:** `recentlyBought()` (routeDemand.ts) lists route+months with a
+  `serpapi_flights` fare bought in the last `REBUY_AFTER_DAYS` (10).
+  popular-routes skips those (demand and trend anchors), reading 4x the
+  limit of demand so the next busiest moves up, and rotation fills the rest.
+  A test buys two nights and pins that nothing repeats.
+- Expect the scoreboard to grow by ~18 fares a night from the next run
+  (04:10 UTC schedule, runs ~10:00 UTC). The trend's route count should climb.
+- The scoreboard's "(7)" counted FARES, not routes; the label now says fares.
 
 ### 2026-10-03, end — deals apply themselves; the email names a dollar figure
 

@@ -208,3 +208,28 @@ test("rotation never buys a route nobody flies", async () => {
     "LAX still flies to Orlando");
   await db.close();
 });
+
+test("a route+month bought recently is not re-bought the next night; its slot goes to rotation", async () => {
+  // 2026-10-03: demand filled all 18 slots with the same route+months every
+  // night and each night's fares overwrote the last, so 226 paid lookups left
+  // 19 fares. A second night must buy DIFFERENT routes.
+  const db = await memoryDb();
+  for (const d of ["MCO", "SNA"]) await recordSearch(db, "RDU", [d], "2027-03");
+  const bought: string[] = [];
+  const stub = {
+    callsSpent: 0, budgetRemaining: 100,
+    async quote(origin: string, destination: string, departDate: string, tripLength: number) {
+      bought.push(`${origin}|${destination}|${departDate.slice(0, 7)}`);
+      return { origin, destination, departDate, tripLength, priceUsd: 400, stops: 0, deepLink: "x" };
+    },
+  };
+  await runPopularRoutes(db, { limit: 4, datesPerMonth: 1, provider: stub as never });
+  const night1 = new Set(bought);
+  assert.ok(night1.has("RDU|MCO|2027-03") && night1.has("RDU|SNA|2027-03"), "demand is bought first");
+  bought.length = 0;
+  await runPopularRoutes(db, { limit: 4, datesPerMonth: 1, provider: stub as never });
+  const repeats = bought.filter((k) => night1.has(k));
+  assert.deepEqual(repeats, [], "nothing bought last night is bought again");
+  assert.ok(bought.length >= 4, "the freed slots are still spent, on other routes");
+  await db.close();
+});
