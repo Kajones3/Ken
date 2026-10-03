@@ -95,6 +95,17 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-03, last — screenshots can be DROPPED now
+
+Owner: "I keep trying to drop a screenshot on the page and it isn't
+working." Neither reader had any drag-and-drop handling (only Choose and
+paste), so the browser just opened the dropped picture. Both readers now
+sit in a dashed `.dropzone` ("Drop a screenshot here, paste one, or Choose"),
+highlighted while dragging; a picture dropped ANYWHERE goes to the reader on
+screen (#deals or #checks), and on other admin pages a drop is refused rather
+than navigating away. Clicking the empty part of a zone opens the picker.
+Checked in Chromium by dispatching real drag events with a PNG file.
+
 ### 2026-10-03, later — a Deals page in /admin, with the screenshot reader
 
 Owner: "I couldn't find the place to put screenshots in the admin panel. I

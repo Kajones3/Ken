@@ -208,6 +208,10 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
   padding:4px 5px 4px 11px; font-size:13px; background:var(--surface)}
 .chip small{color:var(--muted)}
 .chip button{min-height:0; padding:3px 9px; font-size:12px; border-radius:99px}
+.dropzone{border:2px dashed var(--rule-strong); border-radius:12px; padding:18px 14px; margin:6px 0 4px;
+  display:flex; flex-wrap:wrap; align-items:center; gap:10px 14px; background:var(--surface)}
+.dropzone .dzt{font-size:14px; color:var(--ink-2)}
+.dropzone.over{border-color:var(--accent-line); background:var(--accent-bg)}
 .shot{max-width:100%; max-height:220px; border:1px solid var(--rule); border-radius:8px; margin-top:8px; display:block}
 pre.ocr{white-space:pre-wrap; font-size:12px; max-height:220px; overflow:auto; background:var(--surface);
   border:1px solid var(--rule); border-radius:8px; padding:8px}
@@ -371,13 +375,14 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p>The text is read <b>on this device</b> &mdash; the picture isn't sent anywhere and no AI looks at it
       (the reader itself downloads once from cdn.jsdelivr.net). It only fills in the form below. <b>Check
       every box before you save</b>: a reader can mistake a 3 for an 8.</p>
-    <div class="tools" style="margin:6px 0 4px">
+    <div class="dropzone" data-drop="checks">
+      <span class="dzt"><b>Drop a screenshot here</b>, paste one, or</span>
       <button class="btn" id="sPick">Choose a screenshot</button>
       <input type="file" id="sFile" accept="image/*" class="hidden">
       <label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink-2)">
         <input type="checkbox" id="sCjk"> Also read Japanese and Chinese (slower the first time)</label>
     </div>
-    <p class="count" id="sStatus">Or paste a screenshot anywhere on this page.</p>
+    <p class="count" id="sStatus">You can also paste a screenshot anywhere on this page.</p>
     <img id="sImg" class="shot hidden" alt="The screenshot being read">
     <div id="sFound"></div>
     <details id="sTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
@@ -530,11 +535,12 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <h3>Read a screenshot of the offer</h3>
     <p>Read on this device, like the price-check reader: nothing is sent anywhere. It only fills in the form
       below, so check every box before you save.</p>
-    <div class="tools" style="margin:6px 0 4px">
+    <div class="dropzone" data-drop="deals">
+      <span class="dzt"><b>Drop a screenshot here</b>, paste one, or</span>
       <button class="btn" id="dPick">Choose a screenshot</button>
       <input type="file" id="dFile" accept="image/*" class="hidden">
     </div>
-    <p class="count" id="dStatus">Or paste a screenshot anywhere on this page.</p>
+    <p class="count" id="dStatus">You can also paste a screenshot anywhere on this page.</p>
     <img id="dImg" class="shot hidden" alt="The offer being read">
     <div id="dFound"></div>
     <details id="dTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
@@ -1510,6 +1516,39 @@ document.addEventListener("paste", e => {
   if(location.hash === "#deals") readDealShot(item.getAsFile());
   else readShot(item.getAsFile());
 });
+
+/* Dragging a screenshot onto the page (owner, 2026-10-03: "I keep trying to
+   drop a screenshot on the page and it isn't working" — there was no drop
+   handling at all, so the browser simply opened the picture instead). A
+   picture dropped anywhere goes to the reader on screen; on a page with no
+   reader it is refused rather than letting the browser navigate away. */
+const dropTarget = () => location.hash === "#deals" ? "deals" : location.hash === "#checks" ? "checks" : null;
+const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
+let dragDepth = 0;
+const markZone = on => document.querySelectorAll(".dropzone").forEach(z => z.classList.toggle("over", on && z.dataset.drop === dropTarget()));
+document.addEventListener("dragenter", e => { if(!hasFiles(e)) return; e.preventDefault(); dragDepth++; markZone(true); });
+document.addEventListener("dragleave", e => { if(!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if(!dragDepth) markZone(false); });
+document.addEventListener("dragover", e => {
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = dropTarget() ? "copy" : "none";
+});
+document.addEventListener("drop", e => {
+  if(!hasFiles(e)) return;
+  e.preventDefault();
+  dragDepth = 0; markZone(false);
+  const file = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
+  const where = dropTarget();
+  const say = where === "deals" ? $("#dStatus") : $("#sStatus");
+  if(!where) return;
+  if(!file){ say.textContent = "That isn't a picture. Drop a screenshot (PNG or JPG)."; return; }
+  if(where === "deals") readDealShot(file); else readShot(file);
+});
+// Clicking the empty part of a drop area opens the picker too.
+document.querySelectorAll(".dropzone").forEach(z => z.addEventListener("click", e => {
+  if(e.target.closest("button,input")) return;
+  (z.dataset.drop === "deals" ? $("#dFile") : $("#sFile")).click();
+}));
 document.addEventListener("click", e => {
   const a = e.target.closest("[data-useamt]");
   if(a){ const x = (window.__shotAmounts || [])[+a.dataset.useamt]; if(x){ fill("#cAmount", x.amount); if(x.currency) fill("#cCur", x.currency); } return; }
