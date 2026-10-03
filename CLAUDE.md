@@ -26,7 +26,7 @@ and columns (`search_days`, `hotel_samples`, `fare_trend.kind`,
 the migrate workflow.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**693 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
+**694 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
 email with its dollar figure.
 
 ### Last session in one table (2026-10-02 to 10-03, PRs #90-#107)
@@ -480,9 +480,12 @@ admin panel allow me to fix this without AI." It didn't: each resort's
 3. **One real unsubscribe link.** The next real deal email should show a
    "Stop these emails" link. It should open a page on the apex domain, not
    `www`, and the button on that page should work.
-4. **Shanghai wait times.** Check the next "Parkfare wait times" run log
-   for Shanghai. If the park name is refused, the log prints the name
-   Queue-Times uses; put that name into `QUEUE_TIMES_PARKS`.
+4. ~~**Shanghai wait times.**~~ **FIXED 2026-10-03.** Every run had refused
+   id 30: `we expect "Shanghai Disney Resort", they say "Shanghai
+   Disneyland"` (run 37098343101). The id was right, the name was Claude's
+   guess. Now "Shanghai Disneyland"; a test pins it. It records from the
+   next run after merge that falls 9am-7pm Shanghai time (01-11 UTC), so
+   the /admin Wait times row stays grey until then.
 
 **Decisions the owner hasn't made yet. Ask; don't build ahead:**
 

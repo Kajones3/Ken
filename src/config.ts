@@ -739,15 +739,16 @@ export const QUEUE_TIMES_PARKS: Record<string, QueueTimesPark[]> = {
   // the live job's refusal log (run 36243504041). Five of twelve parks had
   // recorded nothing since the job started: four only spelled differently,
   // and id 32 turned out to be Six Flags Magic Mountain — the name check
-  // doing exactly its job. Shanghai is id 30 (queue-times.com/parks/30); its
-  // name is a best guess, and a mismatch is refused and logged, not stored.
+  // doing exactly its job. Shanghai is id 30; its name was a guess
+  // ("Shanghai Disney Resort") and was refused until 2026-10-03, when the log
+  // (run 37098343101) showed Queue-Times calls it "Shanghai Disneyland".
   // Walt Disney Studios is now "Disney Adventure World" — Paris renamed it.
   wdw:  [{ id: 6, name: "Magic Kingdom" }, { id: 5, name: "Epcot" },
          { id: 7, name: "Disney Hollywood Studios" }, { id: 8, name: "Disney's Animal Kingdom" }],
   dlr:  [{ id: 16, name: "Disneyland" }, { id: 17, name: "Disney California Adventure" }],
   dlp:  [{ id: 4, name: "Disneyland Park Paris" }, { id: 28, name: "Disney Adventure World Paris" }],
   tdr:  [{ id: 274, name: "Tokyo Disneyland" }, { id: 275, name: "Tokyo DisneySea" }],
-  shdr: [{ id: 30, name: "Shanghai Disney Resort" }],
+  shdr: [{ id: 30, name: "Shanghai Disneyland" }],
   hkdl: [{ id: 31, name: "Disneyland Hong Kong" }],
 };
 
