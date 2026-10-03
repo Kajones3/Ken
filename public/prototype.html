@@ -1921,6 +1921,7 @@ async function fetchPromosFor(resortId, on){
 function describePromoEffect(kind, value){
   if(kind==="room_pct_off") return Math.round(value)+"% off the room rate";
   if(kind==="room_flat_off") return usd(value)+" off the room rate";
+  if(kind==="room_night_off") return usd(value)+" off per night";
   if(kind==="free_dining") return "Free dining plan";
   if(kind==="ticket_pct_off") return Math.round(value)+"% off tickets";
   if(kind==="flat_off_total") return usd(value)+" off the total";
@@ -2387,6 +2388,7 @@ function promosCard(item, x, promoList){
     const applied = ov.promoId === promo.id;
     return `<div class="li"><div class="l"><b>${promo.label}</b>
       <small>${describePromoEffect(promo.effectKind, promo.effectValue)} · ${promo.startsOn} to ${promo.endsOn}
+      ${promo.minNights?` · stays of ${promo.minNights}+ nights`:""}${promo.conditions?` · ${esc(promo.conditions)}`:""}
       ${promo.historical?" · historical pattern, not confirmed for your dates":""}</small></div>
       <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
@@ -2411,6 +2413,7 @@ function promosCard(item, x, promoList){
     <p class="sub">Historical patterns, not guarantees — plus your own codes</p>
     ${rows}${personalForm}
     ${appliedNote?`<p class="sub" style="margin:10px 0 0; color:var(--accent)">Applied: ${appliedNote}</p>`:""}
+    ${x.appliedPromos.filter(a=>a.skipped).map(a=>`<p class="sub" style="margin:6px 0 0">Not applied: ${esc(a.label)} (${esc(a.skipped)}).</p>`).join("")}
   </div>`;
 }
 

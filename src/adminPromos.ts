@@ -18,6 +18,7 @@ import type { PromoEffectKind } from "./pricing.js";
 
 export const DEAL_KINDS: { kind: PromoEffectKind; label: string; unit: "pct" | "usd" | "none" }[] = [
   { kind: "room_pct_off", label: "% off the room", unit: "pct" },
+  { kind: "room_night_off", label: "$ off per night (each room)", unit: "usd" },
   { kind: "room_flat_off", label: "$ off the whole room bill", unit: "usd" },
   { kind: "ticket_pct_off", label: "% off park tickets", unit: "pct" },
   { kind: "free_dining", label: "Free dining plan", unit: "none" },
@@ -26,11 +27,15 @@ export const DEAL_KINDS: { kind: PromoEffectKind; label: string; unit: "pct" | "
 
 export interface DealInput {
   resortId?: unknown; label?: unknown; effectKind?: unknown; effectValue?: unknown;
-  startsOn?: unknown; endsOn?: unknown; sourceNote?: unknown;
+  startsOn?: unknown; endsOn?: unknown; sourceNote?: unknown; minNights?: unknown; conditions?: unknown;
 }
 export interface Deal {
   id: string; resortId: string | null; label: string; effectKind: PromoEffectKind; effectValue: number;
   startsOn: string; endsOn: string; sourceNote: string; active: boolean;
+  /** Shorter stays get nothing. Null = any length. */
+  minNights: number | null;
+  /** Who or what qualifies, shown to travelers beside the deal. Never priced. */
+  conditions: string;
   /** live = on today, upcoming = starts later, ended, off = turned off. */
   status: "live" | "upcoming" | "ended" | "off";
 }
@@ -58,23 +63,33 @@ export function validateDeal(input: DealInput, today: string):
   if (!validDate(startsOn) || !validDate(endsOn)) return { ok: false, reason: "The deal needs a first and last travel date." };
   if (endsOn < startsOn) return { ok: false, reason: "The last travel date is before the first one." };
   if (endsOn < today) return { ok: false, reason: "That deal has already ended, so nobody could use it." };
+  const mn = String(input.minNights ?? "").trim();
+  const minNights = mn === "" || mn === "0" ? null : Number(mn);
+  if (minNights !== null && !(Number.isInteger(minNights) && minNights >= 1 && minNights <= 30)) {
+    return { ok: false, reason: "The shortest stay should be a whole number of nights, 1 to 30 (or blank for any)." };
+  }
+  const conditions = String(input.conditions ?? "").replace(/\s+/g, " ").trim();
+  if (conditions.length > 200) return { ok: false, reason: `The conditions are ${conditions.length} characters; keep them under 200.` };
   return { ok: true, value: {
     resortId, label, effectKind: kind.kind, effectValue: value, startsOn, endsOn,
-    sourceNote: String(input.sourceNote ?? "").trim().slice(0, 400),
+    sourceNote: String(input.sourceNote ?? "").trim().slice(0, 400), minNights, conditions,
   } };
 }
 
 export async function listDeals(db: Db, today: string): Promise<Deal[]> {
   const { rows } = await db.query<{ id: string; resort_id: string | null; label: string; effect_kind: PromoEffectKind;
-    effect_value: string; starts_on: unknown; ends_on: unknown; source_note: string; active: boolean }>(
-    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, source_note, active
+    effect_value: string; starts_on: unknown; ends_on: unknown; source_note: string; active: boolean;
+    min_nights: number | null; conditions: string | null }>(
+    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, source_note, active, min_nights, conditions
        from promos order by ends_on desc, starts_on desc`,
   );
   return rows.map((r) => {
     const startsOn = dateStr(r.starts_on), endsOn = dateStr(r.ends_on);
     const status: Deal["status"] = !r.active ? "off" : endsOn < today ? "ended" : startsOn > today ? "upcoming" : "live";
     return { id: r.id, resortId: r.resort_id, label: r.label, effectKind: r.effect_kind, effectValue: Number(r.effect_value),
-      startsOn, endsOn, sourceNote: r.source_note ?? "", active: Boolean(r.active), status };
+      startsOn, endsOn, sourceNote: r.source_note ?? "", active: Boolean(r.active), status,
+      minNights: r.min_nights === null || r.min_nights === undefined ? null : Number(r.min_nights),
+      conditions: r.conditions ?? "" };
   });
 }
 
@@ -87,16 +102,17 @@ export async function saveDeal(db: Db, input: DealInput, today: string, id?: str
   if (id) {
     const r = await db.query(
       `update promos set resort_id = $2, label = $3, effect_kind = $4, effect_value = $5, starts_on = $6, ends_on = $7,
-              source_note = $8, historical = false where id = $1 returning id`,
-      [id, d.resortId, d.label, d.effectKind, d.effectValue, d.startsOn, d.endsOn, d.sourceNote],
+              source_note = $8, min_nights = $9, conditions = $10, historical = false where id = $1 returning id`,
+      [id, d.resortId, d.label, d.effectKind, d.effectValue, d.startsOn, d.endsOn, d.sourceNote, d.minNights, d.conditions],
     );
     return r.rows.length ? { ok: true, id } : { ok: false, reason: "That deal no longer exists." };
   }
   const newId = randomUUID();
   await db.query(
-    `insert into promos (id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note, active)
-     values ($1,$2,$3,$4,$5,$6,$7,false,$8,true)`,
-    [newId, d.resortId, d.label, d.effectKind, d.effectValue, d.startsOn, d.endsOn, d.sourceNote],
+    `insert into promos (id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note, active,
+                         min_nights, conditions)
+     values ($1,$2,$3,$4,$5,$6,$7,false,$8,true,$9,$10)`,
+    [newId, d.resortId, d.label, d.effectKind, d.effectValue, d.startsOn, d.endsOn, d.sourceNote, d.minNights, d.conditions],
   );
   return { ok: true, id: newId };
 }

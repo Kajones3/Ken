@@ -95,6 +95,38 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-03, very last — reading a whole offers PAGE (owner's daily routine)
+
+Owner: "These are the kind of deals I would check daily and screenshot to
+put in." Their WDW offers-page screenshot filled ONE form with three offers
+stirred together (headline from one, 25% from another, Sep 25 **2027**).
+Causes, all fixed:
+- **Cards sit side by side and OCR reads straight across them.**
+  `findColumnCuts()` (pure, in screenshot-reader.js) finds the blank gaps
+  between cards (columns with ~no change top to bottom: gaps measured 0,
+  sparsest text column 8+) and `readImage(..., {columns:true})` reads each
+  card separately. Deals page only; one cropped offer gives no cuts.
+- **One form for many offers.** `splitOffers()` / `readOffer()` split the
+  text (after "Learn More", else before each headline) and the page shows a
+  card per offer with "Use this one"; the first NEW one fills the form.
+  "Already added" = same resort and same name, or same kind + dates; saving
+  a twin asks first.
+- **Ranges name the year once** ("Sept 25 to Dec 24, 2026"): `findDates`
+  gives the first date the second's year.
+- Headline: strays stripped (`cleanLabel`, "3 Save" -> "Save"), wrapped
+  lines joined (hyphen wraps too), stops at small print or a repeated "Save".
+- Resort: "Disney Resorts Collection", park names etc. mean WDW; otherwise
+  the last resort saved (localStorage). The doubled "Screenshot" note fixed.
+- **New deal kind `room_night_off`** ("$250 off per night", per room per
+  night) and two new `promos` columns: `min_nights` (shorter stays get
+  nothing, and the card says "Not applied: needs N nights") and
+  `conditions` (shown to travelers and in the deal email, NEVER priced:
+  Perks members, package-only, free Park Hopper). schema.sql re-states the
+  effect_kind check. **"Up to" amounts are stored as read**; the form says
+  a smaller number is the careful choice. Package-only deals still price on
+  our separate room + ticket lines. Checked in Chromium with real OCR of a
+  rendered three-card page at 1x and 2x. 687 tests.
+
 ### 2026-10-03, last — screenshots can be DROPPED now
 
 Owner: "I keep trying to drop a screenshot on the page and it isn't

@@ -100,9 +100,25 @@ const nextYearFor = (m, d, today) => {
  */
 export function findDates(text, today = new Date().toISOString().slice(0, 10)) {
   const found = [];
-  const add = (index, s) => { if (s) found.push({ index, iso: s }); };
+  const spans = [];
+  const add = (index, s) => { if (s && !spans.some(([a, b]) => index > a && index < b)) found.push({ index, iso: s }); };
   let m;
   const mon = "(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\\.?";
+  // A range names its year once, at the end: "Sept 25 to Dec 24, 2026" and
+  // "Jan 3 – 29, 2027". The first date takes the second's year (the year
+  // before, when its month comes later). Read alone it would be guessed, and
+  // a start already passed would wrongly jump to next year.
+  const rangeRe = new RegExp(`\\b${mon}\\s+(\\d{1,2})(?!\\d)(?:st|nd|rd|th)?\\s*(?:to|through|thru|until|till|–|—|-)\\s*(?:${mon}\\s+)?(\\d{1,2})(?!\\d)(?:st|nd|rd|th)?(?:,\\s*|\\s+)(\\d{4})`, "gi");
+  while ((m = rangeRe.exec(text))) {
+    const m1 = monthIdx(m[1]) + 1, d1 = Number(m[2]);
+    const m2 = m[3] ? monthIdx(m[3]) + 1 : m1, d2 = Number(m[4]), y2 = Number(m[5]);
+    const y1 = m1 > m2 ? y2 - 1 : y2;
+    const a = iso(y1, m1, d1), b = iso(y2, m2, d2);
+    if (a && b) {
+      found.push({ index: m.index, iso: a }, { index: m.index + 1, iso: b });
+      spans.push([m.index - 1, m.index + m[0].length]);
+    }
+  }
   // (?!\\d) after the day: in "17 Dec 2026" the "20" of the year is not a day.
   // OCR drops spaces: "Dec 17,2026" has to read the same as "Dec 17, 2026".
   let re = new RegExp(`\\b${mon}\\s+(\\d{1,2})(?!\\d)(?:st|nd|rd|th)?(?:(?:,\\s*|\\s+)(\\d{4}))?`, "gi");
@@ -147,7 +163,7 @@ export function guessResort(text) {
   if (/hong kong/.test(s)) return "hkdl";
   if (/shanghai/.test(s)) return "shdr";
   if (/tokyo|maihama|urayasu|miracosta|ambassador|celebration hotel/.test(s)) return "tdr";
-  if (/walt disney world|orlando|\bmco\b/.test(s)) return "wdw";
+  if (/walt disney world|orlando|\bmco\b|disney resorts collection|disney springs|magic kingdom|epcot|hollywood studios|animal kingdom|disneyworld/.test(s)) return "wdw";
   if (/anaheim|disneyland resort|\bsna\b|california adventure/.test(s)) return "dlr";
   return null;
 }
@@ -196,6 +212,7 @@ export function guessDealKind(text) {
   if (/free\s+dining|dining\s+plan/.test(s)) return "free_dining";
   const ticket = /\btickets?\b|park hopper|admission|theme park/.test(s);
   const room = /\brooms?\b|resort hotels?|\bstay\b|\bnights?\b|accommodation/.test(s);
+  if (/[$€£¥]\s?\d[\d,]*\s*(?:off\s+)?(?:per|a|each|\/)\s*night/.test(s)) return "room_night_off";
   if (findPercents(text).length) return ticket && !room ? "ticket_pct_off" : "room_pct_off";
   if (/[$€£¥]\s?\d[\d,]*\s*(?:off|discount|savings)|save\s+[$€£¥]\s?\d/.test(s)) return room ? "room_flat_off" : "flat_off_total";
   return null;
@@ -225,11 +242,150 @@ export function findDollarsOff(text) {
   const re = /(?:save\s+)?\$\s?(\d[\d,]*)(?:\s*(?:off|discount|savings))?/gi;
   let m;
   while ((m = re.exec(text))) {
-    const near = /save|off|discount|savings/i.test(text.slice(Math.max(0, m.index - 6), m.index + m[0].length + 10));
+    // "Save Up to $250 Per Night": the word can sit a few words away.
+    const near = /save|off|discount|savings/i.test(text.slice(Math.max(0, m.index - 14), m.index + m[0].length + 10));
     const v = Number(m[1].replace(/,/g, ""));
     if (near && v > 0 && !out.includes(v)) out.push(v);
   }
   return out;
+}
+
+/** OCR leaves strays at the start of a headline: a "3" from an icon, a
+ *  bullet, a quote. Strip those, never a real "25% off" or "$300". */
+export function cleanLabel(line) {
+  let l = String(line || "").replace(/\s+/g, " ").trim();
+  l = l.replace(/^(?:[^\p{L}\p{N}$€£¥]+|\d{1}\s+(?=\p{Lu}))+/u, "").trim();
+  return l.replace(/[\s|•·>»]+$/u, "").trim();
+}
+
+// Where an offer's headline stops and its small print begins.
+const SMALL_PRINT = /^(?:[•·*\-–]\s*|for (?:stays|travel)|valid|offer type|location|book (?:by|now|through)|learn more|view |see |terms|eligib|available|must|stays? |travel |when you|excludes|limited|\d{1,2}\/\d)/i;
+// A line that ends an offer card on Disney's pages.
+const CARD_END = /^(?:learn more|view (?:offer|details)|see (?:offer|details)|get (?:offer|details)|book now)\b/i;
+// A line that starts one: it names a saving, or "...Members: Save...".
+const HEADLINE = /^(?:save|get|enjoy|free|up to|\d{1,2}% off|\$\d)|members?:|\bsave\b.*(?:%|\$|\bon\b)|\b\d{1,2}% off\b/i;
+
+/**
+ * Pulls one offer apart: headline (joined across wrapped lines), what it
+ * takes off and how much, travel dates, the shortest stay, and the
+ * conditions a traveler must meet. Pure; a guess the owner checks.
+ */
+export function readOffer(text, today = new Date().toISOString().slice(0, 10)) {
+  const lines = String(text).split("\n").map((x) => x.replace(/\s+/g, " ").trim()).filter(Boolean);
+  let start = lines.findIndex((l) => /save|%|\boff\b|free\s|discount/i.test(l) && cleanLabel(l).length >= 8);
+  if (start < 0) start = 0;
+  const parts = [];
+  for (let i = start; i < lines.length && parts.length < 4; i++) {
+    const l = cleanLabel(lines[i]);
+    if (i > start && (SMALL_PRINT.test(lines[i]) || SMALL_PRINT.test(l) || CARD_END.test(l))) break;
+    // Body copy, not a wrapped headline: a sentence, or a long line (a
+    // headline is set large, so OCR gives it short lines).
+    if (i > start && (/[.!]\s|[.!]$/.test(l) || l.length > 55)) break;
+    if (!l) break;
+    // A second "Save up to..." is the description repeating the headline.
+    if (i > start && /^(?:save|get|enjoy)\b/i.test(l)) break;
+    parts.push(l);
+    if ((parts.join(" ")).length > 110) break;
+  }
+  // "Room-" / "and-Ticket" was one word wrapped at its hyphen.
+  let label = parts.join(" ").replace(/(\p{L})- (\p{Ll})/gu, "$1-$2").replace(/\s+/g, " ").trim();
+  if (label.length > 120) label = label.slice(0, 117).replace(/\s+\S*$/, "") + "…";
+  const kind = guessDealKind(text);
+  const pcts = findPercents(text), dollars = findDollarsOff(text);
+  const value = kind === "free_dining" ? null
+    : /pct/.test(kind || "") ? (pcts[0] ?? null)
+    : kind ? (dollars[0] ?? null) : null;
+  const dates = findDates(text, today);
+  // Wrapped lines rejoined, so "FREE Park / Hopper" still reads as one phrase.
+  const s = text.toLowerCase().replace(/(\p{L})-\s+(\p{L})/gu, "$1-$2").replace(/\s+/g, " ");
+  const nm = s.match(/(?:minimum|at least)\s+(?:of\s+)?(\d{1,2})[- ]nights?/) || s.match(/\b(\d{1,2})[- ]nights?\b/);
+  const conditions = [];
+  if (/disney\+|perks members?/.test(s)) conditions.push("Disney+ Perks members");
+  if (/passholders?|magic key|annual pass/.test(s)) conditions.push("Annual Passholders / Magic Key holders");
+  if (/florida residents?/.test(s)) conditions.push("Florida residents");
+  if (/california residents?|socal residents?/.test(s)) conditions.push("California residents");
+  if (/military|armed forces/.test(s)) conditions.push("Military");
+  if (/room[- ]and[- ]ticket|package/.test(s)) conditions.push("Room-and-ticket package only");
+  if (/free park hopper|park hopper option/.test(s) && /free/.test(s)) conditions.push("Includes a free Park Hopper (not counted in our price)");
+  if (/select (?:disney )?resort|select hotels?|select rooms?/.test(s)) conditions.push("Select hotels");
+  if (/most nights/.test(s)) conditions.push("Most nights, not all");
+  return {
+    label: label || guessName(text), kind, value, upTo: /up\s+to/.test(s),
+    startsOn: dates[0] ?? null, endsOn: dates[1] && dates[1] > dates[0] ? dates[1] : null,
+    dates, minNights: nm ? Number(nm[1]) : null, conditions: conditions.join("; "),
+    resort: guessResort(text), text,
+  };
+}
+
+/**
+ * A screenshot of an offers PAGE holds several offers. Split the text into
+ * one chunk per offer: after each "Learn More"-type line when the page has
+ * them, else before each headline. Chunks with no saving and no date (page
+ * headings, menus) are dropped. One offer in, one offer out.
+ */
+export function splitOffers(text, today = new Date().toISOString().slice(0, 10)) {
+  const lines = String(text).split("\n");
+  let chunks = [];
+  let cur = [];
+  const push = () => { if (cur.join("").trim()) chunks.push(cur.join("\n")); cur = []; };
+  if (lines.some((l) => CARD_END.test(cleanLabel(l)))) {
+    for (const l of lines) { cur.push(l); if (CARD_END.test(cleanLabel(l))) push(); }
+    push();
+  } else {
+    let inSmallPrint = false;
+    for (const l of lines) {
+      const c = cleanLabel(l);
+      if (HEADLINE.test(c) && !SMALL_PRINT.test(l.trim()) && (inSmallPrint || !cur.some((x) => HEADLINE.test(cleanLabel(x))))) {
+        push(); inSmallPrint = false;
+      }
+      cur.push(l);
+      if (cur.length > 1 && (SMALL_PRINT.test(l.trim()) || /\d{4}/.test(l))) inSmallPrint = true;
+    }
+    push();
+  }
+  // Whatever resort the page names applies to every offer on it.
+  const pageResort = guessResort(text);
+  const offers = chunks.map((c) => readOffer(c, today))
+    .filter((o) => (o.kind || o.dates.length) && o.label && /save|%|\boff\b|free|discount/i.test(o.text));
+  for (const o of offers) if (!o.resort) o.resort = pageResort;
+  return offers;
+}
+
+/**
+ * Where to cut a screenshot of cards laid out SIDE BY SIDE (Disney's offer
+ * pages are a grid). Read whole, OCR goes straight across every card a line
+ * at a time and stirs three headlines into one. A gap between cards is a
+ * band of columns with almost nothing changing from top to bottom; text
+ * always has something. `lum` is one brightness value (0-255) per pixel,
+ * row by row. Returns the x positions to cut at, [] for one column.
+ */
+export function findColumnCuts(lum, width, height) {
+  if (width < 200 || height < 100) return [];
+  // Changes down AND across: a card's border is a steady vertical line, but
+  // the step from page to border still counts, so only true gaps are blank.
+  const ink = new Array(width).fill(0);
+  for (let y = 1; y < height; y++) {
+    const row = y * width, prev = (y - 1) * width;
+    for (let x = 1; x < width; x++) {
+      const v = lum[row + x];
+      if (Math.abs(v - lum[prev + x]) > 40 || Math.abs(v - lum[row + x - 1]) > 40) ink[x]++;
+    }
+  }
+  // Measured on a rendered offers page: gaps read 0, the sparsest text
+  // column 8+. A little room for a page title that crosses a gap.
+  const quiet = (x) => ink[x] <= 2 + height * 0.003;
+  const minGap = Math.max(10, Math.round(width * 0.008));
+  const runs = [];
+  for (let x = 0; x < width; ) {
+    if (!quiet(x)) { x++; continue; }
+    const a = x; while (x < width && quiet(x)) x++;
+    if (x - a >= minGap && a > 0 && x < width) runs.push(Math.round((a + x) / 2));
+  }
+  // Every piece has to be wide enough to be a card, not a sliver of margin.
+  const cuts = [];
+  let last = 0;
+  for (const c of runs) if (c - last >= width * 0.15 && width - c >= width * 0.15) { cuts.push(c); last = c; }
+  return cuts;
 }
 
 /* ------------------------------------------------------------ the OCR */
@@ -254,15 +410,37 @@ function loadTesseract() {
  * "eng+jpn+chi_sim" to also read Japanese and Chinese (a few MB more the
  * first time). `onProgress` gets a 0-1 number and a status line.
  */
-export async function readImage(image, { langs = "eng", onProgress } = {}) {
+export async function readImage(image, { langs = "eng", onProgress, columns = false } = {}) {
   const T = await loadTesseract();
   const worker = await T.createWorker(langs, 1, {
     logger: (m) => { if (onProgress && typeof m.progress === "number") onProgress(m.progress, m.status || ""); },
   });
   try {
-    const { data } = await worker.recognize(image);
-    return data.text || "";
+    const rects = columns ? await columnRects(image) : [];
+    if (rects.length < 2) return (await worker.recognize(image)).data.text || "";
+    // One card column at a time, left to right, so each offer reads whole.
+    const parts = [];
+    for (const rectangle of rects) parts.push((await worker.recognize(image, { rectangle })).data.text || "");
+    return parts.join("\n");
   } finally {
     await worker.terminate();
   }
+}
+
+/** The card columns in an image file, as rectangles for Tesseract. */
+async function columnRects(image) {
+  try {
+    const bmp = await createImageBitmap(image);
+    const { width, height } = bmp;
+    const c = document.createElement("canvas");
+    c.width = width; c.height = height;
+    const g = c.getContext("2d", { willReadFrequently: true });
+    g.drawImage(bmp, 0, 0);
+    const px = g.getImageData(0, 0, width, height).data;
+    const lum = new Uint8Array(width * height);
+    for (let i = 0; i < lum.length; i++) lum[i] = (px[i * 4] * 299 + px[i * 4 + 1] * 587 + px[i * 4 + 2] * 114) / 1000;
+    const cuts = findColumnCuts(lum, width, height);
+    const edges = [0, ...cuts, width];
+    return cuts.length ? edges.slice(1).map((x, i) => ({ left: edges[i], top: 0, width: x - edges[i], height })) : [];
+  } catch { return []; }
 }

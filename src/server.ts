@@ -469,7 +469,7 @@ async function listPromos(q: URLSearchParams) {
   let where = "active and starts_on <= $1 and ends_on >= $2";
   if (resortId) { where += " and (resort_id = $3 or resort_id is null)"; params.push(resortId); }
   const { rows } = await db.query(
-    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note
+    `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, historical, source_note, min_nights, conditions
        from promos where ${where} order by starts_on`,
     params,
   );
@@ -478,6 +478,8 @@ async function listPromos(q: URLSearchParams) {
     effectKind: r.effect_kind, effectValue: Number(r.effect_value),
     startsOn: dateStr(r.starts_on), endsOn: dateStr(r.ends_on),
     historical: Boolean(r.historical), sourceNote: r.source_note ?? "",
+    minNights: r.min_nights === null || r.min_nights === undefined ? null : Number(r.min_nights),
+    conditions: r.conditions ?? "",
   }));
 }
 

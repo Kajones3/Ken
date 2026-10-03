@@ -121,7 +121,8 @@ export function roomCountOf(params: Pick<TripParams, "hotelRooms">): number {
   return Number.isFinite(n) ? Math.min(MAX_HOTEL_ROOMS, Math.max(1, n)) : 1;
 }
 
-export type PromoEffectKind = "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
+export type PromoEffectKind =
+  | "room_pct_off" | "room_flat_off" | "room_night_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
 
 /** A rate or fare the user supplied themselves. */
 export interface ResortOverride {
@@ -281,6 +282,11 @@ export interface PromoRow {
   id: string; resortId: string | null; label: string;
   effectKind: PromoEffectKind; effectValue: number;
   startsOn: ISODate; endsOn: ISODate; historical: boolean; sourceNote: string;
+  /** A stay shorter than this gets nothing ("Select 4-night packages"). */
+  minNights?: number | null;
+  /** Who/what qualifies, shown beside the deal, never priced
+   *  ("Disney+ Perks members", "room-and-ticket package"). */
+  conditions?: string;
 }
 export interface AppliedPromo {
   source: "global" | "personal"; label: string; kind: PromoEffectKind;
@@ -993,7 +999,7 @@ export function priceTrip(
   const applyPromoEffect = (
     source: "global" | "personal", label: string, kind: PromoEffectKind, value: number, historical: boolean,
   ) => {
-    if (kind === "room_pct_off" || kind === "room_flat_off") {
+    if (kind === "room_pct_off" || kind === "room_flat_off" || kind === "room_night_off") {
       // A curated guess shouldn't second-guess a rate the user already found
       // themselves — but the user's own claim about their own price may.
       // Same reasoning applies to a room that's been excluded entirely: a
@@ -1006,7 +1012,9 @@ export function priceTrip(
         return;
       }
       const before = rooms;
-      rooms = kind === "room_pct_off" ? rooms * (1 - clampPct(value) / 100) : Math.max(0, rooms - value);
+      // "$250 off per night" is per room, per night of this stay.
+      const off = kind === "room_night_off" ? value * params.nights * roomCountOf(params) : value;
+      rooms = kind === "room_pct_off" ? rooms * (1 - clampPct(value) / 100) : Math.max(0, rooms - off);
       appliedPromos.push({ source, label, kind, amountUsd: before - rooms, historical });
     } else if (kind === "ticket_pct_off") {
       const before = tickets;
@@ -1028,7 +1036,10 @@ export function priceTrip(
 
   if (ov.promoId) {
     const promo = book.promosFor(resort.id, start).find((candidate) => candidate.id === ov.promoId);
-    if (promo) applyPromoEffect("global", promo.label, promo.effectKind, promo.effectValue, promo.historical);
+    if (promo && promo.minNights && params.nights < promo.minNights) {
+      appliedPromos.push({ source: "global", label: promo.label, kind: promo.effectKind, amountUsd: 0, historical: promo.historical,
+        skipped: `needs a stay of at least ${promo.minNights} nights` });
+    } else if (promo) applyPromoEffect("global", promo.label, promo.effectKind, promo.effectValue, promo.historical);
     // An unknown/expired promoId is silently ignored — never a hard failure over a stale id.
   }
   if (ov.personalPromo) {

@@ -52,7 +52,7 @@ create table if not exists promos (
   resort_id     text,                 -- null = applies to all resorts
   label         text not null,
   effect_kind   text not null check (effect_kind in
-                  ('room_pct_off','room_flat_off','free_dining','ticket_pct_off','flat_off_total')),
+                  ('room_pct_off','room_flat_off','room_night_off','free_dining','ticket_pct_off','flat_off_total')),
   effect_value  numeric(8,3) not null default 0,
   starts_on     date not null,
   ends_on       date not null,
@@ -62,6 +62,14 @@ create table if not exists promos (
   created_at    timestamptz not null default now()
 );
 create index if not exists promos_lookup on promos (resort_id, starts_on, ends_on) where active;
+-- 2026-10-03: "$X off per night" deals, a minimum stay, and the conditions
+-- shown beside a deal (members only, package only...). The kind list is
+-- re-stated so databases created before room_night_off accept it.
+alter table promos add column if not exists min_nights integer;
+alter table promos add column if not exists conditions text not null default '';
+alter table promos drop constraint if exists promos_effect_kind_check;
+alter table promos add constraint promos_effect_kind_check check (effect_kind in
+  ('room_pct_off','room_flat_off','room_night_off','free_dining','ticket_pct_off','flat_off_total'));
 
 -- One row per day, national average only. Free EIA API when EIA_API_KEY is
 -- set, mock (plausible, no account) otherwise — same pattern as everything
