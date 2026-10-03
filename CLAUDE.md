@@ -12,34 +12,57 @@ say when something is a guess.
 
 ---
 
-## START HERE — state as of 2026-09-29 (end of session)
+## START HERE — state as of 2026-10-03 (end of session)
 
-**Live at https://pricingthemagic.com, behind a password.** The owner set
-`SITE_PASSWORD` in Render on 2026-09-29, so visitors see "Coming soon".
-`master` is at the merge of PR #89 (plus this notes commit). Every PR through
-#89 is merged.
+**Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
+in Render; delete it to launch). `master` is at the merge of PR #107 plus
+this notes commit. Every PR through #107 is merged. The owner said
+"This all works" at the end of the session.
 
 **Ask whether Render has been redeployed before trusting the live site.** The
-owner redeploys by hand, and the live site has lagged `master` for days at a
-time. The DATABASE is ahead of Render: the migrate workflow ran on
-2026-09-29, so domestic flight baselines are already doubled in production
-(see below).
+owner redeploys by hand. Render's build runs `npm run migrate`, so new tables
+and columns (`search_days`, `hotel_samples`, `fare_trend.kind`,
+`promos.min_nights`/`conditions`) only exist in production after a deploy or
+the migrate workflow.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-658 tests, and typecheck is clean.
+**693 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
+email with its dollar figure.
 
-### This session in one table (2026-09-27 to 09-29, PRs #82-#89)
+### Last session in one table (2026-10-02 to 10-03, PRs #90-#107)
 
-| PR | What |
+| PR(s) | What |
 |---|---|
-| #82 | "None" in the party dropdowns, two sentences cut, card tiles fixed at 560-940px, cheaper real fares shown as an option (not in the total), senior ticket lines everywhere, booking links in the PDF |
-| #83 | Price checks (`price_checks`, /admin), and the screenshot reader (Tesseract, in the owner's browser) |
-| #84 | The "Raised 16% using 1 real price" note removed from the travel site |
-| #85 | "Age bands" card turned into one phrase in the detail header; "prices in CNY" fixed to "prices in US dollars" |
-| #86 | The 100-mile rule is enforced in pricing (LAX -> Disneyland had been priced as a flight) |
-| #87 | "Prices compared with Orlando" (World Bank + BEA) replaced the Money line |
-| #88 | The whole site is behind a password with a coming-soon page |
-| #89 | Domestic flight estimates were half a round trip; fixed, and two new daily-email warnings added |
+| #90-#98 | Park days per resort, "?" help on the party form, click counter, /admin split into pages, 153k fake flight rows ignored, the fare-trend overwrite fix, lands follow the attraction sheet (see the dated sections below) |
+| #99 | "How to update lands" instructions in /admin |
+| #100 | /admin **Lands** page (remove / add / put back); hidden attractions fold into a box |
+| #101 | /admin **Flights**: fare scoreboard (graded against bought fares, by lean) and route tracking (`search_days`) |
+| #102 | **Hotel scorecard** on the same page ("Flights & hotels") |
+| #103 | International "baselines" were a flat seeded guess: relabeled `seed_guess`, moved by a new nightly **international trend**; Disney's own hotels removed from the off-property list |
+| #104 | /admin **Deals** page over the `promos` table, with the screenshot reader |
+| #105 | Drag-and-drop for screenshots |
+| #106 | Reading a whole **offers page**: cards split before OCR, one card per offer, "already added", date ranges, `$ off per night` kind, shortest stay, conditions |
+| #107 | **Deals apply themselves** when the arrival date is inside a deal's dates (marked "Includes a deal"), and the deal email says **"A Deal May Save You $X on your Disney Trip"** |
+
+### Waiting on the owner after 2026-10-03
+
+- **Redeploy Render** if not done since #107, then add a real deal from the
+  daily offers-page screenshot. The reader was tested on a rendered copy of
+  Disney's layout, not a real Disney screenshot; if something reads wrong,
+  ask for that screenshot.
+- **The first real deal email** (next alert run after a new deal, Plus
+  members with a confirmed email): check the subject carries a dollar figure
+  and the "How we got $X" line reads sensibly. No dollar figure = no cached
+  hotel rates for the deal's dates (falls back to plain wording on purpose).
+- **Three deal choices Claude made, owner may change** (told to the owner,
+  no answer yet): (1) only the ARRIVAL date must be inside the deal's dates;
+  (2) conditions (Perks members, packages) are shown, not checked, so the
+  deal is taken off for everyone; (3) "up to" amounts are applied at the
+  full stated value; typing a smaller number in /admin is the careful choice.
+- **The lean** (item 3 below): owner is at 75, Claude recommends 50. The
+  Flights scoreboard is the evidence; revisit once it has ~2 weeks of fares
+  and the international trend has computed (refresh log "intl trend ...").
+- **Hotel scorecard** fills in over ~2 weeks after deploy (`hotel_samples`).
 
 ### Pick up here — first thing next session
 
@@ -63,8 +86,8 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    `fare-trend-stale` line disappears when it works. If it still skips, find
    out why before anything else. The stale x0.945 trend is still applied to
    every domestic estimate until then.
-3. **The lean decision (the owner's call).** `flight.estimateLean` is 100 (the
-   top of each route's range). 100 was partly compensating for the halving
+3. **The lean decision (the owner's call).** `flight.estimateLean` is 75 as
+   of 2026-10-03 (owner moved it; was 100, the top of each route's range). 100 was partly compensating for the halving
    bug. Claude recommends 50. BNA->MCO at 100 reads about $440, against
    Kayak's cheapest $372 and Delta's $445. Owner changes it in /admin.
 4. **Re-check domestic routes against real fares.** Every domestic estimate
