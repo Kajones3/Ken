@@ -26,6 +26,7 @@ import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS } from "../config.js";
 import { internationalDestinations, runIntlBaseline } from "./intlBaseline.js";
 import { sampleDates } from "./popularRoutes.js";
+import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 
 export interface IntlSweepOptions {
   months?: number;
@@ -86,6 +87,9 @@ export async function runIntlSweep(db: Db, opts: IntlSweepOptions = {}) {
             calls++;
             const q = await provider.quote(origin, destination, date, bucket);
             if (!q) { misses++; continue; }
+            // The record first (observations.ts): every paid fare is kept,
+            // even if the working copy below is later replaced.
+            await recordFlightObservations(db, [q], SERPAPI_FLIGHTS);
             await db.query(
               `insert into flight_prices
                  (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)

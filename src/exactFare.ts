@@ -28,6 +28,7 @@ import type { Db } from "./db.js";
 import { todayISO, type ISODate } from "./dates.js";
 import { isLocalRoute } from "./config.js";
 import { SerpApiFlightProvider } from "./providers/serpapiFlights.js";
+import { recordFlightObservations, SERPAPI_FLIGHTS } from "./observations.js";
 
 /** Reserved user_id holding the site-wide daily tally. */
 export const GLOBAL_BUDGET_KEY = "global";
@@ -201,6 +202,9 @@ export async function fetchExactFare(
   // source so the trend can tell real fares from Travelpayouts leftovers.
   // This row is now in the shared cache — the next person to ask, Plus or
   // not, benefits from it, and it feeds the trend every free estimate uses.
+  // The record first (observations.ts): a paid fare is kept even if the
+  // working copy below is later replaced.
+  await recordFlightObservations(db, [quote], SERPAPI_FLIGHTS);
   await db.query(
     `insert into flight_prices
        (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)

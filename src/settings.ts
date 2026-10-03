@@ -34,7 +34,8 @@
 import type { Db } from "./db.js";
 import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
-import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
+import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
+import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
 import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
   THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
@@ -147,6 +148,39 @@ export const SETTINGS: SettingDef[] = [
     min: 0,
     max: 50,
     help: "At 3, one check moves an estimate a quarter of the way to what you saw, three checks halfway, nine three-quarters. Higher is more cautious. 0 trusts your checks completely. However many agree, an estimate never moves below half or above double.",
+  },
+  // Data sources (2026-10-03, the owner's governing rule): every source is
+  // kept, and these say how much each one counts instead of one replacing
+  // another.
+  {
+    key: FLIGHT_WEIGHT_KEYS.serpapi,
+    label: "Real fares we pay for (Google Flights via SerpApi) — weight",
+    group: "Data sources",
+    kind: "number",
+    default: DEFAULT_FLIGHT_WEIGHTS.serpapi,
+    min: 0,
+    max: 10,
+    help: "How much a fare we bought counts when we also hold a fare from another source for the same date. Weights are relative: at 1 here and 1 for the free feed, the two are averaged evenly. Every fare is kept either way; this only decides how they are combined.",
+  },
+  {
+    key: FLIGHT_WEIGHT_KEYS.travelpayouts,
+    label: "Free nightly fare feed (Travelpayouts) — weight",
+    group: "Data sources",
+    kind: "number",
+    default: DEFAULT_FLIGHT_WEIGHTS.travelpayouts,
+    min: 0,
+    max: 10,
+    help: "The free feed is \"cheapest fares other travelers recently found\": real, but it skews cheap. At 0 it is used only on dates where it is the only real fare we hold, and never pulls a bought fare down. Raise it to blend it in (0.25 = a quarter as much as a bought fare). Every fare is kept either way.",
+  },
+  {
+    key: GOOGLE_DISNEY_WEIGHT_KEY,
+    label: "Google's rates for Disney's own hotels — weight",
+    group: "Data sources",
+    kind: "number",
+    default: DEFAULT_GOOGLE_DISNEY_WEIGHT,
+    min: 0,
+    max: 10,
+    help: "Google's hotel search returns Disney's own hotels with a real nightly rate. Each one is compared with our rate for the same hotel and night, and moves that hotel's price the same way your price checks do. 1 counts each Google rate as much as one of your checks; 0 turns it off (they are still recorded).",
   },
   {
     key: TYPICAL_TRIM_KEY,

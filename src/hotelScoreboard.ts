@@ -221,7 +221,7 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
 }
 
 /** Writes one night's off-property pulls, so the next pull has something to be compared with. */
-export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[]): Promise<number> {
+export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[], source = "serpapi_hotels"): Promise<number> {
   let n = 0;
   for (const p of pulls) {
     // One timestamp per pull, so its rows group back together when read.
@@ -229,8 +229,8 @@ export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[]
     for (const r of p.rates) {
       if (!(r.nightly > 0)) continue;
       await db.query(
-        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd) values ($1,$2,$3,$4,$5,$6)`,
-        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly],
+        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, source) values ($1,$2,$3,$4,$5,$6,$7)`,
+        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly, source],
       );
       n++;
     }

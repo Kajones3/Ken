@@ -36,6 +36,9 @@ import { median } from "./fareCorrections.js";
 export const CHECKS_USE_KEY = "checks.use";
 export const CHECKS_WEIGHT_KEY = "checks.priorWeight";
 export const DEFAULT_CHECKS_WEIGHT = 3;
+/** How much one Google rate for a Disney hotel counts, against one owner check. */
+export const GOOGLE_DISNEY_WEIGHT_KEY = "sources.hotel.googleDisney";
+export const DEFAULT_GOOGLE_DISNEY_WEIGHT = 1;
 
 /** Beyond these, a check is kept as a record but not counted. */
 export const MIN_RATIO = 0.2;
@@ -59,6 +62,9 @@ export interface CountedCheck {
    *  is the one our base rate describes — a family room at twice the price
    *  is a different product, not evidence that the hotel costs double. */
   groupKey: string;
+  /** How much this data point counts (default 1). An owner's price check is
+   *  1; a Google rate for a Disney hotel counts GOOGLE_DISNEY_WEIGHT_KEY. */
+  weight?: number;
 }
 
 export interface CheckFactor {
@@ -112,23 +118,43 @@ export function computeFactors(
     const cur = byGroup.get(g);
     if (!cur || c.unitUsd < cur.unitUsd) byGroup.set(g, c);
   }
-  const ratios = new Map<string, number[]>();
+  const ratios = new Map<string, { r: number; w: number }[]>();
   for (const c of byGroup.values()) {
+    const w = c.weight ?? 1;
+    if (!(w > 0)) continue;
     const r = ratioOf(c, c.category === "hotel" ? opts.hotelBase?.(c.matchKey) : undefined);
     if (!usableRatio(r)) continue;
     const key = `${c.category}|${c.matchKey}`;
-    ratios.set(key, [...(ratios.get(key) ?? []), r]);
+    ratios.set(key, [...(ratios.get(key) ?? []), { r, w }]);
   }
   const out = new Map<string, CheckFactor>();
   for (const [key, rs] of ratios) {
-    const med = median(rs)!;
+    const med = weightedMedian(rs);
+    // Evidence counts by weight: two Google rates at 0.5 move things as far
+    // as one owner check. With every weight at 1 this is the plain median
+    // and plain count it always was.
+    const n = rs.reduce((s, x) => s + x.w, 0);
     out.set(key, {
-      factor: Math.round(shrink(med, rs.length, opts.priorWeight ?? DEFAULT_CHECKS_WEIGHT) * 10000) / 10000,
-      n: rs.length,
+      factor: Math.round(shrink(med, n, opts.priorWeight ?? DEFAULT_CHECKS_WEIGHT) * 10000) / 10000,
+      n: Math.round(n * 100) / 100,
       medianRatio: Math.round(med * 10000) / 10000,
     });
   }
   return out;
+}
+
+/** Median of weighted values. With equal weights, the ordinary median. */
+export function weightedMedian(xs: { r: number; w: number }[]): number {
+  if (xs.every((x) => x.w === xs[0]!.w)) return median(xs.map((x) => x.r))!;
+  const sorted = [...xs].sort((a, b) => a.r - b.r);
+  const half = sorted.reduce((s, x) => s + x.w, 0) / 2;
+  let acc = 0;
+  for (let i = 0; i < sorted.length; i++) {
+    acc += sorted[i]!.w;
+    if (acc > half) return sorted[i]!.r;
+    if (acc === half) return (sorted[i]!.r + sorted[i + 1]!.r) / 2;
+  }
+  return sorted[sorted.length - 1]!.r;
 }
 
 /* ---------------------------------------------------------------------------

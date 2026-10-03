@@ -12,6 +12,54 @@ say when something is a guess.
 
 ---
 
+## ⛔ GOVERNING PRIORITY — DO NOT DELETE, SHORTEN OR MOVE THIS SECTION
+
+**The owner's words (2026-10-03):** "RETRIEVING AND KEEPING FLIGHT AND HOTEL
+DATA ACROSS A DIVERSE SPECTRUM IS ONE OF THE PRIMARY FUNCTIONALITIES OF THIS
+APP. If that does not happen, this app cannot succeed. Even the free flight
+data is information. And we need as much information as we can get. Nothing
+should be overwritten. It should all be added to the database with the
+source. Then we can weight our formula based on the sources instead of
+overwriting anything. ... This is one of our highest governing priorities."
+
+What that means in code. **Every change must keep all of these true:**
+
+1. **Keep everything, with its source.** Every flight fare and hotel rate any
+   job or user action is handed goes into the append-only record:
+   `flight_observations` (flights) and `hotel_samples` (hotels, Disney's own
+   included), each row with `source` and when we saw it. **No code may
+   `update` or `delete` those two tables.** A new data source writes there
+   first (`recordFlightObservations()` / `recordHotelSamples()`), before any
+   working-copy table.
+2. **Nothing is overwritten.** `flight_prices` and `hotel_rates` are working
+   copies (latest per date) that readers find convenient; replacing a row
+   there is allowed ONLY because the observation is already in the record.
+   Never treat a working copy as the store, and never "clean up" old
+   observations.
+3. **Weight sources; never let one replace another.** Pricing reads the
+   latest observation per source and blends them (`blendFares()` in
+   `src/observations.ts`, weights in /admin → Rates & settings → Data
+   sources). Google's rates for Disney's own hotels move on-property prices
+   as weighted evidence (`src/disneyEvidence.ts`), alongside the owner's
+   price checks.
+4. **Prove the data stuck.** The morning email's "Did the data stick?"
+   section (`src/dataIntake.ts`) compares what each paid job wrote with what
+   the record holds, every day. **After ANY change to a job that fetches or
+   stores flight or hotel data, Claude re-runs the "Parkfare debug coverage"
+   workflow (or reads the next morning's data check) and shows the owner the
+   before/after numbers BEFORE calling it fixed.** "The job logged N written"
+   is not proof; twice in 2026-10 it was true while the fares vanished.
+5. **Paid searches are for new information.** Never spend a paid search
+   re-buying a route+date we bought in the last `REBUY_AFTER_DAYS`
+   (`recentlyBought()`); spread coverage instead.
+
+History that made this a rule: 2026-10-02 the free feed was overwriting paid
+fares; 2026-10-03 the paid job was overwriting its own fares nightly. 226 paid
+fares became 19, and every log said "written". Both are fixed, and the record
+now exists so it cannot recur silently.
+
+---
+
 ## START HERE — state as of 2026-10-03 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
@@ -26,7 +74,7 @@ and columns (`search_days`, `hotel_samples`, `fare_trend.kind`,
 the migrate workflow.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**695 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
+**707 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
 email with its dollar figure.
 
 ### Last session in one table (2026-10-02 to 10-03, PRs #90-#107)
@@ -117,6 +165,44 @@ email with its dollar figure.
      cheaper than other airlines. They're leaning toward simply SURFACING
      budget carriers rather than pricing them into the total. Wait for their
      decision.
+
+### 2026-10-03, last of all — the record, source weights, Google's Disney rates, the daily check
+
+Owner: "Do all of those and make sure we do include Google's rates to keep
+our Disney hotel pricing honest" (see the GOVERNING PRIORITY section above,
+which this built).
+- **`flight_observations`** (schema.sql): append-only, every fare from every
+  writer (refresh's free feed via `upsertFlights`, popular-routes,
+  intl-sweep, exact-fare), with `source` and `observed_at`. Backfilled once
+  from every labelled `flight_prices` row. `hotel_samples` gained `source`
+  and is now written un-ignored (a failure fails the refresh).
+- **Pricing blends sources** (`book.ts` + `blendFares()`): latest fare per
+  source per date, from the record and the working copy, weighted by
+  `sources.flight.serpapi` (1) and `sources.flight.travelpayouts` (0 =
+  fallback only: used when it's the only real fare for that date, which is
+  exactly what happened before; owner can raise it). `FlightRow.sources`
+  says what a fare was blended from.
+- **Google's Disney hotel rates move on-property prices** (`disneyEvidence.ts`):
+  each Google rate for a Disney hotel and night over our raw rate for the
+  same hotel and night is a ratio, pooled with the owner's price checks in
+  `computeFactors` (now weighted: `sources.hotel.googleDisney`, default 1 =
+  one Google rate counts like one owner check; 0 turns it off). Same shrink
+  (n/(n+3)) and 0.5x-2x guard. `applyChecks: false` leaves it out.
+  Cached 10 minutes per database.
+- **On-property hotel_rates are labelled `owner_base`**, not
+  `serpapi_hotels` (they were never a vendor's). schema.sql relabels old
+  rows once.
+- **Morning email every day** with "Did the data stick?" (`dataIntake.ts`):
+  fares in the last 24h by source, paid fares bought vs kept (7 days),
+  hotel searches made vs kept, Disney rates seen, totals. Losses become
+  BLOCKING tasks. `newsDigest.ts` now always sends when `OWNER_EMAIL` is set.
+- **/admin → Flights & hotels → "Hotels we hold"** (`hotelList.ts`): every
+  hotel per resort, latest Google rate and night, range, searches, last seen;
+  Disney's marked; pre-record cache rows marked "older".
+- Workflows refresh, popular-routes, intl-sweep and news-digest now run
+  `npm run migrate` first.
+- **Verify next session:** the morning data check and the coverage report
+  should show paid fares "bought = kept" and the record growing nightly.
 
 ### 2026-10-03, later still — paid fares were re-buying themselves every night
 

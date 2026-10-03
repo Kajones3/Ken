@@ -335,8 +335,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
       <h3>Disney's own hotels, priced by Google</h3>
       <p>Our nightly &ldquo;hotels near the resort&rdquo; search also returns Disney's own hotels. Their real rate grades
-        the Disney hotel prices we otherwise estimate. Both are before taxes and fees, for the same month, and ours is
-        before your price checks adjust it.</p>
+        the Disney hotel prices we otherwise estimate, and (since 2026-10-03) also <b>moves</b> them, the same way your
+        price checks do; the weight is in Rates &amp; settings &rarr; Data sources. Both are before taxes and fees, for the
+        same month, and &ldquo;ours&rdquo; here is before Google's rates and your checks adjust it.</p>
       <div id="htDisney"></div>
       <div id="htInList"></div>
 
@@ -350,6 +351,15 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <p>Your own hotel and ticket checks, against what our model said that day. More detail is on the
         <a href="#checks">Prices you've checked</a> page.</p>
       <div id="htChecks"></div>
+    </section>
+
+    <section class="sheet">
+      <h2>Hotels we hold</h2>
+      <p>Every hotel Google has returned for each resort, from the nightly paid searches. <b>Every search is kept</b>,
+        with the night it was for: nothing is replaced. Disney's own hotels are listed last and marked; their Google rate
+        moves our Disney hotel prices (Rates &amp; settings &rarr; Data sources). &ldquo;Older&rdquo; means a hotel we only
+        hold from before every search was kept (2026-10-03): the rate is the middle of what we were showing for that month.</p>
+      <div id="hlList"><p class="count">Loading…</p></div>
     </section>
 
     <section class="sheet">
@@ -1819,6 +1829,23 @@ function renderHotelScore(h){
     : `<p class="count">No hotel or ticket checks with a model price yet.</p>`;
 }
 
+function renderHotelList(list){
+  const day = iso => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+  const total = list.reduce((n, r) => n + r.hotels.length, 0);
+  $("#hlList").innerHTML = !total ? `<p class="count">No hotels held yet.</p>` : list.map(r => {
+    const off = r.hotels.filter(x => !x.disney).length, dis = r.hotels.length - off;
+    return `<details${r.hotels.length ? "" : " disabled"}><summary style="cursor:pointer;padding:6px 0"><b>${esc(r.name)}</b>
+      <span class="count">· ${num(off)} off-property${dis ? ` · ${num(dis)} Disney` : ""} · ${num(r.searches)} searches kept</span></summary>
+      ${r.hotels.length ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Hotel</th><th class="n">Nightly</th><th>For the night of</th>
+        <th class="n">Range seen</th><th class="n">Searches</th><th>Last seen</th></tr></thead><tbody>${r.hotels.map(x =>
+        `<tr><td>${esc(x.name)}${x.disney ? ` <span class="count">(Disney)</span>` : ""}${x.basis === "older" ? ` <span class="count">(older)</span>` : ""}</td>
+         <td class="n">$${num(x.nightly)}</td><td>${x.night ? esc(day(x.night + "T12:00:00Z")) : "—"}</td>
+         <td class="n">${x.low === x.high ? "$" + num(x.low) : `$${num(x.low)}–$${num(x.high)}`}</td>
+         <td class="n">${x.searches ? num(x.searches) : "—"}</td><td>${esc(day(x.seenAt))}</td></tr>`).join("")}</tbody></table></div>`
+        : `<p class="count">None yet.</p>`}</details>`;
+  }).join("");
+}
+
 /* ------------------------------- flights ------------------------------- */
 let flDays = 30;
 const signed = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + v + "%";
@@ -1826,8 +1853,9 @@ const offBy = v => v === null || v === undefined ? "—" : v + "%";
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
-  const { scoreboard: s, demand: d, hotels: h } = await r.json();
+  const { scoreboard: s, demand: d, hotels: h, hotelList: hl } = await r.json();
   renderHotelScore(h);
+  renderHotelList(hl || []);
   const g = (x, name) => x.n
     ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
     : tile(name, "—", "no fares to test yet");

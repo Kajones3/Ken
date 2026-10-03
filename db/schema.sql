@@ -703,3 +703,61 @@ create table if not exists event_counts (
   n         integer not null default 0,
   primary key (day, kind, resort_id, detail)
 );
+
+-- ============================================================================
+-- THE RECORD (2026-10-03, the owner's governing rule, top of CLAUDE.md):
+-- every fare and hotel rate we are handed is KEPT, with its source. Nothing
+-- is overwritten. Pricing weights the sources (src/observations.ts).
+--
+-- flight_observations is append-only: every writer (the free nightly feed,
+-- popular-routes, intl-sweep, exact-fare) inserts here BEFORE it touches the
+-- flight_prices working copy, and no code updates or deletes these rows.
+-- flight_prices keeps one row per route/date/length and may be replaced;
+-- that is fine because the observation stays here.
+-- ============================================================================
+create table if not exists flight_observations (
+  id            bigserial    primary key,
+  origin        char(3)      not null,
+  destination   char(3)      not null,
+  depart_date   date         not null,
+  trip_length   smallint     not null,
+  price_usd     numeric(9,2) not null check (price_usd > 0),
+  carrier       text,
+  stops         smallint     not null default 0,
+  deep_link     text,
+  source        text         not null,
+  observed_at   timestamptz  not null default now()
+);
+create index if not exists flight_observations_lookup
+  on flight_observations (origin, destination, trip_length, depart_date);
+create index if not exists flight_observations_source
+  on flight_observations (source, observed_at);
+
+-- Carry every labelled fare already in the working copy into the record,
+-- ONCE. A marker row makes it one-time: matching on timestamps would not do,
+-- because a writer's flight_prices and flight_observations rows are stamped by
+-- separate statements, so every later migration would copy them again.
+-- Unlabelled rows are the 2026-09-07..09 mock placeholders and are not data.
+create table if not exists schema_marks (
+  name      text primary key,
+  done_at   timestamptz not null default now()
+);
+insert into flight_observations
+  (origin, destination, depart_date, trip_length, price_usd, carrier, stops, deep_link, source, observed_at)
+select f.origin, f.destination, f.depart_date, f.trip_length, f.price_usd, f.carrier, f.stops, f.deep_link,
+       f.source, f.fetched_at
+  from flight_prices f
+ where f.source is not null
+   and not exists (select 1 from schema_marks where name = 'flight_observations_backfill');
+insert into schema_marks (name) values ('flight_observations_backfill') on conflict (name) do nothing;
+
+-- hotel_samples is the hotel record (every pull as Google returned it,
+-- Disney's own hotels included). Append-only, like flight_observations; the
+-- source says who returned it.
+alter table hotel_samples add column if not exists source text not null default 'serpapi_hotels';
+create index if not exists hotel_samples_pulled on hotel_samples (pulled_at);
+
+-- On-property rates are generated from the owner's base rates, not returned
+-- by any vendor, but were tagged 'serpapi_hotels' alongside real Google rows.
+-- Label them for what they are, once.
+update hotel_rates set source = 'owner_base' where on_property and source = 'serpapi_hotels';

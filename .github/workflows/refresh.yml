@@ -26,6 +26,12 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
+      # Apply db/schema.sql first (idempotent): this job writes to the
+      # append-only record (flight_observations / hotel_samples), and Render's
+      # deploy, which also migrates, is done by hand and can lag master.
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - run: npm run refresh
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
