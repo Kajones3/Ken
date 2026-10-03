@@ -1521,10 +1521,8 @@ function renderHotelScore(h){
       ${h.disney.rows.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(h.disney.rows.length)}.</p>` : ""}`
     : `<p class="count">No Disney hotels found in Google's results yet.</p>`;
   $("#htInList").innerHTML = h.disney.inOffPropertyList.length
-    ? `<p class="said bad" style="margin-top:10px">Worth knowing: these Disney hotels came back in the &ldquo;hotels near&rdquo; search, so
-        they're also in the <b>off-property</b> list travelers can be shown (with off-property parking added).
-        ${h.disney.inOffPropertyList.map(x => `<b>${esc(x.name)}</b>: ${x.hotels.map(esc).join(", ")}`).join(" · ")}.
-        Say the word and they'll be kept out of the off-property list.</p>` : "";
+    ? `<p class="count" style="margin-top:10px">Disney hotels Google returned, and that are kept out of the off-property list:
+        ${h.disney.inOffPropertyList.map(x => `<b>${esc(x.name)}</b>: ${x.hotels.map(esc).join(", ")}`).join(" · ")}.</p>` : "";
   $("#htPulls").innerHTML = h.offProperty.pairs.length
     ? resortRows(h.offProperty.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
         <th>Night</th><th class="n">We showed</th><th class="n">Then real</th><th class="n">Reads</th></tr></thead><tbody>${h.offProperty.pairs.slice(0, 20).map(x =>

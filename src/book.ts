@@ -8,6 +8,7 @@ import type { Db } from "./db.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
 import { RESORTS, type Tier } from "./config.js";
+import { matchDisneyHotel } from "./disneyHotels.js";
 import {
   computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
   type CheckFactor,
@@ -27,7 +28,7 @@ const pctOf = (f: CheckFactor) => ({ pct: Math.round((f.factor - 1) * 100), n: f
  * to historical surveys only — never to a baseline built from fares sampled
  * this month, which is already current (see jobs/intlBaseline.ts).
  */
-const TREND_APPLIES_TO = new Set(["bts_db1b"]);
+const TREND_APPLIES_TO = new Set(["bts_db1b", "seed_guess"]);
 
 /**
  * How many real fares a route+quarter needs before its own evidence is
@@ -143,7 +144,18 @@ export async function loadBook(
       where resort_id = any($1) and stay_date between $2 and $3`,
     [req.resortIds, req.from, req.to],
   );
+  // Disney's own hotels, cached by an off-property search before 2026-10-03,
+  // are not off-property picks; skip them until the next pull replaces the
+  // month (see disneyHotels.ts). Memoized: a book reads thousands of rows.
+  const disneyName = new Map<string, boolean>();
+  const isDisney = (resort: string, name: string) => {
+    const k = `${resort}|${name}`;
+    let v = disneyName.get(k);
+    if (v === undefined) disneyName.set(k, v = matchDisneyHotel(resort, name) !== null);
+    return v;
+  };
   for (const r of h.rows) {
+    if (!r.on_property && isDisney(r.resort_id, r.hotel_name)) continue;
     const date = dateStr(r.stay_date);
     const key = `${r.resort_id}|${date}`;
     const list = hotels.get(key) ?? [];
@@ -233,7 +245,7 @@ export async function loadBook(
   }
   const historicals = new Map<string, {
     med: number; p25: number; p75: number; quarter: string;
-    seasonMatched: boolean; applyTrend: boolean; fetchedAt: Date | null;
+    seasonMatched: boolean; applyTrend: boolean; fetchedAt: Date | null; seedGuess: boolean;
   }>();
   for (const route of new Set([...byRouteQuarter.keys(), ...newestByRoute.keys()])) {
     const r = byRouteQuarter.get(route) ?? newestByRoute.get(route)!;
@@ -255,6 +267,8 @@ export async function loadBook(
       // today's prices; multiplying it again would inflate a current fare
       // by the trend a second time.
       applyTrend: TREND_APPLIES_TO.has(String(r.source ?? "bts_db1b")),
+      // A flat regional guess, not a survey of this route (seedInternational.ts).
+      seedGuess: String(r.source) === "seed_guess",
       // When this baseline was written. Only real fares seen AFTER it can
       // correct it — see the route-correction note below.
       fetchedAt: tsOf(r.fetched_at),
@@ -334,15 +348,16 @@ export async function loadBook(
   /** The owner's own median for one route/quarter/band, if they have said. */
   const ownerSays = (key: string, band: FareBand) => median(corrections.get(key)?.[band] ?? []);
 
-  const ft = await db.query(
-    `select multiplier, low_multiplier, high_multiplier from fare_trend order by computed_at desc limit 1`,
-  );
-  const trend = ft.rows[0]
-    ? {
-        m: Number(ft.rows[0].multiplier), lo: Number(ft.rows[0].low_multiplier),
-        hi: Number(ft.rows[0].high_multiplier),
-      }
-    : undefined;
+  const latestTrend = async (kind: "domestic" | "intl") => {
+    const ft = await db.query(
+      `select multiplier, low_multiplier, high_multiplier from fare_trend where kind = $1 order by computed_at desc limit 1`,
+      [kind],
+    );
+    return ft.rows[0]
+      ? { m: Number(ft.rows[0].multiplier), lo: Number(ft.rows[0].low_multiplier), hi: Number(ft.rows[0].high_multiplier) }
+      : undefined;
+  };
+  const trends = { domestic: await latestTrend("domestic"), intl: await latestTrend("intl") };
 
   // Owner overrides for the numbers this app runs on. Loaded once per book,
   // beside the prices, so pricing.ts can stay pure and synchronous — see
@@ -407,6 +422,7 @@ export async function loadBook(
     // below (the "no evidence anywhere" guard included) is unaffected by
     // blending — it only changes HOW MUCH a real observation moves things,
     // never WHETHER one exists.
+    const trend = h.applyTrend ? trends[h.seedGuess ? "intl" : "domestic"] : undefined;
     const baseM = h.applyTrend ? (trend?.m ?? 1) : 1;
     const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
       ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
@@ -437,7 +453,9 @@ export async function loadBook(
     // observation, which is strictly better evidence than the global
     // average would have been. A live-sampled baseline needs no trend and
     // must not wait on one.
-    if (h.applyTrend && !trend && routeM === undefined && anyCorrection === undefined) return undefined;
+    // (The seeded international guess still prices with no trend yet: it is
+    // already roughly today's money, just unchecked.)
+    if (h.applyTrend && !h.seedGuess && !trend && routeM === undefined && anyCorrection === undefined) return undefined;
     // The owner's own figure for the middle outranks a measured correction,
     // which outranks the global trend: each is better evidence about THIS
     // route than the one after it. A correction they typed is a fare they
@@ -464,6 +482,7 @@ export async function loadBook(
       seasonMatched: h.seasonMatched,
       trendPct: (routeM !== undefined || h.applyTrend) ? Math.round((m - 1) * 1000) / 10 : undefined,
       sampledLive: !h.applyTrend,
+      seedGuess: h.seedGuess || undefined,
       // How many real fares on this exact route the correction rests on.
       // Undefined means it fell back to the global trend. The UI says this
       // out loud, because a correction built on one fare deserves less

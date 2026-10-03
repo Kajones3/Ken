@@ -142,7 +142,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // --- 3. The trend multiplier every estimate is scaled by ---
   const ft = await db.query<{ multiplier: string; low_multiplier: string; high_multiplier: string; sample_routes: number; computed_at: string }>(
     `select multiplier, low_multiplier, high_multiplier, sample_routes, computed_at
-       from fare_trend order by computed_at desc limit 3`,
+       from fare_trend where kind = 'domestic' order by computed_at desc limit 3`,
   );
   out.push("## fare_trend (multiplies every BTS baseline into a shown estimate)");
   if (!ft.rows.length) {

@@ -312,7 +312,9 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // needing its own schedule. Null just means too few overlapping routes
   // right now; the last good fare_trend row keeps serving estimates.
   const trend = await computeFareTrend(db);
-  const trendNote = trend ? `trend: ${trend.sampleRoutes} routes` : "trend: skipped (too few overlapping routes)";
+  const intlTrend = await computeFareTrend(db, "intl");
+  const trendNote = (trend ? `trend: ${trend.sampleRoutes} routes` : "trend: skipped (too few overlapping routes)")
+    + (intlTrend ? ` · intl trend: ${intlTrend.sampleRoutes} routes` : " · intl trend: skipped");
   const hotelNote = paidSlots
     ? `hotel slots: ${paidSlots.map((x) => `${x.resortId}/${x.month}`).join(" ")}`
     : "hotel slots: no rotation";

@@ -51,7 +51,7 @@ export function basisVerdict(avg: number): "ok" | "low" | "high" {
 export async function trendAgeDays(db: Db, now = new Date()): Promise<number | null> {
   try {
     const { rows } = await db.query<{ at: Date | string | null }>(
-      `select max(computed_at) as at from fare_trend`,
+      `select max(computed_at) as at from fare_trend where kind = 'domestic'`,
     );
     const at = rows[0]?.at;
     if (!at) return null;
