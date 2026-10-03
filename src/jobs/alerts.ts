@@ -17,11 +17,13 @@
  */
 import { randomUUID } from "node:crypto";
 import { RESORT_BY_ID } from "../config.js";
+import { dateStr } from "../book.js";
 import { getDb, type Db } from "../db.js";
 import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
 import { unsubscribeToken, unsubscribeUrl } from "../dealEmails.js";
+import { dealSaving, tripFromSaved } from "../dealSavings.js";
 
 export interface Candidate {
   userId: string; email: string; resortId: string | null;
@@ -53,6 +55,9 @@ export function applyCap(cands: Candidate[], cap = CAP): Candidate[] {
   }
   return out;
 }
+
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const fmtLong = (d: string) => `${MON[Number(d.slice(5, 7)) - 1]} ${Number(d.slice(8, 10))}, ${d.slice(0, 4)}`;
 
 function describePromoEffectForEmail(kind: string, value: number): string {
   switch (kind) {
@@ -90,12 +95,19 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
   const candidates: Candidate[] = [];
   for (const m of members) {
     const { rows: promos } = await db.query(
-      `select resort_id, label, effect_kind, effect_value, min_nights, conditions
+      `select id, resort_id, label, effect_kind, effect_value, starts_on, ends_on, min_nights, conditions
          from promos
         where active and ends_on >= current_date and created_at > $1
         order by created_at desc limit 3`,
       [m.since],
     );
+    if (!promos.length) continue;
+    // The member's own most recent saved search, so "$X" is measured on
+    // their trip rather than ours when we can (dealSavings.ts).
+    const { rows: saved } = await db.query(
+      `select params from saved_trips where user_id = $1 order by created_at desc limit 1`, [m.id]);
+    const savedParams = saved[0]?.params as Record<string, unknown> | undefined;
+    const trip = tripFromSaved(savedParams);
     for (const promo of promos) {
       const where = promo.resort_id ? RESORT_BY_ID.get(promo.resort_id)?.name ?? promo.resort_id : "Every resort";
       const effect = [
@@ -103,10 +115,33 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
         promo.min_nights ? `stays of ${promo.min_nights}+ nights` : "",
         promo.conditions ?? "",
       ].filter(Boolean).join("; ");
+      const startsOn = dateStr(promo.starts_on), endsOn = dateStr(promo.ends_on);
+      let saving = null;
+      try {
+        saving = await dealSaving(db, {
+          id: promo.id, resortId: promo.resort_id ?? null, effectKind: promo.effect_kind,
+          startsOn, endsOn, minNights: promo.min_nights === null || promo.min_nights === undefined ? null : Number(promo.min_nights),
+        }, trip, { preferResort: typeof savedParams?.resortId === "string" ? savedParams.resortId : null });
+      } catch (e) {
+        // A deal email with plain wording beats no deal email.
+        console.error(`couldn't price the saving for deal ${promo.id}:`, (e as Error).message);
+      }
+      const lines = [
+        `${where}: ${promo.label}${effect ? ` (${effect})` : ""}`,
+        `Travel dates: ${fmtLong(startsOn)} to ${fmtLong(endsOn)}.`,
+      ];
+      if (saving) {
+        const at = RESORT_BY_ID.get(saving.resortId)?.name ?? saving.resortId;
+        lines.push("",
+          `How we got $${saving.saving.toLocaleString("en-US")}: ${saving.basis} at ${at}, arriving ${fmtLong(saving.date)}. `
+          + `$${saving.without.toLocaleString("en-US")} without the deal, $${saving.withDeal.toLocaleString("en-US")} with it `
+          + `(flights left out; no deal changes them).`,
+          "Your own dates and party may save more or less, and Disney can end a deal early.");
+      }
       candidates.push({
         userId: m.id, email: m.email, resortId: promo.resort_id ?? null,
-        oldTotal: 0, newTotal: 0, dropPct: 0, kind: "new_promo",
-        detail: `${where}: ${promo.label}${effect ? ` (${effect})` : ""}`,
+        oldTotal: saving?.without ?? 0, newTotal: saving?.withDeal ?? 0, dropPct: 0, kind: "new_promo",
+        detail: lines.join("\n"),
       });
     }
   }
