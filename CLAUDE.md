@@ -60,24 +60,74 @@ now exists so it cannot recur silently.
 
 ---
 
-## START HERE — state as of 2026-10-03 (end of session)
+## START HERE — state as of 2026-10-04 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of PR #107 plus
-this notes commit. Every PR through #107 is merged. The owner said
-"This all works" at the end of the session.
+in Render; delete it to launch). `master` is at the merge of **PR #112** plus
+this notes commit. Every PR through #112 is merged.
 
-**Ask whether Render has been redeployed before trusting the live site.** The
-owner redeploys by hand. Render's build runs `npm run migrate`, so new tables
-and columns (`search_days`, `hotel_samples`, `fare_trend.kind`,
-`promos.min_nights`/`conditions`) only exist in production after a deploy or
-the migrate workflow.
+**Ask whether Render has been redeployed since #111 before trusting the live
+site.** The owner redeploys by hand. Render's build runs `npm run migrate`.
+The nightly data workflows (refresh, popular-routes, intl-sweep, news-digest)
+now run `npm run migrate` themselves, so the new `flight_observations` table
+exists in production after their first run even without a redeploy; but the
+SITE only blends sources, uses Google's Disney rates and shows the /admin
+hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**707 tests**, and typecheck is clean. `npm run smoke` prints a sample deal
-email with its dollar figure.
+**707 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
-### Last session in one table (2026-10-02 to 10-03, PRs #90-#107)
+### This session in one table (2026-10-03 to 10-04, PRs #109-#112)
+
+| PR | What |
+|---|---|
+| #109 | Shanghai wait times: Queue-Times calls id 30 "Shanghai Disneyland", not "Shanghai Disney Resort"; every run had refused it |
+| #110 | Paid flight job re-bought (and overwrote) the same 18 fares nightly: 226 bought, 19 kept. `recentlyBought()` skips route+months bought in the last 10 days |
+| #111 | **The governing rule built** (section above): append-only `flight_observations`, source-weighted pricing, Google's Disney hotel rates move on-property prices, daily "Did the data stick?" email, /admin "Hotels we hold" |
+| #112 | Tokyo "Good to know" line about Vacation Packages (information only) |
+
+### Pick up here FIRST next session (in this order)
+
+1. **Prove the data stuck (governing rule #4).** Run the "Parkfare debug
+   coverage" workflow (select-only) and read the latest morning email's
+   "Did the data stick?" section. Expect: paid fares "bought = kept";
+   `flight_observations` growing nightly (the coverage report does not yet
+   print the record's counts; the morning email does); "Fares the trend could
+   use" climbing past the 19 of 2026-10-03, about 18 more per night; the
+   refresh log's "trend: N routes" rising above 7. **Show the owner the
+   before/after numbers.** Baseline at 2026-10-03 16:42 UTC: 19
+   `serpapi_flights` rows (7 domestic, 12 intl), popular_routes had written
+   226, trend from 7 routes, hotel record 24,604 off-property rows / 223
+   hotels in `hotel_rates`.
+2. **If any paid fare is missing** (blocking line in the email), find the
+   writer skipping `recordFlightObservations()` before anything else.
+3. **Did the morning email arrive daily?** It now sends every day (it used to
+   send only on news days). If the owner says no, check the news-digest run
+   log for "handed to resend".
+4. **Shanghai wait times:** /admin Wait times should show Shanghai rows
+   after a run between 01:00-11:00 UTC. If not, read the wait-times log.
+5. **Disney hotel prices may move** now that Google's rates count (weight 1
+   = one Google rate counts like one owner price check, shrunk n/(n+3),
+   held within 0.5x-2x). If the owner reports a Disney hotel jumping, check
+   /admin Flights & hotels "Disney's own hotels, priced by Google" and the
+   `sources.hotel.googleDisney` weight; don't silently change the default.
+6. **The lean** is still the owner's call (at 75, Claude recommends 50).
+   Revisit once the scoreboard has ~2 weeks of fares, which only began
+   accumulating properly on 2026-10-04.
+
+### Owner decisions from this session (don't re-litigate)
+
+- The free Travelpayouts feed weight defaults to **0 = fallback only** (used
+  only when it's the only real fare for that date; never pulls a bought fare
+  down). Every fare is kept regardless. Owner may raise it in /admin.
+- Tokyo Vacation Packages: **information only**, never priced. Replace the
+  ~$700 fan figure only with a real screenshot price.
+- **Per-resort pages** ("I choose Tokyo": links, YouTube videos, more than the
+  detail card) are the owner's idea for AFTER user testing. Don't build ahead.
+- Pasting Disney links: this sandbox can't reach Disney (timeouts). Ask for
+  screenshots or pasted text early. Strip `_gl=` tracking from any URL.
+
+### The session before, in one table (2026-10-02 to 10-03, PRs #90-#107)
 
 | PR(s) | What |
 |---|---|
@@ -1180,7 +1230,7 @@ that every number is either real or labelled a guess.
 | **Promos** | **REAL for WDW, Disneyland, Disneyland Paris** (`seedPromos.ts`, found by web search of each resort's own official offers page, 2026-09-25). **Still illustrative-gap for Tokyo, Hong Kong, Shanghai** — nothing official found, see "Next work". Applying one is free for anyone signed in, not Plus. |
 | **Attractions** | **The owner's own list, with lands (2026-09-26)**, reviewed in `docs/attractions/`. It takes effect once uploaded in /admin; until then the ~10-row starter set ships. About 15 rows are flagged `claude_check` as likely factual slips. |
 | `parkList` lands | Claude draft. The owner's attraction sheet now carries real land names to check it against. |
-| `QUEUE_TIMES_PARKS` | Checked against Queue-Times' own names from the live log (2026-09-26), except Shanghai (id 30), whose name is a guess. |
+| `QUEUE_TIMES_PARKS` | Checked against Queue-Times' own names from the live log (2026-09-26); Shanghai (id 30, "Shanghai Disneyland") confirmed from the log 2026-10-03. |
 
 ### Open questions for the owner — do not decide these alone
 
