@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**711 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**717 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +97,30 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-04, last — "68 of 84 paid hotel searches left nothing"
+
+Live coverage report (new per-run hotel section): Sep 21 - Oct 2 every
+refresh kept 0 (hotel_samples only started 10-03 09:40: the old-runs false
+alarm again), and Oct 3 and Oct 4 each kept **8 of 12**. The 4 missing were
+the same every night: `dlp/hkdl/shdr/tdr 2027-10`, "never bought", a
+mid-October-2027 check-in ~375 days out that Google returns no priced hotels
+for. Nothing was saved, so the rotation re-bought them nightly: ~120 of ~360
+monthly hotel searches wasted. Fixes:
+- `sampleCheckIn()` never picks a night past `HOTEL_SEARCH_MAX_DAYS` (360,
+  a GUESS from that evidence: ~300-330 days worked); a month past it gets no
+  slot until it comes into range.
+- New append-only **`hotel_searches`** (every paid search as made: check-in,
+  properties, priced, status). An empty search is logged by name in the
+  refresh log and counts as "made" for the rotation, so it waits ~10 days
+  like any other instead of being re-bought nightly.
+- The record now keeps **every** priced hotel a search returns (was the
+  first 10 of ~20); pricing still uses the first 10.
+- `dataIntake` hotels: only runs since the record marker; "made / kept /
+  came back with no prices / failed / unexplained"; unexplained is the
+  alarm, empty is its own non-blocking line.
+- **Verify on the next morning's email:** 12 made, ~12 kept, 0 unexplained.
+  If "came back with no prices" repeats for the same months, lower 360.
 
 ### This session in one table (2026-10-03 to 10-04, PRs #109-#112)
 

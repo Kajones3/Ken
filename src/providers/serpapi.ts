@@ -56,8 +56,26 @@ export function sampleCheckIn(month: string, today: ISODate = todayISO()): ISODa
   const [first, last] = monthBounds(month);
   const midMonth = addDaysISO(first, 13);
   const soonest = addDaysISO(today, 1);
-  const pick = midMonth > soonest ? midMonth : soonest;
-  return pick > last ? null : pick;
+  const latest = addDaysISO(today, HOTEL_SEARCH_MAX_DAYS);
+  let pick = midMonth > soonest ? midMonth : soonest;
+  if (pick > latest) pick = latest;
+  return pick > last || pick < first ? null : pick;
+}
+
+/**
+ * How far ahead Google Hotels returns prices. A GUESS from live evidence
+ * (2026-10-04): searches ~300-330 days out came back full, and four for
+ * mid-October 2027 (~375 days) came back with no priced hotels, every
+ * night, each one a paid search. 360 keeps every month that worked; the
+ * refresh log names any search that still comes back empty, so this can be
+ * moved on evidence.
+ */
+export const HOTEL_SEARCH_MAX_DAYS = 360;
+
+/** One paid hotel search, as made: kept even when it found nothing. */
+export interface HotelSearch {
+  resort: string; month: string; checkIn: ISODate;
+  properties: number; priced: number; status: "ok" | "error";
 }
 
 interface SerpApiProperty {
@@ -148,6 +166,8 @@ export class SerpApiHotelProvider {
   get callsSpent(): number { return this.spent; }
   /** Every off-property pull this run, as Google returned it (see hotelScoreboard.ts). */
   readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number }[] }[] = [];
+  /** Every paid search made, empty or failed ones included (hotel_searches). */
+  readonly searches: HotelSearch[] = [];
   get budgetRemaining(): number { return Math.max(0, this.budget - this.spent); }
 
   /**
@@ -228,12 +248,16 @@ export class SerpApiHotelProvider {
     // errors or finds nothing, so charging only successes would make a
     // failing route a free infinite retry. Same rule as exactFare.ts.
     this.spent++;
+    const search: HotelSearch = { resort: resortId, month, checkIn, properties: 0, priced: 0, status: "error" };
+    this.searches.push(search);
     const res = await fetch(url);
     if (!res.ok) throw new Error(`serpapi hotels ${resortId} ${month} -> ${res.status} ${await res.text().catch(() => "")}`);
     const json = (await res.json()) as { properties?: SerpApiProperty[] };
     const properties = json?.properties ?? [];
 
-    const rawAnchors = properties.slice(0, 10)
+    // Every priced hotel Google returned, for the record; pricing still uses
+    // the first 10 (unchanged), so keeping the rest costs nothing extra.
+    const allPriced = properties
       .map((p) => {
         const nightly = p.rate_per_night?.extracted_before_taxes_fees
           ?? p.rate_per_night?.extracted_lowest
@@ -248,9 +272,18 @@ export class SerpApiHotelProvider {
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
+    search.properties = properties.length;
+    search.priced = allPriced.length;
+    search.status = "ok";
+    if (!allPriced.length) {
+      console.warn(`serpapi hotels ${resortId} ${month}: paid search (check-in ${checkIn}) returned ${properties.length} hotel(s), none priced`);
+    }
     // Recorded as Google returned it, Disney hotels included: their real
     // rates grade our on-property estimates (hotelScoreboard.ts).
-    this.pulls.push({ resort: resortId, month, checkIn, rates: rawAnchors.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly })) });
+    const rawAnchors = allPriced.slice(0, 10);
+    // The record keeps ALL of them (governing rule: nothing we paid for is
+    // thrown away). It used to keep only the first 10 of ~20.
+    this.pulls.push({ resort: resortId, month, checkIn, rates: allPriced.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly })) });
     // But Disney's own hotels are not OFF-property picks (owner, 2026-10-03).
     // "Hotels near Walt Disney World" returns Pop Century and the Grand
     // Floridian too, which were being offered as "Off property" with

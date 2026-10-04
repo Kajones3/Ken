@@ -156,3 +156,28 @@ test("Disney's own hotels in Google's results are kept out of off-property, but 
   // The scorecard still sees Google's rate for Pop Century.
   assert.deepEqual(p.pulls[0]!.rates.map((r) => r.name), ["Disney's Pop Century Resort", "Hampton Inn Lake Buena Vista"]);
 });
+
+test("every priced hotel a search returns is recorded, not just the 10 we price from (2026-10-04)", async () => {
+  const properties = Array.from({ length: 20 }, (_, i) => ({ name: `Hotel ${i + 1}`, rate_per_night: { extracted_lowest: 100 + i } }));
+  globalThis.fetch = (async () => new Response(JSON.stringify({ properties }), { status: 200 })) as typeof fetch;
+  const p = new SerpApiHotelProvider("key", 999, 5, null, "2026-10-03");
+  const quotes = await p.hotelMonth(RESORT, "2027-03");
+  assert.equal(p.pulls[0]!.rates.length, 20, "the record keeps all 20");
+  const off = new Set(quotes.filter((q) => !q.onProperty).map((q) => q.hotelName));
+  assert.ok(off.size <= 10, "pricing still picks from the first 10");
+});
+
+test("sampleCheckIn never asks further ahead than Google prices (HOTEL_SEARCH_MAX_DAYS)", () => {
+  // 2026-10-04 + 360 = 2027-09-29: mid-Sept works, October waits.
+  assert.equal(sampleCheckIn("2027-09", "2026-10-04"), "2027-09-14");
+  assert.equal(sampleCheckIn("2027-10", "2026-10-04"), null);
+  // Two weeks later October opens, at the furthest night Google prices.
+  assert.equal(sampleCheckIn("2027-10", "2026-10-18"), "2027-10-13");
+});
+
+test("an empty paid search is still recorded as made", async () => {
+  globalThis.fetch = (async () => new Response(JSON.stringify({ properties: [] }), { status: 200 })) as typeof fetch;
+  const p = new SerpApiHotelProvider("key", 999, 5, null, "2026-10-03");
+  await p.hotelMonth(RESORT, "2027-03");
+  assert.deepEqual(p.searches.map((s) => [s.month, s.priced, s.status]), [["2027-03", 0, "ok"]]);
+});

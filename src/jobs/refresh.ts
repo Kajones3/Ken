@@ -16,7 +16,7 @@ import { getDb, type Db } from "../db.js";
 import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import { SerpApiHotelProvider } from "../providers/serpapi.js";
-import { recordHotelSamples } from "../hotelScoreboard.js";
+import { recordHotelSamples, recordHotelSearches } from "../hotelScoreboard.js";
 import { recordFlightObservations } from "../observations.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
@@ -42,6 +42,7 @@ export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null):
     flightMonth: flights.flightMonth.bind(flights),
     hotelMonth: hotels.hotelMonth.bind(hotels),
     hotelPulls: () => hotels.pulls,
+    hotelSearches: () => hotels.searches,
   };
 }
 
@@ -309,6 +310,10 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // and the rest feed the scorecard and the /admin hotel list. Not ignored on
   // failure any more: losing a paid pull should fail the job loudly.
   await recordHotelSamples(db, provider.hotelPulls?.() ?? [], provider.hotelSource ?? provider.name);
+  // And every paid search itself, empty ones included, so a search that
+  // found nothing is still known to have been made (and isn't re-bought
+  // the next night as "never bought").
+  await recordHotelSearches(db, provider.hotelSearches?.() ?? [], provider.hotelSource ?? provider.name);
 
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);

@@ -763,6 +763,23 @@ insert into schema_marks (name) values ('flight_observations_backfill') on confl
 alter table hotel_samples add column if not exists source text not null default 'serpapi_hotels';
 create index if not exists hotel_samples_pulled on hotel_samples (pulled_at);
 
+-- 2026-10-04: every paid hotel search as MADE, empty and failed ones
+-- included. Append-only like hotel_samples. Without it a search that found
+-- nothing left no trace, so the rotation re-bought it every night (four
+-- October-2027 searches, ~375 days out, nightly).
+create table if not exists hotel_searches (
+  id           bigserial    primary key,
+  resort_id    text         not null,
+  month        char(7)      not null,
+  check_in     date         not null,
+  searched_at  timestamptz  not null default now(),
+  properties   integer      not null default 0,
+  priced       integer      not null default 0,
+  status       text         not null default 'ok',
+  source       text         not null default 'serpapi_hotels'
+);
+create index if not exists hotel_searches_lookup on hotel_searches (resort_id, month, searched_at);
+
 -- On-property rates are generated from the owner's base rates, not returned
 -- by any vendor, but were tagged 'serpapi_hotels' alongside real Google rows.
 -- Label them for what they are, once.

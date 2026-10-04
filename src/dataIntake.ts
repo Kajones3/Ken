@@ -108,18 +108,33 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
     }
 
     // --- Hotels: did every paid hotel search land in the record? ----------
-    const refreshes = await db.query<{ started_at: unknown; finished_at: unknown; note: string; pulls: string }>(
+    // Only runs since the record began (same marker as flights): before it,
+    // hotel_samples didn't exist in production, so those searches were
+    // never going to be "kept" there.
+    const refreshes = await db.query<{ started_at: unknown; finished_at: unknown; note: string; pulls: string; empty: string; failed: string }>(
       `select r.started_at, r.finished_at, r.note,
               (select count(distinct (s.resort_id, s.month, s.pulled_at)) from hotel_samples s
                 where s.pulled_at >= r.started_at
-                  and s.pulled_at <= coalesce(r.finished_at, now()) + interval '1 minute') as pulls
+                  and s.pulled_at <= coalesce(r.finished_at, now()) + interval '1 minute') as pulls,
+              (select count(*) from hotel_searches h
+                where h.status = 'ok' and h.priced = 0 and h.searched_at >= r.started_at
+                  and h.searched_at <= coalesce(r.finished_at, now()) + interval '1 minute') as empty,
+              (select count(*) from hotel_searches h
+                where h.status <> 'ok' and h.searched_at >= r.started_at
+                  and h.searched_at <= coalesce(r.finished_at, now()) + interval '1 minute') as failed
          from fetch_runs r
         where r.job = 'refresh' and r.started_at > now() - ($1 || ' days')::interval
+          and r.started_at >= coalesce((select done_at from schema_marks where name = 'flight_observations_backfill'), '-infinity')
           and r.finished_at is not null`,
       [String(days)],
     );
     const slots = refreshes.rows.reduce((s, r) => s + slotCount(r.note), 0);
     const pulls = refreshes.rows.reduce((s, r) => s + n(r.pulls), 0);
+    const empty = refreshes.rows.reduce((s, r) => s + n(r.empty), 0);
+    const failed = refreshes.rows.reduce((s, r) => s + n(r.failed), 0);
+    // Searches that left nothing and are NOT explained by "came back empty"
+    // or "the search itself failed".
+    const unexplained = Math.max(0, slots - pulls - empty - failed);
     const hDay = await db.query<{ resort_id: string; hotel_name: string }>(
       `select resort_id, hotel_name from hotel_samples where pulled_at > now() - interval '1 day'`,
     );
@@ -131,7 +146,9 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
     lines.push("HOTELS (every Google hotel search is kept, Disney's own hotels included)");
     lines.push(`  Last 24 hours: ${fmt(hDay.rows.length)} hotel rates (${fmt(disney)} of them Disney's own hotels, which now move our on-property prices).`);
     lines.push(`  Paid hotel searches, last ${days} days: ${fmt(slots)} made, ${fmt(pulls)} kept`
-      + (pulls >= slots ? "." : `. ${fmt(slots - pulls)} came back empty or were not kept.`));
+      + (empty ? `, ${fmt(empty)} came back with no prices from Google` : "")
+      + (failed ? `, ${fmt(failed)} failed` : "")
+      + (unexplained ? `, ${fmt(unexplained)} left nothing and aren't explained.` : "."));
     lines.push(`  Kept in total: ${fmt(n(hTotal.rows[0]?.c))} hotel rates across ${fmt(n(hTotal.rows[0]?.hotels))} hotels.`);
     if (slots > 0 && pulls === 0) {
       problems.push({
@@ -140,11 +157,19 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
         why: "Every search is paid for. If none of them are being kept, the hotel scorecard, the /admin hotel list and the Disney price check from Google all go blind. Tell Claude.",
         side: "both", blocking: true,
       });
-    } else if (pulls < slots) {
+    } else if (unexplained > 0) {
       problems.push({
         id: "intake-hotels-short",
-        title: `${fmt(slots - pulls)} of ${fmt(slots)} paid hotel searches left nothing in the record`,
-        why: "A search can honestly come back empty (a sold-out night, a far-future month), but a steady gap means searches are being paid for and thrown away. Worth a look if this repeats.",
+        title: `${fmt(unexplained)} of ${fmt(slots)} paid hotel searches left nothing in the record`,
+        why: "These searches were paid for and nothing about them was kept, not even that they came back empty. Tell Claude: a hotel search is skipping recordHotelSearches().",
+        side: "both", blocking: false,
+      });
+    }
+    if (empty + failed > 0) {
+      problems.push({
+        id: "intake-hotels-empty",
+        title: `${fmt(empty + failed)} of ${fmt(slots)} paid hotel searches came back with no prices`,
+        why: "Each one cost a search. The refresh log names them (\"returned ... none priced\"). Usually the dates are further ahead than Google prices; if the same months repeat, tell Claude to lower HOTEL_SEARCH_MAX_DAYS.",
         side: "both", blocking: false,
       });
     }

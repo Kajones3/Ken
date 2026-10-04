@@ -221,6 +221,19 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
 }
 
 /** Writes one night's off-property pulls, so the next pull has something to be compared with. */
+/** Append every paid hotel search to hotel_searches (append-only). */
+export async function recordHotelSearches(db: Db,
+  searches: { resort: string; month: string; checkIn: string; properties: number; priced: number; status: string }[],
+  source = "serpapi_hotels"): Promise<number> {
+  for (const s of searches) {
+    await db.query(
+      `insert into hotel_searches (resort_id, month, check_in, properties, priced, status, source) values ($1,$2,$3,$4,$5,$6,$7)`,
+      [s.resort, s.month, s.checkIn, s.properties, s.priced, s.status, source],
+    );
+  }
+  return searches.length;
+}
+
 export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[], source = "serpapi_hotels"): Promise<number> {
   let n = 0;
   for (const p of pulls) {
