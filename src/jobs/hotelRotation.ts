@@ -78,6 +78,17 @@ export async function rotateHotelSlots(
       r.last_pull ? new Date(r.last_pull).getTime() : 0,
     ]),
   );
+  // A search that came back EMPTY still counts as made: it waits its turn
+  // like any other instead of being re-bought every night as "never bought".
+  try {
+    const searched = await db.query<{ resort_id: string; month: string; last: Date | null }>(
+      `select resort_id, month, max(searched_at) as last from hotel_searches group by resort_id, month`);
+    for (const r of searched.rows) {
+      const key = `${r.resort_id}|${r.month}`;
+      const t = r.last ? new Date(r.last).getTime() : 0;
+      if (t > (lastPull.get(key) ?? 0)) lastPull.set(key, t);
+    }
+  } catch { /* table not migrated yet: rotation works as before */ }
 
   const candidates: HotelSlot[] = [];
   for (const resortId of resortIds) {

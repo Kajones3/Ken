@@ -249,3 +249,23 @@ test("the one-time backfill of old fares into the record runs once, however ofte
     "the labelled fare is carried over once; the unlabelled placeholder never");
   await db.close();
 });
+
+test("hotel searches that came back empty are reported as empty, not as lost", async () => {
+  const db = await memoryDb();
+  await recordSince(db, "2 hours");
+  await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written, note)
+                  values (gen_random_uuid(), 'refresh', now() - interval '1 hour', now() - interval '50 minutes', 3, 3,
+                          'hotel slots: wdw/2027-03 dlr/2027-03 tdr/2027-10')`);
+  await recordHotelSamples(db, [
+    { resort: "wdw", month: "2027-03", checkIn: "2027-03-14", rates: [{ name: "Motel", nightly: 99 }] },
+    { resort: "dlr", month: "2027-03", checkIn: "2027-03-14", rates: [{ name: "Inn", nightly: 120 }] },
+  ]);
+  await db.query(`update hotel_samples set pulled_at = now() - interval '55 minutes'`);
+  await db.query(`insert into hotel_searches (resort_id, month, check_in, priced, status, searched_at)
+                  values ('tdr','2027-10','2027-10-14',0,'ok', now() - interval '55 minutes')`);
+  const r = await dataIntake(db);
+  assert.equal(r.problems.find((p) => p.id === "intake-hotels-short"), undefined, "nothing is unexplained");
+  assert.ok(r.problems.find((p) => p.id === "intake-hotels-empty"));
+  assert.match(r.lines.join("\n"), /3 made, 2 kept, 1 came back with no prices from Google\./);
+  await db.close();
+});

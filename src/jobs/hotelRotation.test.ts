@@ -154,3 +154,19 @@ test("slotKeys produces exactly what the provider checks against", async () => {
   assert.deepEqual([...slotKeys(slots)].sort(), ["dlr|2027-02", "wdw|2027-02"]);
   await db.close();
 });
+
+test("a search that came back EMPTY waits its turn instead of being re-bought every night (2026-10-04)", async () => {
+  const db = await memoryDb();
+  // Last night: wdw/2027-02 was searched and Google priced nothing.
+  await db.query(`insert into hotel_searches (resort_id, month, check_in, priced, status) values ('wdw','2027-02','2027-02-14',0,'ok')`);
+  const slots = await rotateHotelSlots(db, { months: MONTHS, resortIds: ["wdw"], limit: 2, today: TODAY });
+  assert.deepEqual(slots.map((s) => s.month), ["2027-03", "2027-04"], "the never-searched months go first");
+  await db.close();
+});
+
+test("months further ahead than Google prices never get a paid slot", async () => {
+  const db = await memoryDb();
+  const slots = await rotateHotelSlots(db, { months: ["2027-12", "2028-02"], resortIds: ["wdw"], limit: 5, today: "2027-01-10" });
+  assert.deepEqual(slots.map((s) => s.month), ["2027-12"], "Feb 2028 is past the horizon");
+  await db.close();
+});
