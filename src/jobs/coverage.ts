@@ -224,6 +224,26 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   } catch (e) {
     out.push(`The record could not be read: ${(e as Error).message}`);
   }
+  // The hotel record: per refresh run, paid searches made (from its note)
+  // beside the pulls hotel_samples holds from that run.
+  try {
+    const { slotCount } = await import("../dataIntake.js");
+    const hr = await db.query<{ started_at: unknown; finished_at: unknown; note: string; pulls: string; rates: string }>(
+      `select r.started_at, r.finished_at, r.note,
+              (select count(distinct (s.resort_id, s.month, s.pulled_at)) from hotel_samples s
+                where s.pulled_at >= r.started_at and s.pulled_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as pulls,
+              (select count(*) from hotel_samples s
+                where s.pulled_at >= r.started_at and s.pulled_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as rates
+         from fetch_runs r
+        where r.job = 'refresh' and r.started_at > now() - interval '14 days' and r.finished_at is not null
+        order by r.started_at`);
+    out.push("Hotel searches per refresh run, last 14 days: made / pulls kept (rates kept)");
+    for (const r of hr.rows) out.push(`   ${String(r.started_at).slice(4, 21)}: ${slotCount(r.note)} / ${r.pulls} (${r.rates})`);
+    const first = await db.query<{ first: unknown; n: string }>(`select min(pulled_at) as first, count(*)::text as n from hotel_samples`);
+    out.push(`   (hotel_samples: ${first.rows[0]?.n} rates, first written ${String(first.rows[0]?.first).slice(4, 21)})`);
+  } catch (e) {
+    out.push(`The hotel record could not be read: ${(e as Error).message}`);
+  }
   const bySource = await db.query<{ source: string; n: string }>(
     `select coalesce(source, '(none)') as source, count(*)::text as n from flight_prices
       where fetched_at > now() - interval '21 days' group by 1 order by 2 desc`,
