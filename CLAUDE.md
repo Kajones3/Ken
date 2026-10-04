@@ -166,6 +166,20 @@ email with its dollar figure.
      budget carriers rather than pricing them into the total. Wait for their
      decision.
 
+### 2026-10-04 — Tokyo Vacation Packages, as information only
+
+Owner asked what Tokyo's "Vacation Package Kit" is: Tokyo's bundle (Disney
+hotel + a park ticket per day + ride tickets for chosen attractions + usually
+unlimited soft drinks and a restaurant voucher; the "kit" is the envelope
+collected at the hotel desk the day before check-in). Owner picked "just a Good
+to know line": added to `tdr.goodToKnow` in config.ts. **Not priced**; the
+~$700/person figure is one fan review's, said so in the line. If the owner
+brings a real package price (screenshot), replace the figure.
+
+**Owner's idea for later, not built:** after testing and learning about users,
+a page per resort ("I choose Tokyo") with links, YouTube videos and more than
+the detail card holds. Don't build ahead; wait for the owner.
+
 ### 2026-10-03, last of all — the record, source weights, Google's Disney rates, the daily check
 
 Owner: "Do all of those and make sure we do include Google's rates to keep
