@@ -74,3 +74,29 @@ test("a saved search is read defensively", () => {
   assert.deepEqual([t.adults, t.childAges, t.nights, t.tier, t.food], [12, [5], 1, 2, "mix"]);
   assert.equal(describeTrip({ ...STANDARD_TRIP, childAges: [4] }), "6 nights, 2 adults, 1 child, a Moderate Disney hotel");
 });
+
+test("a kids-only free dining deal promises two adults nothing, and a family the child's plan (2026-10-04)", async () => {
+  const db = await seeded();
+  const d = deal({ effectKind: "kids_free_dining" });
+  await insert(db, d, 0);
+  // The email that went out: 2 adults, told they'd save $1,198. Now: no figure.
+  assert.equal(await dealSaving(db, d, tripFromSaved({ adults: 2, nights: 6, stay: "on", tier: 1 }), { today }), null);
+  const family = await dealSaving(db, d, tripFromSaved({ adults: 2, childAges: [5], nights: 6, stay: "on", tier: 1 }), { today });
+  assert.ok(family && family.saving > 0 && family.saving < 600, `one child's plan, not the party's: ${family?.saving}`);
+  await db.close();
+});
+
+test("a free dining deal already saved with 'Kids' in its name becomes kids-only on the next database update", async () => {
+  const db = await memoryDb();
+  const id = randomUUID(), other = randomUUID();
+  for (const [pid, label] of [[id, "FREE Dining Plan for Kids (Ages 3 to 9) in 2026"], [other, "Free Dining Plan"]]) {
+    await db.query(`insert into promos (id,resort_id,label,effect_kind,effect_value,starts_on,ends_on,historical,active)
+                    values ($1,'wdw',$2,'free_dining',0,'2026-08-03','2026-12-31',false,true)`, [pid, label]);
+  }
+  const { readFileSync } = await import("node:fs");
+  await db.exec(readFileSync(new URL("../db/schema.sql", import.meta.url), "utf8"));
+  const { rows } = await db.query<{ id: string; effect_kind: string }>(`select id, effect_kind from promos`);
+  assert.equal(rows.find((r) => r.id === id)!.effect_kind, "kids_free_dining");
+  assert.equal(rows.find((r) => r.id === other)!.effect_kind, "free_dining", "an everyone deal is left alone");
+  await db.close();
+});

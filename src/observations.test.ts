@@ -150,8 +150,13 @@ test("on-property rates are labelled as ours, not as a vendor's", async () => {
 
 /* ------------------------------ the check ------------------------------ */
 
+/** The test database creates the record "now"; the runs below are older. */
+const recordSince = (db: Awaited<ReturnType<typeof memoryDb>>, ago: string) =>
+  db.query(`update schema_marks set done_at = now() - $1::interval where name = 'flight_observations_backfill'`, [ago]);
+
 test("the daily data check says when paid fares were bought but not kept", async () => {
   const db = await memoryDb();
+  await recordSince(db, "2 hours");
   await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written)
                   values (gen_random_uuid(), 'popular_routes', now() - interval '1 hour', now() - interval '50 minutes', 5, 5)`);
   // Only 3 of the 5 made it into the record, inside the run's window.
@@ -168,6 +173,7 @@ test("the daily data check says when paid fares were bought but not kept", async
 
 test("the daily data check is quiet about paid fares when every one was kept", async () => {
   const db = await memoryDb();
+  await recordSince(db, "2 hours");
   await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written)
                   values (gen_random_uuid(), 'popular_routes', now() - interval '1 hour', now() - interval '50 minutes', 1, 1)`);
   await db.query(`insert into flight_observations (origin,destination,depart_date,trip_length,price_usd,source,observed_at)
@@ -175,6 +181,31 @@ test("the daily data check is quiet about paid fares when every one was kept", a
   const r = await dataIntake(db);
   assert.equal(r.problems.find((p) => p.id === "intake-paid-fares-lost"), undefined);
   assert.match(r.lines.join("\n"), /1 bought, 1 kept \(all of them\)/);
+  await db.close();
+});
+
+test("paid runs from before the record existed are not reported as lost (the 2026-10-04 false alarm)", async () => {
+  const db = await memoryDb();
+  await recordSince(db, "1 day");
+  // Five nights of the old code: 18 written each, none of it in the record.
+  for (let d = 2; d <= 6; d++) {
+    await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written)
+                    values (gen_random_uuid(), 'popular_routes', now() - ($1 || ' days')::interval,
+                            now() - ($1 || ' days')::interval + interval '1 minute', 18, 18)`, [String(d)]);
+  }
+  // Tonight's run on the new code: 18 written, 18 recorded.
+  await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written)
+                  values (gen_random_uuid(), 'popular_routes', now() - interval '1 hour', now() - interval '59 minutes', 18, 18)`);
+  for (let i = 0; i < 18; i++) {
+    await db.query(`insert into flight_observations (origin,destination,depart_date,trip_length,price_usd,source,observed_at)
+                    values ('ATL','MCO', date '2027-03-01' + $1::int, 7, 400, 'serpapi_flights', now() - interval '59 minutes 30 seconds')`, [i]);
+  }
+  const r = await dataIntake(db);
+  assert.equal(r.problems.find((p) => p.id === "intake-paid-fares-lost"), undefined);
+  assert.equal(r.problems.find((p) => p.id === "intake-no-paid-runs"), undefined);
+  const text = r.lines.join("\n");
+  assert.match(text, /18 bought, 18 kept \(all of them\)/);
+  assert.match(text, /Not counted: 5 paid run\(s\), 90 fares, from before the record existed/);
   await db.close();
 });
 

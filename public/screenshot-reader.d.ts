@@ -9,7 +9,7 @@ export function guessResort(text: string): string | null;
 export function findAirports(text: string): string[];
 export function guessName(text: string): string | null;
 export function findPercents(text: string): number[];
-export function guessDealKind(text: string): "room_pct_off" | "room_flat_off" | "room_night_off" | "free_dining" | "ticket_pct_off" | "flat_off_total" | null;
+export function guessDealKind(text: string): "room_pct_off" | "room_flat_off" | "room_night_off" | "free_dining" | "kids_free_dining" | "ticket_pct_off" | "flat_off_total" | null;
 export function cleanLabel(line: string): string;
 export interface ReadOffer {
   label: string | null; kind: ReturnType<typeof guessDealKind>; value: number | null; upTo: boolean;

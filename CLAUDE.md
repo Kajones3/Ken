@@ -75,7 +75,28 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**707 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**711 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
+
+- **The morning email's "paid fares ... not in the record / the writer is
+  skipping recordFlightObservations()" was a FALSE alarm about old runs.**
+  The check counted every paid run of the last 7 days, but only the 10-04 run
+  (18 written, 0 errors, log checked) ran on code that writes the record; the
+  earlier nights predate the table, so their fares could never be "kept"
+  there (that is the known 226 -> 19 loss). Every writer was read and records
+  before it writes. `dataIntake.ts` now counts only runs started after the
+  record's marker (`schema_marks.flight_observations_backfill`) and lists
+  older runs as "Not counted ... known loss". The coverage report gained
+  "The record (flight_observations)" with per-run written / kept.
+- **A "FREE Dining Plan for Kids (Ages 3 to 9)" deal emailed 2 adults "save
+  $1,198"**: `free_dining` zeroed the whole party's plan. New kind
+  **`kids_free_dining`** takes off only child-band plan cost (WDW child band
+  is 3-9, matching the deal); a party with no children gets nothing and the
+  deal is never auto-applied to it, so the email falls back to plain wording.
+  schema.sql relabels saved `free_dining` deals whose name says kids/child;
+  /admin offers both kinds; the screenshot reader picks the kids kind from
+  "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
 
 ### This session in one table (2026-10-03 to 10-04, PRs #109-#112)
 

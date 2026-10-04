@@ -1927,6 +1927,7 @@ function describePromoEffect(kind, value){
   if(kind==="room_flat_off") return usd(value)+" off the room rate";
   if(kind==="room_night_off") return usd(value)+" off per night";
   if(kind==="free_dining") return "Free dining plan";
+  if(kind==="kids_free_dining") return "Free dining plan for children";
   if(kind==="ticket_pct_off") return Math.round(value)+"% off tickets";
   if(kind==="flat_off_total") return usd(value)+" off the total";
   return "";

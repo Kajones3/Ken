@@ -201,6 +201,29 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
       group by job`,
   ).catch(() => ({ rows: [] as { job: string; rows: string; runs: string }[] }));
   for (const r of wrote.rows) out.push(`Paid job ${r.job} wrote ${r.rows} fare(s) in ${r.runs} run(s); ${sum(bought.rows)} still carry the serpapi_flights tag`);
+  // The record itself (flight_observations, append-only since 2026-10-04):
+  // what each paid run wrote beside what the record holds from that run.
+  try {
+    out.push("The record (flight_observations), by source:");
+    const rec = await db.query<{ source: string; n: string; newest: unknown }>(
+      `select source, count(*)::text as n, max(observed_at) as newest from flight_observations group by 1 order by 2 desc`);
+    for (const r of rec.rows) out.push(`   ${r.source}: ${r.n} fares, newest ${String(r.newest).slice(4, 21)}`);
+    const since = await db.query<{ done_at: unknown }>(`select done_at from schema_marks where name = 'flight_observations_backfill'`);
+    out.push(`   (record started ${String(since.rows[0]?.done_at ?? "never").slice(4, 21)})`);
+    const perRun = await db.query<{ job: string; started_at: unknown; rows_written: number; kept: string }>(
+      `select r.job, r.started_at, r.rows_written,
+              (select count(*) from flight_observations o
+                where o.source = 'serpapi_flights' and o.observed_at >= r.started_at
+                  and o.observed_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as kept
+         from fetch_runs r
+        where r.job in ('popular_routes', 'intl_sweep') and r.started_at > now() - interval '14 days'
+          and r.finished_at is not null
+        order by r.started_at`);
+    out.push("Paid runs, last 14 days: written / kept in the record");
+    for (const r of perRun.rows) out.push(`   ${String(r.started_at).slice(4, 21)} ${r.job}: ${r.rows_written} / ${r.kept}`);
+  } catch (e) {
+    out.push(`The record could not be read: ${(e as Error).message}`);
+  }
   const bySource = await db.query<{ source: string; n: string }>(
     `select coalesce(source, '(none)') as source, count(*)::text as n from flight_prices
       where fetched_at > now() - interval '21 days' group by 1 order by 2 desc`,

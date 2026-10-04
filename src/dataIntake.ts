@@ -65,13 +65,31 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
          from fetch_runs r
         where r.job in ('popular_routes', 'intl_sweep')
           and r.started_at > now() - ($1 || ' days')::interval
+          and r.started_at >= coalesce((select done_at from schema_marks where name = 'flight_observations_backfill'), '-infinity')
           and r.finished_at is not null`,
       [String(days), SERPAPI_FLIGHTS],
+    );
+    // Runs from before the record existed (before 2026-10-04's migration)
+    // never wrote to it, so their fares can't be "kept" there. That loss is
+    // the known 2026-10-03 one (226 bought, 19 survived), not a new one, and
+    // counting it here raised a false blocking alarm every morning for a week.
+    const before = await db.query<{ runs: string; written: string }>(
+      `select count(*) as runs, coalesce(sum(r.rows_written), 0) as written
+         from fetch_runs r
+        where r.job in ('popular_routes', 'intl_sweep')
+          and r.started_at > now() - ($1 || ' days')::interval
+          and r.started_at < coalesce((select done_at from schema_marks where name = 'flight_observations_backfill'), '-infinity')
+          and r.finished_at is not null`,
+      [String(days)],
     );
     const bought = runs.rows.reduce((s, r) => s + n(r.rows_written), 0);
     const kept = runs.rows.reduce((s, r) => s + Math.min(n(r.kept), n(r.rows_written)), 0);
     lines.push(`  Paid fares, last ${days} days: ${fmt(bought)} bought, ${fmt(kept)} kept`
       + (bought === kept ? " (all of them)." : `. ${fmt(bought - kept)} MISSING.`));
+    const oldRuns = n(before.rows[0]?.runs);
+    if (oldRuns) {
+      lines.push(`  (Not counted: ${fmt(oldRuns)} paid run(s), ${fmt(n(before.rows[0]?.written))} fares, from before the record existed. Those are the known 2026-10-03 loss, not a new one.)`);
+    }
     if (kept < bought) {
       problems.push({
         id: "intake-paid-fares-lost",
@@ -80,7 +98,7 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
         side: "both", blocking: true,
       });
     }
-    if (!runs.rows.length) {
+    if (!runs.rows.length && !oldRuns) {
       problems.push({
         id: "intake-no-paid-runs",
         title: `The paid flight job hasn't finished a run in ${days} days`,

@@ -35,7 +35,7 @@ import { getDb, type Db } from "./db.js";
 
 interface SeedPromo {
   resortId: string | null; label: string;
-  effectKind: "room_pct_off" | "room_flat_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
+  effectKind: "room_pct_off" | "room_flat_off" | "free_dining" | "kids_free_dining" | "ticket_pct_off" | "flat_off_total";
   effectValue: number; startsOn: string; endsOn: string; historical: boolean; sourceNote: string;
 }
 
