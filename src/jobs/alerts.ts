@@ -65,6 +65,7 @@ function describePromoEffectForEmail(kind: string, value: number): string {
     case "room_flat_off": return `$${Math.round(value)} off the room rate`;
     case "room_night_off": return `$${Math.round(value)} off per night`;
     case "free_dining": return "free dining plan";
+    case "kids_free_dining": return "free dining plan for children";
     case "ticket_pct_off": return `${Math.round(value)}% off tickets`;
     case "flat_off_total": return `$${Math.round(value)} off the total`;
     default: return "";

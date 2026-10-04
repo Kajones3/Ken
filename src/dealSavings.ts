@@ -113,7 +113,7 @@ export async function dealSaving(db: Db, deal: DealForSaving, saved: TripParams 
   const trip: TripParams = {
     ...base,
     nights: deal.minNights && base.nights < deal.minNights ? deal.minNights : base.nights,
-    ...(deal.effectKind === "free_dining" ? { food: "plan" as const, stay: "on" as const } : {}),
+    ...(deal.effectKind === "free_dining" || deal.effectKind === "kids_free_dining" ? { food: "plan" as const, stay: "on" as const } : {}),
   };
   const resorts = deal.resortId ? [deal.resortId]
     : opts.preferResort && RESORT_BY_ID.has(opts.preferResort) ? [opts.preferResort] : RESORTS.map((r) => r.id);

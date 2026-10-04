@@ -209,7 +209,10 @@ export function findPercents(text) {
  *  "$X off" about rooms -> room_flat_off, otherwise flat_off_total. */
 export function guessDealKind(text) {
   const s = text.toLowerCase();
-  if (/free\s+dining|dining\s+plan/.test(s)) return "free_dining";
+  if (/free\s+dining|dining\s+plan/.test(s)) {
+    // "FREE Dining Plan for Kids (Ages 3 to 9)": only the children eat free.
+    return /\b(kids?|child(ren)?)\b|ages?\s+\d+\s*(?:to|-|–)\s*\d+/.test(s) ? "kids_free_dining" : "free_dining";
+  }
   const ticket = /\btickets?\b|park hopper|admission|theme park/.test(s);
   const room = /\brooms?\b|resort hotels?|\bstay\b|\bnights?\b|accommodation/.test(s);
   if (/[$€£¥]\s?\d[\d,]*\s*(?:off\s+)?(?:per|a|each|\/)\s*night/.test(s)) return "room_night_off";
@@ -292,7 +295,7 @@ export function readOffer(text, today = new Date().toISOString().slice(0, 10)) {
   if (label.length > 120) label = label.slice(0, 117).replace(/\s+\S*$/, "") + "…";
   const kind = guessDealKind(text);
   const pcts = findPercents(text), dollars = findDollarsOff(text);
-  const value = kind === "free_dining" ? null
+  const value = kind === "free_dining" || kind === "kids_free_dining" ? null
     : /pct/.test(kind || "") ? (pcts[0] ?? null)
     : kind ? (dollars[0] ?? null) : null;
   const dates = findDates(text, today);

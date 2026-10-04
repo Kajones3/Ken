@@ -122,7 +122,8 @@ export function roomCountOf(params: Pick<TripParams, "hotelRooms">): number {
 }
 
 export type PromoEffectKind =
-  | "room_pct_off" | "room_flat_off" | "room_night_off" | "free_dining" | "ticket_pct_off" | "flat_off_total";
+  | "room_pct_off" | "room_flat_off" | "room_night_off" | "free_dining" | "kids_free_dining"
+  | "ticket_pct_off" | "flat_off_total";
 
 /** A rate or fare the user supplied themselves. */
 export interface ResortOverride {
@@ -958,11 +959,17 @@ export function priceTrip(
   const stayForResort: Stay = ov.excludeHotel ? "none" : params.stay;
   const foodPlan = planFor(resort, params, stayForResort);
   let food = 0;
+  // The children's share of a dining plan, which is all a "free dining for
+  // kids" deal takes off (2026-10-04: a kids-only deal was zeroing the whole
+  // party's plan, two adults included).
+  let kidsPlanFood = 0;
   if (foodPlan) {
     for (const age of ages) {
       const band = bandOf(resort, age);
       if (band === "infant") continue;
-      food += (band === "child" ? foodPlan.child : foodPlan.adult) * params.nights;
+      const cost = (band === "child" ? foodPlan.child : foodPlan.adult) * params.nights;
+      food += cost;
+      if (band === "child") kidsPlanFood += cost;
     }
   } else if (ov.foodPerDayUsd !== undefined) {
     // A party total, so no per-age scaling — see ResortOverride.foodPerDayUsd.
@@ -1037,6 +1044,16 @@ export function priceTrip(
       } else {
         appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "no dining plan on this trip" });
       }
+    } else if (kind === "kids_free_dining") {
+      // Only the children's plan is free; adults still pay for theirs.
+      if (!foodPlan) {
+        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "no dining plan on this trip" });
+      } else if (kidsPlanFood <= 0) {
+        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "no children at child dining-plan ages on this trip" });
+      } else {
+        appliedPromos.push({ source, label, kind, amountUsd: kidsPlanFood, historical });
+        food = Math.max(0, food - kidsPlanFood);
+      }
     } else if (kind === "flat_off_total") {
       const amountUsd = Math.max(0, value);
       flatOffTotal += amountUsd;
@@ -1061,6 +1078,7 @@ export function priceTrip(
         case "room_night_off": return roomBlocked ? 0 : Math.min(rooms, v * params.nights * roomCountOf(params));
         case "ticket_pct_off": return tickets * clampPct(v) / 100;
         case "free_dining": return foodPlan ? food : 0;
+        case "kids_free_dining": return foodPlan ? kidsPlanFood : 0;
         case "flat_off_total": return Math.max(0, v);
         default: return 0;
       }

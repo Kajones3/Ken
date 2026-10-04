@@ -78,6 +78,7 @@ test("a room offer: percent, kind, headline and dates", () => {
 test("ticket, free dining and dollars-off offers", () => {
   assert.equal(guessDealKind("Save 20% on 3-day theme park tickets"), "ticket_pct_off");
   assert.equal(guessDealKind("Free Dining Plan with a room and ticket package"), "free_dining");
+  assert.equal(guessDealKind("FREE Dining Plan for Kids (Ages 3 to 9) in 2026"), "kids_free_dining");
   assert.equal(guessDealKind("Save $300 off your stay of 4 nights or more"), "room_flat_off");
   assert.deepEqual(findDollarsOff("Save $300 off your stay. Rooms from $129."), [300]);
 });

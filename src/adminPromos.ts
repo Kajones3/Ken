@@ -21,7 +21,8 @@ export const DEAL_KINDS: { kind: PromoEffectKind; label: string; unit: "pct" | "
   { kind: "room_night_off", label: "$ off per night (each room)", unit: "usd" },
   { kind: "room_flat_off", label: "$ off the whole room bill", unit: "usd" },
   { kind: "ticket_pct_off", label: "% off park tickets", unit: "pct" },
-  { kind: "free_dining", label: "Free dining plan", unit: "none" },
+  { kind: "free_dining", label: "Free dining plan (everyone)", unit: "none" },
+  { kind: "kids_free_dining", label: "Free dining plan for children only", unit: "none" },
   { kind: "flat_off_total", label: "$ off the whole trip", unit: "usd" },
 ];
 

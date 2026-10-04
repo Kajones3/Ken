@@ -862,6 +862,32 @@ test("promos: free dining only has an effect when a plan actually resolved", () 
   assert.ok(withPlan.price.appliedPromos[0]!.amountUsd > 0);
 });
 
+test("promos: free dining FOR KIDS takes off only the children's plan, never the adults' (2026-10-04)", () => {
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "kids_free_dining", effectValue: 0 })] });
+  const wdw = resortById("wdw");
+  const plan = { ...base, food: "plan" as const, stay: "on" as const };
+
+  // Two adults, no children: the deal is worth nothing, on purpose and on auto.
+  const adults = { ...plan, adults: 2, childAges: [] };
+  const picked = priceTrip(book, wdw, adults, { wdw: { promoId: "p1" } }, START);
+  const none = priceTrip(book, wdw, adults, { wdw: { promoId: "none" } }, START);
+  const auto = priceTrip(book, wdw, adults, {}, START);
+  assert.ok(picked.ok && none.ok && auto.ok);
+  assert.equal(picked.price.total, none.price.total, "adults pay for their plan");
+  assert.match(picked.price.appliedPromos[0]!.skipped ?? "", /no children/);
+  assert.equal(auto.price.appliedPromos.length, 0, "not auto-applied to a party with no children");
+
+  // Two adults and a 5-year-old: only the child's plan comes off.
+  const family = { ...plan, adults: 2, childAges: [5] };
+  const f = priceTrip(book, wdw, family, { wdw: { promoId: "p1" } }, START);
+  const fNone = priceTrip(book, wdw, family, { wdw: { promoId: "none" } }, START);
+  assert.ok(f.ok && fNone.ok);
+  const childPlan = f.price.foodPlan!.child * family.nights;
+  assert.ok(Math.abs(f.price.appliedPromos[0]!.amountUsd - childPlan) < 0.01);
+  assert.ok(Math.abs((fNone.price.food - f.price.food) - childPlan) < 0.01);
+  assert.ok(f.price.food > 0, "the adults' plans are still paid for");
+});
+
 test("promos: a personal discount stacks on top of your own nightly rate", () => {
   const book = fullBook("wdw", "MCO");
   const overrides: Overrides = { wdw: { nightly: 200, personalPromo: { kind: "room_pct_off", value: 15, label: "DVC member" } } };

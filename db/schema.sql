@@ -52,7 +52,7 @@ create table if not exists promos (
   resort_id     text,                 -- null = applies to all resorts
   label         text not null,
   effect_kind   text not null check (effect_kind in
-                  ('room_pct_off','room_flat_off','room_night_off','free_dining','ticket_pct_off','flat_off_total')),
+                  ('room_pct_off','room_flat_off','room_night_off','free_dining','kids_free_dining','ticket_pct_off','flat_off_total')),
   effect_value  numeric(8,3) not null default 0,
   starts_on     date not null,
   ends_on       date not null,
@@ -69,7 +69,13 @@ alter table promos add column if not exists min_nights integer;
 alter table promos add column if not exists conditions text not null default '';
 alter table promos drop constraint if exists promos_effect_kind_check;
 alter table promos add constraint promos_effect_kind_check check (effect_kind in
-  ('room_pct_off','room_flat_off','room_night_off','free_dining','ticket_pct_off','flat_off_total'));
+  ('room_pct_off','room_flat_off','room_night_off','free_dining','kids_free_dining','ticket_pct_off','flat_off_total'));
+-- 2026-10-04: a "FREE Dining Plan for Kids" deal saved as free_dining was
+-- zeroing the whole party's plan (two adults were told they'd save $1,198).
+-- Deals whose name says it's for kids become kids-only. Matching on the name
+-- is safe to repeat: once relabelled, a row no longer matches.
+update promos set effect_kind = 'kids_free_dining'
+ where effect_kind = 'free_dining' and label ~* '\m(kids?|child|children)\M';
 
 -- One row per day, national average only. Free EIA API when EIA_API_KEY is
 -- set, mock (plausible, no account) otherwise — same pattern as everything
