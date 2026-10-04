@@ -407,6 +407,9 @@ export const RESORTS: Resort[] = [
     ],
     goodToKnow: [
       "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — checked at write time, always confirm current requirements before booking.",
+      // Owner's call 2026-10-04: information only, never priced. The price is
+      // one fan review's figure (Wandering in Disney, 2024), not Disney's.
+      "Tokyo Disney Resort also sells Vacation Packages: a Disney hotel, park tickets for each day, ride tickets that skip most of the line for a few chosen attractions, and usually unlimited soft drinks and a restaurant reservation, all as one booking. One fan review put a Fantasy Springs package at about $700 a person; it varies with dates and hotel. Our total prices the hotel and tickets separately, which you can also book. A package is worth a look if Tokyo's newest rides matter to you, since they can be hard to get into otherwise.",
     ],
     closuresUrl: "https://touringplans.com/tokyo-disney/closures",
     closuresLabel: "Unofficial refurbishment tracker (TouringPlans, not Disney)",
