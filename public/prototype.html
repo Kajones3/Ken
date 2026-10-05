@@ -1296,6 +1296,7 @@ let FX_RATES = { USD:{perUsd:1,name:"US dollar"} };  // replaced by /api/meta
 let FX_AS_OF = "";
 let FX_PLACEHOLDER = true;
 let PRICE_LEVELS = { source:"", byResort:{} };     // replaced by /api/meta
+let VACATION_RENTALS = {};                           // replaced by /api/meta: resort id -> { count, median, low, high }
 
 const ON_TIERS  = ["value","moderate","deluxe"];
 const OFF_TIERS = ["budget","mid","upscale"];
@@ -2825,6 +2826,16 @@ async function renderDetail(){
       <small>${x.swapped ? `Not offered at ${r.name}` : "no cached rate for this date"}</small></div>
       <div class="p">—</div></div>`).join("");
   })();
+  /* Vacation rentals (Airbnb-style) Google showed us near this resort, as ONE
+   * line of information (owner, 2026-10-05, "option 1"). Never in the total:
+   * a rental's nightly is often for a whole apartment or house, so it isn't
+   * a room-for-room comparison. Off property only; absent with too few. */
+  const vr = VACATION_RENTALS[r.id];
+  const rentalLine = !noHotel && !stayNow && vr && vr.median
+    ? `<p class="sub" style="margin:10px 0 0">Vacation rentals near ${esc(r.hotelSearchArea || r.city)} typically run about
+        <b>${usd(vr.median)} a night</b> (${usd(vr.low)}–${usd(vr.high)} across ${vr.count} we've seen). Not in this total:
+        a rental's price is often for a whole apartment or house, so it may sleep your whole party.</p>`
+    : "";
   const tierNote = !noHotel && x.hotelTier.swapped
     ? `${r.name} has no ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[+p.tier]].toLowerCase()} option here — priced at ${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]].toLowerCase()} instead.`
     : "";
@@ -3101,6 +3112,7 @@ async function renderDetail(){
           ${hotelRows}${tierNote?`<p class="sub" style="margin:10px 0 0">${tierNote}</p>`:""}
           <p class="sub" style="margin:14px 0 2px; color:var(--ink-2); font-weight:700; letter-spacing:.06em; text-transform:uppercase; font-size:10px">Every category, same ${p.nights} nights</p>
           ${tierCompare}
+          ${rentalLine}
           <a class="book" href="${stayLink.href}" target="_blank" rel="noopener" data-track="${stayNow ? "hotel_disney" : "hotel_kayak"}">${stayLink.label} →</a>
           ${stayLink.alt ? `<p class="sub" style="margin:8px 0 0">Opens a search of hotels in ${esc(area)} for ${fmtDate(x.start)} to ${fmtDate(checkout)}${(x.roomCount||1) > 1 ? ` — set ${x.roomCount} rooms once you're there` : ""}.
             The hotel named above is a sample price from one night, so it may not have a room on your dates.
@@ -5032,6 +5044,7 @@ async function boot(){
   if(meta.priceLevels){
     PRICE_LEVELS = meta.priceLevels;
   }
+  VACATION_RENTALS = meta.vacationRentals || {};
   PASS_PROGRAMS = meta.passPrograms || [];
   HOLIDAY_WINDOWS = meta.holidayWindows || {};
   if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);

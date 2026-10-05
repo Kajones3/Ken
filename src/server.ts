@@ -34,7 +34,7 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
-import { loadHotelList } from "./hotelList.js";
+import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
@@ -678,6 +678,10 @@ const server = createServer(async (req, res) => {
       // Annual pass programs, and the default DVC take-home figure the
       // points box starts on. Sent from here so the catalog has one home
       // and the browser never carries its own copy of a price.
+      // What vacation rentals near each resort typically cost a night, for
+      // one information-only line in the off-property hotel card (owner,
+      // 2026-10-05). Never in a total; absent with fewer than 3 listings.
+      vacationRentals: await rentalLines(db),
       passPrograms: PASS_RESORTS,
       dvcTakeHomePerPoint: dvcDefault,
       // Each resort's suggested ticket length (the owner's number if set)
