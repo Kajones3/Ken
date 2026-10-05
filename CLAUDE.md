@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**723 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**724 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -116,12 +116,15 @@ off-property HOTEL picks on the site.
 - /admin "Hotels we hold": per resort, a summary line (hotels vs rentals:
   count, typical nightly, range) and rentals in their own table, marked
   "guessed from the name" when Google didn't label them.
-- **Open, owner's call:** how (or whether) rentals appear to travelers, e.g.
-  one line per resort "Vacation rentals nearby typically $X/night", or a
-  "Vacation rental" option beside hotel tiers. A rental nightly is often a
-  whole apartment, so it is not comparable room-for-room. Don't build ahead.
-  Earlier decision "No Airbnb/VRBO rates" was about having no data source;
-  Google's results now are one, at no extra searches.
+- **Owner picked "option 1" (2026-10-05): one information-only line** in the
+  off-property hotel card: "Vacation rentals near <area> typically run about
+  $X a night ($low-$high across N we've seen). Not in this total ..."
+  `rentalLines()` (hotelList.ts) = latest rate per rental listing from the
+  last 90 days of `hotel_samples`, per resort, shown only with 3+ listings
+  (`RENTAL_LINE_MIN`); served as `vacationRentals` in /api/meta. Never priced,
+  not on the board or in the PDF. A "Vacation rental" option priced into the
+  total was offered and NOT chosen. Earlier "No Airbnb/VRBO rates" was about
+  having no data source; Google's results are one now, at no extra searches.
 
 ### 2026-10-04, last — "68 of 84 paid hotel searches left nothing"
 

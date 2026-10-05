@@ -284,3 +284,23 @@ test("/admin hotel list sorts rentals into their own group and summarizes both",
   assert.equal(wdw.offHotels.median, 150);
   await db.close();
 });
+
+test("the traveler-facing rental line: typical nightly per resort, only with 3+ listings, never Disney or hotels", async () => {
+  const { rentalLines } = await import("./hotelList.js");
+  const db = await memoryDb();
+  await recordHotelSamples(db, [
+    { resort: "wdw", month: "2027-03", checkIn: "2027-03-10", rates: [
+      { name: "Sunny Pool Home", nightly: 200, kind: "vacation rental" },
+      { name: "Condo near Disney", nightly: 120 },
+      { name: "Lake Villa House", nightly: 160, kind: "vacation rental" },
+      { name: "Hampton Inn", nightly: 150, kind: "hotel" },
+    ] },
+    { resort: "dlr", month: "2027-03", checkIn: "2027-03-10", rates: [
+      { name: "Anaheim Condo", nightly: 180 }, { name: "Family 2BR Suite", nightly: 220 },
+    ] },
+  ]);
+  const lines = await rentalLines(db);
+  assert.deepEqual(lines.wdw, { count: 3, median: 160, low: 120, high: 200 });
+  assert.equal(lines.dlr, undefined, "two listings aren't enough to call typical");
+  await db.close();
+});

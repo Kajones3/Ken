@@ -101,3 +101,38 @@ export async function loadHotelList(db: Db): Promise<ResortHotels[]> {
     };
   });
 }
+
+/** Fewer listings than this and the line stays off: two condos aren't "typical". */
+export const RENTAL_LINE_MIN = 3;
+
+/**
+ * Per resort, what vacation rentals near it typically cost a night, for the
+ * one information-only line in the off-property hotel card (owner,
+ * 2026-10-05, "option 1"). Latest rate per listing from the last 90 days of
+ * Google searches; never priced into a trip. A resort with fewer than
+ * RENTAL_LINE_MIN listings is left out. Never throws: no line is the fallback.
+ */
+export async function rentalLines(db: Db, days = 90): Promise<Record<string, RentalSummary>> {
+  try {
+    const r = await db.query<{ resort_id: string; hotel_name: string; nightly_usd: string; kind: string | null }>(
+      `select distinct on (resort_id, hotel_name) resort_id, hotel_name, nightly_usd, kind
+         from hotel_samples
+        where pulled_at > now() - ($1 || ' days')::interval
+        order by resort_id, hotel_name, pulled_at desc`,
+      [String(days)],
+    );
+    const by = new Map<string, number[]>();
+    for (const row of r.rows) {
+      if (matchDisneyHotel(row.resort_id, row.hotel_name) || !isRental(row.hotel_name, row.kind)) continue;
+      by.set(row.resort_id, [...(by.get(row.resort_id) ?? []), Number(row.nightly_usd)]);
+    }
+    const out: Record<string, RentalSummary> = {};
+    for (const [resort, nightly] of by) {
+      const s = summarize(nightly);
+      if (s.count >= RENTAL_LINE_MIN) out[resort] = s;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
