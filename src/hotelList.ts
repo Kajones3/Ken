@@ -16,6 +16,7 @@ import type { Db } from "./db.js";
 import { RESORTS } from "./config.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
 import { dateStr } from "./book.js";
+import { isRental, rentalBasis, summarize, type RentalSummary } from "./rentals.js";
 
 export interface HeldHotel {
   name: string;
@@ -30,17 +31,25 @@ export interface HeldHotel {
   low: number;
   high: number;
   basis: "record" | "older";
+  /** A vacation rental (Airbnb-style), not a hotel; see rentals.ts. */
+  rental: boolean;
+  /** "google" = Google's own label said so; "name" = our guess from the name. */
+  rentalBy: "google" | "name";
 }
 
-export interface ResortHotels { resort: string; name: string; hotels: HeldHotel[]; searches: number }
+export interface ResortHotels {
+  resort: string; name: string; hotels: HeldHotel[]; searches: number;
+  /** Latest nightly rate per listing, rentals vs off-property hotels. */
+  rentals: RentalSummary; offHotels: RentalSummary;
+}
 
 const toISO = (v: unknown) => (v instanceof Date ? v : new Date(String(v))).toISOString();
 
 export async function loadHotelList(db: Db): Promise<ResortHotels[]> {
   const rec = await db.query<{ resort_id: string; hotel_name: string; nightly_usd: string; check_in: unknown;
-    pulled_at: unknown; seen: string; low: string; high: string }>(
+    pulled_at: unknown; seen: string; low: string; high: string; kind: string | null }>(
     `select distinct on (resort_id, hotel_name)
-            resort_id, hotel_name, nightly_usd, check_in, pulled_at,
+            resort_id, hotel_name, nightly_usd, check_in, pulled_at, kind,
             count(*) over (partition by resort_id, hotel_name) as seen,
             min(nightly_usd) over (partition by resort_id, hotel_name) as low,
             max(nightly_usd) over (partition by resort_id, hotel_name) as high
@@ -70,6 +79,7 @@ export async function loadHotelList(db: Db): Promise<ResortHotels[]> {
       name: r.hotel_name, disney: matchDisneyHotel(r.resort_id, r.hotel_name) !== null,
       nightly: Math.round(Number(r.nightly_usd)), night: dateStr(r.check_in), seenAt: toISO(r.pulled_at),
       searches: Number(r.seen), low: Math.round(Number(r.low)), high: Math.round(Number(r.high)), basis: "record",
+      rental: isRental(r.hotel_name, r.kind), rentalBy: rentalBasis(r.kind),
     });
   }
   for (const r of old.rows) {
@@ -77,12 +87,17 @@ export async function loadHotelList(db: Db): Promise<ResortHotels[]> {
       name: r.hotel_name, disney: matchDisneyHotel(r.resort_id, r.hotel_name) !== null,
       nightly: Math.round(Number(r.med)), night: null, seenAt: toISO(r.at),
       searches: 0, low: Math.round(Number(r.low)), high: Math.round(Number(r.high)), basis: "older",
+      rental: isRental(r.hotel_name), rentalBy: "name",
     });
   }
   const pullCount = new Map(pulls.rows.map((r) => [r.resort_id, Number(r.n)]));
-  return RESORTS.map((res) => ({
-    resort: res.id, name: res.name, searches: pullCount.get(res.id) ?? 0,
-    hotels: [...(byResort.get(res.id)?.values() ?? [])]
-      .sort((a, b) => Number(a.disney) - Number(b.disney) || a.nightly - b.nightly),
-  }));
+  return RESORTS.map((res) => {
+    const hotels = [...(byResort.get(res.id)?.values() ?? [])]
+      .sort((a, b) => Number(a.rental) - Number(b.rental) || Number(a.disney) - Number(b.disney) || a.nightly - b.nightly);
+    return {
+      resort: res.id, name: res.name, searches: pullCount.get(res.id) ?? 0, hotels,
+      rentals: summarize(hotels.filter((h) => h.rental).map((h) => h.nightly)),
+      offHotels: summarize(hotels.filter((h) => !h.rental && !h.disney).map((h) => h.nightly)),
+    };
+  });
 }

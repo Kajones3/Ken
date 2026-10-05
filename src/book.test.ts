@@ -81,3 +81,16 @@ test("an unlabeled flight row (the early placeholder prices) is never read as a 
   assert.equal(book.flight("ATL", "MCO", "2027-03-11", 7)?.price, 312, "a real fare still counts");
   await db.close();
 });
+
+test("a vacation rental already in the hotel cache is never offered as an off-property hotel (2026-10-05)", async () => {
+  const db = await memoryDb();
+  for (const [id, name, nightly] of [["h1", "Hampton Inn Lake Buena Vista", 150], ["r1", "Family 2BR at Meliá Celebration Balcony and Pool", 95]] as const) {
+    await db.query(
+      `insert into hotel_rates (hotel_id,resort_id,hotel_name,descriptor,stay_date,nightly_usd,tier,on_property,source)
+       values ($1,'wdw',$2,'Off property','2027-03-10',$3,'budget',false,'serpapi_hotels')`, [id, name, nightly]);
+  }
+  const book = await loadBook(db, { origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"], from: "2027-03-10", to: "2027-03-10", tripLength: 7 });
+  const names = book.hotelNights("wdw", "2027-03-10").filter((h) => !h.onProperty).map((h) => h.name);
+  assert.deepEqual(names, ["Hampton Inn Lake Buena Vista"]);
+  await db.close();
+});

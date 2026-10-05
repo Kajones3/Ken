@@ -181,3 +181,18 @@ test("an empty paid search is still recorded as made", async () => {
   await p.hotelMonth(RESORT, "2027-03");
   assert.deepEqual(p.searches.map((s) => [s.month, s.priced, s.status]), [["2027-03", 0, "ok"]]);
 });
+
+test("vacation rentals Google returns are recorded with their label but never priced as hotels (2026-10-05)", async () => {
+  globalThis.fetch = (async () => new Response(JSON.stringify({ properties: [
+    { name: "Hampton Inn Lake Buena Vista", type: "hotel", rate_per_night: { extracted_lowest: 150 } },
+    { name: "Sunny Pool Home", type: "vacation rental", rate_per_night: { extracted_lowest: 210 } },
+    { name: "Family 2BR at Meliá Celebration", rate_per_night: { extracted_lowest: 95 } },
+  ] }), { status: 200 })) as typeof fetch;
+  const p = new SerpApiHotelProvider("key", 999, 5, null, "2026-10-03");
+  const quotes = await p.hotelMonth(RESORT, "2027-03");
+  const off = new Set(quotes.filter((q) => !q.onProperty).map((q) => q.hotelName));
+  assert.deepEqual([...off], ["Hampton Inn Lake Buena Vista"]);
+  assert.deepEqual(p.pulls[0]!.rates.map((r) => [r.name, r.kind ?? null]), [
+    ["Hampton Inn Lake Buena Vista", "hotel"], ["Sunny Pool Home", "vacation rental"], ["Family 2BR at Meliá Celebration", null],
+  ]);
+});

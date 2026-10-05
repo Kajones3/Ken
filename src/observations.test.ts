@@ -269,3 +269,18 @@ test("hotel searches that came back empty are reported as empty, not as lost", a
   assert.match(r.lines.join("\n"), /3 made, 2 kept, 1 came back with no prices from Google\./);
   await db.close();
 });
+
+test("/admin hotel list sorts rentals into their own group and summarizes both", async () => {
+  const db = await memoryDb();
+  await recordHotelSamples(db, [{ resort: "wdw", month: "2027-03", checkIn: "2027-03-10", rates: [
+    { name: "Hampton Inn", nightly: 150, kind: "hotel" },
+    { name: "Sunny Pool Home", nightly: 210, kind: "vacation rental" },
+    { name: "Condo near Disney", nightly: 120 },
+  ] }]);
+  const wdw = (await loadHotelList(db)).find((r) => r.resort === "wdw")!;
+  assert.deepEqual(wdw.hotels.map((h) => [h.name, h.rental, h.rentalBy]),
+    [["Hampton Inn", false, "google"], ["Condo near Disney", true, "name"], ["Sunny Pool Home", true, "google"]]);
+  assert.deepEqual(wdw.rentals, { count: 2, median: 165, low: 120, high: 210 });
+  assert.equal(wdw.offHotels.median, 150);
+  await db.close();
+});

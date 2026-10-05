@@ -9,6 +9,7 @@ import { quarterOf, type ISODate } from "./dates.js";
 import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pricing.js";
 import { RESORTS, type Tier } from "./config.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
+import { isRental } from "./rentals.js";
 import {
   computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
   GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, type CountedCheck,
@@ -179,6 +180,8 @@ export async function loadBook(
   };
   for (const r of h.rows) {
     if (!r.on_property && isDisney(r.resort_id, r.hotel_name)) continue;
+    // Vacation rentals cached before 2026-10-05 aren't hotel picks either.
+    if (!r.on_property && isRental(r.hotel_name)) continue;
     const date = dateStr(r.stay_date);
     const key = `${r.resort_id}|${date}`;
     const list = hotels.get(key) ?? [];

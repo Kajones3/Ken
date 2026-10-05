@@ -26,6 +26,7 @@ import { monthBounds, range, addDaysISO, todayISO, type ISODate } from "../dates
 import { hotelSeasonFactor } from "../seasonality.js";
 import { onPropertyQuotesFor } from "../onProperty.js";
 import { matchDisneyHotel } from "../disneyHotels.js";
+import { isRental } from "../rentals.js";
 import type { HotelQuote } from "./types.js";
 
 const BASE = "https://serpapi.com/search.json";
@@ -86,6 +87,8 @@ interface SerpApiProperty {
   extracted_hotel_class?: number;
   rate_per_night?: { extracted_lowest?: number; extracted_before_taxes_fees?: number };
   extracted_price?: number;
+  /** Google's own label: "hotel" or "vacation rental". */
+  type?: string;
 }
 
 /** SerpApi's Starter plan caps throughput at 200/hour — stay well under that. */
@@ -165,7 +168,7 @@ export class SerpApiHotelProvider {
 
   get callsSpent(): number { return this.spent; }
   /** Every off-property pull this run, as Google returned it (see hotelScoreboard.ts). */
-  readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number }[] }[] = [];
+  readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number; kind?: string }[] }[] = [];
   /** Every paid search made, empty or failed ones included (hotel_searches). */
   readonly searches: HotelSearch[] = [];
   get budgetRemaining(): number { return Math.max(0, this.budget - this.spent); }
@@ -269,6 +272,7 @@ export class SerpApiHotelProvider {
           descriptor: "Off property",
           deepLink: p.link,
           anchorNightly: nightly,
+          kind: p.type ?? null,
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
@@ -283,12 +287,14 @@ export class SerpApiHotelProvider {
     const rawAnchors = allPriced.slice(0, 10);
     // The record keeps ALL of them (governing rule: nothing we paid for is
     // thrown away). It used to keep only the first 10 of ~20.
-    this.pulls.push({ resort: resortId, month, checkIn, rates: allPriced.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly })) });
+    this.pulls.push({ resort: resortId, month, checkIn, rates: allPriced.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly, kind: a.kind ?? undefined })) });
     // But Disney's own hotels are not OFF-property picks (owner, 2026-10-03).
     // "Hotels near Walt Disney World" returns Pop Century and the Grand
     // Floridian too, which were being offered as "Off property" with
     // off-property parking added.
-    const offOnly = rawAnchors.filter((a) => !matchDisneyHotel(resortId, a.hotelName));
+    // Vacation rentals aren't hotel picks either (owner, 2026-10-05): they are
+    // kept in the record and summarized as their own group (rentals.ts).
+    const offOnly = rawAnchors.filter((a) => !matchDisneyHotel(resortId, a.hotelName) && !isRental(a.hotelName, a.kind));
     // Tiered by price, not star class — see tiersByPrice()'s doc comment for
     // why: it guarantees budget <= mid <= upscale, which star class did not.
     const anchors = tiersByPrice(offOnly);
