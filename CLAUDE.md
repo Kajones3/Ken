@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**717 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**723 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +97,31 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-05 — vacation rentals are their own group, not hotels
+
+Owner (screenshot of /admin "Hotels we hold"): "some of these are AirBNB type
+things. I don't want to surface these on the site individually ... the
+pricing is relevant, but sort of for its own category of off property."
+Google labels every property `type: "hotel" | "vacation rental"`; we were
+throwing it away, so condos and 2BR apartments were being priced as
+off-property HOTEL picks on the site.
+- `src/rentals.ts`: `isRental(name, googleType)`; Google's label wins; with no
+  label (rows before 10-05, all hotel_rates) a deliberately narrow name guess
+  (bedroom count, condo, apartment, townhome, "|" titles). Tests pin every
+  name in the owner's screenshot.
+- `hotel_samples.kind` stores Google's label (record still keeps everything).
+- Rentals are kept OUT of off-property hotel picks: the provider's tiering,
+  `loadBook()` for cached rows, and the scorecard's pull-to-pull typical.
+- /admin "Hotels we hold": per resort, a summary line (hotels vs rentals:
+  count, typical nightly, range) and rentals in their own table, marked
+  "guessed from the name" when Google didn't label them.
+- **Open, owner's call:** how (or whether) rentals appear to travelers, e.g.
+  one line per resort "Vacation rentals nearby typically $X/night", or a
+  "Vacation rental" option beside hotel tiers. A rental nightly is often a
+  whole apartment, so it is not comparable room-for-room. Don't build ahead.
+  Earlier decision "No Airbnb/VRBO rates" was about having no data source;
+  Google's results now are one, at no extra searches.
 
 ### 2026-10-04, last — "68 of 84 paid hotel searches left nothing"
 

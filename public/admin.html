@@ -358,7 +358,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <p>Every hotel Google has returned for each resort, from the nightly paid searches. <b>Every search is kept</b>,
         with the night it was for: nothing is replaced. Disney's own hotels are listed last and marked; their Google rate
         moves our Disney hotel prices (Rates &amp; settings &rarr; Data sources). &ldquo;Older&rdquo; means a hotel we only
-        hold from before every search was kept (2026-10-03): the rate is the middle of what we were showing for that month.</p>
+        hold from before every search was kept (2026-10-03): the rate is the middle of what we were showing for that month.
+        <b>Vacation rentals</b> (Airbnb-style listings Google mixes in) are listed separately and summarized; they are not used as
+        hotel prices on the site. Google labels each one; older rows are sorted by name and say &ldquo;guessed from the name&rdquo;.</p>
       <div id="hlList"><p class="count">Loading…</p></div>
     </section>
 
@@ -1832,16 +1834,22 @@ function renderHotelScore(h){
 function renderHotelList(list){
   const day = iso => iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
   const total = list.reduce((n, r) => n + r.hotels.length, 0);
+  const rows = hs => `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Name</th><th class="n">Nightly</th><th>For the night of</th>
+    <th class="n">Range seen</th><th class="n">Searches</th><th>Last seen</th></tr></thead><tbody>${hs.map(x =>
+    `<tr><td>${esc(x.name)}${x.disney ? ` <span class="count">(Disney)</span>` : ""}${x.basis === "older" ? ` <span class="count">(older)</span>` : ""}${x.rental && x.rentalBy === "name" ? ` <span class="count">(guessed from the name)</span>` : ""}</td>
+     <td class="n">$${num(x.nightly)}</td><td>${x.night ? esc(day(x.night + "T12:00:00Z")) : "—"}</td>
+     <td class="n">${x.low === x.high ? "$" + num(x.low) : `$${num(x.low)}–$${num(x.high)}`}</td>
+     <td class="n">${x.searches ? num(x.searches) : "—"}</td><td>${esc(day(x.seenAt))}</td></tr>`).join("")}</tbody></table></div>`;
+  const sum = (s, what) => s && s.count ? `${num(s.count)} ${what}, typically <b>$${num(s.median)}</b>/night ($${num(s.low)}–$${num(s.high)})` : `no ${what}`;
   $("#hlList").innerHTML = !total ? `<p class="count">No hotels held yet.</p>` : list.map(r => {
-    const off = r.hotels.filter(x => !x.disney).length, dis = r.hotels.length - off;
+    const hotels = r.hotels.filter(x => !x.rental), rentals = r.hotels.filter(x => x.rental);
+    const off = hotels.filter(x => !x.disney).length, dis = hotels.length - off;
     return `<details${r.hotels.length ? "" : " disabled"}><summary style="cursor:pointer;padding:6px 0"><b>${esc(r.name)}</b>
-      <span class="count">· ${num(off)} off-property${dis ? ` · ${num(dis)} Disney` : ""} · ${num(r.searches)} searches kept</span></summary>
-      ${r.hotels.length ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Hotel</th><th class="n">Nightly</th><th>For the night of</th>
-        <th class="n">Range seen</th><th class="n">Searches</th><th>Last seen</th></tr></thead><tbody>${r.hotels.map(x =>
-        `<tr><td>${esc(x.name)}${x.disney ? ` <span class="count">(Disney)</span>` : ""}${x.basis === "older" ? ` <span class="count">(older)</span>` : ""}</td>
-         <td class="n">$${num(x.nightly)}</td><td>${x.night ? esc(day(x.night + "T12:00:00Z")) : "—"}</td>
-         <td class="n">${x.low === x.high ? "$" + num(x.low) : `$${num(x.low)}–$${num(x.high)}`}</td>
-         <td class="n">${x.searches ? num(x.searches) : "—"}</td><td>${esc(day(x.seenAt))}</td></tr>`).join("")}</tbody></table></div>`
+      <span class="count">· ${num(off)} off-property hotels${dis ? ` · ${num(dis)} Disney` : ""}${rentals.length ? ` · ${num(rentals.length)} vacation rentals` : ""} · ${num(r.searches)} searches kept</span></summary>
+      ${r.hotels.length ? `<p class="count" style="margin:4px 0 8px">Off-property hotels: ${sum(r.offHotels, "hotels")}. Vacation rentals (Airbnb-style): ${sum(r.rentals, "rentals")}.
+        Rentals are kept but never priced as a hotel on the site; a rental's nightly is often for a whole apartment or house.</p>
+        ${hotels.length ? rows(hotels) : ""}
+        ${rentals.length ? `<h4 style="margin:14px 0 4px">Vacation rentals</h4>${rows(rentals)}` : ""}`
         : `<p class="count">None yet.</p>`}</details>`;
   }).join("");
 }

@@ -762,6 +762,9 @@ insert into schema_marks (name) values ('flight_observations_backfill') on confl
 -- source says who returned it.
 alter table hotel_samples add column if not exists source text not null default 'serpapi_hotels';
 create index if not exists hotel_samples_pulled on hotel_samples (pulled_at);
+-- 2026-10-05: Google's own label per property ("hotel" / "vacation rental").
+-- Null on rows kept before we read it; rentals.ts falls back to the name.
+alter table hotel_samples add column if not exists kind text;
 
 -- 2026-10-04: every paid hotel search as MADE, empty and failed ones
 -- included. Append-only like hotel_samples. Without it a search that found

@@ -30,6 +30,7 @@ import { hotelSeasonFactor } from "./seasonality.js";
 import type { ISODate } from "./dates.js";
 
 import { matchDisneyHotel } from "./disneyHotels.js";
+import { isRental } from "./rentals.js";
 export { matchDisneyHotel };
 
 /* ------------------------------- the report ------------------------------ */
@@ -73,7 +74,7 @@ export interface HotelScoreboard {
 }
 
 /** One pull of one resort/month: its night, and the real nightly rates Google returned. */
-export interface Pull { resort: string; month: string; checkIn: ISODate; pulledAt: Date; rates: { name: string; nightly: number }[] }
+export interface Pull { resort: string; month: string; checkIn: ISODate; pulledAt: Date; rates: { name: string; nightly: number; kind?: string | null }[] }
 
 /**
  * Pure: consecutive pulls of the same resort/month, compared. The older
@@ -90,7 +91,7 @@ export function pullPairs(
   const out: PullPair[] = [];
   for (const list of groups.values()) {
     list.sort((a, b) => a.pulledAt.getTime() - b.pulledAt.getTime());
-    const typical = (p: Pull) => median(p.rates.filter((r) => !matchDisneyHotel(p.resort, r.name)).map((r) => r.nightly));
+    const typical = (p: Pull) => median(p.rates.filter((r) => !matchDisneyHotel(p.resort, r.name) && !isRental(r.name, r.kind)).map((r) => r.nightly));
     for (let i = 1; i < list.length; i++) {
       const a = list[i - 1]!, b = list[i]!;
       const ta = typical(a), tb = typical(b);
@@ -172,8 +173,8 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
   disneyRows.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
 
   /* 2. Off-property, pull to pull. */
-  const s = await db.query<{ resort_id: string; month: string; check_in: unknown; pulled_at: unknown; hotel_name: string; nightly_usd: string }>(
-    `select resort_id, month, check_in, pulled_at, hotel_name, nightly_usd from hotel_samples
+  const s = await db.query<{ resort_id: string; month: string; check_in: unknown; pulled_at: unknown; hotel_name: string; nightly_usd: string; kind: string | null }>(
+    `select resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, kind from hotel_samples
       where pulled_at > now() - interval '120 days'`,
   );
   const pullMap = new Map<string, Pull>();
@@ -181,7 +182,7 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
     const at = r.pulled_at instanceof Date ? r.pulled_at : new Date(String(r.pulled_at));
     const key = `${r.resort_id}|${r.month}|${at.toISOString()}`;
     const p = pullMap.get(key) ?? { resort: r.resort_id, month: r.month, checkIn: dateStr(r.check_in), pulledAt: at, rates: [] };
-    p.rates.push({ name: r.hotel_name, nightly: Number(r.nightly_usd) });
+    p.rates.push({ name: r.hotel_name, nightly: Number(r.nightly_usd), kind: r.kind });
     pullMap.set(key, p);
   }
   const pairs = pullPairs([...pullMap.values()]);
@@ -242,8 +243,8 @@ export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[]
     for (const r of p.rates) {
       if (!(r.nightly > 0)) continue;
       await db.query(
-        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, source) values ($1,$2,$3,$4,$5,$6,$7)`,
-        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly, source],
+        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, source, kind) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly, source, r.kind ?? null],
       );
       n++;
     }
