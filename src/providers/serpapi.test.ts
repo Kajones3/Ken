@@ -196,3 +196,13 @@ test("vacation rentals Google returns are recorded with their label but never pr
     ["Hampton Inn Lake Buena Vista", "hotel"], ["Sunny Pool Home", "vacation rental"], ["Family 2BR at Meliá Celebration", null],
   ]);
 });
+
+test("readHotelExtra keeps Google's 'less than usual' note as a usual price, and each site's rate", async () => {
+  const { readHotelExtra } = await import("./serpapi.js");
+  const x = readHotelExtra({ name: "Hampton Inn", deal: "20% less than usual", deal_description: "Great Deal",
+    prices: [{ source: "Booking.com", rate_per_night: { extracted_lowest: 160 } }, { source: "Expedia", rate_per_night: {} }],
+    extracted_hotel_class: 3, overall_rating: 4.4, reviews: 1200 }, 160);
+  assert.deepEqual(x, { lessThanUsualPct: 20, usualNightly: 200, deal: "20% less than usual · Great Deal",
+    prices: [{ source: "Booking.com", nightly: 160 }], hotelClass: 3, rating: 4.4, reviews: 1200 });
+  assert.equal(readHotelExtra({ name: "Plain" }, 100), undefined);
+});

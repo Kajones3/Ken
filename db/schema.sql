@@ -788,6 +788,10 @@ create index if not exists hotel_samples_pulled on hotel_samples (pulled_at);
 -- 2026-10-05: Google's own label per property ("hotel" / "vacation rental").
 -- Null on rows kept before we read it; rentals.ts falls back to the name.
 alter table hotel_samples add column if not exists kind text;
+-- Everything else Google said about the hotel (2026-10-06): its "X% less
+-- than usual" deal note (the only "typical price" Google Hotels gives), each
+-- booking site's rate, star class, rating. See readHotelExtra().
+alter table hotel_samples add column if not exists extra jsonb;
 
 -- 2026-10-04: every paid hotel search as MADE, empty and failed ones
 -- included. Append-only like hotel_samples. Without it a search that found

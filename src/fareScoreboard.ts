@@ -158,6 +158,25 @@ function pickBaseline(list: Baseline[], quarter: number): Baseline | undefined {
   return same ?? [...list].sort((a, b) => b.year - a.year || b.quarter - a.quarter)[0];
 }
 
+/**
+ * Pure: grade misses (ours / real - 1) against the accuracy zone, which
+ * counts a miss the same in either direction. Shared with the hotel
+ * scoreboard, so flights and hotels are graded by one rule.
+ */
+export function scoreZone(errs: number[], zone: number): ZoneScore {
+  const share = (pred: (e: number) => boolean) =>
+    errs.length ? Math.round((errs.filter(pred).length / errs.length) * 100) : null;
+  return {
+    n: errs.length,
+    inZonePct: share((e) => Math.abs(e) <= zone + 1e-9),
+    within5Pct: share((e) => Math.abs(e) <= 0.05 + 1e-9),
+    lowPct: share((e) => e < -zone - 1e-9),
+    highPct: share((e) => e > zone + 1e-9),
+    typicalOffPct: errs.length ? pct1(median(errs.map(Math.abs))) : null,
+    medianPct: errs.length ? pct1(median(errs)) : null,
+  };
+}
+
 /** Pure: score every bought fare against the blind estimate. */
 export function scoreFares(inp: ScoreInputs): Scoreboard {
   const byRoute = new Map<string, Baseline[]>();
@@ -230,19 +249,7 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     };
   };
 
-  const zoneScore = (errs: number[]): ZoneScore => {
-    const share = (pred: (e: number) => boolean) =>
-      errs.length ? Math.round((errs.filter(pred).length / errs.length) * 100) : null;
-    return {
-      n: errs.length,
-      inZonePct: share((e) => Math.abs(e) <= zone + 1e-9),
-      within5Pct: share((e) => Math.abs(e) <= 0.05 + 1e-9),
-      lowPct: share((e) => e < -zone - 1e-9),
-      highPct: share((e) => e > zone + 1e-9),
-      typicalOffPct: errs.length ? pct1(median(errs.map(Math.abs))) : null,
-      medianPct: errs.length ? pct1(median(errs)) : null,
-    };
-  };
+  const zoneScore = (errs: number[]) => scoreZone(errs, zone);
   const method = (pick: (t: Test) => number | undefined): MethodScores => {
     const errs = (ts: Test[]) => ts.flatMap((t) => { const v = pick(t); return v === undefined ? [] : [v / t.fare.price - 1]; });
     const dom = zoneScore(errs(tests.filter((t) => !t.intl)));

@@ -306,8 +306,6 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <ul>
         <li><b>Shown now</b>: now that we've bought our fares, how far off is the number a traveler sees today for
           that route and date? This includes everything the bought fares taught the estimate.</li>
-        <li><b>Blind</b>: what the formula alone says, before any bought fare on that route corrects it. This is what
-          a traveler sees on a route we have never bought, and it is the number the lean setting changes.</li>
         <li><b>Candidate</b>: a second formula being tested. It is graded only on fares it did NOT learn from, and
           travelers never see it until you switch to it below.</li>
       </ul>
@@ -328,7 +326,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <h3>Which lean fits best</h3>
       <p>&ldquo;Lean&rdquo; is set separately for US and international routes in Rates &amp; settings
         (<code>flight.estimateLean</code> and <code>flight.estimateLeanIntl</code>; international follows the US one
-        until you set it): 0 shows the cheap end of a route's usual range, 50 the middle, 100 the dear end. Graded blind. &ldquo;Typically off by&rdquo; is how far a typical
+        until you set it): 0 shows the cheap end of a route's usual range, 50 the middle, 100 the dear end. Graded on the
+        formula before any bought fare corrects the route, because that is the part the lean moves. Only matters while
+        travelers see the live formula; the candidate isn't leaned. &ldquo;Typically off by&rdquo; is how far a typical
         estimate missed; the smallest number in each row is the best fit. <b>Reads high/low</b>: + means our number
         was above the real fare.</p>
       <div id="flLean"></div>
@@ -336,16 +336,15 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <h3>Routes, furthest off first (by what travelers see now)</h3>
       <div id="flRoutes"></div>
       <p class="count" style="margin-top:8px">Honest limits: &ldquo;shown now&rdquo; is partly graded by the same
-        fares it learned from, so it reads a little kinder than a route we've never bought. For US routes the blind
-        high/low reading is partly built in too, because the trend that moves every US estimate is measured from
-        these same fares. The &ldquo;typically off by&rdquo; spread is the trustworthy number. A route with 1 or 2
-        fares is a hint, not a verdict.</p>
+        fares it learned from, so it reads a little kinder than a route we've never bought; the candidate is graded
+        only on fares it did not learn from. A route with 1 or 2 fares is a hint, not a verdict.</p>
       <p class="count" id="flSkipped"></p>
     </section>
 
     <section class="sheet">
       <h2>How close our hotel numbers are</h2>
-      <p>Hotels have no single real price we buy, so this grades them three ways. Same signs as flights:
+      <p>Hotels have no single real price we buy, so this grades them three ways, by the <b>same rule as flights</b>:
+        accurate means within &plusmn;<span class="flZone">10</span>% of the real price, in either direction.
         <b>+</b> means our number was above the real one.</p>
       <div class="tiles" id="htTiles"><p class="count">Loading…</p></div>
 
@@ -353,7 +352,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <p>Our nightly &ldquo;hotels near the resort&rdquo; search also returns Disney's own hotels. Their real rate grades
         the Disney hotel prices we otherwise estimate, and (since 2026-10-03) also <b>moves</b> them, the same way your
         price checks do; the weight is in Rates &amp; settings &rarr; Data sources. Both are before taxes and fees, for the
-        same month, and &ldquo;ours&rdquo; here is before Google's rates and your checks adjust it.</p>
+        same night or month. &ldquo;Shown now&rdquo; is what travelers see, after your checks and Google's rates adjust
+        it, so it is partly graded by the same Google rates.</p>
       <div id="htDisney"></div>
       <div id="htInList"></div>
 
@@ -1812,38 +1812,43 @@ document.addEventListener("click", e => {
 const RESORT_NAME = { wdw: "Walt Disney World", dlr: "Disneyland Resort", dlp: "Disneyland Paris",
   tdr: "Tokyo Disney Resort", shdr: "Shanghai Disney Resort", hkdl: "Hong Kong Disneyland" };
 function renderHotelScore(h){
-  const st = (x, name, sub) => x.n
-    ? tile(name, offBy(x.typicalOffPct), `${num(x.n)} ${x.n === 1 ? sub.replace(/s$/, "") : sub} · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
+  const g = h.graded;
+  const zt = (x, name, sub) => x && x.n
+    ? tile(name, x.inZonePct + "%", `within ±${h.zonePct}% · ${num(x.n)} ${x.n === 1 ? sub.replace(/s$/, "") : sub} · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
     : tile(name, "—", "nothing to grade yet");
-  $("#htTiles").innerHTML = st(h.disney.all, "Disney hotels: typically off by", "hotel-months")
-    + st(h.offProperty.all, "Off-property: typically off by", "re-checks")
-    + st(h.checks.hotels, "Your hotel checks: off by", "checks")
-    + st(h.checks.tickets, "Your ticket checks: off by", "checks");
+  $("#htTiles").innerHTML = zt(g.disney.all, "Disney hotels, what travelers see", "hotel-months")
+    + zt(g.offProperty.all, "Off-property, between searches", "re-checks")
+    + zt(g.hotelChecks.all, "Your hotel checks", "checks")
+    + zt(g.ticketChecks, "Your ticket checks", "checks");
   const resortRows = list => list.length
-    ? `<table class="ctab"><thead><tr><th>Resort</th><th class="n">Graded</th><th class="n">Typically off by</th><th class="n">Reads</th></tr></thead>
-      <tbody>${list.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${num(x.summary.n)}</td><td class="n">${offBy(x.summary.typicalOffPct)}</td>
-        <td class="n">${signed(x.summary.medianPct)}</td></tr>`).join("")}</tbody></table>` : "";
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Resort</th><th class="n">Graded</th><th class="n">Accurate (±${h.zonePct}%)</th>
+        <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off by</th><th class="n">Reads</th></tr></thead>
+      <tbody>${list.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${num(x.score.n)}</td><td class="n"><b>${x.score.inZonePct}%</b></td>
+        <td class="n">${x.score.lowPct}%</td><td class="n">${x.score.highPct}%</td><td class="n">${offBy(x.score.typicalOffPct)}</td>
+        <td class="n">${signed(x.score.medianPct)}</td></tr>`).join("")}</tbody></table></div>` : "";
   $("#htDisney").innerHTML = h.disney.rows.length
-    ? resortRows(h.disney.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Hotel</th><th>Month</th>
-        <th class="n">Google</th><th class="n">Ours</th><th class="n">Reads</th></tr></thead><tbody>${h.disney.rows.slice(0, 25).map(x =>
+    ? resortRows(g.disney.byResort) + `<h4 style="margin:12px 0 4px">Hotels furthest off first (by what travelers see)</h4>
+      <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Hotel</th><th>Month</th>
+        <th class="n">Google</th><th class="n">Shown now</th><th class="n">Off now</th></tr></thead><tbody>${h.disney.rows.slice(0, 25).map(x =>
         `<tr><td>${esc(x.hotel)} <span class="count">${esc(x.googleName)}</span></td><td>${esc(x.month)}</td><td class="n">$${num(x.google)}</td>
-         <td class="n">$${num(x.ours)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>
+         <td class="n">$${num(x.shown)}</td><td class="n"><b>${signed(x.shownPct)}</b></td></tr>`).join("")}</tbody></table></div>
       ${h.disney.rows.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(h.disney.rows.length)}.</p>` : ""}`
     : `<p class="count">No Disney hotels found in Google's results yet.</p>`;
   $("#htInList").innerHTML = h.disney.inOffPropertyList.length
     ? `<p class="count" style="margin-top:10px">Disney hotels Google returned, and that are kept out of the off-property list:
         ${h.disney.inOffPropertyList.map(x => `<b>${esc(x.name)}</b>: ${x.hotels.map(esc).join(", ")}`).join(" · ")}.</p>` : "";
   $("#htPulls").innerHTML = h.offProperty.pairs.length
-    ? resortRows(h.offProperty.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
-        <th>Night</th><th class="n">We showed</th><th class="n">Then real</th><th class="n">Reads</th></tr></thead><tbody>${h.offProperty.pairs.slice(0, 20).map(x =>
+    ? resortRows(g.offProperty.byResort) + `<h4 style="margin:12px 0 4px">Furthest off first</h4>
+      <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
+        <th>Night</th><th class="n">We showed</th><th class="n">Then real</th><th class="n">Off</th></tr></thead><tbody>${h.offProperty.pairs.slice(0, 20).map(x =>
         `<tr><td>${esc(RESORT_NAME[x.resort] || x.resort)}</td><td>${esc(x.month)}</td><td>${esc(x.to)}</td><td class="n">$${num(x.shown)}</td>
-         <td class="n">$${num(x.real)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>`
+         <td class="n">$${num(x.real)}</td><td class="n"><b>${signed(x.pct)}</b></td></tr>`).join("")}</tbody></table></div>`
     : `<p class="count">${h.offProperty.pullsRecorded ? `${num(h.offProperty.pullsRecorded)} searches recorded so far; a month needs two before it can be graded.`
         : "Nothing recorded yet. It starts with the next nightly refresh after this update."}</p>`;
   $("#htChecks").innerHTML = h.checks.rows.length
-    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Checked</th><th>What</th><th class="n">Ours</th><th class="n">You saw</th><th class="n">Reads</th></tr></thead>
+    ? resortRows(g.hotelChecks.byResort) + `<div style="overflow-x:auto;margin-top:10px"><table class="ctab"><thead><tr><th>Checked</th><th>What</th><th class="n">Ours</th><th class="n">You saw</th><th class="n">Off</th></tr></thead>
       <tbody>${h.checks.rows.slice(0, 20).map(x => `<tr><td>${esc(x.checkedOn)}</td><td>${esc(x.category)} · ${esc(RESORT_NAME[x.resort] || x.resort)}${x.item ? " · " + esc(x.item) : ""}</td>
-        <td class="n">$${num(x.ours)}</td><td class="n">$${num(x.real)}</td><td class="n">${signed(x.pct)}</td></tr>`).join("")}</tbody></table></div>`
+        <td class="n">$${num(x.ours)}</td><td class="n">$${num(x.real)}</td><td class="n"><b>${signed(x.pct)}</b></td></tr>`).join("")}</tbody></table></div>`
     : `<p class="count">No hotel or ticket checks with a model price yet.</p>`;
 }
 
@@ -1949,11 +1954,10 @@ async function loadFlights(){
     : "";
   $("#flRoutes").innerHTML = s.routes.length
     ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Route</th><th class="n">Fares</th><th class="n">Real (middle)</th>
-        <th class="n">Shown now</th><th class="n">Off now</th><th class="n">Candidate</th><th class="n">Candidate off</th><th class="n">Blind</th><th class="n">Blind reads</th></tr></thead><tbody>${s.routes.slice(0, 25).map(x =>
+        <th class="n">Shown now</th><th class="n">Off now</th><th class="n">Candidate</th><th class="n">Candidate off</th></tr></thead><tbody>${s.routes.slice(0, 25).map(x =>
         `<tr><td>${esc(x.origin)} → ${esc(x.destination)}</td><td class="n">${num(x.n)}</td><td class="n">$${num(x.realMedian)}</td>
          <td class="n">${x.shownMedian == null ? "—" : "$" + num(x.shownMedian)}</td><td class="n">${s.useCandidate ? signed(x.shownPct) : `<b>${signed(x.shownPct)}</b>`}</td>
-         <td class="n">${x.candMedian == null ? "—" : "$" + num(x.candMedian)}</td><td class="n">${s.useCandidate ? `<b>${signed(x.candPct)}</b>` : signed(x.candPct)}</td>
-         <td class="n">$${num(x.estMedian)}</td><td class="n">${signed(x.medianPct)}</td></tr>`).join("")}</tbody></table></div>
+         <td class="n">${x.candMedian == null ? "—" : "$" + num(x.candMedian)}</td><td class="n">${s.useCandidate ? `<b>${signed(x.candPct)}</b>` : signed(x.candPct)}</td></tr>`).join("")}</tbody></table></div>
       ${s.routes.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(s.routes.length)} routes.</p>` : ""}`
     : "";
   const k = s.skipped;

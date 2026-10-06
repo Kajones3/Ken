@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**738 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**740 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +97,27 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-06, last — hotels graded like flights; Blind columns gone; Google's hotel extras kept
+
+- Owner: "I don't need the Blind and Blind Reads." Removed from the flight
+  routes table and the intro. The lean table stays (it is graded on the
+  formula before route corrections, because that is the part the lean moves).
+- **Hotel scoreboard uses the flight rule** (`scoreZone()` in
+  fareScoreboard.ts, shared): `HotelScoreboard.graded` = Disney hotels by
+  what travelers SEE (raw rate x `loadCheckFactors()`, the price checks +
+  Google evidence, now a shared helper in book.ts), off-property between
+  searches, hotel checks, ticket checks; each with accurate (±zone), within
+  5%, too low, too high, typically off, reads, per resort. Disney rows carry
+  `shown`/`shownPct` and sort by it. One zone setting for both
+  (`flight.zonePct`, relabeled "Flight and hotel estimates").
+- **Google Hotels has no "typical price range"** like Google Flights. Its
+  nearest thing is a per-hotel deal note ("22% less than usual"), which
+  implies the usual price. `readHotelExtra()` (serpapi.ts) keeps that
+  (`lessThanUsualPct`, `usualNightly`), each booking site's rate, star class,
+  rating and review count in new `hotel_samples.extra` (jsonb). Coverage
+  report counts them. **Unverified until a real run**: that SerpApi sends
+  `deal` / `prices` for our searches. Not used in pricing yet.
 
 ### 2026-10-06, later — a candidate formula, graded beside the live one (ideas 1-5)
 
@@ -125,8 +146,11 @@ real middle fare. Don't re-propose an asymmetric "reading low is worse" score.
   in that group x the seed's season shape) x group calibration (median
   real/prior) x day of week (pooled, `n/(n+8)`, 0.85-1.2) x route factor
   (route's own searches in the last 45 days, each blended with Google's
-  typical midpoint scaled to our footing; `n/(n+2)`, 0.67-1.5). Trains on 90
-  days of `flight_observations` (serpapi_flights).
+  typical midpoint scaled to our footing; `n/(n+2)`). Trains on 90
+  days of `flight_observations` (serpapi_flights). **No cap on how far a
+  route can move** (owner: "what if our first guess was WAY too low or too
+  high?"); was 0.67-1.5, now only 0.25-4x as a data-error guard. The
+  shrink alone keeps one odd fare to a third of the way.
 - **2. Google's own read kept.** `readInsights()` in serpapiFlights.ts;
   `FlightQuote.insights`; new append-only **`flight_insights`** (typical
   range, lowest, price level, price history, itinerary count) written inside

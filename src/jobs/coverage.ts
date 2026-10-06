@@ -248,6 +248,13 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const r of hr.rows) out.push(`   ${String(r.started_at).slice(4, 21)}: ${slotCount(r.note)} / ${r.pulls} (${r.rates})`);
     const first = await db.query<{ first: unknown; n: string }>(`select min(pulled_at) as first, count(*)::text as n from hotel_samples`);
     out.push(`   (hotel_samples: ${first.rows[0]?.n} rates, first written ${String(first.rows[0]?.first).slice(4, 21)})`);
+    const ex = await db.query<{ n: string; extra: string; usual: string; sites: string }>(
+      `select count(*)::text as n, count(extra)::text as extra,
+              count(*) filter (where extra ? 'usualNightly')::text as usual,
+              count(*) filter (where extra ? 'prices')::text as sites
+         from hotel_samples where pulled_at > now() - interval '14 days'`).catch(() => ({ rows: [] as { n: string; extra: string; usual: string; sites: string }[] }));
+    const e = ex.rows[0];
+    if (e) out.push(`   last 14 days: ${e.n} rates; ${e.extra} with Google's extra details, ${e.usual} with a "less than usual" price, ${e.sites} with per-site prices`);
   } catch (e) {
     out.push(`The hotel record could not be read: ${(e as Error).message}`);
   }
