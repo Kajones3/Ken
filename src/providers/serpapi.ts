@@ -89,6 +89,56 @@ interface SerpApiProperty {
   extracted_price?: number;
   /** Google's own label: "hotel" or "vacation rental". */
   type?: string;
+  /** e.g. "22% less than usual" — Google's only read of a hotel's normal price. */
+  deal?: string;
+  deal_description?: string;
+  prices?: { source?: string; rate_per_night?: { extracted_lowest?: number; extracted_before_taxes_fees?: number } }[];
+  overall_rating?: number;
+  reviews?: number;
+}
+
+/** What else Google said about a hotel, kept in the record (hotel_samples.extra). */
+export interface HotelExtra {
+  /** "22% less than usual" -> 22. Only when Google flags a deal. */
+  lessThanUsualPct?: number;
+  /** The nightly Google implies is usual: nightly / (1 - pct). */
+  usualNightly?: number;
+  deal?: string;
+  /** Each booking site's nightly rate. */
+  prices?: { source: string; nightly: number }[];
+  hotelClass?: number;
+  rating?: number;
+  reviews?: number;
+}
+
+/**
+ * Google Hotels has no "typical price range" like Google Flights. The nearest
+ * thing is a per-hotel note on deals ("22% less than usual"), which implies
+ * the usual price. Pure; unknown shapes are dropped, not guessed.
+ */
+export function readHotelExtra(p: SerpApiProperty, nightly: number): HotelExtra | undefined {
+  const pos = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined);
+  const out: HotelExtra = {};
+  const m = typeof p.deal === "string" ? /(\d+(?:\.\d+)?)\s*%\s*less than usual/i.exec(p.deal) : null;
+  if (m) {
+    const pct = Number(m[1]);
+    if (pct > 0 && pct < 90) {
+      out.lessThanUsualPct = pct;
+      out.usualNightly = Math.round((nightly / (1 - pct / 100)) * 100) / 100;
+    }
+  }
+  if (typeof p.deal === "string" || typeof p.deal_description === "string") {
+    out.deal = [p.deal, p.deal_description].filter((x) => typeof x === "string" && x).join(" · ");
+  }
+  const prices = (Array.isArray(p.prices) ? p.prices : []).flatMap((x) => {
+    const n = pos(x?.rate_per_night?.extracted_before_taxes_fees) ?? pos(x?.rate_per_night?.extracted_lowest);
+    return n && typeof x.source === "string" ? [{ source: x.source.slice(0, 80), nightly: n }] : [];
+  });
+  if (prices.length) out.prices = prices;
+  if (pos(p.extracted_hotel_class)) out.hotelClass = p.extracted_hotel_class;
+  if (pos(p.overall_rating)) out.rating = p.overall_rating;
+  if (pos(p.reviews)) out.reviews = p.reviews;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** SerpApi's Starter plan caps throughput at 200/hour — stay well under that. */
@@ -273,6 +323,7 @@ export class SerpApiHotelProvider {
           deepLink: p.link,
           anchorNightly: nightly,
           kind: p.type ?? null,
+          extra: readHotelExtra(p, nightly),
         };
       })
       .filter((a): a is NonNullable<typeof a> => a !== null);
@@ -287,7 +338,7 @@ export class SerpApiHotelProvider {
     const rawAnchors = allPriced.slice(0, 10);
     // The record keeps ALL of them (governing rule: nothing we paid for is
     // thrown away). It used to keep only the first 10 of ~20.
-    this.pulls.push({ resort: resortId, month, checkIn, rates: allPriced.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly, kind: a.kind ?? undefined })) });
+    this.pulls.push({ resort: resortId, month, checkIn, rates: allPriced.map((a) => ({ name: a.hotelName, nightly: a.anchorNightly, kind: a.kind ?? undefined, extra: a.extra })) });
     // But Disney's own hotels are not OFF-property picks (owner, 2026-10-03).
     // "Hotels near Walt Disney World" returns Pop Century and the Grand
     // Floridian too, which were being offered as "Off property" with

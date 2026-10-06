@@ -25,7 +25,10 @@
  */
 import type { Db } from "./db.js";
 import { RESORTS, RESORT_BY_ID } from "./config.js";
-import { dateStr } from "./book.js";
+import { dateStr, loadCheckFactors } from "./book.js";
+import { settingsMap } from "./settings.js";
+import { scoreZone, type ZoneScore } from "./fareScoreboard.js";
+import { ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { hotelSeasonFactor } from "./seasonality.js";
 import type { ISODate } from "./dates.js";
 
@@ -56,14 +59,24 @@ export function summarize(errs: number[]): Summary {
 
 export interface DisneyMatchRow {
   resort: string; hotelId: string; hotel: string; googleName: string; month: string;
+  /** ours = our raw rate, before price checks and Google's evidence; pct its miss. */
   google: number; ours: number; pct: number;
+  /** What travelers see (after price checks and Google's evidence), and its miss. */
+  shown: number; shownPct: number;
 }
 export interface PullPair {
   resort: string; month: string; from: ISODate; to: ISODate; shown: number; real: number; pct: number;
 }
 export interface CheckRow { resort: string; category: string; item: string; checkedOn: string; ours: number; real: number; pct: number }
 
+/** One graded group, by the same accuracy rule as flights (either direction). */
+export interface Graded { all: ZoneScore; byResort: { resort: string; name: string; score: ZoneScore }[] }
+
 export interface HotelScoreboard {
+  zonePct: number;
+  /** The same rows graded by the owner's zone (2026-10-06): what travelers
+   *  see for Disney hotels, off-property between searches, and price checks. */
+  graded: { disney: Graded; offProperty: Graded; hotelChecks: Graded; ticketChecks: ZoneScore };
   disney: { all: Summary; byResort: { resort: string; name: string; summary: Summary }[]; rows: DisneyMatchRow[];
     /** Disney hotels Google returned, per resort. Kept out of the
      *  off-property list since 2026-10-03 (searches skip them, and loadBook
@@ -74,7 +87,8 @@ export interface HotelScoreboard {
 }
 
 /** One pull of one resort/month: its night, and the real nightly rates Google returned. */
-export interface Pull { resort: string; month: string; checkIn: ISODate; pulledAt: Date; rates: { name: string; nightly: number; kind?: string | null }[] }
+export interface Pull { resort: string; month: string; checkIn: ISODate; pulledAt: Date;
+  rates: { name: string; nightly: number; kind?: string | null; extra?: unknown }[] }
 
 /**
  * Pure: consecutive pulls of the same resort/month, compared. The older
@@ -109,6 +123,12 @@ const byResort = <T extends { resort: string }>(rows: T[], err: (r: T) => number
     .filter((x) => x.summary.n > 0);
 
 export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
+  const settings = await settingsMap(db);
+  const zone = (settings.get(ZONE_PCT_KEY) ?? DEFAULT_ZONE_PCT) / 100;
+  // The factors travelers' Disney hotel prices are moved by (price checks +
+  // Google's rates), so "shown" is the number on the site.
+  const factors = await loadCheckFactors(db, settings);
+  const shownOf = (hotelId: string, ours: number) => ours * (factors.get(`hotel|${hotelId}`)?.factor ?? 1);
   /* 1. Disney hotels in Google's results, against our own rate for the same hotel and month. */
   const vend = await db.query<{ resort_id: string; hotel_name: string; m: string; med: string }>(
     `select resort_id, hotel_name, to_char(stay_date, 'YYYY-MM') as m,
@@ -134,8 +154,9 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
     const o = ourMed.get(`${hit.id}|${r.m}`);
     const g = Number(r.med);
     if (!o || !(g > 0)) continue;
+    const sh = shownOf(hit.id, o);
     disneyRows.push({ resort: r.resort_id, hotelId: hit.id, hotel: hit.name, googleName: r.hotel_name, month: r.m,
-      google: Math.round(g), ours: Math.round(o), pct: pct1(o / g - 1)! });
+      google: Math.round(g), ours: Math.round(o), pct: pct1(o / g - 1)!, shown: Math.round(sh), shownPct: pct1(sh / g - 1)! });
   }
   // From 2026-10-03 new searches no longer write Disney hotels into
   // hotel_rates (they are kept out of the off-property list), so their rates
@@ -166,11 +187,14 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
       if (!o || !(x.nightly > 0)) continue;
       const i = disneyRows.findIndex((d) => `${d.hotelId}|${d.month}` === key);
       if (i >= 0) disneyRows.splice(i, 1);
+      const sh = shownOf(x.id, o);
       disneyRows.push({ resort: x.resort, hotelId: x.id, hotel: x.hotel, googleName: x.name, month: key.split("|")[1]!,
-        google: Math.round(x.nightly), ours: Math.round(o), pct: pct1(o / x.nightly - 1)! });
+        google: Math.round(x.nightly), ours: Math.round(o), pct: pct1(o / x.nightly - 1)!,
+        shown: Math.round(sh), shownPct: pct1(sh / x.nightly - 1)! });
     }
   }
-  disneyRows.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
+  // Furthest off by what travelers see.
+  disneyRows.sort((a, b) => Math.abs(b.shownPct) - Math.abs(a.shownPct));
 
   /* 2. Off-property, pull to pull. */
   const s = await db.query<{ resort_id: string; month: string; check_in: unknown; pulled_at: unknown; hotel_name: string; nightly_usd: string; kind: string | null }>(
@@ -199,7 +223,19 @@ export async function loadHotelScoreboard(db: Db): Promise<HotelScoreboard> {
     .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct));
   const hotelChecks = checkRows.filter((r) => r.category === "hotel");
 
+  const graded = <T extends { resort: string }>(rows: T[], err: (r: T) => number): Graded => ({
+    all: scoreZone(rows.map(err), zone),
+    byResort: RESORTS.map((r) => ({ resort: r.id, name: r.name, score: scoreZone(rows.filter((x) => x.resort === r.id).map(err), zone) }))
+      .filter((x) => x.score.n > 0),
+  });
   return {
+    zonePct: Math.round(zone * 100),
+    graded: {
+      disney: graded(disneyRows, (r) => r.shownPct / 100),
+      offProperty: graded(pairs, (p) => p.pct / 100),
+      hotelChecks: graded(hotelChecks, (r) => r.pct / 100),
+      ticketChecks: scoreZone(checkRows.filter((r) => r.category === "ticket").map((r) => r.pct / 100), zone),
+    },
     disney: {
       all: summarize(disneyRows.map((r) => r.pct / 100)),
       byResort: byResort(disneyRows, (r) => r.pct / 100),
@@ -243,8 +279,9 @@ export async function recordHotelSamples(db: Db, pulls: Omit<Pull, "pulledAt">[]
     for (const r of p.rates) {
       if (!(r.nightly > 0)) continue;
       await db.query(
-        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, source, kind) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly, source, r.kind ?? null],
+        `insert into hotel_samples (resort_id, month, check_in, pulled_at, hotel_name, nightly_usd, source, kind, extra) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [p.resort, p.month, p.checkIn, at, r.name.slice(0, 200), r.nightly, source, r.kind ?? null,
+         r.extra ? JSON.stringify(r.extra) : null],
       );
       n++;
     }

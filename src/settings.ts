@@ -144,14 +144,14 @@ export const SETTINGS: SettingDef[] = [
   },
   {
     key: ZONE_PCT_KEY,
-    label: "Flight estimates — how close counts as accurate (±%)",
+    label: "Flight and hotel estimates — how close counts as accurate (±%)",
     group: "Flight estimates",
     kind: "percent",
     default: DEFAULT_ZONE_PCT,
     min: 2,
     max: 30,
-    help: "The scoreboard counts an estimate as accurate when it lands within this many percent of the real "
-      + "fare, in EITHER direction: reading $100 low is as wrong as reading $100 high. Only changes how the "
+    help: "The flight and hotel scoreboards count an estimate as accurate when it lands within this many percent of the real "
+      + "price, in EITHER direction: reading $100 low is as wrong as reading $100 high. Only changes how the "
       + "scoreboard grades; no price moves.",
   },
   {

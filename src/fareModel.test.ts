@@ -27,16 +27,19 @@ test("an unbought US route is its BTS median moved by what bought fares measured
   assert.equal(m.predict("RDU", "MCO", "2027-03-10")!.parts.route, 1);
 });
 
-test("one odd fare moves its route only partway, and many can't move it past 1.5x", () => {
+test("one odd fare moves its route only partway; more searches take it as far as the evidence says", () => {
   const base = US.map((o) => bts(o, "MCO", 300));
   const one = fitFareModel(inputs([...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600)], [...base, bts("RDU", "MCO", 300)]));
   const r = one.predict("RDU", "MCO", "2027-03-10")!;
   // One search saying 2x, shrunk by 1/(1+2): about 1.26x, nowhere near 2x.
   assert.ok(r.parts.route > 1.2 && r.parts.route < 1.3, `route ${r.parts.route}`);
   const many = fitFareModel(inputs(
-    [...US.map((o) => fare(o, "MCO", 300)), ...[1, 2, 3, 4, 5, 6].map((i) => fare("RDU", "MCO", 900, { departDate: `2027-03-1${i}` }))],
+    [...US.map((o) => fare(o, "MCO", 300)), ...[1, 2, 3, 4, 5, 6].map((i) => fare("RDU", "MCO", 900, { observedAt: daysAgo(i) }))],
     [...base, bts("RDU", "MCO", 300)]));
-  assert.equal(many.predict("RDU", "MCO", "2027-03-10")!.parts.route, 1.5);
+  // Six searches saying 3x: n/(n+2) = 3/4 of the way (in proportion), about 2.28x.
+  // No cap: if the first guess was far off, enough evidence moves it far.
+  const r6 = many.predict("RDU", "MCO", "2027-03-10")!.parts.route;
+  assert.ok(Math.abs(r6 - 3 ** 0.75) < 0.01, `route ${r6}`);
 });
 
 test("route evidence older than 45 days no longer counts for that route", () => {

@@ -73,5 +73,21 @@ test("the scorecard reads Disney hotels from Google's list, pulls, and price che
   assert.equal(b.offProperty.pairs[0]!.pct, -25);
   assert.equal(b.checks.hotels.medianPct, -25);
   assert.equal(b.checks.tickets.typicalOffPct, 0);
+  // The same rows graded by the shared accuracy rule (±10%, either direction).
+  assert.equal(b.zonePct, 10);
+  assert.equal(b.graded.disney.all.n, 1);
+  assert.equal(b.graded.disney.all.medianPct, b.disney.rows[0]!.shownPct);
+  assert.deepEqual([b.graded.offProperty.all.lowPct, b.graded.offProperty.all.inZonePct], [100, 0]);
+  assert.deepEqual([b.graded.hotelChecks.byResort[0]!.resort, b.graded.hotelChecks.byResort[0]!.score.lowPct], ["tdr", 100]);
+  assert.equal(b.graded.ticketChecks.within5Pct, 100);
+  await d.close();
+});
+
+test("the hotel record keeps what else Google said about each hotel", async () => {
+  const d = await memoryDb();
+  await recordHotelSamples(d, [{ resort: "wdw", month: "2027-03", checkIn: "2027-03-14",
+    rates: [{ name: "Hampton Inn", nightly: 160, extra: { lessThanUsualPct: 20, usualNightly: 200 } }, { name: "Plain Inn", nightly: 120 }] }]);
+  const r = await d.query<{ hotel_name: string; extra: unknown }>(`select hotel_name, extra from hotel_samples order by hotel_name`);
+  assert.deepEqual(r.rows.map((x) => [x.hotel_name, x.extra]), [["Hampton Inn", { lessThanUsualPct: 20, usualNightly: 200 }], ["Plain Inn", null]]);
   await d.close();
 });

@@ -101,6 +101,25 @@ function tsOf(v: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * The owner's price checks and Google's Disney hotel rates, turned into the
+ * factors that nudge our own estimates (keys like `hotel|<id>`,
+ * `ticket|<resort>`, `flight|<origin>|<resort>`). Shared by loadBook and the
+ * hotel scoreboard, so the scoreboard grades the number travelers see.
+ */
+export async function loadCheckFactors(db: Db, settings: Map<string, number>): Promise<Map<string, CheckFactor>> {
+  let evidence: CountedCheck[] = [];
+  if ((settings.get(CHECKS_USE_KEY) ?? 1) >= 1) evidence = await countedChecks(db);
+  const gw = settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT;
+  if (gw > 0) evidence = evidence.concat(asEvidence(await cachedGoogleDisneyRates(db), gw));
+  return evidence.length
+    ? computeFactors(evidence, {
+        priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+        hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? HOTEL_BASE.get(id),
+      })
+    : new Map<string, CheckFactor>();
+}
+
 export async function loadBook(
   db: Db, req: BookRequest,
   /** applyChecks: false gives the model as it stands WITHOUT the owner's
@@ -407,17 +426,8 @@ export async function loadBook(
   // disneyEvidence.ts), weighted by the owner's `sources.hotel.googleDisney`.
   // `applyChecks: false` leaves out both, so a new check or a scorecard is
   // always measured against our raw model, never against itself.
-  let evidence: CountedCheck[] = [];
-  if (opts.applyChecks !== false) {
-    if ((settings.get(CHECKS_USE_KEY) ?? 1) >= 1) evidence = await countedChecks(db);
-    const gw = settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT;
-    if (gw > 0) evidence = evidence.concat(asEvidence(await cachedGoogleDisneyRates(db), gw));
-  }
-  const factors = evidence.length
-    ? computeFactors(evidence, {
-        priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
-        hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? HOTEL_BASE.get(id),
-      })
+  const factors = opts.applyChecks !== false
+    ? await loadCheckFactors(db, settings)
     : new Map<string, CheckFactor>();
   if (factors.size) {
     const r2 = (n: number) => Math.round(n * 100) / 100;

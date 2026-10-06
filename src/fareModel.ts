@@ -23,8 +23,11 @@
  *    a weekday has many fares, and kept within 0.85-1.2.
  *  - Route factor: this route's own searches in the last 45 days, each one
  *    counted with Google's "typical price" from the same search (idea 2) as
- *    a second opinion. Shrunk toward 1 (n / (n + 2)) and kept within
- *    0.67-1.5, so a route with one odd fare moves only partway.
+ *    a second opinion. Shrunk toward 1 (n / (n + 2)), so one odd fare moves a
+ *    route a third of the way and more searches move it further, with NO cap
+ *    on how far evidence can take it (owner, 2026-10-06: "what if our first
+ *    guess was WAY too low or too high?"). Only a factor beyond 0.25-4x is
+ *    held back, as a data error (a wrong currency, a one-way fare).
  *
  * Pure: no I/O. The caller loads inputs (loadModelInputs in fareModelDb.ts).
  */
@@ -41,8 +44,9 @@ export const DEFAULT_ZONE_PCT = 10;
 export const ROUTE_EVIDENCE_DAYS = 45;
 /** Route shrink: n / (n + K). Two searches = halfway to what they say. */
 export const ROUTE_SHRINK_K = 2;
-export const ROUTE_FACTOR_MIN = 0.67;
-export const ROUTE_FACTOR_MAX = 1.5;
+/** Data-error guard only, not a limit on how wrong the first guess may be. */
+export const ROUTE_FACTOR_MIN = 0.25;
+export const ROUTE_FACTOR_MAX = 4;
 const DOW_SHRINK_K = 8;
 const DOW_MIN = 0.85, DOW_MAX = 1.2;
 
