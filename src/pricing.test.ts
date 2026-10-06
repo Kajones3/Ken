@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
-import { bandOf, cheapestIn, parkDaysFor, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, foodRate, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
+import { bandOf, cheapestIn, parkDaysFor, ticketMultiDay, hopperPerTicket, poolFor, priceTrip, resortById, leanedFare, foodRate, DEFAULT_ESTIMATE_LEAN, ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, type Overrides, type TripParams } from "./pricing.js";
 import type { HotelNight, PromoRow } from "./pricing.js";
 import { newestMileageRateYear, MILEAGE_RATE_CARRY_FORWARD_YEARS, type FoodStyle } from "./config.js";
 
@@ -1173,6 +1173,23 @@ test("the fare on the card and the fare in the total are the same number", () =>
     assert.equal(r.price.flightPick?.price, r.price.perSeatFare,
       `lean ${lean}: card says ${r.price.flightPick?.price}, total priced ${r.price.perSeatFare}`);
   }
+});
+
+test("international routes use their own lean, and follow the US one until it is set", () => {
+  const estimate = { low: 500, med: 650, high: 800, basisQuarter: "2025Q2" };
+  const fare = (id: string, iata: string, settings: Record<string, number>) => {
+    const b = {
+      ...fullBook(id, iata, { days: 6 }), flight: () => undefined, flightEstimate: () => estimate,
+      setting: (key: string) => settings[key],
+    };
+    const r = priceTrip(b, resortById(id), base, {}, START);
+    assert.ok(r.ok);
+    return r.ok ? r.price.perSeatFare : NaN;
+  };
+  const both = { [ESTIMATE_LEAN_KEY]: 50, [INTL_ESTIMATE_LEAN_KEY]: 0 };
+  assert.equal(fare("wdw", "MCO", both), 650);
+  assert.equal(fare("tdr", "NRT", both), 500);
+  assert.equal(fare("tdr", "NRT", { [ESTIMATE_LEAN_KEY]: 50 }), 650);
 });
 
 /**
