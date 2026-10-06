@@ -35,7 +35,9 @@ export interface Provider {
   hotelMonth(resortId: string, month: string): Promise<HotelQuote[]>;
   /** Off-property pulls made so far this run, each with its own night and
    *  the real rates returned — kept by the hotel scorecard (hotel_samples). */
-  hotelPulls?(): { resort: string; month: string; checkIn: string; rates: { name: string; nightly: number; kind?: string }[] }[];
+  hotelPulls?(): { resort: string; month: string; checkIn: string; rates: { name: string; nightly: number; kind?: string; extra?: unknown }[] }[];
+  /** Google's whole answers, for rawResponses.ts. */
+  readonly raw?: import("../rawResponses.js").RawResponse[];
   /** Every paid hotel search made this run, empty ones included. */
   hotelSearches?(): { resort: string; month: string; checkIn: string; properties: number; priced: number; status: string }[];
 }

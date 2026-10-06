@@ -30,6 +30,9 @@ test("off-property stops calling once the budget is spent", async () => {
   await p.hotelMonth(RESORT, "2027-05");
   assert.equal(calls, 2, "the third month must not reach the provider");
   assert.equal(p.budgetRemaining, 0);
+  // Both paid answers are kept whole for the record (rawResponses.ts), key removed.
+  assert.deepEqual(p.raw.map((r) => [r.kind, r.request.check_in_date?.slice(0, 7), "api_key" in r.request]),
+    [["google_hotels", "2027-03", false], ["google_hotels", "2027-04", false]]);
 });
 
 test("on-property rates still come back after the budget is spent", async () => {

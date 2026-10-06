@@ -17,6 +17,7 @@ import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import { SerpApiHotelProvider } from "../providers/serpapi.js";
 import { recordHotelSamples, recordHotelSearches } from "../hotelScoreboard.js";
+import { flushRaw } from "../rawResponses.js";
 import { recordFlightObservations } from "../observations.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
@@ -43,6 +44,7 @@ export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null):
     hotelMonth: hotels.hotelMonth.bind(hotels),
     hotelPulls: () => hotels.pulls,
     hotelSearches: () => hotels.searches,
+    raw: hotels.raw,
   };
 }
 
@@ -314,6 +316,8 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // found nothing is still known to have been made (and isn't re-bought
   // the next night as "never bought").
   await recordHotelSearches(db, provider.hotelSearches?.() ?? [], provider.hotelSource ?? provider.name);
+  // And Google's whole answers (owner: "Don't drop anything"), errors included.
+  await flushRaw(db, provider);
 
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);

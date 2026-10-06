@@ -30,6 +30,7 @@ import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth, plannableMonths } from "../config.js";
 import { loadScoreboard, type RouteScore } from "../fareScoreboard.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
+import { flushRaw } from "../rawResponses.js";
 
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
@@ -224,6 +225,9 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
           } catch (e) {
             errors++;
             console.error(`popular ${route.origin}->${route.destination} ${date}:`, (e as Error).message);
+          } finally {
+            // Google's whole answer, kept after every search, misses and errors included.
+            await flushRaw(db, provider);
           }
         }
       }

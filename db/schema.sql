@@ -762,6 +762,22 @@ create table if not exists flight_insights (
 create index if not exists flight_insights_route
   on flight_insights (origin, destination, observed_at);
 
+-- Every answer Google sends us, whole (owner, 2026-10-06: "keep all the data
+-- we pull from Google. Don't drop anything."). gzip-compressed JSON body,
+-- the request without the API key, and the HTTP status (errors kept too).
+-- Append-only, never updated or deleted. See rawResponses.ts.
+create table if not exists provider_responses (
+  id          bigserial    primary key,
+  source      text         not null,
+  kind        text         not null,
+  request     jsonb        not null,
+  status      integer      not null,
+  body_gz     bytea        not null,
+  bytes       integer      not null,
+  fetched_at  timestamptz  not null default now()
+);
+create index if not exists provider_responses_when on provider_responses (source, fetched_at);
+
 -- Carry every labelled fare already in the working copy into the record,
 -- ONCE. A marker row makes it one-time: matching on timestamps would not do,
 -- because a writer's flight_prices and flight_observations rows are stamped by

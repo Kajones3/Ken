@@ -29,6 +29,7 @@ import { todayISO, type ISODate } from "./dates.js";
 import { isLocalRoute } from "./config.js";
 import { SerpApiFlightProvider } from "./providers/serpapiFlights.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "./observations.js";
+import { flushRaw } from "./rawResponses.js";
 
 /** Reserved user_id holding the site-wide daily tally. */
 export const GLOBAL_BUDGET_KEY = "global";
@@ -189,8 +190,11 @@ export async function fetchExactFare(
   try {
     quote = await provider.quote(req.origin, req.destination, req.departDate, req.tripLength);
   } catch (e) {
+    await flushRaw(db, provider);
     return { ok: false, reason: "error", remainingToday: nowRemaining, message: (e as Error).message };
   }
+  // Google's whole answer, kept (rawResponses.ts).
+  await flushRaw(db, provider);
   if (!quote) {
     return {
       ok: false, reason: "no_fare", remainingToday: nowRemaining,

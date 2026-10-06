@@ -30,6 +30,7 @@
  * asking for the real party size.
  */
 import type { FlightQuote, FlightInsights } from "./types.js";
+import { captureRaw, type RawResponse } from "../rawResponses.js";
 
 const BASE = "https://serpapi.com/search.json";
 
@@ -103,6 +104,8 @@ export class SerpApiFlightProvider {
   /** Hard ceiling on paid lookups for one process, so a loop bug or an
    *  unexpectedly long popular-route list can't quietly run up a bill. */
   private spent = 0;
+  /** Every answer Google sent, whole, until a job writes them (rawResponses.ts). */
+  readonly raw: RawResponse[] = [];
 
   constructor(
     private readonly apiKey = process.env.SERPAPI_KEY ?? "",
@@ -146,8 +149,10 @@ export class SerpApiFlightProvider {
     await this.limiter.take();
     this.spent++;
     const res = await fetch(url);
+    const body = await res.text();
+    this.raw.push(captureRaw(url, res.status, body, this.name, "google_flights"));
     if (!res.ok) throw new Error(`google_flights ${origin}-${destination} ${departDate} -> ${res.status}`);
-    const json = (await res.json()) as SerpApiFlightsResponse;
+    const json = JSON.parse(body) as SerpApiFlightsResponse;
     if (json.error) return null;   // "no flights found" is reported as an error string
 
     const all = [...(json.best_flights ?? []), ...(json.other_flights ?? [])]

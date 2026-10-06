@@ -30,7 +30,11 @@ What that means in code. **Every change must keep all of these true:**
    included), each row with `source` and when we saw it. **No code may
    `update` or `delete` those two tables.** A new data source writes there
    first (`recordFlightObservations()` / `recordHotelSamples()`), before any
-   working-copy table.
+   working-copy table. **Since 2026-10-06 Google's WHOLE answer to every
+   paid search is kept too** (`provider_responses`, gzip, append-only,
+   `rawResponses.ts`; owner: "keep all the data we pull from Google. Don't
+   drop anything."). Any new Google/SerpApi call must capture its raw
+   answer (`captureRaw`) and the job must `flushRaw()` it.
 2. **Nothing is overwritten.** `flight_prices` and `hotel_rates` are working
    copies (latest per date) that readers find convenient; replacing a row
    there is allowed ONLY because the observation is already in the record.
@@ -75,7 +79,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**740 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**741 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +101,30 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-06, very last — every byte Google sends is kept
+
+Owner: "can we keep all the data we pull from Google. Don't drop anything."
+The parsers read a few fields; the rest (every itinerary, airline, layover,
+duration, every hotel's amenities, photos, reviews, per-site prices) was
+thrown away. Now:
+- **`provider_responses`** (schema.sql): source, kind (`google_flights` /
+  `google_hotels`), request params WITHOUT the API key, HTTP status, the body
+  gzip-compressed (`body_gz`), its size, when. Append-only. Errors, "no
+  flights found" and empty hotel searches are kept too.
+- Both providers capture each answer (`captureRaw()` in their fetch path, into
+  `provider.raw`); popular-routes and intl-sweep flush after EVERY search
+  (in `finally`, so misses and errors are kept), exact-fare after its one
+  search, refresh after its hotel pass (`flushRaw()`). `unzipBody()` reads
+  one back.
+- Coverage report: answers kept per source, MB as sent vs stored, and the
+  whole database size against **Neon's free 512 MB**. Morning email: a
+  "Google's whole answers" line (last 24h, count and MB).
+- **Size is a GUESS until the first real run**: maybe 50-300 KB per answer
+  before compression, roughly 10x smaller stored. Check the coverage report
+  after a few nights; if the database heads toward 512 MB, the choices are
+  Neon's paid plan (price not checked) or moving old answers to cheap file storage,
+  NOT deleting them (owner's rule).
 
 ### 2026-10-06, last — hotels graded like flights; Blind columns gone; Google's hotel extras kept
 
