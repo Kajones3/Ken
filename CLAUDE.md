@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**728 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**738 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +97,53 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-06, later — a candidate formula, graded beside the live one (ideas 1-5)
+
+Owner: build all five; and "a $100 surprise EITHER WAY" is equally wrong
+("If someone thinks Orlando is cheaper than Tokyo because we are low on
+Orlando and High on Tokyo, the tool is equally useless"). Goal: within
+5-10% of the real fare. **So the candidate is never leaned**; it aims at the
+real middle fare. Don't re-propose an asymmetric "reading low is worse" score.
+- **1. Test kitchen + switch.** `src/fareModel.ts` (pure) +
+  `src/fareModelDb.ts` (loads; 10-minute cached fit). /admin Flights shows
+  "Live formula vs candidate" per US / international: accurate (within
+  ±`flight.zonePct`, default 10, either direction), within ±5%, too low, too
+  high, typically off, overall reads, and the **US vs international tilt**
+  (US reading minus intl reading; far from 0 = the comparison is tilted),
+  plus "candidate beat live on N of the last 14 days". The candidate is
+  graded **leave-one-out** (`leaveOneOut()`: each fare, and any re-buy of the
+  same route+date, is left out of its own fit). Live = "shown now" (partly
+  in-sample, so flattered). The switch is `flight.useCandidate` (0/1, default
+  0), a radio on the scoreboard and a row in Rates & settings; `loadBook`
+  uses the candidate when it's 1 (`{ formula: "live" }` forces live, which
+  the scoreboard uses). Estimates it makes carry `candidate: true` and
+  pricing never leans them. It ignores owner fare corrections and price
+  checks for now (both still kept and still move the live formula).
+- **The formula:** prior (US: route BTS median for the quarter;
+  international or no BTS: price-by-distance line fitted on all bought fares
+  in that group x the seed's season shape) x group calibration (median
+  real/prior) x day of week (pooled, `n/(n+8)`, 0.85-1.2) x route factor
+  (route's own searches in the last 45 days, each blended with Google's
+  typical midpoint scaled to our footing; `n/(n+2)`, 0.67-1.5). Trains on 90
+  days of `flight_observations` (serpapi_flights).
+- **2. Google's own read kept.** `readInsights()` in serpapiFlights.ts;
+  `FlightQuote.insights`; new append-only **`flight_insights`** (typical
+  range, lowest, price level, price history, itinerary count) written inside
+  `recordFlightObservations()`, so every paid writer keeps it. Coverage
+  report: per paid run "written / kept / with Google's typical range".
+  **Unverified until the first real run**: whether SerpApi returns
+  `price_insights` for our searches. Check the coverage report after the
+  next popular-routes run.
+- **3. Buying where we're most wrong.** popular-routes reserves up to
+  `POPULAR_ROUTES_WORST` (6) of its 18 slots for routes outside the zone
+  (either direction) by what travelers see (`pickWorstRoutes()`), in a
+  tested month still plannable and not bought in 10 days, else another month
+  of the same season. Demand gets the rest; rotation fills any gap. Same
+  nightly budget. A scoreboard failure just skips this for the night.
+- **4/5** live inside the candidate (distance line, day of week).
+- The scoreboard now reads fares from the record (`flight_observations`),
+  not the working copy, so a re-bought date is a second test.
 
 ### 2026-10-06 — two leans, and the scoreboard grades what travelers SEE
 

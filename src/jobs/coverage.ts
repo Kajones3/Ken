@@ -219,8 +219,15 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
         where r.job in ('popular_routes', 'intl_sweep') and r.started_at > now() - interval '14 days'
           and r.finished_at is not null
         order by r.started_at`);
-    out.push("Paid runs, last 14 days: written / kept in the record");
-    for (const r of perRun.rows) out.push(`   ${String(r.started_at).slice(4, 21)} ${r.job}: ${r.rows_written} / ${r.kept}`);
+    out.push("Paid runs, last 14 days: written / kept in the record / with Google's typical range");
+    for (const r of perRun.rows) {
+      const ins = await db.query<{ n: string; ranged: string }>(
+        `select count(*)::text as n, count(typical_low)::text as ranged from flight_insights
+          where source = 'serpapi_flights' and observed_at >= $1
+            and observed_at <= coalesce((select finished_at from fetch_runs where started_at = $1 limit 1), now()) + interval '1 minute'`,
+        [r.started_at]).catch(() => ({ rows: [{ n: "?", ranged: "?" }] }));
+      out.push(`   ${String(r.started_at).slice(4, 21)} ${r.job}: ${r.rows_written} / ${r.kept} / ${ins.rows[0]!.ranged} of ${ins.rows[0]!.n} insights`);
+    }
   } catch (e) {
     out.push(`The record could not be read: ${(e as Error).message}`);
   }

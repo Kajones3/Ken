@@ -17,6 +17,8 @@ import {
 } from "./checkFactors.js";
 import { blendFares, flightSourceWeight, type SourcedFare } from "./observations.js";
 import { asEvidence, cachedGoogleDisneyRates } from "./disneyEvidence.js";
+import { loadFareModel } from "./fareModelDb.js";
+import { USE_CANDIDATE_KEY, type FareModel } from "./fareModel.js";
 
 /** Every on-property hotel's shipped base, for rescaling hotel checks. */
 const HOTEL_BASE = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
@@ -104,7 +106,7 @@ export async function loadBook(
   /** applyChecks: false gives the model as it stands WITHOUT the owner's
    *  price checks — what a new check must be measured against, or checks
    *  would be measured against themselves and compound. */
-  opts: { applyChecks?: boolean } = {},
+  opts: { applyChecks?: boolean; /** "live" ignores the owner's candidate switch (scoreboard). */ formula?: "live" } = {},
 ): Promise<PriceBook> {
   const flights = new Map<string, FlightRow>();
   const hotels = new Map<string, HotelNight[]>();
@@ -544,10 +546,34 @@ export async function loadBook(
              checkAdjust: pctOf(f) };
   };
 
+  // The candidate formula, only when the owner has switched it on in /admin
+  // (flight.useCandidate). It does not use the owner's fare corrections or
+  // price checks yet; those stay recorded and keep moving the live formula.
+  let model: FareModel | undefined;
+  if (opts.formula !== "live" && settings.get(USE_CANDIDATE_KEY) === 1) {
+    try { model = await loadFareModel(db); } catch (e) {
+      console.warn(`candidate fare model unavailable, using the live formula: ${(e as Error).message}`);
+    }
+  }
+  const candidateEstimate = (origin: string, dest: string, date: ISODate) => {
+    const p = model?.predict(origin, dest, date);
+    if (!p) return undefined;
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    return {
+      low: r2(p.value * p.lowRatio), med: r2(p.value), high: r2(p.value * p.highRatio),
+      basisQuarter: `${date.slice(0, 4)}Q${quarterOf(date)}`, seasonMatched: true,
+      seedGuess: p.parts.priorKind === "distance" || undefined,
+      routeSamples: p.parts.routeSearches || undefined,
+      candidate: true,
+    };
+  };
+
   return {
     setting: (key) => settings.get(key),
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
-    flightEstimate: (origin, dest) => {
+    flightEstimate: (origin, dest, date) => {
+      const cand = model ? candidateEstimate(origin, dest, date ?? req.from) : undefined;
+      if (cand) return cand;
       const est = rawEstimate(origin, dest);
       return est ? checkedEstimate(origin, dest, est) : undefined;
     },

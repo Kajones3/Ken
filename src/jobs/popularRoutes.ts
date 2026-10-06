@@ -27,7 +27,8 @@ import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates
 import { getDb, type Db } from "../db.js";
 import { popularRoutes, recentlyBought, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
-import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth } from "../config.js";
+import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth, plannableMonths } from "../config.js";
+import { loadScoreboard, type RouteScore } from "../fareScoreboard.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 
 /**
@@ -50,6 +51,41 @@ export function sampleDates(month: string, perMonth: number): string[] {
   return out;
 }
 
+/**
+ * The routes travelers see furthest off, and a month to buy for each
+ * (owner, 2026-10-06: spend part of the nightly searches where we're most
+ * wrong). Only routes outside the accuracy zone, in either direction. The
+ * month is one of the months already tested if it can still be picked and
+ * wasn't bought in the last few days, else another month of the same
+ * season, so a route gathers the 2-3 fares in one season that let it be
+ * trusted. Pure.
+ */
+export function pickWorstRoutes(
+  routes: RouteScore[], opts: { useCandidate: boolean; zonePct: number; fresh: Set<string>;
+    plannable: string[]; n: number; taken?: Set<string> },
+): PopularRoute[] {
+  const plannable = new Set(opts.plannable);
+  const seen = (r: RouteScore) => (opts.useCandidate ? r.candPct : r.shownPct) ?? r.shownPct;
+  const out: PopularRoute[] = [];
+  const quarterMonths = (m: string) => {
+    const [y, mo] = m.split("-").map(Number) as [number, number];
+    const q0 = Math.floor((mo - 1) / 3) * 3 + 1;
+    return [0, 1, 2].map((i) => `${y}-${String(q0 + i).padStart(2, "0")}`);
+  };
+  const ranked = routes
+    .filter((r) => { const v = seen(r); return v !== null && Math.abs(v) > opts.zonePct; })
+    .sort((a, b) => Math.abs(seen(b)!) - Math.abs(seen(a)!));
+  for (const r of ranked) {
+    if (out.length >= opts.n) break;
+    if (opts.taken?.has(`${r.origin}|${r.destination}`)) continue;
+    if (isLocalRoute(r.origin, r.destination)) continue;
+    const candidates = [...r.months, ...r.months.flatMap(quarterMonths)];
+    const month = candidates.find((m) => plannable.has(m) && !opts.fresh.has(`${r.origin}|${r.destination}|${m}`));
+    if (month) out.push({ origin: r.origin, destination: r.destination, departMonth: month, searches: 0 });
+  }
+  return out;
+}
+
 export interface PopularRoutesOptions {
   limit?: number;
   datesPerMonth?: number;
@@ -58,6 +94,8 @@ export interface PopularRoutesOptions {
    *  trend that reads the same either way. */
   buckets?: number[];
   routes?: PopularRoute[];
+  /** Slots kept for the routes travelers see furthest off (idea 3). */
+  worstSlots?: number;
   provider?: Pick<SerpApiFlightProvider, "quote" | "callsSpent" | "budgetRemaining">;
 }
 
@@ -76,8 +114,30 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   // room for the next busiest before rotation fills the rest.
   const fresh = opts.routes ? new Set<string>() : await recentlyBought(db);
   const notFresh = (r: PopularRoute) => !fresh.has(`${r.origin}|${r.destination}|${r.departMonth}`);
+  // Part of tonight's budget goes to the routes we're most wrong about.
+  // Demand gets what's left, so the owner's own test searches can't crowd
+  // it out (they filled all 18 slots on 2026-10-03).
+  const worstSlots = opts.routes ? 0 : Math.min(limit, opts.worstSlots ?? Number(process.env.POPULAR_ROUTES_WORST ?? 6));
+  let worst: PopularRoute[] = [];
+  if (worstSlots > 0) {
+    try {
+      const board = await loadScoreboard(db, 30);
+      worst = pickWorstRoutes(board.routes, {
+        useCandidate: board.useCandidate, zonePct: board.zonePct, fresh,
+        plannable: plannableMonths(todayISO()), n: worstSlots,
+      });
+      if (worst.length) console.log(`popular-routes: ${worst.length} furthest-off route(s): ` +
+        worst.map((r) => `${r.origin}->${r.destination} ${r.departMonth}`).join(", "));
+    } catch (e) {
+      // The scoreboard is a guide, not a requirement: tonight just buys by
+      // demand and rotation instead.
+      console.warn(`popular-routes: furthest-off routes skipped: ${(e as Error).message}`);
+    }
+  }
+  const worstKeys = new Set(worst.map((r) => `${r.origin}|${r.destination}`));
   let routes = opts.routes
-    ?? (await popularRoutes(db, limit * 4)).filter(notFresh).slice(0, limit);
+    ?? [...worst, ...(await popularRoutes(db, limit * 4)).filter(notFresh)
+      .filter((r) => !worstKeys.has(`${r.origin}|${r.destination}`)).slice(0, limit - worst.length)];
 
   // Fill the rest of tonight's slots by rotation, stalest route first.
   // Demand still wins where it exists — someone actually asking about a

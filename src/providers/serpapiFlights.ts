@@ -29,7 +29,7 @@
  * would multiply the party size in twice. Do not "optimize" this by
  * asking for the real party size.
  */
-import type { FlightQuote } from "./types.js";
+import type { FlightQuote, FlightInsights } from "./types.js";
 
 const BASE = "https://serpapi.com/search.json";
 
@@ -43,7 +43,10 @@ interface SerpApiFlight {
 interface SerpApiFlightsResponse {
   best_flights?: SerpApiFlight[];
   other_flights?: SerpApiFlight[];
-  price_insights?: { lowest_price?: number; typical_price_range?: number[] };
+  price_insights?: {
+    lowest_price?: number; typical_price_range?: number[]; price_level?: string;
+    price_history?: unknown[];
+  };
   error?: string;
 }
 
@@ -66,6 +69,32 @@ export interface RealFare {
   carrier?: string;
   stops: number;
   deepLink: string;
+  insights?: FlightInsights;
+}
+
+const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : undefined);
+
+/**
+ * Google's own read of the route, kept as evidence (2026-10-06). Every field
+ * is optional: Google leaves price_insights out for some routes, and a shape
+ * we don't recognise is dropped rather than guessed at.
+ */
+export function readInsights(json: SerpApiFlightsResponse, itineraries: number): FlightInsights {
+  const pi = json.price_insights ?? {};
+  const range = Array.isArray(pi.typical_price_range) ? pi.typical_price_range : [];
+  const history = Array.isArray(pi.price_history)
+    ? pi.price_history.filter((h): h is [number, number] =>
+        Array.isArray(h) && h.length >= 2 && typeof h[0] === "number" && num(h[1]) !== undefined)
+      .map((h) => [h[0], h[1]] as [number, number])
+    : undefined;
+  let lo = num(range[0]), hi = num(range[1]);
+  if (lo !== undefined && hi !== undefined && lo > hi) [lo, hi] = [hi, lo];
+  return {
+    typicalLow: lo, typicalHigh: hi, lowestPrice: num(pi.lowest_price),
+    priceLevel: typeof pi.price_level === "string" ? pi.price_level : undefined,
+    history: history?.length ? history : undefined,
+    itineraries,
+  };
 }
 
 export class SerpApiFlightProvider {
@@ -155,6 +184,7 @@ export class SerpApiFlightProvider {
       deepLink: `https://www.google.com/travel/flights?q=${encodeURIComponent(
         `Flights from ${origin} to ${destination} on ${departDate} through ${returnDate}`,
       )}`,
+      insights: readInsights(json, all.length),
     };
   }
 
@@ -167,6 +197,7 @@ export class SerpApiFlightProvider {
     return {
       origin, destination, departDate, tripLength,
       priceUsd: f.priceUsd, carrier: f.carrier, stops: f.stops, deepLink: f.deepLink,
+      insights: f.insights,
     };
   }
 }

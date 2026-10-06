@@ -3,6 +3,15 @@ import type { ISODate } from "../dates.js";
 export interface FlightQuote {
   origin: string; destination: string; departDate: ISODate; tripLength: number;
   priceUsd: number; carrier?: string; stops: number; deepLink?: string;
+  /** Google's own read of this route and date, from the same paid search. */
+  insights?: FlightInsights;
+}
+export interface FlightInsights {
+  typicalLow?: number; typicalHigh?: number; lowestPrice?: number; priceLevel?: string;
+  /** [unix seconds, price] pairs, as Google returned them. */
+  history?: [number, number][];
+  /** How many itineraries the search returned. */
+  itineraries: number;
 }
 export interface HotelQuote {
   hotelId: string; resortId: string; hotelName: string; descriptor: string;

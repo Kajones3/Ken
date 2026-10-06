@@ -211,6 +211,9 @@ export interface FlightRow {
     holidayLabel?: string;
     /** The owner's price checks on this route moved the estimate. */
     checkAdjust?: CheckAdjust;
+    /** Made by the candidate formula (fareModel.ts, owner's switch in
+     *  /admin). It aims at the real middle fare, so it is never leaned. */
+    candidate?: boolean;
   };
 }
 /**
@@ -257,12 +260,12 @@ export function estimateLeanFor(book: Pick<PriceBook, "setting">, international:
  * fare instead.
  */
 export function quotedEstimate(book: PriceBook, origin: string, dest: string, start: ISODate): number | undefined {
-  const est = book.flightEstimate?.(origin, dest);
+  const est = book.flightEstimate?.(origin, dest, start);
   if (!est) return undefined;
   const holiday = holidayFlightPremium(start);
   const m = holiday ? 1 + (book.setting?.(holiday.settingKey) ?? holiday.defaultPct) / 100 : 1;
   const resort = RESORTS.find((r) => r.iata === dest || r.altArrivalAirports.some((a) => a.iata === dest));
-  const lean = estimateLeanFor(book, resort ? resort.region !== "dom" : false);
+  const lean = est.candidate ? 50 : estimateLeanFor(book, resort ? resort.region !== "dom" : false);
   return Math.round(leanedFare({ low: est.low * m, med: est.med * m, high: est.high * m }, lean) * 100) / 100;
 }
 
@@ -326,7 +329,8 @@ export interface PriceBook {
    *  cached fare — undefined when this route has no BTS baseline (expected
    *  for most international routes today) or no trend has been computed
    *  yet. Optional on the interface so bookFrom() (tests) needs no changes. */
-  flightEstimate?(origin: string, dest: string): FlightRow["estimate"] | undefined;
+  /** `date` lets the candidate formula use the day of the week; the live one ignores it. */
+  flightEstimate?(origin: string, dest: string, date?: ISODate): FlightRow["estimate"] | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
@@ -775,14 +779,16 @@ export function priceTrip(
     // honest median. This never fabricates a number where flightEstimate()
     // itself has nothing — est stays undefined for most routes, since BTS
     // coverage is domestic-leaning.
-    const est = book.flightEstimate?.(params.origin, destination);
+    const est = book.flightEstimate?.(params.origin, destination, start);
     if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
     // Whenever an ESTIMATE is what gets shown, it is leaned. See
     // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
     // estimate that comes in low is the one that costs somebody at checkout.
-    const leanPct = estimateLeanFor(book, resort.region !== "dom");
+    // The candidate formula aims at the real middle fare (owner: a $100
+    // surprise either way is equally wrong), so it is never leaned.
+    const leanPct = est?.candidate ? 50 : estimateLeanFor(book, resort.region !== "dom");
     // A real cached fare is the headline only when it is at or above what we
     // would otherwise quote — the LEANED estimate, not the median (owner,
     // 2026-09-27). This used to be the median, which let one cheap real fare

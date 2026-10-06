@@ -36,6 +36,7 @@ import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey }
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
 import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
+import { USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
   THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
@@ -128,6 +129,30 @@ export const SETTINGS: SettingDef[] = [
       + "100 the expensive end. Higher is the safer mistake: an estimate that comes in low is the one "
       + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
+  },
+  {
+    key: USE_CANDIDATE_KEY,
+    label: "Flight estimates — use the candidate formula",
+    group: "Flight estimates",
+    kind: "number",
+    default: 0,
+    min: 0,
+    max: 1,
+    help: "0: travelers see the live formula (leaned as set below). 1: travelers see the candidate formula, "
+      + "which is graded beside the live one every day on /admin → Flights & hotels. Switch only when the "
+      + "candidate has been beating the live formula there. Switching back to 0 undoes it at once; nothing is deleted.",
+  },
+  {
+    key: ZONE_PCT_KEY,
+    label: "Flight estimates — how close counts as accurate (±%)",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_ZONE_PCT,
+    min: 2,
+    max: 30,
+    help: "The scoreboard counts an estimate as accurate when it lands within this many percent of the real "
+      + "fare, in EITHER direction: reading $100 low is as wrong as reading $100 high. Only changes how the "
+      + "scoreboard grades; no price moves.",
   },
   {
     key: INTL_ESTIMATE_LEAN_KEY,

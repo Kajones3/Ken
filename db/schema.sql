@@ -739,6 +739,29 @@ create index if not exists flight_observations_lookup
 create index if not exists flight_observations_source
   on flight_observations (source, observed_at);
 
+-- Google's own read of a route and date, returned with every paid flight
+-- search at no extra cost (2026-10-06): its "typical" price range for that
+-- trip and the recent price history. Append-only like flight_observations:
+-- never updated or deleted. The candidate fare model (fareModel.ts) uses it
+-- as extra evidence about a route.
+create table if not exists flight_insights (
+  id            bigserial    primary key,
+  origin        char(3)      not null,
+  destination   char(3)      not null,
+  depart_date   date         not null,
+  trip_length   smallint     not null,
+  typical_low   numeric(9,2),
+  typical_high  numeric(9,2),
+  lowest_price  numeric(9,2),
+  price_level   text,
+  history       jsonb,
+  itineraries   integer,
+  source        text         not null,
+  observed_at   timestamptz  not null default now()
+);
+create index if not exists flight_insights_route
+  on flight_insights (origin, destination, observed_at);
+
 -- Carry every labelled fare already in the working copy into the record,
 -- ONCE. A marker row makes it one-time: matching on timestamps would not do,
 -- because a writer's flight_prices and flight_observations rows are stamped by

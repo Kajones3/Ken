@@ -30,6 +30,8 @@ import { quarterOf, type ISODate } from "./dates.js";
 import { dateStr } from "./book.js";
 import { leanedFare, quotedEstimate, ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN } from "./pricing.js";
 import { loadBook } from "./book.js";
+import { leaveOneOut, USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
+import { loadModelInputs } from "./fareModelDb.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
 import { settingsMap } from "./settings.js";
 
@@ -66,6 +68,13 @@ export interface ScoreInputs {
    * holiday premium. Keyed `${origin}|${destination}|${departDate}`.
    */
   shownNow?: Map<string, number>;
+  /** The candidate formula's estimate for each fare, fitted WITHOUT that
+   *  fare (fareModel.leaveOneOut). Same keys as shownNow. */
+  candidate?: Map<string, number>;
+  /** "Accurate" = within this many percent either way. */
+  zonePct?: number;
+  /** Which formula travelers see now. */
+  useCandidate?: boolean;
   /** Holiday premium percent by setting key (missing = the shipped default). */
   premiumPct: (key: string, fallback: number) => number;
 }
@@ -89,7 +98,29 @@ export interface RouteScore {
   n: number; realMedian: number; estMedian: number; medianPct: number;
   /** What travelers see now (see ScoreInputs.shownNow), and its miss. */
   shownMedian: number | null; shownPct: number | null;
+  /** The candidate formula, graded on fares it did not learn from. */
+  candMedian: number | null; candPct: number | null;
+  /** Travel months of the fares tested (YYYY-MM), for buying more there. */
+  months: string[];
 }
+
+/**
+ * The owner's yardstick (2026-10-06): within ±zone% is accurate, and a miss
+ * is a miss in EITHER direction ("a $100 surprise either way is the same").
+ */
+export interface ZoneScore {
+  n: number;
+  inZonePct: number | null; within5Pct: number | null;
+  /** Read low / high by more than the zone. */
+  lowPct: number | null; highPct: number | null;
+  typicalOffPct: number | null;
+  /** Median signed miss: + = reads high. Should sit near 0. */
+  medianPct: number | null;
+}
+export interface MethodScores { all: ZoneScore; domestic: ZoneScore; international: ZoneScore;
+  /** US reading minus international reading, in points. Far from 0 = the
+   *  comparison itself is tilted (e.g. Orlando reads low while Tokyo reads high). */
+  tilt: number | null }
 
 /** "Now that we've bought fares, how far off are the numbers we show?" */
 export interface ShownScore {
@@ -104,6 +135,12 @@ export interface Scoreboard {
   skipped: { noBaseline: number; noTrend: number; builtFromIt: number };
   all: GroupScore; domestic: GroupScore; international: GroupScore;
   shown: { all: ShownScore; domestic: ShownScore; international: ShownScore };
+  zonePct: number;
+  useCandidate: boolean;
+  /** Live (what travelers see with the switch off) vs the candidate vs blind. */
+  compare: { live: MethodScores; candidate: MethodScores; blind: MethodScores };
+  /** Last 14 days by the day fares were bought: share in the zone. */
+  daily: { day: string; n: number; live: number | null; candidate: number | null }[];
   routes: RouteScore[];
 }
 
@@ -130,7 +167,8 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
   }
   const skipped = { noBaseline: 0, noTrend: 0, builtFromIt: 0 };
   const leanIntl = inp.leanIntl ?? inp.lean;
-  type Test = { fare: BoughtFare; intl: boolean; resort: string; est: Record<number, number>; cur: number; shown?: number };
+  const zone = (inp.zonePct ?? DEFAULT_ZONE_PCT) / 100;
+  type Test = { fare: BoughtFare; intl: boolean; resort: string; est: Record<number, number>; cur: number; shown?: number; cand?: number };
   const tests: Test[] = [];
 
   for (const f of inp.fares) {
@@ -156,8 +194,10 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     for (const L of LEANS) est[L] = leanedFare(band, L) * prem;
     const intl = resort.region !== "dom";
     const cur = leanedFare(band, intl ? leanIntl : inp.lean) * prem;
-    const shown = inp.shownNow?.get(`${f.origin}|${f.destination}|${f.departDate}`);
-    tests.push({ fare: f, intl, resort: resort.id, est, cur, shown });
+    const key = `${f.origin}|${f.destination}|${f.departDate}`;
+    const shown = inp.shownNow?.get(key);
+    const cand = inp.candidate?.get(key);
+    tests.push({ fare: f, intl, resort: resort.id, est, cur, shown, cand });
   }
 
   const group = (ts: Test[]): GroupScore => {
@@ -190,6 +230,41 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     };
   };
 
+  const zoneScore = (errs: number[]): ZoneScore => {
+    const share = (pred: (e: number) => boolean) =>
+      errs.length ? Math.round((errs.filter(pred).length / errs.length) * 100) : null;
+    return {
+      n: errs.length,
+      inZonePct: share((e) => Math.abs(e) <= zone + 1e-9),
+      within5Pct: share((e) => Math.abs(e) <= 0.05 + 1e-9),
+      lowPct: share((e) => e < -zone - 1e-9),
+      highPct: share((e) => e > zone + 1e-9),
+      typicalOffPct: errs.length ? pct1(median(errs.map(Math.abs))) : null,
+      medianPct: errs.length ? pct1(median(errs)) : null,
+    };
+  };
+  const method = (pick: (t: Test) => number | undefined): MethodScores => {
+    const errs = (ts: Test[]) => ts.flatMap((t) => { const v = pick(t); return v === undefined ? [] : [v / t.fare.price - 1]; });
+    const dom = zoneScore(errs(tests.filter((t) => !t.intl)));
+    const intl = zoneScore(errs(tests.filter((t) => t.intl)));
+    return {
+      all: zoneScore(errs(tests)), domestic: dom, international: intl,
+      tilt: dom.medianPct !== null && intl.medianPct !== null ? Math.round((dom.medianPct - intl.medianPct) * 10) / 10 : null,
+    };
+  };
+  const compare = {
+    live: method((t) => t.shown), candidate: method((t) => t.cand), blind: method((t) => t.cur),
+  };
+  const days = [...new Set(tests.map((t) => t.fare.fetchedAt.toISOString().slice(0, 10)))].sort().slice(-14);
+  const inZone = (ts: Test[], pick: (t: Test) => number | undefined) => {
+    const e = ts.flatMap((t) => { const v = pick(t); return v === undefined ? [] : [Math.abs(v / t.fare.price - 1)]; });
+    return e.length ? Math.round((e.filter((x) => x <= zone + 1e-9).length / e.length) * 100) : null;
+  };
+  const daily = days.map((day) => {
+    const ts = tests.filter((t) => t.fare.fetchedAt.toISOString().slice(0, 10) === day);
+    return { day, n: ts.length, live: inZone(ts, (t) => t.shown), candidate: inZone(ts, (t) => t.cand) };
+  });
+
   const routeMap = new Map<string, Test[]>();
   for (const t of tests) {
     const k = `${t.fare.origin}|${t.fare.destination}`;
@@ -200,6 +275,8 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     const estMedian = median(ts.map((t) => t.cur))!;
     const withShown = ts.filter((t) => t.shown !== undefined);
     const shownMedian = median(withShown.map((t) => t.shown!));
+    const withCand = ts.filter((t) => t.cand !== undefined);
+    const candMedian = median(withCand.map((t) => t.cand!));
     return {
       origin: ts[0]!.fare.origin, destination: ts[0]!.fare.destination, resort: ts[0]!.resort,
       international: ts[0]!.intl, n: ts.length,
@@ -207,14 +284,22 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
       medianPct: pct1(median(ts.map((t) => t.cur / t.fare.price - 1)))!,
       shownMedian: shownMedian === null ? null : Math.round(shownMedian),
       shownPct: pct1(median(withShown.map((t) => t.shown! / t.fare.price - 1))),
+      candMedian: candMedian === null ? null : Math.round(candMedian),
+      candPct: pct1(median(withCand.map((t) => t.cand! / t.fare.price - 1))),
+      months: [...new Set(ts.map((t) => t.fare.departDate.slice(0, 7)))].sort(),
     };
   })
-    // Furthest off by what travelers SEE now, where we know it; the blind
-    // number only orders routes we couldn't rebuild.
-    .sort((a, b) => Math.abs(b.shownPct ?? b.medianPct) - Math.abs(a.shownPct ?? a.medianPct) || b.n - a.n);
+    // Furthest off by what travelers SEE now (the candidate's number once the
+    // owner has switched to it), where we know it; the blind number only
+    // orders routes we couldn't rebuild.
+    .sort((a, b) => {
+      const seen = (r: RouteScore) => Math.abs((inp.useCandidate ? r.candPct : r.shownPct) ?? r.shownPct ?? r.medianPct);
+      return seen(b) - seen(a) || b.n - a.n;
+    });
 
   return {
     lean: inp.lean, leanIntl, trend: inp.trend, tested: tests.length, skipped,
+    zonePct: Math.round(zone * 100), useCandidate: !!inp.useCandidate, compare, daily,
     all: group(tests), domestic: group(tests.filter((t) => !t.intl)),
     international: group(tests.filter((t) => t.intl)),
     shown: {
@@ -227,17 +312,21 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
 
 /** Loads the inputs and scores the last `days` days of bought fares. */
 export async function loadScoreboard(db: Db, days = 30): Promise<Scoreboard & { days: number }> {
-  const f = await db.query<{ origin: string; destination: string; depart_date: unknown; price_usd: string; fetched_at: unknown }>(
-    `select origin, destination, depart_date, price_usd, fetched_at
-       from flight_prices
-      where source = 'serpapi_flights'
-        and fetched_at > now() - ($1 || ' days')::interval`,
-    [String(days)],
-  );
-  const fares: BoughtFare[] = f.rows.map((r) => ({
-    origin: r.origin.trim(), destination: r.destination.trim(), departDate: dateStr(r.depart_date),
-    price: Number(r.price_usd), fetchedAt: r.fetched_at instanceof Date ? r.fetched_at : new Date(String(r.fetched_at)),
-  }));
+  // Every paid fare in the record (flight_observations), not only the latest
+  // per date in the working copy: a re-bought date is a second test.
+  const inputs = await loadModelInputs(db, Math.max(days, 90));
+  const since = Date.now() - days * 86_400_000;
+  const testIdx = inputs.fares.flatMap((x, i) => (x.observedAt.getTime() > since ? [i] : []));
+  const fares: BoughtFare[] = testIdx.map((i) => {
+    const x = inputs.fares[i]!;
+    return { origin: x.origin, destination: x.destination, departDate: x.departDate, price: x.price, fetchedAt: x.observedAt };
+  });
+  const loo = leaveOneOut(inputs, testIdx);
+  const candidate = new Map<string, number>();
+  for (const [i, v] of loo) {
+    const x = inputs.fares[i]!;
+    candidate.set(`${x.origin}|${x.destination}|${x.departDate}`, v);
+  }
   const origins = [...new Set(fares.map((x) => x.origin))];
   const b = origins.length
     ? await db.query<{ origin: string; destination: string; year: number; quarter: number; median_fare_usd: string | null;
@@ -272,6 +361,9 @@ export async function loadScoreboard(db: Db, days = 30): Promise<Scoreboard & { 
     lean,
     leanIntl: settings.get(INTL_ESTIMATE_LEAN_KEY) ?? lean,
     shownNow: await shownNow(db, fares),
+    candidate,
+    zonePct: settings.get(ZONE_PCT_KEY) ?? DEFAULT_ZONE_PCT,
+    useCandidate: settings.get(USE_CANDIDATE_KEY) === 1,
     premiumPct: (key, fallback) => settings.get(key) ?? fallback,
   });
   return { ...board, days };
@@ -302,7 +394,7 @@ async function shownNow(db: Db, fares: BoughtFare[]): Promise<Map<string, number
         origin: list[0]!.origin, destinations: dests,
         resortIds: [...new Set(dests.map((d) => RESORT_OF_AIRPORT.get(d)!.id))],
         from: day, to: day, tripLength: 7,
-      });
+      }, { formula: "live" });
       for (const f of list) {
         const v = quotedEstimate(book, f.origin, f.destination, f.departDate);
         if (v !== undefined) out.set(`${f.origin}|${f.destination}|${f.departDate}`, v);
