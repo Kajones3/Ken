@@ -173,6 +173,16 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
         side: "both", blocking: false,
       });
     }
+    // Google's whole answers (rawResponses.ts): one per paid search, errors included.
+    const raw = await db.query<{ source: string; c: string; mb: string }>(
+      `select source, count(*)::text as c, round(sum(octet_length(body_gz)) / 1048576.0, 1)::text as mb
+         from provider_responses where fetched_at > now() - interval '24 hours' group by source order by source`,
+    ).catch(() => ({ rows: [] as { source: string; c: string; mb: string }[] }));
+    lines.push("");
+    lines.push("GOOGLE'S WHOLE ANSWERS (everything each paid search returned, kept compressed)");
+    lines.push("  Last 24 hours: " + (raw.rows.length
+      ? raw.rows.map((r) => `${r.source} ${fmt(n(r.c))} (${r.mb} MB)`).join(", ")
+      : "none (fine on a night with no paid searches)"));
   } catch (e) {
     lines.push(`The data check could not run: ${(e as Error).message}`);
     problems.push({

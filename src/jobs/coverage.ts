@@ -231,6 +231,24 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   } catch (e) {
     out.push(`The record could not be read: ${(e as Error).message}`);
   }
+  // Google's whole answers (provider_responses, 2026-10-06), and how much
+  // room they take: Neon's free plan holds 0.5 GB for the whole database.
+  try {
+    const raw = await db.query<{ source: string; n: string; raw_mb: string; stored_mb: string; newest: unknown }>(
+      `select source, count(*)::text as n,
+              round(sum(bytes) / 1048576.0, 1)::text as raw_mb,
+              round(sum(octet_length(body_gz)) / 1048576.0, 1)::text as stored_mb,
+              max(fetched_at) as newest
+         from provider_responses group by source order by source`);
+    out.push("Google's whole answers kept (provider_responses):");
+    if (!raw.rows.length) out.push("   none yet");
+    for (const r of raw.rows) out.push(`   ${r.source}: ${r.n} answers, ${r.raw_mb} MB as sent, ${r.stored_mb} MB stored (compressed), newest ${String(r.newest).slice(4, 21)}`);
+    const size = await db.query<{ mb: string }>(`select round(pg_database_size(current_database()) / 1048576.0)::text as mb`)
+      .catch(() => ({ rows: [] as { mb: string }[] }));
+    if (size.rows[0]) out.push(`   whole database: ${size.rows[0].mb} MB (Neon free plan: 512 MB)`);
+  } catch (e) {
+    out.push(`Google's whole answers could not be read: ${(e as Error).message}`);
+  }
   // The hotel record: per refresh run, paid searches made (from its note)
   // beside the pulls hotel_samples holds from that run.
   try {

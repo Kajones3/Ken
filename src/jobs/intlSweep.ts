@@ -27,6 +27,7 @@ import { TRIP_BUCKETS } from "../config.js";
 import { internationalDestinations, runIntlBaseline } from "./intlBaseline.js";
 import { sampleDates } from "./popularRoutes.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
+import { flushRaw } from "../rawResponses.js";
 
 export interface IntlSweepOptions {
   months?: number;
@@ -105,6 +106,9 @@ export async function runIntlSweep(db: Db, opts: IntlSweepOptions = {}) {
           } catch (e) {
             errors++;
             console.error(`intl ${origin}->${destination} ${date}:`, (e as Error).message);
+          } finally {
+            // Google's whole answer, kept after every search (rawResponses.ts).
+            await flushRaw(db, provider);
           }
         }
       }

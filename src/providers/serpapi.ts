@@ -28,6 +28,7 @@ import { onPropertyQuotesFor } from "../onProperty.js";
 import { matchDisneyHotel } from "../disneyHotels.js";
 import { isRental } from "../rentals.js";
 import type { HotelQuote } from "./types.js";
+import { captureRaw, type RawResponse } from "../rawResponses.js";
 
 const BASE = "https://serpapi.com/search.json";
 
@@ -218,9 +219,11 @@ export class SerpApiHotelProvider {
 
   get callsSpent(): number { return this.spent; }
   /** Every off-property pull this run, as Google returned it (see hotelScoreboard.ts). */
-  readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number; kind?: string }[] }[] = [];
+  readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number; kind?: string; extra?: unknown }[] }[] = [];
   /** Every paid search made, empty or failed ones included (hotel_searches). */
   readonly searches: HotelSearch[] = [];
+  /** Every answer Google sent, whole, until the refresh writes them (rawResponses.ts). */
+  readonly raw: RawResponse[] = [];
   get budgetRemaining(): number { return Math.max(0, this.budget - this.spent); }
 
   /**
@@ -304,8 +307,10 @@ export class SerpApiHotelProvider {
     const search: HotelSearch = { resort: resortId, month, checkIn, properties: 0, priced: 0, status: "error" };
     this.searches.push(search);
     const res = await fetch(url);
-    if (!res.ok) throw new Error(`serpapi hotels ${resortId} ${month} -> ${res.status} ${await res.text().catch(() => "")}`);
-    const json = (await res.json()) as { properties?: SerpApiProperty[] };
+    const body = await res.text().catch(() => "");
+    this.raw.push(captureRaw(url, res.status, body, this.name, "google_hotels"));
+    if (!res.ok) throw new Error(`serpapi hotels ${resortId} ${month} -> ${res.status} ${body}`);
+    const json = JSON.parse(body) as { properties?: SerpApiProperty[] };
     const properties = json?.properties ?? [];
 
     // Every priced hotel Google returned, for the record; pricing still uses

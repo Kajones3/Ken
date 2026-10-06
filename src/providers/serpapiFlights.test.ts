@@ -88,3 +88,32 @@ test("roundTrip: respects its own spend budget instead of an unbounded number of
   const second = await p.roundTrip("ATL", "MCO", "2027-03-16", 7);
   assert.equal(second, null, "budget exhausted after one call");
 });
+
+test("Google's whole answer is kept, errors and 'no flights' included, without the API key", async () => {
+  const { memoryDb } = await import("../db.js");
+  const { flushRaw, unzipBody } = await import("../rawResponses.js");
+  const body = { best_flights: [flight(300)], airports: [{ departure: [{ airport: { id: "ATL" } }] }], search_metadata: { id: "x" } };
+  mockFetch(body);
+  const p = new SerpApiFlightProvider("secret-key", 999, 999);
+  await p.roundTrip("ATL", "MCO", "2027-03-15", 7);
+  mockFetch({ error: "Google Flights hasn't returned any results for this query." });
+  assert.equal(await p.roundTrip("ATL", "MCO", "2027-03-16", 7), null);
+  globalThis.fetch = (async () => new Response("rate limited", { status: 429 })) as typeof fetch;
+  await assert.rejects(p.roundTrip("ATL", "MCO", "2027-03-17", 7));
+  assert.equal(p.raw.length, 3);
+
+  const d = await memoryDb();
+  assert.equal(await flushRaw(d, p), 3);
+  assert.equal(p.raw.length, 0, "written once, not twice");
+  const rows = await d.query<{ request: Record<string, string>; status: number; body_gz: Uint8Array; bytes: number }>(
+    `select request, status, body_gz, bytes from provider_responses order by id`);
+  assert.deepEqual(rows.rows.map((r) => r.status), [200, 200, 429]);
+  // Every byte Google sent, including fields our parser never reads.
+  assert.deepEqual(JSON.parse(unzipBody(rows.rows[0]!.body_gz)), body);
+  assert.equal(unzipBody(rows.rows[2]!.body_gz), "rate limited");
+  assert.equal(rows.rows[0]!.request.departure_id, "ATL");
+  assert.equal("api_key" in rows.rows[0]!.request, false);
+  assert.ok(!JSON.stringify(rows.rows).includes("secret-key"));
+  assert.equal(await flushRaw(d, { quote: () => null }), 0, "a provider that captures nothing is fine");
+  await d.close();
+});
