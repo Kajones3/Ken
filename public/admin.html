@@ -308,13 +308,22 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
           that route and date? This includes everything the bought fares taught the estimate.</li>
         <li><b>Blind</b>: what the formula alone says, before any bought fare on that route corrects it. This is what
           a traveler sees on a route we have never bought, and it is the number the lean setting changes.</li>
+        <li><b>Candidate</b>: a second formula being tested. It is graded only on fares it did NOT learn from, and
+          travelers never see it until you switch to it below.</li>
       </ul>
+      <p><b>Accurate</b> means within &plusmn;<span class="flZone">10</span>% of the real fare, <b>in either
+        direction</b>: $100 low and $100 high are the same miss. (Change the &plusmn; in Rates &amp; settings,
+        <code>flight.zonePct</code>; it only changes the grading.)</p>
       <div class="seg" id="flDays">
         <button data-days="14">Last 14 days</button>
         <button data-days="30" aria-pressed="true">Last 30 days</button>
         <button data-days="90">Last 90 days</button>
       </div>
       <div class="tiles" id="flTiles"><p class="count">Loading…</p></div>
+
+      <h3>Live formula vs candidate</h3>
+      <div id="flCompare"></div>
+      <div id="flSwitch" style="margin-top:12px"></div>
 
       <h3>Which lean fits best</h3>
       <p>&ldquo;Lean&rdquo; is set separately for US and international routes in Rates &amp; settings
@@ -1874,12 +1883,62 @@ async function loadFlights(){
   const g = (x, name) => x.n
     ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
     : tile(name, "—", "no fares to test yet");
-  const sh = s.shown || { domestic: { n: 0 }, international: { n: 0 } };
+  document.querySelectorAll(".flZone").forEach(el => el.textContent = s.zonePct);
+  const cmp = s.compare;
+  const seen = s.useCandidate ? cmp.candidate : cmp.live;
+  const zt = (x, name) => x.n
+    ? tile(name, x.inZonePct + "%", `within ±${s.zonePct}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
+    : tile(name, "—", "no fares to test yet");
   $("#flTiles").innerHTML = s.tested
-    ? g(sh.domestic, "US, shown now") + g(sh.international, "International, shown now")
-      + g(s.domestic, "US, blind") + g(s.international, "International, blind")
-      + tile("Lean now", `US ${s.lean} · Intl ${s.leanIntl ?? s.lean}`, "0 cheap end · 100 dear end")
+    ? zt(seen.domestic, "US, what travelers see") + zt(seen.international, "International, what travelers see")
+      + tile("Travelers see", s.useCandidate ? "Candidate" : "Live formula",
+          s.useCandidate ? "switched on below" : `lean US ${s.lean} · Intl ${s.leanIntl ?? s.lean}`)
     : `<p class="count">No real fares bought in this period to test against yet.</p>`;
+  const row = (label, f, better) => `<tr><td>${label}</td>${["live", "candidate"].map(m => {
+      const v = f(cmp[m]); const w = f(cmp[m === "live" ? "candidate" : "live"]);
+      const bold = v !== null && w !== null && (better === "high" ? v > w : Math.abs(v) < Math.abs(w));
+      return `<td class="n"${bold ? ' style="font-weight:700"' : ""}>${v === null || v === undefined ? "—" : v + (label.includes("reads") ? "" : "%")}</td>`;
+    }).join("")}</tr>`;
+  const grp = (k, name) => cmp.live[k].n || cmp.candidate[k].n ? `
+      <tr><th colspan="3" style="text-align:left">${name} · ${num(cmp.live[k].n)} fares</th></tr>
+      ${row(`Accurate (within ±${s.zonePct}%)`, x => x[k].inZonePct, "high")}
+      ${row("Within ±5%", x => x[k].within5Pct, "high")}
+      ${row(`Too low (over ${s.zonePct}% under)`, x => x[k].lowPct, "low")}
+      ${row(`Too high (over ${s.zonePct}% over)`, x => x[k].highPct, "low")}
+      ${row("Typically off by", x => x[k].typicalOffPct, "low")}
+      ${row("Overall reads (+ high, − low)", x => x[k].medianPct === null ? null : signed(x[k].medianPct), "low")}` : "";
+  const beat = s.daily.filter(d => d.live !== null && d.candidate !== null && d.candidate > d.live).length;
+  const scored = s.daily.filter(d => d.live !== null && d.candidate !== null).length;
+  $("#flCompare").innerHTML = s.tested ? `<div style="overflow-x:auto"><table class="ctab">
+      <thead><tr><th></th><th class="n">Live${s.useCandidate ? "" : " (travelers see)"}</th><th class="n">Candidate${s.useCandidate ? " (travelers see)" : ""}</th></tr></thead>
+      <tbody>${grp("domestic", "US")}${grp("international", "International")}
+      <tr><th colspan="3" style="text-align:left">The comparison itself</th></tr>
+      <tr><td>US vs international tilt (0 is fair)</td><td class="n">${cmp.live.tilt ?? "—"}</td><td class="n">${cmp.candidate.tilt ?? "—"}</td></tr>
+      </tbody></table></div>
+      <p class="count" style="margin-top:8px">Bold = better of the two. <b>Tilt</b>: how many points more the US reads
+        high than international (negative = US reads lower). Far from 0 means one side looks cheaper than it is, which
+        breaks &ldquo;Orlando or Tokyo?&rdquo; even if each number is close. The live column is partly graded by fares it
+        learned from, so it is flattered; the candidate is not.</p>
+      <p><b>Candidate beat live on ${beat} of the last ${scored} days</b> (share of that day's fares within ±${s.zonePct}%).</p>
+      <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Day bought</th><th class="n">Fares</th><th class="n">Live accurate</th><th class="n">Candidate accurate</th></tr></thead>
+      <tbody>${s.daily.slice().reverse().map(d => `<tr><td>${esc(d.day)}</td><td class="n">${num(d.n)}</td><td class="n">${d.live ?? "—"}${d.live === null ? "" : "%"}</td><td class="n">${d.candidate ?? "—"}${d.candidate === null ? "" : "%"}</td></tr>`).join("")}</tbody></table></div>`
+    : "";
+  $("#flSwitch").innerHTML = `<div style="border:1px solid var(--line, #ccc);border-radius:10px;padding:12px">
+      <b>Which formula do travelers see?</b>
+      <label style="display:block;margin-top:6px"><input type="radio" name="flUse" value="0"${s.useCandidate ? "" : " checked"}> Live formula (with the leans)</label>
+      <label style="display:block"><input type="radio" name="flUse" value="1"${s.useCandidate ? " checked" : ""}> Candidate formula</label>
+      <button class="btn" id="flUseSave" style="margin-top:8px">Save</button> <span id="flUseSaid" class="said"></span>
+      <p class="count" style="margin-top:6px">Takes effect within about 10 minutes. Switching back undoes it straight away; nothing is deleted, and both formulas keep being graded here either way.</p></div>`;
+  $("#flUseSave").onclick = async () => {
+    const v = Number(document.querySelector('input[name="flUse"]:checked').value);
+    const said = $("#flUseSaid"); said.textContent = "Saving…";
+    const r = await fetch("/api/admin/settings", { method: "PUT", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key: "flight.useCandidate", value: v, note: v ? "switched to the candidate from the scoreboard" : "back to the live formula" }) });
+    const d = await r.json().catch(() => ({}));
+    said.className = r.ok ? "said ok" : "said bad";
+    said.textContent = r.ok ? (v ? "Saved: travelers now see the candidate." : "Saved: travelers see the live formula.") : (d.message || "That wasn't saved.");
+    if (r.ok) loadFlights();
+  };
   const leanRow = (x, name, now) => x.n ? `<tr><td>${esc(name)} (${num(x.n)} ${x.n === 1 ? "fare" : "fares"})</td>${x.byLean.map(b =>
       `<td class="n"${b.lean === x.bestLean ? ' style="font-weight:700"' : ""}>${offBy(b.typicalOffPct)}${b.lean === now ? " ◀ now" : ""}<br><span class="count">${signed(b.medianPct)}</span></td>`).join("")}</tr>` : "";
   $("#flLean").innerHTML = s.tested
@@ -1890,9 +1949,10 @@ async function loadFlights(){
     : "";
   $("#flRoutes").innerHTML = s.routes.length
     ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Route</th><th class="n">Fares</th><th class="n">Real (middle)</th>
-        <th class="n">Shown now</th><th class="n">Off now</th><th class="n">Blind</th><th class="n">Blind reads</th></tr></thead><tbody>${s.routes.slice(0, 25).map(x =>
+        <th class="n">Shown now</th><th class="n">Off now</th><th class="n">Candidate</th><th class="n">Candidate off</th><th class="n">Blind</th><th class="n">Blind reads</th></tr></thead><tbody>${s.routes.slice(0, 25).map(x =>
         `<tr><td>${esc(x.origin)} → ${esc(x.destination)}</td><td class="n">${num(x.n)}</td><td class="n">$${num(x.realMedian)}</td>
-         <td class="n">${x.shownMedian == null ? "—" : "$" + num(x.shownMedian)}</td><td class="n"><b>${signed(x.shownPct)}</b></td>
+         <td class="n">${x.shownMedian == null ? "—" : "$" + num(x.shownMedian)}</td><td class="n">${s.useCandidate ? signed(x.shownPct) : `<b>${signed(x.shownPct)}</b>`}</td>
+         <td class="n">${x.candMedian == null ? "—" : "$" + num(x.candMedian)}</td><td class="n">${s.useCandidate ? `<b>${signed(x.candPct)}</b>` : signed(x.candPct)}</td>
          <td class="n">$${num(x.estMedian)}</td><td class="n">${signed(x.medianPct)}</td></tr>`).join("")}</tbody></table></div>
       ${s.routes.length > 25 ? `<p class="count" style="margin-top:8px">Showing the 25 furthest off of ${num(s.routes.length)} routes.</p>` : ""}`
     : "";

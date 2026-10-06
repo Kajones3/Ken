@@ -233,3 +233,19 @@ test("a route+month bought recently is not re-bought the next night; its slot go
   assert.ok(bought.length >= 4, "the freed slots are still spent, on other routes");
   await db.close();
 });
+
+test("the furthest-off routes get buying slots, either direction, in a month that can still be picked", async () => {
+  const { pickWorstRoutes } = await import("./jobs/popularRoutes.js");
+  const r = (origin: string, shownPct: number, months: string[]) => ({
+    origin, destination: "MCO", resort: "wdw", international: false, n: 1, realMedian: 300, estMedian: 300,
+    medianPct: 0, shownMedian: 300, shownPct, candMedian: null, candPct: null, months,
+  });
+  const picked = pickWorstRoutes([
+    r("ATL", 4, ["2027-03"]),          // inside the zone: left alone
+    r("BOS", -30, ["2027-03"]),        // reads LOW by 30%
+    r("ORD", 25, ["2027-03"]),         // reads HIGH by 25%
+    r("DEN", 40, ["2026-11"]),         // worst, but Nov can't be picked; Dec can (same season)
+  ], { useCandidate: false, zonePct: 10, n: 3, plannable: ["2026-12", "2027-01", "2027-02", "2027-03"],
+       fresh: new Set(["ORD|MCO|2027-03"]) });
+  assert.deepEqual(picked.map((p) => `${p.origin} ${p.departMonth}`), ["DEN 2026-12", "BOS 2027-03", "ORD 2027-01"]);
+});

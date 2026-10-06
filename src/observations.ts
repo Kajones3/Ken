@@ -120,5 +120,18 @@ export async function recordFlightObservations(db: Db, rows: FlightQuote[], sour
       vals,
     );
   }
+  // Google's read of the same searches, kept beside the fares (append-only).
+  for (const r of good) {
+    const i = r.insights;
+    if (!i) continue;
+    await db.query(
+      `insert into flight_insights
+         (origin,destination,depart_date,trip_length,typical_low,typical_high,lowest_price,price_level,history,itineraries,source)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [r.origin, r.destination, r.departDate, r.tripLength, i.typicalLow ?? null, i.typicalHigh ?? null,
+       i.lowestPrice ?? null, i.priceLevel ?? null, i.history ? JSON.stringify(i.history) : null,
+       i.itineraries, source],
+    );
+  }
   return good.length;
 }

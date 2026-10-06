@@ -66,6 +66,9 @@ test("the scoreboard reads only bought SerpApi fares from the database", async (
   await d.query(`insert into flight_prices (origin, destination, depart_date, trip_length, price_usd, source)
                  values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights'), ('ATL','MCO','2027-03-11',7,99,'travelpayouts'),
                         ('ATL','MCO','2027-03-12',7,98,null)`);
+  // The record is what the scoreboard reads.
+  await d.query(`insert into flight_observations (origin, destination, depart_date, trip_length, price_usd, source)
+                 values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights'), ('ATL','MCO','2027-03-11',7,99,'travelpayouts')`);
   const b = await loadScoreboard(d, 30);
   assert.equal(b.tested, 1);
   // Shipped lean is 100: 250 x 1.5 = 375 against 300 = +25%.
@@ -133,6 +136,8 @@ test("'shown now' includes what bought fares taught the route", async () => {
                  values ('00000000-0000-0000-0000-000000000001', 1, 1, 1, '2025Q1')`);
   await d.query(`insert into flight_prices (origin, destination, depart_date, trip_length, price_usd, source)
                  values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights')`);
+  await d.query(`insert into flight_observations (origin, destination, depart_date, trip_length, price_usd, source)
+                 values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights')`);
   const b = await loadScoreboard(d, 30);
   // Blind at lean 100: 250 against 300 = -16.7%.
   assert.equal(b.all.medianPct, -16.7);
@@ -141,4 +146,27 @@ test("'shown now' includes what bought fares taught the route", async () => {
   assert.equal(b.shown.all.n, 1);
   assert.equal(b.shown.all.medianPct, -2.8);
   await d.close();
+});
+
+test("a miss counts the same in either direction, and the US/international tilt is reported", () => {
+  const seed: Baseline = { origin: "ATL", destination: "NRT", year: 2026, quarter: 1, med: 1000, p25: 1000, p75: 1000,
+    source: "seed_guess", fetchedAt: null };
+  const fares = [fare("ATL", "MCO", "2027-03-10", 500), fare("BOS", "MCO", "2027-03-10", 500), fare("ATL", "NRT", "2027-02-01", 1000)];
+  const b = scoreFares({
+    fares, baselines: [bts("ATL", "MCO", 1, 500, 500, 500), bts("BOS", "MCO", 1, 500, 500, 500), seed],
+    trend: 1, intlTrend: 1, lean: 50, ...flat, zonePct: 10,
+    // Live: ATL $100 low, BOS $100 high, Tokyo spot on.
+    shownNow: new Map([["ATL|MCO|2027-03-10", 400], ["BOS|MCO|2027-03-10", 600], ["ATL|NRT|2027-02-01", 1000]]),
+    candidate: new Map([["ATL|MCO|2027-03-10", 470], ["BOS|MCO|2027-03-10", 530], ["ATL|NRT|2027-02-01", 1080]]),
+  });
+  const live = b.compare.live.domestic;
+  assert.deepEqual([live.lowPct, live.highPct, live.inZonePct], [50, 50, 0]);
+  assert.equal(live.typicalOffPct, 20);
+  const cand = b.compare.candidate;
+  assert.equal(cand.domestic.inZonePct, 100);
+  assert.equal(cand.domestic.within5Pct, 0);
+  // US reads 0 on the middle, Tokyo +8: tilted 8 points toward Tokyo.
+  assert.equal(cand.tilt, -8);
+  assert.equal(b.daily.length, 1);
+  assert.deepEqual([b.daily[0]!.live, b.daily[0]!.candidate], [33, 100]);
 });
