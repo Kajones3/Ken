@@ -10,7 +10,7 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
+  ON_TIERS, OFF_TIERS, RESORTS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
   type MileageRateLookup,
   SUGGESTED_PARK_DAYS, suggestedParkDaysKey,
@@ -231,6 +231,21 @@ export interface FlightRow {
  */
 export const ESTIMATE_LEAN_KEY = "flight.estimateLean";
 export const DEFAULT_ESTIMATE_LEAN = 100;
+/**
+ * International routes get their own lean (owner, 2026-10-06: "we are
+ * inconsistent in what each version needs"). The scoreboard showed US fares
+ * fit best near 50 and international near 25, because the two are built from
+ * different baselines (a real US survey vs a seeded regional guess moved by
+ * the international trend). Unset = use the US lean, so nothing moves until
+ * the owner sets it.
+ */
+export const INTL_ESTIMATE_LEAN_KEY = "flight.estimateLeanIntl";
+
+/** The lean for a route: the international one for an overseas resort, if set. */
+export function estimateLeanFor(book: Pick<PriceBook, "setting">, international: boolean): number {
+  const us = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+  return international ? (book.setting?.(INTL_ESTIMATE_LEAN_KEY) ?? us) : us;
+}
 
 /**
  * What our ESTIMATE alone would quote for this route on this date: the
@@ -246,7 +261,8 @@ export function quotedEstimate(book: PriceBook, origin: string, dest: string, st
   if (!est) return undefined;
   const holiday = holidayFlightPremium(start);
   const m = holiday ? 1 + (book.setting?.(holiday.settingKey) ?? holiday.defaultPct) / 100 : 1;
-  const lean = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+  const resort = RESORTS.find((r) => r.iata === dest || r.altArrivalAirports.some((a) => a.iata === dest));
+  const lean = estimateLeanFor(book, resort ? resort.region !== "dom" : false);
   return Math.round(leanedFare({ low: est.low * m, med: est.med * m, high: est.high * m }, lean) * 100) / 100;
 }
 
@@ -766,7 +782,7 @@ export function priceTrip(
     // Whenever an ESTIMATE is what gets shown, it is leaned. See
     // ESTIMATE_LEAN_KEY: the owner's call is to lean high, because an
     // estimate that comes in low is the one that costs somebody at checkout.
-    const leanPct = book.setting?.(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
+    const leanPct = estimateLeanFor(book, resort.region !== "dom");
     // A real cached fare is the headline only when it is at or above what we
     // would otherwise quote — the LEANED estimate, not the median (owner,
     // 2026-09-27). This used to be the median, which let one cheap real fare

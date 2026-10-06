@@ -93,3 +93,52 @@ test("searches are counted per day by home airport and month, and the owner's ar
   assert.deepEqual(Object.keys(rdu.fares).sort(), ["dlp", "dlr", "hkdl", "shdr", "tdr", "wdw"]);
   await d.close();
 });
+
+test("US and international fares are each graded at their own lean", () => {
+  const seed: Baseline = { origin: "ATL", destination: "NRT", year: 2026, quarter: 1, med: 1000, p25: 800, p75: 1200,
+    source: "seed_guess", fetchedAt: null };
+  const b = scoreFares({
+    fares: [fare("ATL", "MCO", "2027-03-10", 200), fare("ATL", "NRT", "2027-02-01", 800)],
+    baselines: [bts("ATL", "MCO", 1, 200, 150, 250), seed],
+    trend: 1, intlTrend: 1, lean: 50, leanIntl: 0, ...flat,
+  });
+  assert.equal(b.leanIntl, 0);
+  assert.equal(b.domestic.typicalOffPct, 0);   // 200 at lean 50
+  assert.equal(b.international.typicalOffPct, 0); // 800 at lean 0
+  // Unset international lean = the US one.
+  const same = scoreFares({ fares: [fare("ATL", "NRT", "2027-02-01", 800)], baselines: [seed], trend: 1, intlTrend: 1, lean: 50, ...flat });
+  assert.equal(same.leanIntl, 50);
+  assert.equal(same.international.medianPct, 25);
+});
+
+test("routes are ordered by how far off what travelers SEE now is", () => {
+  const b = scoreFares({
+    fares: [fare("ATL", "MCO", "2027-03-10", 200), fare("BOS", "MCO", "2027-03-10", 200)],
+    baselines: [bts("ATL", "MCO", 1, 300, 300, 300), bts("BOS", "MCO", 1, 220, 220, 220)],
+    trend: 1, lean: 50, ...flat,
+    shownNow: new Map([["ATL|MCO|2027-03-10", 210], ["BOS|MCO|2027-03-10", 260]]),
+  });
+  // Blind: ATL +50%, BOS +10%. Shown now: ATL +5%, BOS +30%, so BOS leads.
+  assert.deepEqual(b.routes.map((r) => [r.origin, r.shownPct]), [["BOS", 30], ["ATL", 5]]);
+  assert.equal(b.shown.domestic.n, 2);
+  assert.equal(b.shown.domestic.typicalOffPct, 17.5);
+  assert.equal(b.shown.domestic.within15Pct, 50);
+});
+
+test("'shown now' includes what bought fares taught the route", async () => {
+  const d = await memoryDb();
+  await d.query(`insert into historical_fares (origin, destination, year, quarter, avg_fare_usd, median_fare_usd, p25_fare_usd, p75_fare_usd, fetched_at)
+                 values ('ATL','MCO',2025,1,200,200,150,250, '2026-01-01')`);
+  await d.query(`insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, basis_quarter)
+                 values ('00000000-0000-0000-0000-000000000001', 1, 1, 1, '2025Q1')`);
+  await d.query(`insert into flight_prices (origin, destination, depart_date, trip_length, price_usd, source)
+                 values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights')`);
+  const b = await loadScoreboard(d, 30);
+  // Blind at lean 100: 250 against 300 = -16.7%.
+  assert.equal(b.all.medianPct, -16.7);
+  // One bought fare moves the route a third of the way to 300/200: x1.1667,
+  // so travelers now see 250 x 1.1667 = 291.67, -2.8%.
+  assert.equal(b.shown.all.n, 1);
+  assert.equal(b.shown.all.medianPct, -2.8);
+  await d.close();
+});

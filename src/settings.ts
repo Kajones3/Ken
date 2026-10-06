@@ -36,7 +36,7 @@ import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey }
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
 import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
-import { ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
+import { ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
   THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
   CHRISTMAS_PREMIUM_KEY, DEFAULT_CHRISTMAS_PREMIUM_PCT,
@@ -118,7 +118,7 @@ export const SETTINGS: SettingDef[] = [
   // reads naturally for "how far up the range".
   {
     key: ESTIMATE_LEAN_KEY,
-    label: "Estimated flights — where in the range to show",
+    label: "Estimated US flights — where in the range to show",
     group: "Flight estimates",
     kind: "percent",
     default: DEFAULT_ESTIMATE_LEAN,
@@ -128,6 +128,19 @@ export const SETTINGS: SettingDef[] = [
       + "100 the expensive end. Higher is the safer mistake: an estimate that comes in low is the one "
       + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
+  },
+  {
+    key: INTL_ESTIMATE_LEAN_KEY,
+    label: "Estimated international flights — where in the range to show",
+    group: "Flight estimates",
+    kind: "percent",
+    default: DEFAULT_ESTIMATE_LEAN,
+    min: 0,
+    max: 100,
+    help: "The same dial for Paris, Tokyo, Shanghai and Hong Kong. Until you set it, international "
+      + "flights use the US setting above. International estimates start from a different, rougher "
+      + "starting point than US ones, so they can need a different setting: check /admin → Flights & "
+      + "hotels for which setting fits each best.",
   },
   {
     key: CHECKS_USE_KEY,
@@ -270,7 +283,7 @@ export async function loadSettings(db: Db): Promise<SettingValue[]> {
     `select key, value, note, updated_at from owner_settings`,
   );
   const byKey = new Map(rows.map((r) => [r.key, r]));
-  return SETTINGS.map((def) => {
+  const list: SettingValue[] = SETTINGS.map((def) => {
     const row = byKey.get(def.key);
     const raw = row ? Number(row.value) : NaN;
     // A stored value that no longer validates (the registry's bounds changed,
@@ -285,6 +298,12 @@ export async function loadSettings(db: Db): Promise<SettingValue[]> {
       updatedAt: row ? new Date(row.updated_at).toISOString() : null,
     };
   });
+  // An unset international lean follows the US one, so show THAT number,
+  // not the registry default it would never actually use.
+  const intl = list.find((v) => v.key === INTL_ESTIMATE_LEAN_KEY);
+  const us = list.find((v) => v.key === ESTIMATE_LEAN_KEY);
+  if (intl && us && !intl.overridden) intl.value = us.value;
+  return list;
 }
 
 /* ---------------------------------------------------------------------------

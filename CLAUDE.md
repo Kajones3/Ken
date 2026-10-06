@@ -75,7 +75,7 @@ SITE only blends sources, uses Google's Disney rates and shows the /admin
 hotel list after a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**724 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**728 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -97,6 +97,32 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   schema.sql relabels saved `free_dining` deals whose name says kids/child;
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
+
+### 2026-10-06 — two leans, and the scoreboard grades what travelers SEE
+
+Owner: "Can we separate the lean for international and US" and "The
+scoreboard is answering the wrong question. It should answer: now that we've
+bought our fares, how far off are the numbers we are showing?"
+- **`flight.estimateLeanIntl`** (`INTL_ESTIMATE_LEAN_KEY`,
+  `estimateLeanFor()` in pricing.ts): the lean for resorts with
+  `region !== "dom"`. **Unset = follows the US lean**, so nothing moved on
+  deploy; /admin shows the US value for it until the owner sets one. Used by
+  priceTrip, quotedEstimate (price checks) and the scoreboard. Evidence at
+  the time: US best near 50, international near 25 (owner's call to set it).
+- **Scoreboard "shown now"** (`fareScoreboard.ts` `shownNow()`): for every
+  bought fare, the estimate a traveler would see today for that route and
+  date from a fresh `loadBook` (route corrections from bought fares, owner
+  corrections, price checks, leaned, holiday premium), one book per origin
+  and travel quarter. Tiles, a per-route "Shown now / Off now" column, and
+  the route list is ordered by it. The blind column stays (it is what the
+  lean changes and what an unbought route gets). Honest limit printed on the
+  page: shown-now is partly graded by the fares it learned from.
+- Why bought routes barely improved: a route correction needs 3 fares in the
+  same route+QUARTER within 45 days for full weight
+  (`ROUTE_CORRECTION_MIN_SAMPLES`), and `recentlyBought()` spreads purchases,
+  so most routes hold 1 fare per quarter = a third of the way. Proposed to
+  the owner (not built): learn from SIMILAR routes (same destination, same
+  origin, same region) so one bought fare moves its neighbours too.
 
 ### 2026-10-05 — vacation rentals are their own group, not hotels
 

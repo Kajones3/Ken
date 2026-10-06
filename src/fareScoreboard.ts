@@ -28,7 +28,8 @@ import type { Db } from "./db.js";
 import { RESORTS } from "./config.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import { dateStr } from "./book.js";
-import { leanedFare, ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN } from "./pricing.js";
+import { leanedFare, quotedEstimate, ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN } from "./pricing.js";
+import { loadBook } from "./book.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
 import { settingsMap } from "./settings.js";
 
@@ -54,7 +55,17 @@ export interface ScoreInputs {
   trend: number | null;
   /** The international trend, for seeded guesses (seed_guess). Null = none yet, so 1. */
   intlTrend?: number | null;
+  /** The US lean. */
   lean: number;
+  /** The international lean (unset in settings = the US one). */
+  leanIntl?: number;
+  /**
+   * What a traveler is shown TODAY for this route and date, if we had not
+   * bought it: the estimate with every correction applied (bought fares on
+   * the route, the owner's corrections, price checks), leaned and with the
+   * holiday premium. Keyed `${origin}|${destination}|${departDate}`.
+   */
+  shownNow?: Map<string, number>;
   /** Holiday premium percent by setting key (missing = the shipped default). */
   premiumPct: (key: string, fallback: number) => number;
 }
@@ -76,14 +87,23 @@ export interface GroupScore {
 export interface RouteScore {
   origin: string; destination: string; resort: string; international: boolean;
   n: number; realMedian: number; estMedian: number; medianPct: number;
+  /** What travelers see now (see ScoreInputs.shownNow), and its miss. */
+  shownMedian: number | null; shownPct: number | null;
+}
+
+/** "Now that we've bought fares, how far off are the numbers we show?" */
+export interface ShownScore {
+  n: number; medianPct: number | null; typicalOffPct: number | null; within15Pct: number | null;
 }
 
 export interface Scoreboard {
   lean: number;
+  leanIntl: number;
   trend: number | null;
   tested: number;
   skipped: { noBaseline: number; noTrend: number; builtFromIt: number };
   all: GroupScore; domestic: GroupScore; international: GroupScore;
+  shown: { all: ShownScore; domestic: ShownScore; international: ShownScore };
   routes: RouteScore[];
 }
 
@@ -109,7 +129,8 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     byRoute.set(k, [...(byRoute.get(k) ?? []), b]);
   }
   const skipped = { noBaseline: 0, noTrend: 0, builtFromIt: 0 };
-  type Test = { fare: BoughtFare; intl: boolean; resort: string; est: Record<number, number> };
+  const leanIntl = inp.leanIntl ?? inp.lean;
+  type Test = { fare: BoughtFare; intl: boolean; resort: string; est: Record<number, number>; cur: number; shown?: number };
   const tests: Test[] = [];
 
   for (const f of inp.fares) {
@@ -132,8 +153,11 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
     const prem = hol ? 1 + inp.premiumPct(hol.settingKey, hol.defaultPct) / 100 : 1;
     const band = { low: h.p25 * m, med: h.med * m, high: h.p75 * m };
     const est: Record<number, number> = {};
-    for (const L of new Set([...LEANS, inp.lean])) est[L] = leanedFare(band, L) * prem;
-    tests.push({ fare: f, intl: resort.region !== "dom", resort: resort.id, est });
+    for (const L of LEANS) est[L] = leanedFare(band, L) * prem;
+    const intl = resort.region !== "dom";
+    const cur = leanedFare(band, intl ? leanIntl : inp.lean) * prem;
+    const shown = inp.shownNow?.get(`${f.origin}|${f.destination}|${f.departDate}`);
+    tests.push({ fare: f, intl, resort: resort.id, est, cur, shown });
   }
 
   const group = (ts: Test[]): GroupScore => {
@@ -143,15 +167,26 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
       return { medianPct: pct1(median(e)), typicalOffPct: pct1(median(e.map(Math.abs))) };
     };
     const byLean = LEANS.map((lean) => ({ lean, ...at(lean) }));
-    const cur = errs(inp.lean);
+    const cur = ts.map((t) => t.cur / t.fare.price - 1);
     const best = byLean.filter((b) => b.typicalOffPct !== null)
       .sort((a, b) => a.typicalOffPct! - b.typicalOffPct!)[0];
     return {
       n: ts.length,
-      ...at(inp.lean),
+      medianPct: pct1(median(cur)),
+      typicalOffPct: pct1(median(cur.map(Math.abs))),
       within15Pct: ts.length ? Math.round((cur.filter((e) => Math.abs(e) <= 0.15).length / ts.length) * 100) : null,
       byLean,
       bestLean: best?.lean ?? null,
+    };
+  };
+
+  const shownGroup = (ts: Test[]): ShownScore => {
+    const e = ts.filter((t) => t.shown !== undefined).map((t) => t.shown! / t.fare.price - 1);
+    return {
+      n: e.length,
+      medianPct: pct1(median(e)),
+      typicalOffPct: pct1(median(e.map(Math.abs))),
+      within15Pct: e.length ? Math.round((e.filter((x) => Math.abs(x) <= 0.15).length / e.length) * 100) : null,
     };
   };
 
@@ -162,19 +197,31 @@ export function scoreFares(inp: ScoreInputs): Scoreboard {
   }
   const routes: RouteScore[] = [...routeMap.values()].map((ts) => {
     const realMedian = median(ts.map((t) => t.fare.price))!;
-    const estMedian = median(ts.map((t) => t.est[inp.lean]!))!;
+    const estMedian = median(ts.map((t) => t.cur))!;
+    const withShown = ts.filter((t) => t.shown !== undefined);
+    const shownMedian = median(withShown.map((t) => t.shown!));
     return {
       origin: ts[0]!.fare.origin, destination: ts[0]!.fare.destination, resort: ts[0]!.resort,
       international: ts[0]!.intl, n: ts.length,
       realMedian: Math.round(realMedian), estMedian: Math.round(estMedian),
-      medianPct: pct1(median(ts.map((t) => t.est[inp.lean]! / t.fare.price - 1)))!,
+      medianPct: pct1(median(ts.map((t) => t.cur / t.fare.price - 1)))!,
+      shownMedian: shownMedian === null ? null : Math.round(shownMedian),
+      shownPct: pct1(median(withShown.map((t) => t.shown! / t.fare.price - 1))),
     };
-  }).sort((a, b) => Math.abs(b.medianPct) - Math.abs(a.medianPct) || b.n - a.n);
+  })
+    // Furthest off by what travelers SEE now, where we know it; the blind
+    // number only orders routes we couldn't rebuild.
+    .sort((a, b) => Math.abs(b.shownPct ?? b.medianPct) - Math.abs(a.shownPct ?? a.medianPct) || b.n - a.n);
 
   return {
-    lean: inp.lean, trend: inp.trend, tested: tests.length, skipped,
+    lean: inp.lean, leanIntl, trend: inp.trend, tested: tests.length, skipped,
     all: group(tests), domestic: group(tests.filter((t) => !t.intl)),
-    international: group(tests.filter((t) => t.intl)), routes,
+    international: group(tests.filter((t) => t.intl)),
+    shown: {
+      all: shownGroup(tests), domestic: shownGroup(tests.filter((t) => !t.intl)),
+      international: shownGroup(tests.filter((t) => t.intl)),
+    },
+    routes,
   };
 }
 
@@ -217,12 +264,53 @@ export async function loadScoreboard(db: Db, days = 30): Promise<Scoreboard & { 
     return t.rows[0] ? Number(t.rows[0].multiplier) : null;
   };
   const settings = await settingsMap(db);
+  const lean = settings.get(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN;
   const board = scoreFares({
     fares, baselines,
     trend: await latest("domestic"),
     intlTrend: await latest("intl"),
-    lean: settings.get(ESTIMATE_LEAN_KEY) ?? DEFAULT_ESTIMATE_LEAN,
+    lean,
+    leanIntl: settings.get(INTL_ESTIMATE_LEAN_KEY) ?? lean,
+    shownNow: await shownNow(db, fares),
     premiumPct: (key, fallback) => settings.get(key) ?? fallback,
   });
   return { ...board, days };
+}
+
+/**
+ * What a traveler sees today for each bought fare's route and date, had we
+ * not bought that date: the same estimate the board shows (quotedEstimate),
+ * from a fresh price book, so every correction counts — bought fares on the
+ * route (ROUTE_CORRECTION in book.ts), the owner's fare corrections and price
+ * checks. One book per origin and travel quarter, since a route correction
+ * is per quarter. Partly graded by the same fares it learned from, so it
+ * reads kinder than a fare we've never bought; the page says so.
+ */
+async function shownNow(db: Db, fares: BoughtFare[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const groups = new Map<string, BoughtFare[]>();
+  for (const f of fares) {
+    if (!RESORT_OF_AIRPORT.has(f.destination)) continue;
+    const k = `${f.origin}|${f.departDate.slice(0, 4)}Q${quarterOf(f.departDate)}`;
+    groups.set(k, [...(groups.get(k) ?? []), f]);
+  }
+  for (const list of groups.values()) {
+    const dests = [...new Set(list.map((f) => f.destination))];
+    const day = list[0]!.departDate;
+    try {
+      const book = await loadBook(db, {
+        origin: list[0]!.origin, destinations: dests,
+        resortIds: [...new Set(dests.map((d) => RESORT_OF_AIRPORT.get(d)!.id))],
+        from: day, to: day, tripLength: 7,
+      });
+      for (const f of list) {
+        const v = quotedEstimate(book, f.origin, f.destination, f.departDate);
+        if (v !== undefined) out.set(`${f.origin}|${f.destination}|${f.departDate}`, v);
+      }
+    } catch (e) {
+      // A book that won't load leaves those fares off this column only.
+      console.warn(`scoreboard: shown-now skipped for ${list[0]!.origin}: ${(e as Error).message}`);
+    }
+  }
+  return out;
 }
