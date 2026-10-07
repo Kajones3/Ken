@@ -319,6 +319,14 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       </div>
       <div class="tiles" id="flTiles"><p class="count">Loading…</p></div>
 
+      <h3>Checked before buying: how far off are we right now</h3>
+      <p>Every night, <b>just before</b> buying each fare, we write down the number a traveler would have seen for
+        that route and date at that moment, with everything the formula had learned so far. Then we buy the fare and
+        compare. Nothing here could have learned from the fare it is graded on, so this is the honest answer to
+        &ldquo;how far off is the number on screen?&rdquo; It started with the 2026-10-08 run, grows by about 18 fares a
+        night, and can't be rebuilt for nights before it started.</p>
+      <div id="flForecast"><p class="count">Loading…</p></div>
+
       <h3>Live formula vs candidate</h3>
       <div id="flCompare"></div>
       <div id="flSwitch" style="margin-top:12px"></div>
@@ -1879,10 +1887,45 @@ function renderHotelList(list){
 let flDays = 30;
 const signed = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + v + "%";
 const offBy = v => v === null || v === undefined ? "—" : v + "%";
+/* "How far off are we right now": numbers written down before each fare was
+ * bought, graded against it (fareForecasts.ts). */
+function renderForecasts(fc){
+  const el = $("#flForecast");
+  if(!fc || !fc.n){
+    el.innerHTML = `<p class="count">Nothing yet. The first numbers arrive after the next nightly fare run${fc && fc.noFare ? ` (${num(fc.noFare)} checked, but Google had no fare for them)` : ""}.</p>`;
+    return;
+  }
+  const z = fc.zonePct;
+  const zt = (x, name) => x.n
+    ? tile(name, x.inZonePct + "%", `within ±${z}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
+    : tile(name, "—", "no fares checked yet");
+  const cell = v => `<td class="n">${v === null || v === undefined ? "—" : v}</td>`;
+  const pc = v => v === null || v === undefined ? null : v + "%";
+  const line = (label, x) => x.n ? `<tr><td>${label}</td>${cell(num(x.n))}${cell(pc(x.inZonePct))}${cell(pc(x.within5Pct))}${cell(pc(x.lowPct))}${cell(pc(x.highPct))}${cell(offBy(x.typicalOffPct))}${cell(signed(x.medianPct))}</tr>` : "";
+  const grp = (k, name) => (fc[k].shown.n || fc[k].candidate.n) ? `
+      <tr><th colspan="8" style="text-align:left">${name}</th></tr>
+      ${line("What travelers saw", fc[k].shown)}
+      ${line("Live estimate alone", fc[k].live)}
+      ${line("Candidate", fc[k].candidate)}` : "";
+  el.innerHTML = `<div class="tiles">${zt(fc.domestic.shown, "US, right now")}${zt(fc.international.shown, "International, right now")}
+      ${tile("Checked so far", num(fc.n), `since ${fc.since || "—"} · ${num(fc.shownKinds.realFare)} showed a real fare we held, ${num(fc.shownKinds.estimate)} an estimate`)}</div>
+    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Fares</th><th class="n">Within ±${z}%</th><th class="n">Within ±5%</th>
+      <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off</th><th class="n">Reads</th></tr></thead>
+      <tbody>${grp("domestic", "US")}${grp("international", "International")}</tbody></table></div>
+    <p class="count" style="margin-top:8px"><b>What travelers saw</b> is the number on the board: a real fare we already
+      held for that date when the board uses one, otherwise the estimate. <b>Live estimate alone</b> is the live
+      formula's estimate even where a real fare was shown. <b>Candidate</b> is the second formula, as it stood that night.
+      <b>Reads</b>: + means our number was above the real fare. With fewer than about 50 fares a group, treat a few
+      points either way as noise.</p>
+    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Night</th><th class="n">Fares</th><th class="n">Travelers saw: within ±${z}%</th>
+      <th class="n">Typically off</th><th class="n">Reads</th><th class="n">Candidate: within ±${z}%</th></tr></thead>
+      <tbody>${fc.daily.map(d => `<tr><td>${esc(d.day)}</td>${cell(num(d.n))}${cell(pc(d.shown.inZonePct))}${cell(offBy(d.shown.typicalOffPct))}${cell(signed(d.shown.medianPct))}${cell(pc(d.candidate.inZonePct))}</tr>`).join("")}</tbody></table></div>`;
+}
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
-  const { scoreboard: s, demand: d, hotels: h, hotelList: hl } = await r.json();
+  const { scoreboard: s, forecasts: fc, demand: d, hotels: h, hotelList: hl } = await r.json();
+  renderForecasts(fc);
   renderHotelScore(h);
   renderHotelList(hl || []);
   const g = (x, name) => x.n
