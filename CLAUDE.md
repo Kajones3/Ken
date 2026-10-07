@@ -102,6 +102,25 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   /admin offers both kinds; the screenshot reader picks the kids kind from
   "for Kids" / "Ages 3 to 9". The email already sent can't be recalled.
 
+### 2026-10-07 — VERIFIED on live data (first nightly run after PRs #120-#122)
+
+Coverage report run 37625287160 plus the night's job logs:
+- Paid fares: 18 written / 18 kept, every night since 10-03. `serpapi_flights`
+  in the record: **91** (19 on 10-03). Domestic trend from **19** routes (7 on
+  10-03), x1.135; international trend from 45 routes.
+- **Google's flight typical range: 18 of 18** of the night's fares have one,
+  so `price_insights` is real. (The coverage line for this was miscounting
+  older runs; fixed 10-07 to measure inside the same query.)
+- popular-routes log: "6 furthest-off route(s): ATL->SNA, CLT->MCO, CLT->NRT,
+  RDU->HKG, MCI->NRT 2027-01, DEN->PVG 2027-04", bought first; 0 errors.
+- Hotels: 12 searches made / 12 kept (200 rates). Google's extra details on
+  199 of them: **49 with a "less than usual" price, 14 with per-site
+  prices** (Google sends per-site prices only rarely in list results).
+- Whole answers: flights 18 (0.5 MB sent, 0.1 MB stored), hotels 12 (2.2 MB
+  sent, 0.4 MB stored) = ~0.5 MB stored a night, ~15 MB a month. **Database
+  79 MB of Neon's 512 MB.** The raw answers alone would fill the rest in
+  about two years; other tables grow too, so watch the size line.
+
 ### 2026-10-06, very last — every byte Google sends is kept
 
 Owner: "can we keep all the data we pull from Google. Don't drop anything."

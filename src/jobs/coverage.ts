@@ -210,24 +210,25 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const r of rec.rows) out.push(`   ${r.source}: ${r.n} fares, newest ${String(r.newest).slice(4, 21)}`);
     const since = await db.query<{ done_at: unknown }>(`select done_at from schema_marks where name = 'flight_observations_backfill'`);
     out.push(`   (record started ${String(since.rows[0]?.done_at ?? "never").slice(4, 21)})`);
-    const perRun = await db.query<{ job: string; started_at: unknown; rows_written: number; kept: string }>(
+    const perRun = await db.query<{ job: string; started_at: unknown; rows_written: number; kept: string; ins: string; ranged: string }>(
       `select r.job, r.started_at, r.rows_written,
               (select count(*) from flight_observations o
                 where o.source = 'serpapi_flights' and o.observed_at >= r.started_at
-                  and o.observed_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as kept
+                  and o.observed_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as kept,
+              (select count(*) from flight_insights i
+                where i.source = 'serpapi_flights' and i.observed_at >= r.started_at
+                  and i.observed_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as ins,
+              (select count(typical_low) from flight_insights i
+                where i.source = 'serpapi_flights' and i.observed_at >= r.started_at
+                  and i.observed_at <= coalesce(r.finished_at, now()) + interval '1 minute')::text as ranged
          from fetch_runs r
         where r.job in ('popular_routes', 'intl_sweep') and r.started_at > now() - interval '14 days'
           and r.finished_at is not null
         order by r.started_at`);
     out.push("Paid runs, last 14 days: written / kept in the record / with Google's typical range");
-    for (const r of perRun.rows) {
-      const ins = await db.query<{ n: string; ranged: string }>(
-        `select count(*)::text as n, count(typical_low)::text as ranged from flight_insights
-          where source = 'serpapi_flights' and observed_at >= $1
-            and observed_at <= coalesce((select finished_at from fetch_runs where started_at = $1 limit 1), now()) + interval '1 minute'`,
-        [r.started_at]).catch(() => ({ rows: [{ n: "?", ranged: "?" }] }));
-      out.push(`   ${String(r.started_at).slice(4, 21)} ${r.job}: ${r.rows_written} / ${r.kept} / ${ins.rows[0]!.ranged} of ${ins.rows[0]!.n} insights`);
-    }
+    // Measured inside the same query, by each run's own time window. (A
+    // per-run lookup by started_at missed: JS dates drop the microseconds.)
+    for (const r of perRun.rows) out.push(`   ${String(r.started_at).slice(4, 21)} ${r.job}: ${r.rows_written} / ${r.kept} / ${r.ranged} of ${r.ins} insights`);
   } catch (e) {
     out.push(`The record could not be read: ${(e as Error).message}`);
   }
