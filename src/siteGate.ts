@@ -105,6 +105,10 @@ export function clearGateFailures(ip: string): void {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
+/** The logo mark (public/brand/mark.svg), inline: while the site is locked
+ *  nothing under /public is served, so the page can't link to it. */
+const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/><path d="M14 50 V33 h5 v-6 l3.5 -9 l3.5 9 v6 h12 v-6 l3.5 -9 l3.5 9 v6 h5 V50 Z" fill="#F5EFE0"/><path d="M27.5 33 V22 l4.5 -12 l4.5 12 V33 Z" fill="#F5EFE0"/><circle cx="32" cy="8.5" r="2.6" fill="#E8B23E"/><path d="M28 50 v-7 a4 4 0 0 1 8 0 v7 Z" fill="#16204A"/><rect x="14" y="52.5" width="36" height="3" rx="1.5" fill="#E8B23E"/></svg>`;
+
 export function comingSoonHtml(opts: { next?: string; error?: string } = {}): string {
   const next = safeNext(opts.next);
   return `<!doctype html>
@@ -113,7 +117,8 @@ export function comingSoonHtml(opts: { next?: string; error?: string } = {}): st
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Parkfare · Coming soon</title>
+<title>Pricing the Magic · Coming soon</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(MARK_SVG)}">
 <style>
 :root{color-scheme:light;--plane:#F1F2F6;--surface:#FBFBFD;--ink:#14161F;--ink-2:#565B6B;--muted:#878DA0;
   --rule:#E1E3EB;--accent:#9A6A00;--accent-bg:#F6E7C4;--accent-line:#D9A22B;--bad:#B3261E}
@@ -124,9 +129,9 @@ html,body{margin:0;height:100%}
 body{background:var(--plane);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
   display:flex;align-items:center;justify-content:center;padding:24px 16px}
 main{width:100%;max-width:440px;text-align:center}
-.mark{display:inline-grid;place-items:center;width:56px;height:56px;border-radius:14px;
-  background:var(--accent-bg);color:var(--accent);border:1px solid var(--accent-line);
-  font-weight:800;letter-spacing:.02em;font-size:20px}
+.mark{display:inline-block;width:64px;height:64px}
+.name{font-weight:800;font-size:20px;letter-spacing:-.01em;margin:10px 0 0}
+.name span{color:var(--accent)}
 h1{font-size:34px;line-height:1.15;margin:20px 0 8px;letter-spacing:-.01em}
 p.lede{color:var(--ink-2);margin:0 0 36px}
 details{border-top:1px solid var(--rule);padding-top:20px;text-align:left}
@@ -142,9 +147,10 @@ button{font:inherit;font-weight:600;padding:10px 16px;border-radius:10px;border:
 </head>
 <body>
 <main>
-  <span class="mark">PF</span>
+  <span class="mark">${MARK_SVG}</span>
+  <p class="name">Pricing the <span>Magic</span></p>
   <h1>Coming soon</h1>
-  <p class="lede">Parkfare is getting ready. Check back soon.</p>
+  <p class="lede">We're getting ready. Check back soon.</p>
   <details${opts.error ? " open" : ""}>
     <summary>Have the password?</summary>
     <form method="post" action="/site-unlock">

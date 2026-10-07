@@ -65,7 +65,7 @@ test("the email leads with the owner's wording only when there is a measured sav
   assert.equal(withX.subject, "A Deal May Save You $1,240 on your Disney Trip");
   assert.match(withX.text, /^A Deal May Save You \$1,240 on your Disney Trip\./);
   const plain = buildAlertEmail({ detail: "x", oldTotal: 0, newTotal: 0, kind: "new_promo" }, "a@example.com", "https://x/u");
-  assert.equal(plain.subject, "Parkfare: a new Disney deal");
+  assert.equal(plain.subject, "Pricing the Magic: a new Disney deal");
 });
 
 test("a saved search is read defensively", () => {

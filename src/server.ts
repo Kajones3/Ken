@@ -70,7 +70,9 @@ function escapeHtml(v: string): string {
   return v.replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
-const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css" };
+const MIME: Record<string, string> = {
+  ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
+};
 
 /**
  * Free for everyone — how you get there isn't a Plus feature, just a different
@@ -606,7 +608,12 @@ const server = createServer(async (req, res) => {
     if (url.pathname.startsWith("/public/")) {
       const name = url.pathname.slice("/public/".length);
       const file = await readFile(new URL(name, PUBLIC_DIR));
-      res.writeHead(200, { "content-type": MIME[extname(name)] ?? "application/octet-stream" });
+      res.writeHead(200, {
+        "content-type": MIME[extname(name)] ?? "application/octet-stream",
+        // The illustration (tools/brand/gen.mjs) changes rarely; a day saves
+        // re-sending ~120 KB of map on every visit.
+        ...(name.startsWith("brand/") ? { "cache-control": "public, max-age=86400" } : {}),
+      });
       return res.end(file);
     }
     if (url.pathname === "/health") {
@@ -786,10 +793,10 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/auth/reset" && (req.method === "GET" || req.method === "POST")) {
       const page = (title: string, body: string, status = 200) => sendHtml(status,
         `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
-        + `<title>${title} · Parkfare</title>`
+        + `<title>${title} · Pricing the Magic</title>`
         + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
         + `<h1 style="font-size:1.4rem">${title}</h1>${body}`
-        + `<p><a href="/">Back to Parkfare</a></p></div>`);
+        + `<p><a href="/">Back to Pricing the Magic</a></p></div>`);
       const dead = (reason: "unknown" | "expired") => page(
         reason === "expired" ? "That link has expired" : "That link isn't valid",
         reason === "expired"
@@ -837,10 +844,10 @@ const server = createServer(async (req, res) => {
       const result = await verifyEmailToken(db, url.searchParams.get("token") ?? "");
       const page = (title: string, body: string) =>
         `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
-        + `<title>${title} · Parkfare</title>`
+        + `<title>${title} · Pricing the Magic</title>`
         + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
         + `<h1 style="font-size:1.4rem">${title}</h1><p>${body}</p>`
-        + `<p><a href="/">Back to Parkfare</a></p></div>`;
+        + `<p><a href="/">Back to Pricing the Magic</a></p></div>`;
       if (result.ok) {
         return sendHtml(200, page(
           result.alreadyVerified ? "Already confirmed" : "Email confirmed",
@@ -869,10 +876,10 @@ const server = createServer(async (req, res) => {
       const token = url.searchParams.get("t") ?? "";
       const page = (title: string, body: string, status = 200) => sendHtml(status,
         `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
-        + `<meta name="robots" content="noindex"><title>${title} · Parkfare</title>`
+        + `<meta name="robots" content="noindex"><title>${title} · Pricing the Magic</title>`
         + `<div style="font:16px/1.6 system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:0 1.25rem">`
         + `<h1 style="font-size:1.4rem">${title}</h1>${body}`
-        + `<p style="margin-top:2rem"><a href="/">Back to Parkfare</a></p></div>`);
+        + `<p style="margin-top:2rem"><a href="/">Back to Pricing the Magic</a></p></div>`);
       const button = (label: string, action: "stop" | "resume") =>
         `<form method="post" action="/unsubscribe?t=${encodeURIComponent(token)}">`
         + `<input type="hidden" name="do" value="${action}">`
@@ -882,7 +889,7 @@ const server = createServer(async (req, res) => {
 
       if (req.method === "GET") {
         return page("Stop deal emails?",
-          "<p>You'll stop getting Parkfare's emails about new Disney deals. Your account, your Plus and your "
+          "<p>You'll stop getting Pricing the Magic's emails about new Disney deals. Your account, your Plus and your "
           + "saved searches aren't affected, and emails about your account (like password resets) still come.</p>"
           + button("Stop deal emails", "stop"));
       }
@@ -895,7 +902,7 @@ const server = createServer(async (req, res) => {
           ? page("Deal emails are back on",
               `<p>${escapeHtml(email)} will get an email when we add a new official Disney deal.</p>`)
           : page("You're unsubscribed",
-              `<p>${escapeHtml(email)} won't get any more deal emails from Parkfare.</p>`
+              `<p>${escapeHtml(email)} won't get any more deal emails from Pricing the Magic.</p>`
               + `<p>Changed your mind?</p>` + button("Turn deal emails back on", "resume"));
       }
     }
@@ -1025,7 +1032,7 @@ const server = createServer(async (req, res) => {
       if (owner) {
         await pickEmailSender().send({
           to: owner,
-          subject: `Parkfare: ${user.email} wants Plus`,
+          subject: `Pricing the Magic: ${user.email} wants Plus`,
           text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
             + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.days}`,
         });
