@@ -63,9 +63,9 @@ export function verifyUrl(token: string, env: NodeJS.ProcessEnv = process.env): 
 export function buildVerifyEmail(to: string, url: string): EmailMessage {
   return {
     to,
-    subject: "Confirm your email for Parkfare",
+    subject: "Confirm your email for Pricing the Magic",
     text: [
-      "Someone (hopefully you) created a Parkfare account with this address.",
+      "Someone (hopefully you) created a Pricing the Magic account with this address.",
       "",
       "Confirm it here:",
       url,
@@ -74,7 +74,7 @@ export function buildVerifyEmail(to: string, url: string): EmailMessage {
       "",
       "If this wasn't you, you can ignore this — nothing will be sent to this address unless it's confirmed.",
       "",
-      "— Parkfare",
+      "— Pricing the Magic",
     ].join("\n"),
   };
 }

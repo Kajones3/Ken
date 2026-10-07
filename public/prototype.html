@@ -1,8 +1,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Parkfare</title>
+<title>Pricing the Magic</title>
+<link rel="icon" type="image/svg+xml" href="/public/brand/mark.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Karla:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Karla:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 
 <style>
 /* ---------- tokens: light is the base, both dark scopes override ---------- */
@@ -31,6 +32,9 @@
   --lock:rgba(20,22,31,.055);
   --shadow:0 1px 2px rgba(20,22,31,.05), 0 8px 24px -12px rgba(20,22,31,.14);
   --ring:rgba(20,22,31,.10);
+  /* The hero illustration (tools/brand/gen.mjs), one per theme. */
+  --hero-map:url("/public/brand/map-light.svg");
+  --hero-bg:#F3F6FB;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
@@ -59,6 +63,8 @@
     --lock:rgba(255,255,255,.05);
     --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
     --ring:rgba(255,255,255,.11);
+    --hero-map:url("/public/brand/map-dark.svg");
+    --hero-bg:#0E1530;
   }
 }
 :root[data-theme="dark"]{
@@ -85,6 +91,8 @@
   --lock:rgba(255,255,255,.05);
   --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
   --ring:rgba(255,255,255,.11);
+  --hero-map:url("/public/brand/map-dark.svg");
+  --hero-bg:#0E1530;
 }
 
 *{box-sizing:border-box}
@@ -106,12 +114,30 @@ a{color:var(--ink)}
 /* ---------- masthead ---------- */
 .masthead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:6px 0 18px}
 .brand{display:flex; align-items:center; gap:12px}
-.mark{
-  width:38px; height:38px; display:grid; place-items:center; flex:none;
-  background:var(--ink); color:var(--plane); border-radius:9px;
-  font-family:"Archivo"; font-weight:800; font-size:15px; letter-spacing:-.04em;
+.mark{width:40px; height:40px; display:block; flex:none}
+.brand h1{font-family:"Bricolage Grotesque","Archivo",sans-serif; font-size:24px; font-weight:800; letter-spacing:-.025em; line-height:1.05}
+.brand h1 span, .hero h2 span{color:var(--accent)}
+
+/* ---------- hero ----------
+   The six-castle map (owner, 2026-10-07). It greets a visitor and steps
+   aside once a comparison is on screen, so the results never sit below a
+   400px picture. */
+.hero{background:var(--hero-bg); border-radius:18px; overflow:hidden; margin:0 0 18px; padding:34px 20px 0; text-align:center}
+.hero h2{font-family:"Bricolage Grotesque","Archivo",sans-serif; font-weight:800; font-size:clamp(32px,5.4vw,58px);
+  line-height:1.03; letter-spacing:-.03em; color:var(--ink)}
+.hero p{margin:14px auto 0; max-width:38em; font-size:clamp(15px,1.7vw,18px); line-height:1.5; color:var(--ink-2)}
+.heromap{width:calc(100% + 40px); margin:10px -20px 0; aspect-ratio:1440/547;
+  background:var(--hero-map) center/100% auto no-repeat}
+.herobadges{display:none}
+@media (max-width:560px){
+  .hero{padding:24px 14px 14px; text-align:left; border-radius:14px}
+  .hero p{margin-top:10px}
+  .heromap{width:calc(100% + 28px); margin:12px -14px 0}
+  /* On a phone the map is ~360px wide and its castles tiny, so the six
+     also appear as badges you can actually see. */
+  .herobadges{display:flex; justify-content:space-between; gap:4px; margin-top:6px}
+  .herobadges img{width:15%; max-width:52px; height:auto}
 }
-.brand h1{font-size:23px; font-weight:800; letter-spacing:-.035em; line-height:1.05}
 .tag{margin:1px 0 0; color:var(--ink-2); font-size:12.5px}
 .acct{display:flex; align-items:center; gap:9px; flex-wrap:wrap; row-gap:8px}
 .chip{
@@ -362,6 +388,10 @@ a{color:var(--ink)}
     letter-spacing:-.025em; line-height:1.12; margin:0 0 14px}
   .pcover p{font-size:11.5pt; line-height:1.6; margin:0 0 10px; max-width:50em}
   .pcover .psub{font-size:9pt; color:#555; border-top:1px solid #ccc; padding-top:9px; margin-top:18px}
+  .pcover .pbrand{display:flex; align-items:center; gap:8px; font-family:"Bricolage Grotesque","Archivo",sans-serif;
+    font-weight:800; font-size:13pt; margin:0 0 28px}
+  .pcover .pbrand img{width:26px; height:26px}
+  .pcover .pmap{display:block; width:100%; height:auto; margin:22px 0 4px}
 
   /* --- one resort --- */
   .presort{break-before:page}
@@ -718,10 +748,9 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="wrap">
   <header class="masthead">
     <div class="brand">
-      <span class="mark">PF</span>
+      <img class="mark" src="/public/brand/mark.svg" alt="">
       <div>
-        <h1>Parkfare</h1>
-        <p class="tag">Six Disney resorts, priced side by side.</p>
+        <h1>Pricing the <span>Magic</span></h1>
         <p class="tag">Best for deciding when to go — not for locking in today's price.</p>
       </div>
     </div>
@@ -747,6 +776,17 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
   </header>
+
+  <section class="hero" id="hero">
+    <h2>Six Disney resorts.<br><span>One honest price.</span></h2>
+    <p>Compare the whole trip, flights, hotel, tickets and food, at every Disney resort in the world, and see which month costs least.</p>
+    <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
+    <div class="herobadges" aria-hidden="true">
+      <img src="/public/brand/badge-dlr.svg" alt=""><img src="/public/brand/badge-wdw.svg" alt="">
+      <img src="/public/brand/badge-dlp.svg" alt=""><img src="/public/brand/badge-shdr.svg" alt="">
+      <img src="/public/brand/badge-tdr.svg" alt=""><img src="/public/brand/badge-hkdl.svg" alt="">
+    </div>
+  </section>
 
   <section class="intro" id="intro">
     <p>Could we really go to Shanghai if we didn't get Annual Passes this year? That was the question that led me down a
@@ -1187,7 +1227,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <div class="authfield" style="margin:16px 0 4px">
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
-          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Parkfare. Free — it's a remembered field, not a Plus feature.</small>
+          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Pricing the Magic. Free — it's a remembered field, not a Plus feature.</small>
           <small id="homeAirportLapsed" class="downgrade" hidden></small>
           <small id="homeAirportSaved" class="downgrade" hidden></small>
         </div>
@@ -1213,7 +1253,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
-      <h3 id="pwTitle">Get Parkfare Plus</h3>
+      <h3 id="pwTitle">Get Pricing the Magic Plus</h3>
       <p>Comparing all six resorts, typing in your own numbers, picking your attractions and
       applying Disney deals are free, and always will be — you should never have to pay to see what a trip costs.
       Plus is for when you're getting serious about one.</p>
@@ -2009,6 +2049,7 @@ async function runSearch(keepId){
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
     selected = idx < 0 ? 0 : idx;
     render();
+    $("#hero").hidden = true;
   } catch(e){
     console.error(e);
     $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not reach the pricing API</div>
@@ -4324,12 +4365,14 @@ function coverHtml(lead, chosen){
     : ` Here is how that breaks down.`;
 
   return `<section class="pcover">
+    <p class="pbrand"><img src="/public/brand/mark.svg" alt="">Pricing the Magic</p>
     <h1>Let's go to ${esc(lead.resort.name)}!</h1>
     <p>This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${esc(whenPhrase(p))} &mdash;
     ${esc(partyPhrase(p))}, ${travelPhrase(p, lead)}, ${p.nights} night${p.nights===1?"":"s"}
     with ${daysOf(lead.price)} park day${daysOf(lead.price)===1?"":"s"} at ${esc(lead.resort.name)}.
     The estimated cost is <b>${usd(lead.price.total)}</b>.${alsoLine}</p>
-    <p class="psub">Prepared with Parkfare on ${esc(prepared)}.
+    <img class="pmap" src="/public/brand/map-cover-${esc(lead.resortId)}.svg" alt="">
+    <p class="psub">Prepared with Pricing the Magic on ${esc(prepared)}.
     Flights and hotel rates are estimates from cached prices, not quotes &mdash; check them before booking.</p>
   </section>`;
 }

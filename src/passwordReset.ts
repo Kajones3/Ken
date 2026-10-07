@@ -62,9 +62,9 @@ export function resetUrl(token: string, env: NodeJS.ProcessEnv = process.env): s
 export function buildResetEmail(to: string, url: string): EmailMessage {
   return {
     to,
-    subject: "Reset your Parkfare password",
+    subject: "Reset your Pricing the Magic password",
     text: [
-      "Someone asked to reset the password for this Parkfare account.",
+      "Someone asked to reset the password for this Pricing the Magic account.",
       "",
       "Set a new one here:",
       url,
@@ -78,7 +78,7 @@ export function buildResetEmail(to: string, url: string): EmailMessage {
       "If this wasn't you, you can ignore it — your password has not changed,",
       "and nobody can use this link without access to this inbox.",
       "",
-      "— Parkfare",
+      "— Pricing the Magic",
     ].join("\n"),
   };
 }

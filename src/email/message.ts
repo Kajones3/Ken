@@ -21,16 +21,16 @@ export function buildAlertEmail(a: AlertContent, to: string, unsubscribeLink: st
   const saving = Math.round(a.oldTotal - a.newTotal);
   const subject = saving > 0
     ? `A Deal May Save You $${saving.toLocaleString("en-US")} on your Disney Trip`
-    : "Parkfare: a new Disney deal";
+    : "Pricing the Magic: a new Disney deal";
   const text = [
     ...(saving > 0 ? [subject + ".", ""] : []),
     a.detail,
     "",
-    "Open Parkfare: any search whose arrival date falls in the deal's dates already has it taken off, marked \"Includes a deal\".",
+    "Open Pricing the Magic: any search whose arrival date falls in the deal's dates already has it taken off, marked \"Includes a deal\".",
     "",
-    "— Parkfare",
+    "— Pricing the Magic",
     "",
-    "You get these because you have Parkfare Plus.",
+    "You get these because you have Pricing the Magic Plus.",
     `Stop these emails: ${unsubscribeLink}`,
   ].join("\n");
   // RFC 8058 one-click: Gmail and Yahoo show their own "Unsubscribe" button

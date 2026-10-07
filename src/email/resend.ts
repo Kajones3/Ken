@@ -27,7 +27,7 @@ export class ResendEmailSender implements EmailSender {
     // decoration: a bare address with no name and nowhere to reply is a
     // shape spam filters have learned to distrust, and a reply that
     // disappears is worse than no reply at all.
-    const fromHeader = from.includes("<") ? from : `Parkfare <${from}>`;
+    const fromHeader = from.includes("<") ? from : `Pricing the Magic <${from}>`;
     const replyTo = process.env.OWNER_EMAIL || undefined;
 
     const res = await fetch("https://api.resend.com/emails", {

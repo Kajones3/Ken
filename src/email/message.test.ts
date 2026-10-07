@@ -10,7 +10,7 @@ test("a deal email carries the deal and says why it was sent", () => {
   assert.equal(msg.to, "you@example.com");
   assert.match(msg.subject, /new Disney deal/);
   assert.match(msg.text, /Summer room discount/);
-  assert.match(msg.text, /Parkfare Plus/);
+  assert.match(msg.text, /Pricing the Magic Plus/);
 });
 
 test("every deal email says how to stop them, and carries the one-click header", () => {
