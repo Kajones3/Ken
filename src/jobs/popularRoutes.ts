@@ -31,6 +31,7 @@ import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth, plannableMonths } from
 import { loadScoreboard, type RouteScore } from "../fareScoreboard.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 import { flushRaw } from "../rawResponses.js";
+import { forecastFare, recordForecast, type Forecast } from "../fareForecasts.js";
 
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
@@ -190,7 +191,7 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     routes = routes.filter((r) => !isLocalRoute(r.origin, r.destination));
   }
 
-  let calls = 0, rows = 0, errors = 0, misses = 0;
+  let calls = 0, rows = 0, errors = 0, misses = 0, forecasts = 0;
 
   if (routes.length) {
     const provider = opts.provider ?? new SerpApiFlightProvider();
@@ -201,10 +202,21 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
             console.warn("popular-routes: provider budget exhausted, stopping early");
             break outer;
           }
+          // What travelers were being shown for this route and date, written
+          // down BEFORE the fare exists (fareForecasts.ts). Never allowed to
+          // stop the purchase: a failure here is logged and skipped.
+          let forecast: Forecast | null = null;
+          try {
+            forecast = await forecastFare(db, route.origin, route.destination, date, bucket);
+          } catch (e) {
+            console.warn(`popular ${route.origin}->${route.destination} ${date}: forecast skipped: ${(e as Error).message}`);
+          }
+          let bought: number | null = null;
           try {
             calls++;
             const q = await provider.quote(route.origin, route.destination, date, bucket);
             if (!q) { misses++; continue; }
+            bought = q.priceUsd;
             // Same upsert contract as the main refresh: on success only. A
             // failed lookup leaves yesterday's real fare in place.
             // The record first (observations.ts): every paid fare is kept,
@@ -228,6 +240,11 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
           } finally {
             // Google's whole answer, kept after every search, misses and errors included.
             await flushRaw(db, provider);
+            if (forecast) {
+              try { await recordForecast(db, forecast, bought, "popular_routes"); forecasts++; } catch (e) {
+                console.warn(`popular ${route.origin}->${route.destination} ${date}: forecast not saved: ${(e as Error).message}`);
+              }
+            }
           }
         }
       }
@@ -237,9 +254,9 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
        note = note || ' · ' || $5 where id = $1`,
-    [runId, calls, rows, errors, `${routes.length} routes, ${misses} with no fare`],
+    [runId, calls, rows, errors, `${routes.length} routes, ${misses} with no fare, ${forecasts} forecasts kept`],
   );
-  return { runId, routes: routes.length, calls, rows, errors, misses };
+  return { runId, routes: routes.length, calls, rows, errors, misses, forecasts };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

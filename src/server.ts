@@ -33,6 +33,7 @@ import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COL
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
+import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
@@ -1594,6 +1595,7 @@ const server = createServer(async (req, res) => {
       const days = Math.max(1, Math.min(120, Number(url.searchParams.get("days") ?? 30) || 30));
       return send(200, {
         scoreboard: await loadScoreboard(db, days),
+        forecasts: await loadForecastScores(db, days),
         demand: await loadRouteDemand(db, days),
         hotels: await loadHotelScoreboard(db),
         hotelList: await loadHotelList(db),

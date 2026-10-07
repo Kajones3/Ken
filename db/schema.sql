@@ -778,6 +778,36 @@ create table if not exists provider_responses (
 );
 create index if not exists provider_responses_when on provider_responses (source, fetched_at);
 
+-- What we were showing travelers for a route and date, written down just
+-- BEFORE the nightly job buys that fare (owner, 2026-10-07: "for every day,
+-- how far are we off ... right now"). Nothing written here has seen the fare
+-- it is graded against, so it is the honest test of the number on screen.
+-- Append-only, never updated or deleted. See fareForecasts.ts.
+--   shown_usd          per-seat fare the board showed (real cached fare or
+--                      leaned estimate, whichever formula travelers see)
+--   shown_kind         'real_fare' | 'estimate'
+--   formula            'live' | 'candidate' (the owner's switch at the time)
+--   live_estimate_usd  the live formula's estimate alone, leaned + holiday
+--   candidate_usd      the candidate formula's estimate, holiday included
+--   price_usd          what Google charged when we bought it (null = no fare)
+create table if not exists fare_forecasts (
+  id                 bigserial    primary key,
+  origin             char(3)      not null,
+  destination        char(3)      not null,
+  depart_date        date         not null,
+  trip_length        smallint     not null,
+  shown_usd          numeric(9,2),
+  shown_kind         text,
+  formula            text         not null,
+  live_estimate_usd  numeric(9,2),
+  candidate_usd      numeric(9,2),
+  price_usd          numeric(9,2),
+  job                text         not null,
+  forecast_at        timestamptz  not null,
+  bought_at          timestamptz  not null default now()
+);
+create index if not exists fare_forecasts_when on fare_forecasts (bought_at);
+
 -- Carry every labelled fare already in the working copy into the record,
 -- ONCE. A marker row makes it one-time: matching on timestamps would not do,
 -- because a writer's flight_prices and flight_observations rows are stamped by
