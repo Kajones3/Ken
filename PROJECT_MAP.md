@@ -1,4 +1,4 @@
-# Parkfare — Project Map
+# Pricing the Magic — Project Map
 
 A quick-orientation reference. **`CLAUDE.md` is the authority** on *why* decisions
 were made and must not be contradicted; this file is the *what and where*.
@@ -209,7 +209,7 @@ Always confirm a new failure isn't just this one.
 
 1. **Finish Resend verification** → send a real test alert. `ResendEmailSender` has
    never run against a live account; this is unproven code.
-2. **Run "Parkfare popular routes" once by hand** — the fare trend is stale
+2. **Run "Pricing the Magic popular routes" once by hand** — the fare trend is stale
    (Sep 9) and rotation should start immediately.
 3. **Re-run coverage for `RDU` in ~1 week** — `est` markers should be becoming real
    counts as rotation works through the routes.

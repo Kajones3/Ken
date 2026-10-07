@@ -51,7 +51,7 @@ async function getJson(url: string): Promise<{ ok: true; body: unknown } | { ok:
         // Their terms ask for attribution in the app; identifying the caller
         // is the same courtesy one level down, and it is what lets them tell
         // a well-behaved consumer from a scraper if they ever look.
-        "user-agent": "Parkfare/0.1 (+https://pricingthemagic.com) wait-time feasibility probe",
+        "user-agent": "PricingTheMagic/0.1 (+https://pricingthemagic.com) wait-time feasibility probe",
         accept: "application/json",
       },
     });

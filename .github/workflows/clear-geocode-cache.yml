@@ -1,4 +1,4 @@
-name: Parkfare clear geocode cache
+name: Pricing the Magic clear geocode cache
 
 # Manual only — wipes geocode_cache entirely. Needed when a bad cached
 # result (e.g. from an earlier provider/filtering bug, since fixed in code)

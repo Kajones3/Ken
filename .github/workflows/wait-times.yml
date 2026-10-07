@@ -1,4 +1,4 @@
-name: Parkfare wait times
+name: Pricing the Magic wait times
 
 # Records posted wait times into wait_time_samples. NOTHING READS THAT TABLE
 # and nothing is shown to anybody — this job exists only to start the clock.

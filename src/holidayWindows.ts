@@ -88,7 +88,7 @@ export function wholeMonthWindow(yyyymm: string): { from: ISODate; to: ISODate }
  * date — independent of how the search got here (whole-month scan or a
  * picked window), because a Dec 26 flight really is pricier either way.
  *
- * Deliberately NOT sourced from Parkfare's own BTS pipeline. BTS DB1B is
+ * Deliberately NOT sourced from Pricing the Magic's own BTS pipeline. BTS DB1B is
  * reported by QUARTER only, with no month or day field at all, so "is
  * Thanksgiving week pricier than an ordinary November day" is a question the
  * app's own flight data structurally cannot answer, however cleverly it's

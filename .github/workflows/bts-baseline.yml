@@ -1,4 +1,4 @@
-name: Parkfare BTS baseline
+name: Pricing the Magic BTS baseline
 
 # Manual only — BTS DB1B is a quarterly historical survey, not something to
 # poll daily. Downloads one quarter's real fare data (~100MB zip) and

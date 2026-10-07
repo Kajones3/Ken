@@ -306,7 +306,7 @@ test("the same name twice at one resort is flagged, not refused", async () => {
 test("the owner's reviewed 2026-09-26 sheet uploads with no errors", async () => {
   const { readFileSync } = await import("node:fs");
   const { parseCsv } = await import("./csv.js");
-  const rows = parseCsv(readFileSync(new URL("../docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8"));
+  const rows = parseCsv(readFileSync(new URL("../docs/attractions/pricingthemagic-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8"));
   const h = rows[0]!.map((x) => x.trim().toLowerCase());
   const c = (r: string[], n: string) => (r[h.indexOf(n)] ?? "").trim();
   const bad = rows.slice(1).filter((r) => r.some((x) => x.trim())).map((r) => validateAttraction({
@@ -426,7 +426,7 @@ test("uploading the reviewed sheet removes only DinoLand and adds nothing to 'al
   // The reviewed sheet hides exact repeats. A hide meant as "this is a
   // duplicate" must not take a real land off a resort's list, so run the
   // whole file through the same rules the app uses.
-  const text = readFileSync(new URL("../docs/attractions/parkfare-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8");
+  const text = readFileSync(new URL("../docs/attractions/pricingthemagic-attractions-reviewed-2026-09-26.csv", import.meta.url), "utf8");
   const [head, ...body] = parseCsv(text);
   const at = (r: string[], n: string) => (r[head!.indexOf(n)] ?? "").trim();
   const rows = body.filter((r) => r.some((c) => c.trim())).map((r) => row({

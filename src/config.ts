@@ -722,7 +722,7 @@ export interface Origin { iata: string; name: string; lat: number; lon: number }
  * Queue-Times park ids, for the wait-time recorder.
  *
  * DRAFT UNTIL THE PROBE HAS RUN. These ids are Claude's best recollection,
- * not observations — the "Parkfare debug wait times" workflow prints the real
+ * not observations — the "Pricing the Magic debug wait times" workflow prints the real
  * list, and it cannot be dispatched until this branch reaches the default
  * branch (GitHub only lists workflow_dispatch workflows that live there).
  *

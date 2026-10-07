@@ -293,7 +293,7 @@ export async function runWaitTimes(db: Db, deps: WaitTimesDeps = {}): Promise<Wa
   return result;
 }
 
-const UA = "Parkfare/0.1 (+https://pricingthemagic.com)";
+const UA = "PricingTheMagic/0.1 (+https://pricingthemagic.com)";
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const { getDb } = await import("../db.js");

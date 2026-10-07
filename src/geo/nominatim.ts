@@ -11,7 +11,7 @@
  */
 import type { GeocodeProvider, GeocodeResult } from "./types.js";
 
-const USER_AGENT = "Parkfare/1.0 (+https://github.com/kajones3/ken; trip cost comparator, low volume)";
+const USER_AGENT = "PricingTheMagic/1.0 (+https://github.com/kajones3/ken; trip cost comparator, low volume)";
 
 const US_ZIP = /^\d{5}(-\d{4})?$/;
 

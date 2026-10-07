@@ -1,4 +1,4 @@
-name: Parkfare migrate
+name: Pricing the Magic migrate
 
 # Manual only — applies db/schema.sql (idempotent, safe to re-run: every
 # statement is "create table if not exists") against the production

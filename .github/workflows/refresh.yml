@@ -1,4 +1,4 @@
-name: Parkfare refresh
+name: Pricing the Magic refresh
 
 # Tiered per CLAUDE.md: this is the once-a-morning cache refresh. It talks to
 # the same Neon database the deployed app reads from — the DATABASE_URL

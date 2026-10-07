@@ -1,4 +1,4 @@
-name: Parkfare debug fetch
+name: Pricing the Magic debug fetch
 
 # One-off diagnostic: HEAD-checks (or optionally GETs) an arbitrary URL, to
 # verify reachability, content-type, and size before committing to a real

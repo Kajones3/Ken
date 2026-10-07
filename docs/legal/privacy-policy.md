@@ -8,7 +8,7 @@
 
 **Last updated: [DATE]**
 
-This explains what Parkfare (pricingthemagic.com) collects, why, and what
+This explains what Pricing the Magic (pricingthemagic.com) collects, why, and what
 you can do about it. Short version: **we collect as little as we can, we
 don't sell it, and there are no ad trackers on the Site.**
 
@@ -85,7 +85,7 @@ Only the companies we need to run the Site:
 | [Stripe] | [Payments, once live] |
 
 When you click a link to Kayak, Booking.com, Disney or an airline, you leave
-Parkfare and **their** privacy policy applies. Some of those links may be
+Pricing the Magic and **their** privacy policy applies. Some of those links may be
 affiliate links, which tell that site you came from us.
 
 ## How long we keep it
@@ -112,7 +112,7 @@ deletion — and you can use them the same way, by emailing us.
 
 ## Children
 
-Parkfare isn't meant for children under 13, and we don't knowingly collect
+Pricing the Magic isn't meant for children under 13, and we don't knowingly collect
 their information. (Children's **ages** that parents enter to price tickets
 aren't linked to any child's identity.) If you think a child has created an
 account, email us and we'll delete it.

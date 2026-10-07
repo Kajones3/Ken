@@ -1,4 +1,4 @@
-name: Parkfare debug wait times
+name: Pricing the Magic debug wait times
 
 # Reconnaissance for the "average wait time this month" card, run from Actions
 # because the sandbox Claude works in cannot reach queue-times.com at all —

@@ -1,4 +1,4 @@
-name: Parkfare exchange rates
+name: Pricing the Magic exchange rates
 
 # Regenerates src/exchangeData.ts from the European Central Bank's published
 # reference rates (via Frankfurter — free, no key, no account) and commits it.
@@ -70,7 +70,7 @@ jobs:
           git add src/exchangeData.ts
           git commit -m "Regenerate exchange rates from ECB reference rates
 
-          Ran the Parkfare exchange rates workflow. src/exchangeData.ts is
+          Ran the Pricing the Magic exchange rates workflow. src/exchangeData.ts is
           generated; do not hand-edit it.
           "
           git push

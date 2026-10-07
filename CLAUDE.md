@@ -1,4 +1,10 @@
-# Parkfare — project context
+# Pricing the Magic — project context
+
+**The name is "Pricing the Magic" (pricingthemagic.com) since 2026-10-07; it used to be
+"Parkfare". Never put "Parkfare" in anything a visitor, email reader or the owner sees.**
+The only places the old name stays on purpose: the Render service name in `render.yaml`
+(renaming it can create a second service) and the site-gate key in `siteGate.ts`
+(changing it signs every tester out). Look and art: `tools/brand/gen.mjs` -> `public/brand/`.
 
 Compares the **total cost of a Disney trip across all six global resorts at once**, and
 tells you *when* to go. Walt Disney World, Disneyland Resort, Disneyland Paris, Tokyo
@@ -49,7 +55,7 @@ What that means in code. **Every change must keep all of these true:**
 4. **Prove the data stuck.** The morning email's "Did the data stick?"
    section (`src/dataIntake.ts`) compares what each paid job wrote with what
    the record holds, every day. **After ANY change to a job that fetches or
-   stores flight or hotel data, Claude re-runs the "Parkfare debug coverage"
+   stores flight or hotel data, Claude re-runs the "Pricing the Magic debug coverage"
    workflow (or reads the next morning's data check) and shows the owner the
    before/after numbers BEFORE calling it fixed.** "The job logged N written"
    is not proof; twice in 2026-10 it was true while the fares vanished.
@@ -103,7 +109,7 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    /admin will show.
 2. **Prove the data still sticks (governing rule #4).** Read the morning
    email's "Did the data stick?" (paid fares bought = kept, hotel searches
-   made = kept, the "Google's whole answers" line) or run "Parkfare debug
+   made = kept, the "Google's whole answers" line) or run "Pricing the Magic debug
    coverage". Baseline 2026-10-07: 91 `serpapi_flights` fares in the record,
    18/night, trend from 19 domestic routes (x1.135) and 45 intl routes,
    database **79 MB of Neon's free 512 MB** (~15 MB/month from whole answers).
@@ -364,7 +370,7 @@ monthly hotel searches wasted. Fixes:
 
 ### (Superseded 2026-10-07 by the list at the top) Pick-up list of 2026-10-04 — items 1-2 verified done
 
-1. **Prove the data stuck (governing rule #4).** Run the "Parkfare debug
+1. **Prove the data stuck (governing rule #4).** Run the "Pricing the Magic debug
    coverage" workflow (select-only) and read the latest morning email's
    "Did the data stick?" section. Expect: paid fares "bought = kept";
    `flight_observations` growing nightly (the coverage report does not yet
@@ -453,7 +459,7 @@ monthly hotel searches wasted. Fixes:
    carried the `serpapi_flights` tag. `upsertFlights` in refresh.ts now
    never replaces a `serpapi_flights` row (test pins it). The trend should
    climb back toward ~100+ routes over the next three weeks as bought fares
-   stop vanishing; re-run "Parkfare debug coverage" to watch it. Old note: It had been "skipped" nightly since
+   stop vanishing; re-run "Pricing the Magic debug coverage" to watch it. Old note: It had been "skipped" nightly since
    2026-09-09. With all four BTS quarters loaded (2024 Q3, 2024 Q4, 2025 Q1,
    2025 Q2), the 2026-09-30 refresh should write a new `fare_trend` row.
    Check the refresh log ("trend skipped" or not), or the daily email: the
@@ -866,7 +872,7 @@ admin panel allow me to fix this without AI." It didn't: each resort's
 - **Domestic flight estimates were HALF a round trip. FIXED 2026-09-29**
   (owner: BNA->MCO showed $220 against Kayak's cheapest $372). DB1B's
   MktFare is ItinYield x MktMilesFlown, one leg's share of the ticket: the
-  "Parkfare debug DB1B" workflow joins the Ticket file (ItinFare = whole
+  "Pricing the Magic debug DB1B" workflow joins the Ticket file (ItinFare = whole
   ticket), and for BNA->MCO 2025 Q2, 2,047 of 2,085 round trips had
   MktFare = ItinFare / 2, none equal. SUPERSEDES "Do not re-open this" in
   the 2026-09-22 lean note below; the x0.945 trend that "disproved" it was
@@ -1694,7 +1700,7 @@ new decision, not a reason to silently re-add gates this entry removed.
 | Annual passes & DVC | **Wired, free.** A pass you hold takes its holder off the ticket line (and off hopper and parking) at that resort only, with the pass's own yearly price reported beside the trip rather than added to it — the "what if I don't buy it" number. DVC points you'd rent out are a take-home credit on the total. `src/memberships.ts`; every price is owner-editable. |
 | Owner-editable numbers | **Done, end to end.** `src/settings.ts` declares 73 editable values (every hotel base, every resort's parking and transfers, hopper differentials, the rental-car rate) and `owner_settings` holds the overrides, reaching pricing through `PriceBook.setting` so `pricing.ts` stays pure. `/admin` is the screen: owner-only, one form per number, plus a spreadsheet for bulk edits. Saving a hotel rate re-seeds that resort's `hotel_rates` rows immediately, and the generator reads the owner's value, so the nightly refresh can't revert it. The database overrides the shipped defaults and never replaces them. |
 | Owner-maintained attractions | **Wired, owner-only.** `/admin` has a section for the attraction list, backed by `owner_attractions` as an OVERLAY on `config.ts` — replace, add or hide a row, with its own spreadsheet. An empty table ships exactly as the code does. See the decision note. |
-| Exchange rates | **Wired, free — and still a placeholder.** `src/exchangeData.ts` is generated from ECB reference rates by a monthly Actions job; the browser's five hardcoded numbers are gone. **The committed rows are Claude's seed and `EXCHANGE_IS_PLACEHOLDER` says so in the UI** — run the "Parkfare exchange rates" workflow. |
+| Exchange rates | **Wired, free — and still a placeholder.** `src/exchangeData.ts` is generated from ECB reference rates by a monthly Actions job; the browser's five hardcoded numbers are gone. **The committed rows are Claude's seed and `EXCHANGE_IS_PLACEHOLDER` says so in the UI** — run the "Pricing the Magic exchange rates" workflow. |
 | Lands per park | **Wired, free, owner-editable since 2026-09-29.** `parkList` names every park and its lands, pinned against the `parks` count by a test; the owner's attraction sheet overrides it (hide a land row, or add one with a `park`). See "lands follow the attraction sheet" at the top. |
 | The shared PDF | **Rebuilt.** Written prose per resort, not a print stylesheet over the live board, and "Save as PDF" asks which resorts to include. See the decision note for the three things deliberately left out. |
 | Average wait times | **Recorded, shown to nobody.** `wait_time_samples` + a two-hourly Actions job reading Queue-Times, keeping only 9am-7pm local. No card, no API wiring, no aggregation — the card was dropped because every automated source records POSTED waits and that bias is not uniform across six operators. This exists so there is an archive to decide with in a year. Park ids are a draft until the probe runs. See the decision note. |
@@ -1928,7 +1934,7 @@ Three things that were decisions, not defaults (the second no longer applies
   another Plus airport until they renew, and moving to a free airport or
   clearing it always works, so nobody is stuck.
 - *It feeds the drive/fly default.* The saved airport is what
-  `defaultGettingThere()` reads, so an LA user opens Parkfare already on
+  `defaultGettingThere()` reads, so an LA user opens Pricing the Magic already on
   "drive to Disneyland, fly everywhere else" without touching anything.
   Verified in a browser: save LAX, reload, and both the origin and the preset
   are right with nothing typed.
@@ -2793,7 +2799,7 @@ crowds.ts) is the one home for this:
   owner described, working for real rather than asserted.
 
 **Flights get a real, sourced holiday premium too — deliberately NOT derived
-from Parkfare's own BTS pipeline** (2026-09-25, the owner: "we have years of
+from Pricing the Magic's own BTS pipeline** (2026-09-25, the owner: "we have years of
 BTS data ... use that big brain and find the pattern"). Worth stating
 plainly why that specific ask can't be met the way it was asked: BTS DB1B is
 reported by QUARTER ONLY, with no month or day field at all. Thanksgiving
@@ -3126,7 +3132,7 @@ brand-new, empty database only gets the near tier on its first run — the far
 tier needs about a week of daily cron runs before it's rotated through the
 whole year, so a friend searching six months out would see "no cached price"
 until then. `npm run refresh` now takes `REFRESH_BACKFILL=true` (also a
-checkbox on the GitHub Actions "Parkfare refresh" workflow) to fill every
+checkbox on the GitHub Actions "Pricing the Magic refresh" workflow) to fill every
 tier's months in one run instead of just today's due one — meant as a
 one-time catch-up right after first deploying, not a replacement for the
 normal tiered cron.
@@ -3741,7 +3747,7 @@ Stripe, Resend domain verification, and a "prices as of ..." line in the UI.
 
 ## What the live database actually holds (checked 2026-09-18)
 
-Run the **"Parkfare debug coverage"** workflow to re-check any of this — it is
+Run the **"Pricing the Magic debug coverage"** workflow to re-check any of this — it is
 select-only, makes no provider calls, and reads the real Neon database from
 inside Actions, so nobody has to handle the connection string. Findings that
 matter:
@@ -3775,7 +3781,7 @@ text would actively mislead: **real mail now leaves this project and arrives.**
 Established against real logs and real DNS, not assumed:
 
 - **A real email sent from GitHub Actions** on 2026-09-18 23:06 UTC. The
-  "Parkfare test email" run printed `sender: resend` … `Sent.` and it
+  "Pricing the Magic test email" run printed `sender: resend` … `Sent.` and it
   arrived. So the Actions environment has `RESEND_API_KEY` and
   `ALERT_FROM_EMAIL`.
 - **Render has them too**, plus `PUBLIC_BASE_URL` — a sign-up confirmation
@@ -3924,7 +3930,7 @@ the warning that there is nowhere to send warnings.
   used instead, so driving-mode pricing and the refresh job both still run end to end.
 - **`src/exchangeData.ts` is generated and still hand-seeded.** The rates in
   it are Claude's approximations, not observed, until somebody runs the
-  "Parkfare exchange rates" workflow; `EXCHANGE_IS_PLACEHOLDER` is true until
+  "Pricing the Magic exchange rates" workflow; `EXCHANGE_IS_PLACEHOLDER` is true until
   then and the PDF says so in words. Never hand-edit rows there — they are
   overwritten wholesale.
 - **`parkList`'s lands are a Claude draft.** Lands get renamed and rebuilt
@@ -3933,7 +3939,7 @@ the warning that there is nowhere to send warnings.
   rebuilding DinoLand. The wait-time probe prints Queue-Times' own land
   names, which would be a real source to check them against.
 - **`src/climateData.ts` is generated and still hand-seeded.** The numbers in it
-  are Claude's, not observations, until somebody runs the "Parkfare climate
+  are Claude's, not observations, until somebody runs the "Pricing the Magic climate
   normals" workflow — `CLIMATE_SOURCE` in that file says which it currently is.
   Never hand-edit rows there; they are overwritten wholesale. Season notes are
   in `config.ts` and survive regeneration.
@@ -3944,7 +3950,7 @@ the warning that there is nowhere to send warnings.
 - **`NEWS_FEEDS` (`config.ts`) are best-guess RSS URLs, not confirmed reachable from
   this environment** (this sandbox's network is proxied/restricted, so a real fetch
   attempt here returns a blocked-looking error regardless of whether the URL is
-  actually right). Check the first real GitHub Actions "Parkfare news digest" run's
+  actually right). Check the first real GitHub Actions "Pricing the Magic news digest" run's
   log for per-feed errors before assuming these are correct.
 - Shanghai height-based ticket banding is not modelled.
 - **Every account requires a password (owner's call, 2026-09-18) — but still no email

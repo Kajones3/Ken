@@ -1,4 +1,4 @@
-name: Parkfare international sweep
+name: Pricing the Magic international sweep
 
 # Monthly: sample real fares on every international route, then turn them
 # into per-quarter baselines so the WHOLE quarter can be estimated from them.

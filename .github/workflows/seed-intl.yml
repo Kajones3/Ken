@@ -1,4 +1,4 @@
-name: Parkfare seed international baselines
+name: Pricing the Magic seed international baselines
 
 # Manual only — fills historical_fares with synthetic international flight
 # baselines (src/seedInternational.ts) from researched 2026 market pricing,

@@ -1,4 +1,4 @@
-name: Parkfare alerts
+name: Pricing the Magic alerts
 
 # Runs twice a day (04:20 and 16:20 UTC) so Plus users' saved trips get
 # checked more often than the once-daily flight/hotel cache refresh — the

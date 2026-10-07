@@ -8,13 +8,13 @@
 
 **Last updated: [DATE]**
 
-These terms cover your use of Parkfare at pricingthemagic.com (the "Site"),
+These terms cover your use of Pricing the Magic at pricingthemagic.com (the "Site"),
 run by [LEGAL NAME — you personally, or your LLC] ("we", "us"). By using the
 Site you agree to them. If you don't agree, please don't use the Site.
 
-## 1. What Parkfare is — and isn't
+## 1. What Pricing the Magic is — and isn't
 
-Parkfare estimates what a Disney trip might cost at six resorts and compares
+Pricing the Magic estimates what a Disney trip might cost at six resorts and compares
 them side by side. **It is a planning tool, not a travel agent.** We don't
 sell flights, hotels, park tickets or packages, and we can't book, change or
 cancel anything for you.
@@ -35,7 +35,7 @@ requirements — before you travel.
 
 ## 2. Not affiliated with Disney
 
-Parkfare is an independent site. **We are not affiliated with, endorsed by,
+Pricing the Magic is an independent site. **We are not affiliated with, endorsed by,
 or sponsored by The Walt Disney Company, Disneyland Paris, Oriental Land Co.
 (Tokyo Disney Resort), Shanghai Disney Resort, Hong Kong Disneyland, or any
 airline or hotel.** Disney, Walt Disney World, Disneyland and the other park,
@@ -53,7 +53,7 @@ resorts appear in — the board is always sorted by our estimated total.
 
 ## 4. Accounts
 
-You can use most of Parkfare without an account. If you create one:
+You can use most of Pricing the Magic without an account. If you create one:
 
 - Give us an email address you control, and keep your password to yourself.
   You're responsible for what happens under your account.
@@ -64,7 +64,7 @@ You can use most of Parkfare without an account. If you create one:
 You can delete your account at any time by [emailing CONTACT EMAIL / using
 the account panel — not built yet].
 
-## 5. Parkfare Plus
+## 5. Pricing the Magic Plus
 
 Plus is a paid add-on. Right now it includes the trip price calendar, saving
 searches, the shareable PDF, and emails about new Disney deals. **We may
