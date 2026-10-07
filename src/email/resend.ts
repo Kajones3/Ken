@@ -11,7 +11,7 @@ export class ResendEmailSender implements EmailSender {
   readonly name = "resend";
 
   async send(msg: EmailMessage): Promise<void> {
-    // No default from-address. There used to be one — alerts@parkfare.app —
+    // No default from-address. There used to be one, on a domain we never owned,
     // and a default here is worse than no default: Resend refuses to send
     // from a domain you have not verified, so an unset variable would fail
     // at the provider with an error about a domain nobody recognizes,

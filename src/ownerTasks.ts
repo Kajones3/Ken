@@ -241,7 +241,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   if (EXCHANGE_IS_PLACEHOLDER) {
     placeholders.push({
       id: "exchange-placeholder",
-      title: "Run the 'Parkfare exchange rates' workflow",
+      title: "Run the 'Pricing the Magic exchange rates' workflow",
       why: "src/exchangeData.ts still holds hand-seeded rates rather than ECB reference rates, and the shared PDF says so in words. The workflow is free and takes one dispatch.",
       side: "free",
     });
@@ -249,7 +249,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   if (/hand-seeded|seed/i.test(CLIMATE_SOURCE)) {
     placeholders.push({
       id: "climate-placeholder",
-      title: "Run the 'Parkfare climate normals' workflow",
+      title: "Run the 'Pricing the Magic climate normals' workflow",
       why: "src/climateData.ts still holds hand-seeded weather rather than observations. CLIMATE_SOURCE in that file says which it currently is.",
       side: "free",
     });
@@ -288,7 +288,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
         : "Domestic flight estimates look DOUBLE what they should be",
       why: `Our average government fare is $${Math.round(nat.avg)}, and the government's own published average is about $${BTS_PUBLISHED_AVG_USD}. `
         + (low
-          ? "That is the size of error you get when each fare is read as one leg instead of a round trip, and it halves every domestic flight on the board. Check that the database update has run (redeploy on Render, or run the 'Parkfare migrate' workflow)."
+          ? "That is the size of error you get when each fare is read as one leg instead of a round trip, and it halves every domestic flight on the board. Check that the database update has run (redeploy on Render, or run the 'Pricing the Magic migrate' workflow)."
           : "That is the size of error you get when the round-trip doubling happens twice. Tell Claude before trusting any domestic flight price.")
         + " Details: src/jobs/btsBaseline.ts.",
       side: "both",
@@ -300,7 +300,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
     checked({
       id: "fare-trend-stale",
       title: `The nightly flight-price correction hasn't updated in ${trendAge} days`,
-      why: "Each night the refresh compares the real fares we bought against the government's figures for the same routes and quarter, and moves every estimate by the difference. When it can't find three routes with both, the refresh log says \"trend skipped (too few routes)\" and estimates keep using the last correction. The usual cause is a quarter with no government data loaded: run the 'Parkfare BTS baseline' workflow for that quarter.",
+      why: "Each night the refresh compares the real fares we bought against the government's figures for the same routes and quarter, and moves every estimate by the difference. When it can't find three routes with both, the refresh log says \"trend skipped (too few routes)\" and estimates keep using the last correction. The usual cause is a quarter with no government data loaded: run the 'Pricing the Magic BTS baseline' workflow for that quarter.",
       side: "both",
       blocking: false,
     });
@@ -378,7 +378,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
     checked({
       id: "news-feeds",
       title: `${lastFeedError.errors} of ${NEWS_FEEDS.length} news feeds failed on the last run`,
-      why: "These URLs were best guesses and have never been confirmed reachable. The per-feed error naming the failing URL is in the 'Parkfare news digest' Actions log; a feed that is permanently 403 or 404 should be replaced in NEWS_FEEDS in src/config.ts. This is how closures and new promos reach you, so a dead feed is a blind spot.",
+      why: "These URLs were best guesses and have never been confirmed reachable. The per-feed error naming the failing URL is in the 'Pricing the Magic news digest' Actions log; a feed that is permanently 403 or 404 should be replaced in NEWS_FEEDS in src/config.ts. This is how closures and new promos reach you, so a dead feed is a blind spot.",
       side: "free",
       blocking: false,
     });

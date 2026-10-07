@@ -1,4 +1,4 @@
-name: Parkfare debug DB1B
+name: Pricing the Magic debug DB1B
 
 # One-off diagnostic: downloads one real BTS DB1B Market quarterly file,
 # unzips it, and shows the CSV header plus a few sample rows for routes we

@@ -117,10 +117,10 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
       ? ` + ${blocking.length} blocking job${blocking.length === 1 ? "" : "s"}`
       : tasks.length ? ` + ${tasks.length} job${tasks.length === 1 ? "" : "s"} for you` : "";
     const subject = newItems.length
-      ? `Parkfare: ${newItems.length} new Disney news item${newItems.length === 1 ? "" : "s"}${jobTag}`
+      ? `Pricing the Magic: ${newItems.length} new Disney news item${newItems.length === 1 ? "" : "s"}${jobTag}`
       : blocking.length
-        ? `Parkfare: ${blocking.length} job${blocking.length === 1 ? "" : "s"} need${blocking.length === 1 ? "s" : ""} you`
-        : `Parkfare: daily data check${jobTag}`;
+        ? `Pricing the Magic: ${blocking.length} job${blocking.length === 1 ? "" : "s"} need${blocking.length === 1 ? "s" : ""} you`
+        : `Pricing the Magic: daily data check${jobTag}`;
     try {
       await sender.send({ to: ownerEmail, subject, text: parts.join("\n\n———\n\n") });
       sent = 1;

@@ -1,4 +1,4 @@
-name: Parkfare climate normals
+name: Pricing the Magic climate normals
 
 # Regenerates src/climateData.ts — the weather box's numbers — from real daily
 # observations, and commits the result.
@@ -74,7 +74,7 @@ jobs:
           git add src/climateData.ts
           git commit -m "Regenerate climate normals from observations
 
-          Ran the Parkfare climate normals workflow. src/climateData.ts is
+          Ran the Pricing the Magic climate normals workflow. src/climateData.ts is
           generated; the season notes in config.ts are hand-written and are
           untouched by this.
           "

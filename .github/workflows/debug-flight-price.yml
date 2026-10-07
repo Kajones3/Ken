@@ -1,4 +1,4 @@
-name: Parkfare debug flight price
+name: Pricing the Magic debug flight price
 
 # One-off diagnostic: hits an arbitrary Travelpayouts endpoint/query and
 # dumps the raw response, so a suspicious cached price (or a candidate

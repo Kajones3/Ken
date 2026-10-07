@@ -40,9 +40,9 @@ if (sender.name === "console") {
 try {
   await sender.send({
     to,
-    subject: "Parkfare: email is working",
+    subject: "Pricing the Magic: email is working",
     text: [
-      "If you're reading this, Parkfare can send email.",
+      "If you're reading this, Pricing the Magic can send email.",
       "",
       "That turns on four things that were built and reaching nobody:",
       "  - price-drop and deal alerts for Plus users",
@@ -53,7 +53,7 @@ try {
       "Next: set PUBLIC_BASE_URL so confirmation links point at the real site,",
       "then REQUIRE_VERIFIED_EMAIL=true once you've confirmed a link arrives.",
       "",
-      "— Parkfare",
+      "— Pricing the Magic",
     ].join("\n"),
   });
   console.log("\nSent. Check that inbox (and the spam folder) before trusting it.");
@@ -68,7 +68,7 @@ try {
     console.error(
       "That is a NETWORK failure, not a Resend one — this machine could not reach\n"
       + "api.resend.com at all. Your key and from-address may be perfectly fine. Try from\n"
-      + "somewhere with open outbound HTTPS, or run the \"Parkfare test email\" workflow,\n"
+      + "somewhere with open outbound HTTPS, or run the \"Pricing the Magic test email\" workflow,\n"
       + "which runs on GitHub's runners.",
     );
   } else if (/not verified|verify a domain/i.test(message)) {

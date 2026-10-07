@@ -2,7 +2,7 @@
  * Owner-editable settings: the numbers this app runs on, changeable without
  * anyone touching code.
  *
- * THE PROBLEM THIS SOLVES. Almost every maintained figure in Parkfare — hotel
+ * THE PROBLEM THIS SOLVES. Almost every maintained figure in Pricing the Magic — hotel
  * rates, the IRS mileage rate, park-hopper differentials, parking and
  * transfers — lived in config.ts, so changing one meant editing TypeScript and
  * pushing a commit. That makes the owner dependent on a developer for routine

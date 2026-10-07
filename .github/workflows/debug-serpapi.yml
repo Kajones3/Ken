@@ -1,4 +1,4 @@
-name: Parkfare debug SerpApi
+name: Pricing the Magic debug SerpApi
 
 # One-off diagnostic: hits an arbitrary SerpApi engine/query and dumps the
 # raw response, so a candidate integration (Google Flights, Google Hotels)

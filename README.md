@@ -1,4 +1,4 @@
-# Parkfare backend
+# Pricing the Magic backend
 
 Prices a Disney trip across all six global resorts, out of a cache you own.
 
@@ -27,7 +27,7 @@ and runs the alert job. No API key, no database, no network. Expect something li
    1. Walt Disney World        $ 6,076  flights $  557  tickets $ 1714  hotel $ 1624  food $ 2181
    ...
 3. save a trip and run the alert job
-[email:console] to=you@example.com subject="Parkfare: your trip just got $495 cheaper"
+[email:console] to=you@example.com subject="Pricing the Magic: your trip just got $495 cheaper"
 Walt Disney World fell to $6311 for arrival 2027-03-04
 ...
    1 trip checked, 1 alert(s), 1 emailed, 0 provider calls
@@ -116,7 +116,7 @@ Steps:
    UTC). The news digest also needs an `OWNER_EMAIL` secret if you want it
    to actually send — it's a private digest to you, not something friends see.
 4. **Run the refresh workflow once by hand, with backfill on** (Actions tab
-   → "Parkfare refresh" → Run workflow → tick the **backfill** checkbox
+   → "Pricing the Magic refresh" → Run workflow → tick the **backfill** checkbox
    → Run workflow). The tiered refresh (see "Decisions worth knowing"
    below) is built to spread the far-out months across a week of daily
    cron runs, which is right for a warm cache but means a brand-new,
@@ -232,7 +232,7 @@ DATABASE_URL="<your neon connection string>" REFRESH_BACKFILL=true npm run refre
 ```
 
 (Same backfill flag as the first-deploy step above — also runnable from the
-Actions tab → "Parkfare refresh" → Run workflow → tick backfill, if
+Actions tab → "Pricing the Magic refresh" → Run workflow → tick backfill, if
 `DATABASE_URL` is already set as a repo secret.) This overwrites every cached
 international fare with the corrected formula in one pass, rather than
 waiting on the cron tiers to rotate through.
@@ -720,9 +720,9 @@ have free real data behind them.
 
 | Step | Workflow | Inputs | Lookups |
 |---|---|---|---|
-| 1. International, whole year | Parkfare international sweep | months 13, **dates 2**, budget 300/shard | ~2,470 |
-| 2. Hotels, every resort and month | Parkfare refresh | `REFRESH_BACKFILL=true`, `SERPAPI_HOTELS_BUDGET=80` | ~78 |
-| 3. Nightly domestic, left running | Parkfare popular routes | unchanged | ~300/month |
+| 1. International, whole year | Pricing the Magic international sweep | months 13, **dates 2**, budget 300/shard | ~2,470 |
+| 2. Hotels, every resort and month | Pricing the Magic refresh | `REFRESH_BACKFILL=true`, `SERPAPI_HOTELS_BUDGET=80` | ~78 |
+| 3. Nightly domestic, left running | Pricing the Magic popular routes | unchanged | ~300/month |
 | | | **Committed** | **~2,850 of 5,000** |
 
 **`INTL_SWEEP_DATES=2`, not the default 1.** `INTL_BASELINE_MIN_SAMPLES` is 3,

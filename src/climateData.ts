@@ -1,7 +1,7 @@
 /**
  * GENERATED DATA — the numbers only. Do not hand-edit rows here.
  *
- * `npm run climate-normals` (or the "Parkfare climate normals" workflow)
+ * `npm run climate-normals` (or the "Pricing the Magic climate normals" workflow)
  * rewrites this whole file from real daily observations. Anything you type in
  * it is lost on the next run.
  *

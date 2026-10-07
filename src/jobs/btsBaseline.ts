@@ -14,7 +14,7 @@
  * (the whole ticket): for BNA->MCO in 2025 Q2, 2,047 of 2,085 round-trip
  * tickets had MktFare = ItinFare / 2, and not one had them equal. Southwest
  * ORD->MCO->MDW splits $283.62 / $279.38, in exactly the ratio of 1,005 to
- * 990 miles. The "Parkfare debug DB1B" workflow reprints that proof.
+ * 990 miles. The "Pricing the Magic debug DB1B" workflow reprints that proof.
  *
  * So a round trip is 2 x MktFare. About a quarter of rows are one-way tickets,
  * where MktFare is the whole one-way fare; twice that is the round trip at

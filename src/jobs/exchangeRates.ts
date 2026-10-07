@@ -101,7 +101,7 @@ export function renderFile(asOf: string, rates: Record<string, number>): string 
   return `/**
  * GENERATED DATA — the rates only. Do not hand-edit rows here.
  *
- * \`npm run exchange-rates\` (or the "Parkfare exchange rates" workflow)
+ * \`npm run exchange-rates\` (or the "Pricing the Magic exchange rates" workflow)
  * rewrites this whole file from the European Central Bank's published
  * reference rates. Anything typed in it is lost on the next run.
  *

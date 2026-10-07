@@ -1,4 +1,4 @@
-name: Parkfare grant Plus
+name: Pricing the Magic grant Plus
 
 # Manual only — comps a friend or a test account into Plus against the same
 # production database refresh/alerts use (DATABASE_URL secret). This is the

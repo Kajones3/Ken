@@ -1300,7 +1300,7 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="parkfare-settings-${todayISO()}.csv"`,
+        "content-disposition": `attachment; filename="pricing-the-magic-settings-${todayISO()}.csv"`,
         "cache-control": "no-store",
       });
       return res.end(lines.join("\n") + "\n");
@@ -1350,7 +1350,7 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="parkfare-wait-times-${days}d-${todayISO()}.csv"`,
+        "content-disposition": `attachment; filename="pricing-the-magic-wait-times-${days}d-${todayISO()}.csv"`,
         "cache-control": "no-store",
       });
       return res.end(lines.join("\n") + "\n");
@@ -1395,7 +1395,7 @@ const server = createServer(async (req, res) => {
       // template to type into rather than a blank page to guess at.
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="parkfare-fares-${todayISO()}.csv"`,
+        "content-disposition": `attachment; filename="pricing-the-magic-fares-${todayISO()}.csv"`,
         "cache-control": "no-store",
       });
       return res.end(lines.join("\n") + "\n");
@@ -1479,7 +1479,7 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="parkfare-price-checks-${todayISO()}.csv"`,
+        "content-disposition": `attachment; filename="pricing-the-magic-price-checks-${todayISO()}.csv"`,
         "cache-control": "no-store",
       });
       return res.end(lines.join("\n") + "\n");
@@ -1644,7 +1644,7 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(200, {
         "content-type": "text/csv; charset=utf-8",
-        "content-disposition": `attachment; filename="parkfare-attractions-${todayISO()}.csv"`,
+        "content-disposition": `attachment; filename="pricing-the-magic-attractions-${todayISO()}.csv"`,
         "cache-control": "no-store",
       });
       return res.end(lines.join("\n") + "\n");
@@ -1724,4 +1724,4 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`parkfare api on :${PORT} (${db.kind})`));
+server.listen(PORT, () => console.log(`pricing-the-magic api on :${PORT} (${db.kind})`));

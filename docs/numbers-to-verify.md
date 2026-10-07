@@ -4,7 +4,7 @@ Written 2026-09-26 for the owner's testing against real plans and AI
 searches. Ordered by how much each line moves a typical trip total, so the
 first rows are where a wrong number does the most damage.
 
-**How to use it.** Price a trip in Parkfare, price the same trip for real,
+**How to use it.** Price a trip in Pricing the Magic, price the same trip for real,
 and compare line by line: flights, hotel, tickets, food. When a line is off:
 
 - If the table says **/admin**, change it there. It takes effect with no

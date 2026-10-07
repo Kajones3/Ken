@@ -1,4 +1,4 @@
-name: Parkfare news digest
+name: Pricing the Magic news digest
 
 # Private, owner-only — checks a handful of Disney-fan-news RSS feeds
 # (NEWS_FEEDS in config.ts) and emails whatever's new. Never surfaces

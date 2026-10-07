@@ -41,6 +41,8 @@ export function sitePassword(env: NodeJS.ProcessEnv = process.env): string | nul
 
 /** What the cookie holds: a keyed hash of the password. */
 export function gateToken(password: string): string {
+  // The key keeps the project's old name on purpose: it is never shown, and
+  // changing it would sign every tester out.
   return createHmac("sha256", "parkfare-site-gate").update(password).digest("hex");
 }
 

@@ -1,4 +1,4 @@
--- Parkfare schema. Safe to run repeatedly.
+-- Pricing the Magic schema. Safe to run repeatedly.
 
 create table if not exists flight_prices (
   origin        char(3)      not null,

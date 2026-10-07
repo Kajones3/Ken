@@ -1,4 +1,4 @@
-name: Parkfare popular routes
+name: Pricing the Magic popular routes
 
 # Nightly: buy real round-trip fares for the routes people actually searched,
 # and let those measure the trend that every *estimated* route is moved by.

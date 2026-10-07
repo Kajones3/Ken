@@ -1,4 +1,4 @@
-name: Parkfare debug coverage
+name: Pricing the Magic debug coverage
 
 # Read-only diagnostic against the live database: for one departure city,
 # shows month by month whether a searcher gets a REAL cached fare, a

@@ -51,7 +51,7 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
       problems.push({
         id: "intake-no-flights",
         title: "No flight prices came in yesterday, from any source",
-        why: "The nightly jobs fetch fares every night, so a day with none means a job failed or a key stopped working. Check the 'Parkfare refresh' and 'Parkfare popular routes' runs in GitHub Actions.",
+        why: "The nightly jobs fetch fares every night, so a day with none means a job failed or a key stopped working. Check the 'Pricing the Magic refresh' and 'Pricing the Magic popular routes' runs in GitHub Actions.",
         side: "both", blocking: true,
       });
     }
@@ -102,7 +102,7 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
       problems.push({
         id: "intake-no-paid-runs",
         title: `The paid flight job hasn't finished a run in ${days} days`,
-        why: "Nightly real fares are what keep every flight estimate honest. Check the 'Parkfare popular routes' workflow in GitHub Actions.",
+        why: "Nightly real fares are what keep every flight estimate honest. Check the 'Pricing the Magic popular routes' workflow in GitHub Actions.",
         side: "both", blocking: true,
       });
     }
@@ -188,7 +188,7 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
     problems.push({
       id: "intake-check-failed",
       title: "The daily data check could not read the database",
-      why: `Most likely the database update hasn't run (redeploy on Render, or run the 'Parkfare migrate' workflow). Error: ${(e as Error).message}`,
+      why: `Most likely the database update hasn't run (redeploy on Render, or run the 'Pricing the Magic migrate' workflow). Error: ${(e as Error).message}`,
       side: "both", blocking: true,
     });
   }

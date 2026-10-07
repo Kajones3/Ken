@@ -212,8 +212,8 @@ export async function runPullsDigest(db: Db, opts: PullsDigestOptions = {}) {
       await sender.send({
         to: ownerEmail,
         subject: anything
-          ? `Parkfare: ${routes.length} route and ${hotels.length} hotel pulls in the last ${windowDays} days`
-          : `Parkfare: no real provider data pulled in the last ${windowDays} days`,
+          ? `Pricing the Magic: ${routes.length} route and ${hotels.length} hotel pulls in the last ${windowDays} days`
+          : `Pricing the Magic: no real provider data pulled in the last ${windowDays} days`,
         text,
       });
       sent = 1;
