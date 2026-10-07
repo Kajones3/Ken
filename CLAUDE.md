@@ -64,22 +64,81 @@ now exists so it cannot recur silently.
 
 ---
 
-## START HERE — state as of 2026-10-04 (end of session)
+## START HERE — state as of 2026-10-07 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of **PR #112** plus
-this notes commit. Every PR through #112 is merged.
+in Render; delete it to launch). `master` is at the merge of **PR #123** plus
+this notes commit. Every PR through #123 is merged.
 
-**Ask whether Render has been redeployed since #111 before trusting the live
-site.** The owner redeploys by hand. Render's build runs `npm run migrate`.
-The nightly data workflows (refresh, popular-routes, intl-sweep, news-digest)
-now run `npm run migrate` themselves, so the new `flight_observations` table
-exists in production after their first run even without a redeploy; but the
-SITE only blends sources, uses Google's Disney rates and shows the /admin
-hotel list after a redeploy.
+**Ask whether Render has been redeployed since #121 before trusting the live
+site.** The owner redeploys by hand; Render's build runs `npm run migrate`.
+The nightly data jobs run in GitHub Actions and migrate themselves, so the
+DATA side (record tables, Google's whole answers, insights, buying the
+furthest-off routes) works with or without a redeploy; that is verified
+(see "2026-10-07 — VERIFIED" below). What only shows after a redeploy: the
+/admin "Live formula vs candidate" table and its switch, the hotel
+scoreboard's new layout, the separate international lean, Blind columns gone.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **741 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### This session in one table (2026-10-04 to 10-07, PRs #114-#123)
+
+| PR | What |
+|---|---|
+| #114 | "Missing paid fares" was a false alarm about pre-record runs; new deal kind `kids_free_dining` |
+| #115 | Coverage report: per-run hotel section |
+| #116 | Hotel searches never past 360 days out; append-only `hotel_searches` (empty searches wait like any other) |
+| #117 | Vacation rentals separated from hotels (`src/rentals.ts`, `hotel_samples.kind`) |
+| #118 | One information-only "Vacation rentals near X typically run $Y" line |
+| #119 | Separate international lean (`flight.estimateLeanIntl`); scoreboard grades "shown now" |
+| #120 | **Candidate formula** (`src/fareModel.ts`) graded beside the live one, switch `flight.useCandidate` (off); Google's flight typical range kept (`flight_insights`); popular-routes buys the 6 furthest-off routes first |
+| #121 | Hotels graded like flights; Blind columns removed; route cap removed (0.25-4x data-error guard only); Google's hotel extras kept (`hotel_samples.extra`) |
+| #122 | **Every Google answer kept whole** (`provider_responses`, gzip, append-only, `src/rawResponses.ts`) |
+| #123 | Coverage report's "with Google's typical range" counted inside the same query (was miscounting old runs) |
+
+### Pick up here FIRST next session (in this order)
+
+1. **Ask about the Render redeploy** (above). If not done, nothing new in
+   /admin will show.
+2. **Prove the data still sticks (governing rule #4).** Read the morning
+   email's "Did the data stick?" (paid fares bought = kept, hotel searches
+   made = kept, the "Google's whole answers" line) or run "Parkfare debug
+   coverage". Baseline 2026-10-07: 91 `serpapi_flights` fares in the record,
+   18/night, trend from 19 domestic routes (x1.135) and 45 intl routes,
+   database **79 MB of Neon's free 512 MB** (~15 MB/month from whole answers).
+3. **Around 2026-10-20, the candidate decision.** By then the scoreboard has
+   ~2 weeks of fares. Show the owner /admin Flights "Live formula vs
+   candidate" (accurate within ±10%, within 5%, too low, too high, US vs
+   international tilt, "candidate beat live on N of 14 days"). The owner
+   flips `flight.useCandidate`; Claude does not. Until then the owner may set
+   the leans: evidence pointed to US ~50 and international ~25 (US is at 75).
+4. **Watch the database size line.** If it heads toward 512 MB: Neon's paid
+   plan (price not checked) or move old raw answers to cheap file storage.
+   NEVER delete them (owner's rule).
+5. **Not built, ask the owner first:** using Google's hotel "less than usual"
+   (`usualNightly`) and per-site prices as pricing evidence (only kept today);
+   the candidate also ignores owner fare corrections and price checks for now.
+6. Older open items further down still stand: the three deal choices, budget
+   airlines (DON'T build), food from menu prices, legal blanks, Stripe,
+   restaurant examples, character-dining rate, crowd chip at Thanksgiving.
+
+### Owner decisions from 2026-10-04 to 10-07 (don't re-litigate)
+
+- **A miss is a miss either way.** "A $100 surprise EITHER WAY" is equally
+  wrong (Orlando read low + Tokyo read high = a useless comparison). Goal:
+  within 5-10% of the real fare. The candidate is never leaned. Don't
+  propose an asymmetric "reading low is worse" score.
+- **No Blind / Blind reads columns.**
+- **No cap on how far a route can move** ("what if our first guess was WAY
+  too low or too high?"); only the 0.25-4x data-error guard remains.
+- **Keep everything Google sends, whole.** Never delete; if space runs low,
+  pay for space or move to file storage.
+- **Vacation rentals:** their own group, one information-only line, never
+  priced or listed individually.
+- "Learn from similar routes" was proposed and NOT built; ideas 1-5 (the
+  candidate) replaced it.
+
 
 ### 2026-10-04, later — the "missing paid fares" alarm, and a kids-only deal priced for adults
 
@@ -294,7 +353,7 @@ monthly hotel searches wasted. Fixes:
 - **Verify on the next morning's email:** 12 made, ~12 kept, 0 unexplained.
   If "came back with no prices" repeats for the same months, lower 360.
 
-### This session in one table (2026-10-03 to 10-04, PRs #109-#112)
+### Session of 2026-10-03 to 10-04, in one table (PRs #109-#112)
 
 | PR | What |
 |---|---|
@@ -303,7 +362,7 @@ monthly hotel searches wasted. Fixes:
 | #111 | **The governing rule built** (section above): append-only `flight_observations`, source-weighted pricing, Google's Disney hotel rates move on-property prices, daily "Did the data stick?" email, /admin "Hotels we hold" |
 | #112 | Tokyo "Good to know" line about Vacation Packages (information only) |
 
-### Pick up here FIRST next session (in this order)
+### (Superseded 2026-10-07 by the list at the top) Pick-up list of 2026-10-04 — items 1-2 verified done
 
 1. **Prove the data stuck (governing rule #4).** Run the "Parkfare debug
    coverage" workflow (select-only) and read the latest morning email's
@@ -332,7 +391,7 @@ monthly hotel searches wasted. Fixes:
    Revisit once the scoreboard has ~2 weeks of fares, which only began
    accumulating properly on 2026-10-04.
 
-### Owner decisions from this session (don't re-litigate)
+### Owner decisions from 2026-10-03 to 10-04 (don't re-litigate)
 
 - The free Travelpayouts feed weight defaults to **0 = fallback only** (used
   only when it's the only real fare for that date; never pulls a bought fare
