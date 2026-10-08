@@ -1,0 +1,21 @@
+name: Pricing the Magic sample scan
+
+# Read-only: prices every plannable month at all six resorts from each major
+# city, to pick a scenario for the free sample PDF where the two cheapest
+# resorts are both international. No provider calls, no writes (it does not
+# record searches as route demand).
+on:
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npx tsx src/jobs/sampleScan.ts
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
