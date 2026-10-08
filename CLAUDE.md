@@ -70,25 +70,133 @@ now exists so it cannot recur silently.
 
 ---
 
-## START HERE — state as of 2026-10-07 (end of session)
+## START HERE — state as of 2026-10-08 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of **PR #123** plus
-this notes commit. Every PR through #123 is merged.
+in Render; delete it to launch). `master` is at the merge of **PR #127** plus
+this notes commit. Every PR through #127 is merged.
 
-**Ask whether Render has been redeployed since #121 before trusting the live
+**Ask whether Render has been redeployed since #127 before trusting the live
 site.** The owner redeploys by hand; Render's build runs `npm run migrate`.
 The nightly data jobs run in GitHub Actions and migrate themselves, so the
-DATA side (record tables, Google's whole answers, insights, buying the
-furthest-off routes) works with or without a redeploy; that is verified
-(see "2026-10-07 — VERIFIED" below). What only shows after a redeploy: the
-/admin "Live formula vs candidate" table and its switch, the hotel
-scoreboard's new layout, the separate international lean, Blind columns gone.
+DATA side works with or without a redeploy. What only shows after a
+redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
+"Checked before buying" section, and everything listed under #121.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**741 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**745 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
-### This session in one table (2026-10-04 to 10-07, PRs #114-#123)
+### Session of 2026-10-07 to 10-08 in one table (PRs #124-#127)
+
+| PR | What |
+|---|---|
+| #124 | Notes only (the previous session's state) |
+| #125 | **"Checked before buying"**: popular-routes writes down what travelers were shown for a route+date BEFORE buying it (`fare_forecasts`, append-only, `src/fareForecasts.ts`), graded in /admin Flights. `decideFlightFare()` in pricing.ts is now the one home of the board's real-fare-vs-estimate choice |
+| #126 | **New look**: name "Pricing the Magic", logo mark, hero "Six Disney resorts. One honest price." over a dotted world map with six stylized castles, castle badges on phones, PDF cover map. Art from `tools/brand/gen.mjs` into `public/brand/` |
+| #127 | "Parkfare" renamed everywhere it can surface (owner emails, workflow names, user agents, CSV names, docs); hero line in the owner's words |
+
+### 2026-10-07/08 — why flight accuracy isn't improving (analysis, owner-read)
+
+The owner asked to understand the scoreboard before changing anything. What
+was found (all from the code and the 2026-10-07 coverage report):
+- **It's scatter, not bias.** Every "reads" number sat near 0 (US live +6.5%,
+  candidate -0.4%; intl +3.4% / +0.6%) while "typically off" was 10-15%. The
+  lean only fixes bias, so moving it further won't help.
+- **Only 5 days of data then.** The record started 2026-10-03.
+- **Route evidence expires faster than it builds.** ~6 US fares a night over
+  ~290 US route-quarters = under 1 fare per cell inside the 45-day window;
+  full weight needs 3. 32 US fares sat across 27 route-quarters.
+- **The live estimate is one number per route per QUARTER** (BTS is
+  quarterly). Real fares move within a quarter: ATL->SNA Jan 15 $472 vs
+  Mar 15 $579, same estimate for both. Every paid fare departs on the 15th.
+- **The scoreboard's live column is flattered**: each fare is in its own
+  route correction at 1/3 weight, while the candidate is leave-one-out.
+  #125 is the fair answer to the owner's real question, "how far off are we
+  RIGHT NOW": it grades only numbers written down before the fare existed.
+- **Owner's plan for monthly accuracy (agreed 2026-10-07, NOT built):**
+  route LEVEL stays quarterly; a monthly SHAPE per destination, pooled
+  across origins, from these sources:
+  - *Season multipliers:* Google's **typical price range** compared month
+    vs month (check first that it really varies by month in the kept answers).
+  - *Traveler message:* Google's **price level** ("prices are coming in
+    lower/higher than normal for this time"), only when recent and for the
+    same route and month. Changes no price.
+  - *Day of week:* the free **Travelpayouts** feed (same route + month,
+    Tuesday vs Thursday cancels route and season; pool per destination).
+    Paid fares can't teach day of week: all on the 15th.
+  - *Holidays:* the feed and Google as a CROSS-CHECK on the sourced
+    +55%/+58%; meaningful only after this holiday season.
+  - *DVC points charts:* informational cross-check only.
+  - *Crowd bands:* NEVER for flight prices (owner).
+  - Proposed first: a read-only "pattern check" report comparing each
+    source's monthly pattern with paid fares. Owner hasn't said go.
+- The owner declined a formal "pause" note, but agreed it's fair to let the
+  flight data build for 2-3 weeks before changing the flight formula or
+  leans (leans now **US 50 / Intl 50**). Next look: **~2026-10-21 to 10-28**.
+
+### Pick up here FIRST next session (in this order)
+
+1. **Ask about the Render redeploy** (above).
+2. **Prove the data still sticks (governing rule #4).** Morning email's "Did
+   the data stick?" or the "Pricing the Magic debug coverage" workflow: paid
+   fares bought = kept (18/night), hotel searches made = kept, database size.
+   Also `fare_forecasts`: ~18 rows a night, each with `price_usd` and
+   `shown_usd` (the popular-routes run note ends "N forecasts kept").
+   **Baseline 2026-10-08** (coverage run 37777824546, after the first
+   night of #125): popular-routes "18 calls, 18 written, 0 errors, **18
+   forecasts kept**"; record 109 `serpapi_flights` fares, 18 bought / 18
+   kept every night since 10-03, 18 of 18 with Google's typical range;
+   domestic trend from **28** routes, international from **60**; hotels 12
+   made / 12 kept (160 rates; `hotel_samples` 808 total, 81 with a "less
+   than usual" price, 44 with per-site prices); database **80 MB** of 512.
+3. **~2026-10-21 to 10-28: the accuracy review.** By then ~250-350 paid
+   fares and ~2 weeks of "Checked before buying". Show the owner:
+   (a) "Checked before buying" US/intl (the honest number);
+   (b) live vs candidate; the owner flips `flight.useCandidate`, Claude
+   doesn't; (c) the noise floor: how far apart two real fares on the same
+   route+quarter usually are (says what "within 10%" can realistically
+   mean); (d) the pattern-check report above, if the owner says go.
+4. **Hotels are the owner's next focus** ("our second biggest
+   vulnerability"). Start from /admin Flights & hotels' hotel scoreboard
+   and `hotel_samples` (Google's "less than usual" `usualNightly` is kept,
+   not yet used).
+5. **Look & feel open items:** the phone map is small (badges show the
+   castles); if the owner finds it too small, drop the map on phones and keep
+   the badges. Final art may be redone in ChatGPT from the prompt in the
+   2026-10-07 conversation; drop new SVG/PNG files into `public/brand/` with
+   the same names. Mock-ups: claude.ai artifact "Pricing the Magic - look &
+   feel" (owner's account). The PDF cover and emails with the new name were
+   not seen by Claude; ask the owner to try "Save as PDF".
+6. **Watch the database size line** (79 MB of Neon's 512 MB on 10-07). NEVER
+   delete raw answers; pay for space or move them to file storage.
+7. Older open items further down still stand: the three deal choices, budget
+   airlines (DON'T build), food from menu prices, legal blanks, Stripe,
+   restaurant examples, character-dining rate, crowd chip at Thanksgiving.
+
+### Owner decisions from 2026-10-07 to 10-08 (don't re-litigate)
+
+- **Name: Pricing the Magic.** "Parkfare" must not surface anywhere (see top).
+- **The look:** dotted world map (not a globe: the parks are around the
+  world) with six small stylized castles that are NODS, not copies (no Disney
+  logos, characters, mouse shapes or lettering); Claude's flat style with
+  one step of shading (owner preferred it to ChatGPT's "uncanny valley"
+  version) and shape-distinct Asian castles (Shanghai wide and tiered,
+  Tokyo tall needles, Hong Kong pink with colored spires). Hero:
+  "Six Disney resorts. / One honest price." with "One honest price." on its
+  own line, then "Compare the whole trip — flights, hotel, tickets and food —
+  at every Disney resort in the world, and see where the magic can take you."
+  Bricolage Grotesque for name and headline; navy + gold. The hero hides once
+  a comparison is on screen.
+- **"How far off are we right now" is the question** (owner): grade the
+  number travelers see, with all its learning, but only against fares it
+  hasn't absorbed. Adapting to new data is good; grading it on the fare it
+  just learned from is not.
+- **Buying every route every night is impossible** (~50,000 route-dates vs
+  ~540 flight searches a month); accuracy comes from shared patterns.
+
+### (Superseded 2026-10-08) Pick-up list and table of 2026-10-07
+
+#### Session of 2026-10-04 to 10-07 in one table (PRs #114-#123)
 
 | PR | What |
 |---|---|
@@ -103,7 +211,7 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 | #122 | **Every Google answer kept whole** (`provider_responses`, gzip, append-only, `src/rawResponses.ts`) |
 | #123 | Coverage report's "with Google's typical range" counted inside the same query (was miscounting old runs) |
 
-### Pick up here FIRST next session (in this order)
+#### Pick-up list of 2026-10-07
 
 1. **Ask about the Render redeploy** (above). If not done, nothing new in
    /admin will show.
