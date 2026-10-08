@@ -86,6 +86,36 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, after #134 (PR #135) — a separate Plus BUDGET page; board lines gone; own discount free again
+
+- **Board sparklines REMOVED** (owner: they "take away from the plus 'When
+  to go' setting"). Best months live only in the detail view (Plus). Don't
+  bring a per-month line back to the board.
+- **"Have your own discount?" is FREE again** (owner: "Free visitors should
+  still be able to enter their own numbers and discounts"). `budgetFor()`
+  now strips only annual passes and DVC points without Plus.
+- **The budget page** (`#budget` hash, masthead "Budget" + "Plan how to pay"
+  beside Save this search; `#budgetPage` in prototype.html, all client-side
+  arithmetic on the comparison's own totals, inputs kept in this browser's
+  localStorage `pf_budget`). Owner: "a completely different page for plus
+  members ... a budgeting tool that helps them think of how to pay for
+  stuff." Sections: (1) which trip (any priced resort); (2) already saved,
+  one-off money coming and when, gift cards bought at % off (the traveler's
+  own figures, capped at 30%); (3) when each bill comes (flights, hotel
+  rooms, tickets, parking/transfers, food, deals and credits), each a
+  dropdown (now / 6-1 months before / during the trip), defaults labelled
+  as guesses, no Disney payment policy asserted; (4) what to set aside:
+  `budgetPlan()` gives STEPS, not one flat figure (the least steady amount
+  covering every bill up to the one that pinches hardest, then again from
+  there), so flights bought now don't keep you saving thousands you no
+  longer need; KPI tiles, a sentence, a month-by-month table; (5) the
+  annual pass and DVC boxes, MOVED here off the search form, with "Update
+  the totals" (re-prices and stays on the page). Free visitors get a pitch.
+  The page's tool is Plus only in the UI (it is arithmetic on free numbers);
+  the passes/DVC that move prices stay Plus on the server.
+- Not built (ask first): "What fits my budget?", "What would save the
+  most?", pass break-even. Never recommend loans, credit or insurance here.
+
 ### 2026-10-08, final (PR #134) — "Your budget" is Plus; the board's lines explained
 
 - **Plus now = best months to go, YOUR BUDGET, saved searches, the PDF,

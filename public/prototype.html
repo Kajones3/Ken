@@ -251,6 +251,8 @@ a{color:var(--ink)}
   font-family:"JetBrains Mono",monospace; font-size:13px; font-variant-numeric:tabular-nums;
 }
 .f select{font-family:"Karla",sans-serif; font-size:13.5px}
+.bbill select{width:100%; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong);
+  border-radius:8px; padding:8px 10px; font:13.5px "Karla",sans-serif}
 .ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .ages[hidden]{display:none}
 .gt-block{margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
@@ -435,7 +437,7 @@ a{color:var(--ink)}
    details left and cut words off both sides (owner, 2026-10-08). */
 .board{list-style:none; margin:0; padding:0; background:var(--surface); border:1px solid var(--rule); border-radius:14px; overflow:hidden; overflow:clip; box-shadow:var(--shadow)}
 .row{
-  display:grid; grid-template-columns:34px minmax(190px,1.35fr) 116px minmax(200px,1.5fr) 150px 96px;
+  display:grid; grid-template-columns:34px minmax(190px,1.35fr) minmax(200px,1.5fr) 150px 96px;
   gap:16px; align-items:center; padding:15px 16px; border-top:1px solid var(--rule);
   position:relative;
 }
@@ -453,8 +455,6 @@ a{color:var(--ink)}
 .code{font-family:"JetBrains Mono",monospace; font-size:10.5px; font-weight:600; letter-spacing:.04em; border:1px solid var(--rule-strong); border-radius:4px; padding:1px 4px; color:var(--ink)}
 .bestflag{display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 7px}
 
-.spark{display:block}
-.sparkcap{display:block; font-size:10.5px; color:var(--muted); margin-top:2px; white-space:nowrap}
 .bar-wrap{min-width:0}
 .bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
 .seg{height:100%}
@@ -526,7 +526,7 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 .rowbtn{justify-self:end}
 
 /* locked rows */
-.row.locked .ident,.row.locked .spark,.row.locked .bar-wrap,.row.locked .total{filter:blur(4.5px); opacity:.5; user-select:none}
+.row.locked .ident,.row.locked .bar-wrap,.row.locked .total{filter:blur(4.5px); opacity:.5; user-select:none}
 .lockover{
   position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px;
   background:var(--lock); backdrop-filter:blur(1px);
@@ -580,7 +580,26 @@ button.mtile:hover{border-color:var(--rule-strong)}
   box-shadow:0 8px 30px rgba(0,0,0,.18); display:flex; flex-direction:column; gap:8px; align-items:center}
 .calgate-cta b{font-family:"Archivo"; font-size:14px; letter-spacing:-.01em}
 .calgate-cta span{font-size:12.5px; color:var(--ink-2)}
-.spark.gated{filter:blur(2px); opacity:.6; cursor:pointer}
+
+/* ---------- budget page ---------- */
+/* One page or the other: while the budget is open, everything in .wrap but
+   the masthead and the budget page steps aside. A class on <body>, not a
+   list of hidden flags, so a future section can't forget to join. */
+body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
+.bhead{margin:4px 0 16px}
+.bhead h2{font-family:"Archivo"; font-size:24px; letter-spacing:-.03em; margin:12px 0 4px}
+.bgate b{font-family:"Archivo"; font-size:16px}
+.bgate p{font-size:13.5px; color:var(--ink-2); margin:8px 0 12px; max-width:62ch}
+.bbill{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr); gap:8px 14px; align-items:center;
+  padding:9px 0; border-top:1px solid var(--rule)}
+.bbill:first-child{border-top:0}
+.bbill b{font-size:13.5px}
+.bbill .amt{font-family:"JetBrains Mono",monospace; font-size:13.5px; text-align:right}
+@media (max-width:560px){ .bbill{grid-template-columns:minmax(0,1fr) auto} .bbill select{grid-column:1 / -1} }
+.bsched{display:grid; grid-template-columns:auto repeat(3,minmax(0,1fr)); gap:4px 12px; font-size:12.5px; color:var(--ink)}
+.bsched .h{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
+.bsched .n{font-family:"JetBrains Mono",monospace; text-align:right}
+.bsched .due{color:var(--accent)}
 
 /* line items */
 .upsell{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
@@ -740,7 +759,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
      940px wide. */
   .row > .rank{grid-area:rank} .row > .ident{grid-area:ident} .row > .total{grid-area:total}
   .row > .bar-wrap{grid-area:bar} .row > .rowbtn{grid-area:btn; justify-self:start}
-  .spark{display:none}
 }
 @media (max-width:560px){
   .plans{grid-template-columns:1fr}
@@ -773,6 +791,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My searches</button>
         <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
       </div>
+      <button class="btn btn-sm" id="budgetTop" title="Work out how to pay for the trip (Plus)">Budget</button>
       <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
       <a class="btn btn-sm" id="adminTop" href="/admin" hidden
          title="Change the rates and other numbers this site prices with">Admin</a>
@@ -780,6 +799,126 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
     </div>
   </header>
+
+
+  <!-- ===================== the budget page (Plus) =====================
+       Owner, 2026-10-08: "a completely different page for plus members.
+       Something like a budgeting tool that helps them think of how to pay
+       for stuff." The comparison answers "what will it cost"; this answers
+       "how do we pay for it": what to set aside each month or paycheck so
+       every bill is covered when it comes due, and what brings the number
+       down (passes, DVC points, discounted gift cards).
+
+       All arithmetic on the totals the comparison already showed, so there
+       is nothing here a free visitor could not work out with a calculator;
+       the Plus line is the tool, not the data. The passes and DVC boxes DO
+       move prices, and those stay Plus on the server (budgetFor()). -->
+  <section id="budgetPage" hidden>
+    <div class="bhead">
+      <button class="btn btn-sm" id="budgetBack">&larr; Back to the comparison</button>
+      <h2>Your budget <span class="pluschip">Plus</span></h2>
+      <p class="hint">How to pay for the trip: what to set aside, when each bill comes, and what brings the total down.</p>
+    </div>
+
+    <div id="budgetGate" hidden>
+      <div class="panel bgate">
+        <b>Plan how you'll pay for it, with Plus</b>
+        <p>Pick a trip from your comparison and see what to set aside each month or each paycheck so every bill is covered when it comes due. Put the annual passes you already hold and the DVC points you'd rent out into every total, and see what discounted gift cards save.</p>
+        <button type="button" class="btn btn-primary btn-sm openpw">Get Plus</button>
+      </div>
+    </div>
+
+    <div id="budgetBody">
+      <div class="panel" id="budgetEmpty" hidden>
+        <p style="margin:0 0 10px">Compare the resorts first, then come back here to plan how to pay for the one you like.</p>
+        <button class="btn btn-sm" id="budgetToSearch">Go to the comparison</button>
+      </div>
+
+      <div id="budgetMain">
+        <div id="budgetPlan">
+        <section class="panel">
+          <p class="panel-lab">1 · Which trip</p>
+          <div class="fields">
+            <div class="f">
+              <label for="bTrip">Trip</label>
+              <select id="bTrip"></select>
+            </div>
+          </div>
+          <p class="hint" id="bTripNote" style="margin:8px 0 0"></p>
+        </section>
+
+        <section class="panel">
+          <p class="panel-lab">2 · What you already have</p>
+          <div class="fields">
+            <div class="f">
+              <label for="bSaved">Already saved for it</label>
+              <input id="bSaved" type="number" min="0" step="50" placeholder="0" inputmode="numeric">
+            </div>
+            <div class="f">
+              <label for="bExtra">Coming before the trip</label>
+              <input id="bExtra" type="number" min="0" step="50" placeholder="0" inputmode="numeric">
+            </div>
+            <div class="f">
+              <label for="bExtraMonth">Arriving in</label>
+              <select id="bExtraMonth"></select>
+            </div>
+          </div>
+          <p class="hint" style="margin:8px 0 0">"Coming before the trip" is any one-off money you mean to put toward it: a tax refund, a bonus, birthday money.</p>
+          <div class="fields" style="margin-top:12px">
+            <div class="f">
+              <label for="bGiftAmt">Paid with gift cards</label>
+              <input id="bGiftAmt" type="number" min="0" step="50" placeholder="0" inputmode="numeric">
+            </div>
+            <div class="f">
+              <label for="bGiftPct">Bought at % off</label>
+              <input id="bGiftPct" type="number" min="0" max="30" step="0.5" placeholder="0" inputmode="decimal">
+            </div>
+          </div>
+          <p class="hint" style="margin:8px 0 0">If you buy Disney gift cards for less than their face value, the difference comes off what you need to save. Type your own figures; we don't check where you buy them.</p>
+        </section>
+
+        <section class="panel">
+          <p class="panel-lab">3 · When each bill comes</p>
+          <p class="hint" style="margin:0 0 10px">Our guesses: change any of them to match how you'll book. Hotels often take a deposit when you book and the rest closer to the trip, so check your booking's terms.</p>
+          <div id="bBills"></div>
+        </section>
+
+        <section class="panel">
+          <p class="panel-lab">4 · What to set aside</p>
+          <div class="kpi" id="bKpi"></div>
+          <p class="hint" id="bPlanNote" style="margin:0 0 10px"></p>
+          <details class="why" id="bScheduleWrap">
+            <summary>Month by month</summary>
+            <div class="whybody"><div class="bsched" id="bSchedule"></div></div>
+          </details>
+        </section>
+
+        </div>
+        <section class="panel" id="memberBlock">
+          <p class="panel-lab">5 · Bring the total down: passes and DVC points</p>
+          <div id="memberFields">
+        <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
+        <div id="passFields"></div>
+        <div class="fields">
+          <div class="f">
+            <label for="dvcPoints">DVC points you'd rent out</label>
+            <input id="dvcPoints" type="number" min="0" step="1" placeholder="0" inputmode="numeric">
+          </div>
+          <div class="f">
+            <label for="dvcPerPoint">Your take-home per point</label>
+            <input id="dvcPerPoint" type="number" min="1" step="0.5" inputmode="decimal">
+          </div>
+        </div>
+        <p class="hint">What you <b>receive</b>, not what the renter pays — a broker keeps the difference. Renters were paying roughly $19&ndash;21 a point and members taking home roughly $18&ndash;20 when this was last checked, so type your own figure if you know it.</p>
+      </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px">
+            <button class="btn btn-primary btn-sm" id="bRecompare">Update the totals</button>
+            <span class="hint">Re-prices all six resorts with these, then brings you back here.</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </section>
 
   <section class="hero" id="hero">
     <h2>Six Disney resorts.<br><span>One honest price.</span></h2>
@@ -1035,32 +1174,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </div>
     </div>
 
-    <!-- "Your budget" is Plus (owner, 2026-10-08): annual passes and DVC
-         points. The server ignores them without Plus (budgetFor() in
-         server.ts); this block only says so instead of offering boxes that
-         would do nothing. -->
-    <details class="why" id="memberBlock">
-      <summary>Your budget <span class="pluschip">Plus</span> — annual passes and DVC points</summary>
-      <div class="whybody" id="memberGate" hidden>
-        <p class="hint" style="margin-top:0">With Plus, put the annual passes you already hold and the DVC points you'd rent out into every total, and add your own discount codes.</p>
-        <button type="button" class="btn btn-sm openpw">Get Plus</button>
-      </div>
-      <div class="whybody" id="memberFields">
-        <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
-        <div id="passFields"></div>
-        <div class="fields">
-          <div class="f">
-            <label for="dvcPoints">DVC points you'd rent out</label>
-            <input id="dvcPoints" type="number" min="0" step="1" placeholder="0" inputmode="numeric">
-          </div>
-          <div class="f">
-            <label for="dvcPerPoint">Your take-home per point</label>
-            <input id="dvcPerPoint" type="number" min="1" step="0.5" inputmode="decimal">
-          </div>
-        </div>
-        <p class="hint">What you <b>receive</b>, not what the renter pays — a broker keeps the difference. Renters were paying roughly $19&ndash;21 a point and members taking home roughly $18&ndash;20 when this was last checked, so type your own figure if you know it.</p>
-      </div>
-    </details>
 
     <div class="panel-foot">
       <p class="hint" id="hint">Every number is an estimate until you type your own. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
@@ -1095,6 +1208,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
            belongs beside the whole comparison rather than buried in one
            resort's detail card. -->
       <button class="btn btn-sm" id="saveSearchBtn" hidden>Save this search</button>
+      <button class="btn btn-sm" id="budgetBtn" hidden>Plan how to pay</button>
     </div>
   </div>
 
@@ -1267,7 +1381,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="plans" id="plusPlans"></div>
     <ul class="feat">
       <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two months out to a year ahead, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>Your budget</b> — the annual passes you hold, the DVC points you'd rent out and your own discount codes, counted in every total</span></li>
+      <li><span class="tick">✓</span><span><b>Your budget</b> — a page that works out what to set aside each month or paycheck so every bill is covered when it comes due, with the annual passes you hold and the DVC points you'd rent out counted in every total</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -1996,14 +2110,6 @@ async function fetchCalendarFor(resortId){
   return { months: data.months, pricesAsOf: data.pricesAsOf };
 }
 
-/** The typical total for each month the picker offers, for the board's little line. */
-function monthlyTotals(cal){
-  return monthOpts.map(([ym])=>{
-    const m = cal && cal.months.find(x=>x.month===ym);
-    return { ym, v: m && m.total !== null ? m.total : null };
-  });
-}
-
 /** Same-day hotel cost at a different category, without re-running the whole search:
  *  flights/tickets/food don't change with hotel tier, so the delta comes straight
  *  from one calendar read on the trip's own start date. */
@@ -2098,42 +2204,6 @@ function gatedMonthsHtml(){
       <span class="mtotal">$—</span><span class="mlevel">&nbsp;</span></div>`;
   }).join("");
 }
-/** A free visitor's stand-in for the by-month price line: the same shape of
- *  thing, blurred, and a click opens the paywall. No real data behind it —
- *  it is drawn, not fetched, so nothing Plus is leaked into the page. */
-function gatedSpark(){
-  const W=112,H=30;
-  return `<svg class="spark gated openpw" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
-    aria-label="Best months to go — a Plus feature"><title>Best months to go — Plus</title>
-    <path d="M3 18 L13 12 L23 16 L33 9 L43 14 L53 20 L63 24 L73 17 L83 11 L93 15 L103 8 L109 13" fill="none"
-      stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
-}
-/** The board's little line: the typical whole-trip total for each month you
- *  can plan (Dec -> Oct), lowest month marked. Owner, 2026-10-08: "what are
- *  these lines telling me?", so it now says so in words underneath and in a
- *  hover list, instead of a bare squiggle. Each line is scaled to its own
- *  resort, so compare SHAPES across rows, not heights. */
-function sparkSVG(pts){
-  const known = pts.map((p,i)=>({v:p.v, i, ym:p.ym})).filter(p=>p.v!==null);
-  const W=112,H=30,pad=3;
-  if(!known.length) return `<div class="spark"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"></svg></div>`;
-  const vals = known.map(p=>p.v);
-  const mn=Math.min(...vals), mx=Math.max(...vals);
-  const x = i => pad + i*(W-2*pad)/((pts.length-1)||1);
-  const y = v => H-pad - ((v-mn)/((mx-mn)||1))*(H-2*pad);
-  const d = known.map((p,k)=>(k?"L":"M")+x(p.i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
-  const best = known.reduce((b,p)=>p.v<b.v?p:b, known[0]);
-  const mon = ym => MONTHS[+ym.slice(5,7)-1];
-  const list = known.map(p=>mon(p.ym)+" "+usd(p.v)).join(" · ");
-  return `<div class="spark"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
-    aria-label="Typical trip total by month: ${list}">
-    <title>Typical trip total by month: ${list}</title>
-    <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-    <circle cx="${x(best.i).toFixed(1)}" cy="${y(best.v).toFixed(1)}" r="4"
-      fill="var(--accent-line)" stroke="var(--surface)" stroke-width="2"/>
-  </svg><span class="sparkcap">Best month: ${mon(best.ym)} · ${usd(best.v)}</span></div>`;
-}
-
 /* The attraction match, on the board row where people actually decide.
  *
  * Note what it deliberately is NOT: part of the sort. The board stays
@@ -2282,7 +2352,6 @@ function renderBoard(){
     const live = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
     const getThere = x.flights + x.driving;   // flights/driving mutually exclusive — one is always 0
     const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
-    const spark = monthlyTotals(calendars[item.resortId]);
     const perPD = tot/pax/(params.nights+1);
     const bands = params.ages.length
       ? params.ages.map(a=>a+" → "+BANDNAME[bandOf(r,a)]).join(" · ") : "";
@@ -2305,7 +2374,6 @@ function renderBoard(){
         ${dealChip(item)}
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
-      ${session.plus ? sparkSVG(spark) : gatedSpark()}
       <div class="bar-wrap">
         <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}">
           <div class="seg f1" style="width:${w(getThere)}"></div>
@@ -2452,12 +2520,7 @@ function promosCard(item, x, promoList){
       <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"none":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
 
-  const personalForm = !session.plus ? `
-    <div class="li"><div class="l" style="width:100%">
-      <b>Have your own discount? <span class="pluschip">Plus</span></b>
-      <small>Annual Passholder, DVC, military, Florida resident or your own code, taken off this total</small>
-      <div style="margin-top:8px"><button class="btn btn-sm openpw">Get Plus</button></div>
-    </div></div>` : `
+  const personalForm = `
     <div class="li"><div class="l" style="width:100%">
       <b>Have your own discount?</b>
       <small>Annual Passholder, DVC, military, Florida resident, or your own code — your claim, not verified</small>
@@ -3320,6 +3383,11 @@ function render(){
     sv.hidden = !results.some(r=>r.ok);
     sv.textContent = session.plus ? "Save this search" : "Save this search (Plus)";
   }
+  const bb = $("#budgetBtn");
+  if(bb){
+    bb.hidden = !results.some(r=>r.ok);
+    bb.textContent = session.plus ? "Plan how to pay" : "Plan how to pay (Plus)";
+  }
   $("#upgradeTop").hidden = session.plus;
   syncAccountUi();
   renderBoard(); renderTable(); renderDetail();
@@ -3499,7 +3567,7 @@ function openAuth(mode){
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, your budget (passes, DVC points, your own discounts), saved searches, the shareable PDF and emails about the latest Disney deals.";
+      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, a budget page (how to pay for it, plus your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -3803,9 +3871,8 @@ async function refreshSession(){
   // through a render, and a stale "Sign in" button after signing in is the
   // exact confusion this change exists to remove.
   syncAccountUi();
-  // "Your budget" is Plus: fields for members, a one-line pitch for everyone else.
-  $("#memberFields").hidden = !session.plus;
-  $("#memberGate").hidden = !!session.plus;
+  // The budget page is Plus: the tool for members, a pitch for everyone else.
+  if(document.body.classList.contains("onbudget")) renderBudget();
   // And point the form at their saved airport, which is why this runs on
   // boot rather than only when the account panel is opened.
   applyHomeAirport();
@@ -4142,9 +4209,9 @@ async function openSavedTrip(trip){
   $("#dvcPoints").value = q.dvcPoints || "";
   $("#dvcPerPoint").value = q.dvcPerPoint || DVC_DEFAULT_PER_POINT;
   if(q.dvcPoints) anyMember = true;
-  // Opened, not just filled in — a restored number sitting inside a closed
-  // disclosure is a number nobody knows is there.
-  if(anyMember) $("#memberBlock").open = true;
+  // Passes and DVC points live on the budget page now (Plus); a restored
+  // search that carries them says so on that page, not in the form.
+  void anyMember;
   const ages = String(q.childAges || "").split(",").filter(Boolean);
   $("#kids").value = String(ages.length);
   buildAges();
@@ -5024,6 +5091,190 @@ document.addEventListener("click", async e=>{
 });
 
 /* boot */
+
+/* ===================== the budget page (Plus) =====================
+ * "How do we pay for it?" Pure arithmetic on totals the comparison already
+ * showed: nothing here is fetched. The bill timings are the traveler's own
+ * (our defaults are labelled guesses), and so is every dollar typed in. */
+const BILL_WHEN = [["now","Now"],["6","6 months before"],["4","4 months before"],["3","3 months before"],
+  ["2","2 months before"],["1","1 month before"],["trip","During the trip"]];
+const BILL_DEFAULT = { travel:"6", rooms:"2", tickets:"2", deals:"2", onsite:"trip", food:"trip" };
+let budgetPrefs = store.get("budget", {});
+let budgetTripId = null;
+let budgetPushed = false;
+
+function saveBudgetPrefs(){ store.set("budget", budgetPrefs); }
+const ymOf = d => d.getFullYear()+"-"+pad(d.getMonth()+1);
+function ymAdd(ym, n){ const [y,m] = ym.split("-").map(Number); const d = new Date(y, m-1+n, 1); return ymOf(d); }
+function ymDiff(a, b){ const [ay,am] = a.split("-").map(Number), [by,bm] = b.split("-").map(Number); return (by-ay)*12 + (bm-am); }
+const ymLabel = ym => MONTHS[+ym.slice(5,7)-1]+" "+ym.slice(0,4);
+
+/** The trip's bills, in the order people meet them. Lines that come to $0
+ *  are left out; whatever the pieces don't explain (deals, DVC take-home)
+ *  is its own line so the bills always add up to the total. */
+function budgetBills(x){
+  const drive = x.transportMode === "drive";
+  const lines = [
+    { key:"travel", label: drive ? "Driving (gas and wear)" : "Flights", amt: x.flights + x.driving,
+      def: drive ? "trip" : BILL_DEFAULT.travel },
+    { key:"rooms", label:"Hotel rooms", amt: x.rooms, def: BILL_DEFAULT.rooms },
+    { key:"tickets", label:"Park tickets", amt: x.tickets, def: BILL_DEFAULT.tickets },
+    { key:"onsite", label:"Parking and transfers", amt: x.transport, def: BILL_DEFAULT.onsite },
+    { key:"food", label:"Food", amt: x.food, def: BILL_DEFAULT.food },
+  ];
+  const rest = x.total - lines.reduce((s,l)=>s+l.amt, 0);
+  if(Math.abs(rest) >= 1) lines.push({ key:"deals", label: rest < 0 ? "Deals and credits" : "Other costs", amt: rest, def: BILL_DEFAULT.deals });
+  return lines.filter(l => Math.abs(l.amt) >= 1);
+}
+
+/** Month index (0 = this month) a bill lands in, given how long until the trip. */
+function billMonth(when, T){
+  if(when === "now") return 0;
+  if(when === "trip") return T;
+  return Math.max(0, T - (+when || 0));
+}
+
+/**
+ * What to set aside each month, starting this month, so the pot never runs
+ * short when a bill comes due — and never more than that. Steps, not one
+ * flat figure: a bill due early (flights bought now) needs money early, and
+ * once it is paid the rest of the trip needs far less a month. One flat
+ * amount sized for the early bill would keep you saving thousands you don't
+ * need. Each step is the least steady amount that covers every bill up to
+ * the one that pinches hardest; then it starts again from there.
+ */
+function budgetPlan({ bills, T, saved, extra, extraAt, giftSaving }){
+  const due = Array.from({length:T+1}, ()=>0);
+  for(const b of bills) due[b.at] += b.amt;
+  const income = due.map((_,i)=>(i === 0 ? saved + giftSaving : 0) + (i === extraAt ? extra : 0));
+  const rate = Array.from({length:T+1}, ()=>0);
+  let start = 0, carry = 0;
+  while(start <= T){
+    let best = 0, bestAt = T, cumDue = 0, cumIn = carry;
+    for(let i=start;i<=T;i++){
+      cumDue += due[i]; cumIn += income[i];
+      const r = (cumDue - cumIn) / (i - start + 1);
+      if(r > best + 1e-9){ best = r; bestAt = i; }
+    }
+    const r = Math.max(0, Math.ceil(best));
+    for(let i=start;i<=bestAt;i++){ rate[i] = r; carry += income[i] + r - due[i]; }
+    start = bestAt + 1;
+  }
+  const steps = [];
+  rate.forEach((r,i)=>{ const last = steps[steps.length-1]; if(last && last.r === r) last.to = i; else steps.push({ r, from:i, to:i }); });
+  const total = due.reduce((s,v)=>s+v, 0);
+  const toFind = Math.max(0, total - saved - extra - giftSaving);
+  const even = Math.ceil(toFind / (T+1));
+  const rows = [];
+  let pot = 0;
+  for(let i=0;i<=T;i++){ pot += income[i] + rate[i] - due[i]; rows.push({ i, in: rate[i] + (i === extraAt ? extra : 0), out: due[i], pot }); }
+  return { steps, even, toFind, total, rows };
+}
+
+function budgetTrips(){ return results.filter(r=>r.ok).slice().sort((a,b)=>a.price.total-b.price.total); }
+
+function renderBudget(){
+  $("#budgetGate").hidden = !!session.plus;
+  $("#budgetBody").hidden = !session.plus;
+  if(!session.plus) return;
+  const trips = budgetTrips();
+  $("#budgetEmpty").hidden = trips.length > 0;
+  $("#budgetPlan").hidden = trips.length === 0;
+  if(!trips.length) return;
+  if(!trips.some(t=>t.resortId===budgetTripId)){
+    const sel = results[selected];
+    budgetTripId = sel && sel.ok ? sel.resortId : trips[0].resortId;
+  }
+  $("#bTrip").innerHTML = trips.map(t=>`<option value="${t.resortId}"${t.resortId===budgetTripId?" selected":""}>${esc(t.resort.name)} — ${usd(t.price.total)}</option>`).join("");
+  const item = trips.find(t=>t.resortId===budgetTripId), x = item.price;
+  const now = ymOf(new Date()), tripYm = x.start.slice(0,7);
+  const T = Math.max(0, ymDiff(now, tripYm));
+  $("#bTripNote").textContent = `Arriving ${fmtDate(x.start)} for ${params.nights} nights, ${T === 0 ? "this month" : T === 1 ? "next month" : T+" months from now"}. Every number is our estimate for that trip; type your own on its card in the comparison and it carries through here.`;
+
+  // Inputs, from what this visitor typed last time (this browser only).
+  const num = id => Math.max(0, +$(id).value || 0);
+  for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"]])
+    if(document.activeElement !== $(id)) $(id).value = budgetPrefs[k] || "";
+  const extraOpts = Array.from({length:T+1}, (_,i)=>ymAdd(now,i));
+  const extraYm = extraOpts.includes(budgetPrefs.extraYm) ? budgetPrefs.extraYm : now;
+  $("#bExtraMonth").innerHTML = extraOpts.map(ym=>`<option value="${ym}"${ym===extraYm?" selected":""}>${ymLabel(ym)}</option>`).join("");
+
+  const when = budgetPrefs.when || {};
+  const bills = budgetBills(x).map(b => ({ ...b, when: when[b.key] || b.def }))
+    .map(b => ({ ...b, at: billMonth(b.when, T) }));
+  $("#bBills").innerHTML = bills.map(b => `<div class="bbill"><b>${b.label}</b>
+      <span class="amt">${b.amt < 0 ? "−"+usd(-b.amt) : usd(b.amt)}</span>
+      <select data-bill="${b.key}" aria-label="When you'll pay for ${esc(b.label.toLowerCase())}">${BILL_WHEN.map(([v,l])=>
+        `<option value="${v}"${v===b.when?" selected":""}>${l}${v!=="now"&&v!=="trip"&&T-(+v)<0?" (that's now)":""}</option>`).join("")}</select></div>`).join("");
+
+  const giftAmt = Math.min(num("#bGiftAmt"), x.total);
+  const giftSaving = Math.round(giftAmt * Math.min(30, num("#bGiftPct")) / 100);
+  const plan = budgetPlan({ bills, T, saved: num("#bSaved"), extra: num("#bExtra"),
+    extraAt: extraOpts.indexOf(extraYm), giftSaving });
+  const first = plan.steps[0], later = plan.steps.slice(1).filter(st=>st.r>0);
+  const span = st => st.from === st.to ? ymLabel(ymAdd(now,st.from)) : `${ymLabel(ymAdd(now,st.from))} to ${ymLabel(ymAdd(now,st.to))}`;
+  const steady = plan.steps.length === 1;
+  // A one-month first step is "due now", not a paycheck habit; the
+  // paycheck figure is the one that follows it.
+  const pay = first.from === first.to && later.length ? later[0] : first;
+  $("#bKpi").innerHTML = `
+    <div class="kpitile"><span class="k">Still to find</span><span class="v">${usd(plan.toFind)}</span>
+      <span class="s">of ${usd(x.total)}${giftSaving?`, after ${usd(giftSaving)} from gift cards`:""}</span></div>
+    <div class="kpitile total"><span class="k">${steady ? "Each month" : first.from===first.to ? "This month" : "Each month, to start"}</span><span class="v">${usd(first.r)}</span>
+      <span class="s">${span(first)}${later.length?`, then ${usd(later[0].r)} a month`:""}</span></div>
+    <div class="kpitile"><span class="k">${pay===first?"Every two weeks":"Then every two weeks"}</span><span class="v">${usd(Math.ceil(pay.r*12/26))}</span>
+      <span class="s">or ${usd(Math.ceil(pay.r*12/52))} a week${pay===first&&later.length?", to start":""}</span></div>`;
+  const dueNow = bills.filter(b=>b.at===0).reduce((s,b)=>s+b.amt,0);
+  $("#bPlanNote").innerHTML = plan.toFind === 0
+    ? "What you have already covers it. Nothing more to set aside."
+    : steady
+      ? `Setting aside ${usd(first.r)} a month covers every bill by the time it comes due.`
+      : `The bills don't come evenly, so neither does the saving: ${plan.steps.filter(st=>st.r>0).map(st=>`<b>${usd(st.r)}</b> ${st.from===st.to?"in":"a month,"} ${span(st)}`).join("; ")}.`
+        + (dueNow>0 && first.from===first.to ? ` ${usd(dueNow)} of bills land this month. Moving one later in step 3 spreads it out; spread evenly to the trip it would be ${usd(plan.even)} a month.` : ` Spread evenly to the trip it would be ${usd(plan.even)} a month, if every bill could wait.`);
+  $("#bSchedule").innerHTML = `<span class="h">Month</span><span class="h n">Set aside</span><span class="h n">Bills</span><span class="h n">In the pot</span>`
+    + plan.rows.map(r=>`<span>${ymLabel(ymAdd(now,r.i))}</span><span class="n">${usd(r.in)}</span>
+      <span class="n${r.out>0?" due":""}">${r.out? (r.out<0?"−"+usd(-r.out):usd(r.out)) : "—"}</span><span class="n">${usd(Math.max(0,r.pot))}</span>`).join("");
+}
+
+function syncBudgetView(){
+  const on = location.hash === "#budget";
+  document.body.classList.toggle("onbudget", on);
+  $("#budgetPage").hidden = !on;
+  if(on){ renderBudget(); window.scrollTo(0,0); }
+}
+function openBudget(){
+  if(location.hash === "#budget") return syncBudgetView();
+  budgetPushed = true;
+  location.hash = "budget";
+}
+function closeBudget(){
+  if(budgetPushed){ budgetPushed = false; history.back(); return; }
+  history.replaceState(null, "", location.pathname + location.search);
+  syncBudgetView();
+}
+window.addEventListener("hashchange", syncBudgetView);
+$("#budgetTop").addEventListener("click", openBudget);
+$("#budgetBtn").addEventListener("click", ()=>{
+  const sel = results[selected];
+  if(sel && sel.ok) budgetTripId = sel.resortId;
+  openBudget();
+});
+$("#budgetBack").addEventListener("click", closeBudget);
+$("#budgetToSearch").addEventListener("click", closeBudget);
+$("#bTrip").addEventListener("change", e=>{ budgetTripId = e.target.value; renderBudget(); });
+for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"]])
+  $(id).addEventListener("input", e=>{ budgetPrefs[k] = +e.target.value || 0; saveBudgetPrefs(); renderBudget(); });
+$("#bExtraMonth").addEventListener("change", e=>{ budgetPrefs.extraYm = e.target.value; saveBudgetPrefs(); renderBudget(); });
+$("#bBills").addEventListener("change", e=>{
+  const k = e.target.dataset && e.target.dataset.bill; if(!k) return;
+  budgetPrefs.when = { ...(budgetPrefs.when||{}), [k]: e.target.value }; saveBudgetPrefs(); renderBudget();
+});
+$("#bRecompare").addEventListener("click", async ()=>{
+  const b = $("#bRecompare"); b.disabled = true; b.textContent = "Updating…";
+  try { await runSearch(budgetTripId); } finally { b.disabled = false; b.textContent = "Update the totals"; }
+  renderBudget();
+});
+
 async function boot(){
   const meta = await apiGet("/api/meta", {});
   ORIGINS = meta.origins;
@@ -5081,6 +5332,7 @@ async function boot(){
   params = readParams();
   render();
   syncView();
+  syncBudgetView();
   await loadSavedTrips();
 }
 boot();
