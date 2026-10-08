@@ -128,15 +128,10 @@ a{color:var(--ink)}
 .hero p{margin:14px auto 0; max-width:38em; font-size:clamp(15px,1.7vw,18px); line-height:1.5; color:var(--ink-2)}
 .heromap{width:calc(100% + 40px); margin:10px -20px 0; aspect-ratio:1440/547;
   background:var(--hero-map) center/100% auto no-repeat}
-.herobadges{display:none}
 @media (max-width:560px){
   .hero{padding:24px 14px 14px; text-align:left; border-radius:14px}
   .hero p{margin-top:10px}
   .heromap{width:calc(100% + 28px); margin:12px -14px 0}
-  /* On a phone the map is ~360px wide and its castles tiny, so the six
-     also appear as badges you can actually see. */
-  .herobadges{display:flex; justify-content:space-between; gap:4px; margin-top:6px}
-  .herobadges img{width:15%; max-width:52px; height:auto}
 }
 .tag{margin:1px 0 0; color:var(--ink-2); font-size:12.5px}
 .acct{display:flex; align-items:center; gap:9px; flex-wrap:wrap; row-gap:8px}
@@ -781,11 +776,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <h2>Six Disney resorts.<br><span>One honest price.</span></h2>
     <p>Compare the whole trip &mdash; flights, hotel, tickets and food &mdash; at every Disney resort in the world, and see where the magic can take you.</p>
     <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
-    <div class="herobadges" aria-hidden="true">
-      <img src="/public/brand/badge-dlr.svg" alt=""><img src="/public/brand/badge-wdw.svg" alt="">
-      <img src="/public/brand/badge-dlp.svg" alt=""><img src="/public/brand/badge-shdr.svg" alt="">
-      <img src="/public/brand/badge-tdr.svg" alt=""><img src="/public/brand/badge-hkdl.svg" alt="">
-    </div>
   </section>
 
   <section class="intro" id="intro">
@@ -942,6 +932,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <label for="nights">Nights</label>
         <select id="nights"></select>
       </div>
+      <div class="f">
+        <label for="priceBasis">Which day should we price?</label>
+        <select id="priceBasis">
+          <option value="typical" selected>A typical day that month</option>
+          <option value="cheapest">The cheapest day we can find</option>
+        </select>
+      </div>
     </div>
 
     <div class="fields">
@@ -963,13 +960,6 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <option value="none">Not much</option>
           <option value="some" selected>Somewhat</option>
           <option value="high">A lot</option>
-        </select>
-      </div>
-      <div class="f">
-        <label for="priceBasis">Which day should we price?</label>
-        <select id="priceBasis">
-          <option value="typical" selected>A typical day that month</option>
-          <option value="cheapest">The cheapest day we can find</option>
         </select>
       </div>
     </div>
