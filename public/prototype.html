@@ -590,16 +590,24 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .bhead h2{font-family:"Archivo"; font-size:24px; letter-spacing:-.03em; margin:12px 0 4px}
 .bgate b{font-family:"Archivo"; font-size:16px}
 .bgate p{font-size:13.5px; color:var(--ink-2); margin:8px 0 12px; max-width:62ch}
-.bbill{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.3fr); gap:8px 14px; align-items:center;
-  padding:9px 0; border-top:1px solid var(--rule)}
-.bbill:first-child{border-top:0}
-.bbill b{font-size:13.5px}
-.bbill .amt{font-family:"JetBrains Mono",monospace; font-size:13.5px; text-align:right}
-@media (max-width:560px){ .bbill{grid-template-columns:minmax(0,1fr) auto} .bbill select{grid-column:1 / -1} }
-.bsched{display:grid; grid-template-columns:auto repeat(3,minmax(0,1fr)); gap:4px 12px; font-size:12.5px; color:var(--ink)}
-.bsched .h{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
-.bsched .n{font-family:"JetBrains Mono",monospace; text-align:right}
-.bsched .due{color:var(--accent)}
+.bmiles{list-style:none; margin:0; padding:0}
+.bmiles li{display:grid; grid-template-columns:110px minmax(0,1fr) auto; gap:4px 14px; align-items:baseline;
+  padding:10px 0; border-top:1px solid var(--rule)}
+.bmiles li:first-child{border-top:0}
+.bmiles .when{font-family:"Archivo"; font-weight:700; font-size:13.5px; color:var(--accent)}
+.bmiles .when small{display:block; font:500 11.5px "Karla",sans-serif; color:var(--muted)}
+.bmiles .what{font-size:13.5px}
+.bmiles .amt{font-family:"JetBrains Mono",monospace; font-size:13px; text-align:right}
+.bmiles li.short .when{color:var(--warnfg,#f0c674)}
+@media (max-width:560px){ .bmiles li{grid-template-columns:minmax(0,1fr) auto} .bmiles .what{grid-column:1 / -1} }
+.bpass{width:100%; border-collapse:collapse; font-size:13px; margin:6px 0 4px}
+.bpass th{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); text-align:left; padding:6px 8px 6px 0}
+.bpass td,.bpass th{text-align:left; white-space:normal}
+.bpass td{padding:8px 8px 8px 0; border-top:1px solid var(--rule); vertical-align:top}
+.bpass td.n{font-family:"JetBrains Mono",monospace; white-space:nowrap}
+.bpass small{display:block; color:var(--muted); font-size:11px}
+.bpass .good{color:var(--accent); font-weight:700}
+.bpasswrap{overflow-x:auto}
 
 /* line items */
 .upsell{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
@@ -817,13 +825,13 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="bhead">
       <button class="btn btn-sm" id="budgetBack">&larr; Back to the comparison</button>
       <h2>Your budget <span class="pluschip">Plus</span></h2>
-      <p class="hint">How to pay for the trip: what to set aside, when each bill comes, and what brings the total down.</p>
+      <p class="hint">How to pay for the trip: what to set aside, when you'll have enough for each part, and whether a pass pays for itself.</p>
     </div>
 
     <div id="budgetGate" hidden>
       <div class="panel bgate">
         <b>Plan how you'll pay for it, with Plus</b>
-        <p>Pick a trip from your comparison and see what to set aside each month or each paycheck so every bill is covered when it comes due. Put the annual passes you already hold and the DVC points you'd rent out into every total, and see what discounted gift cards save.</p>
+        <p>Pick a trip from your comparison and see what to set aside each month or paycheck, and the month you'll have enough for each part: flights, hotel, tickets, spending money. Check whether an annual pass would pay for itself, and put the passes and DVC points you already have into every total.</p>
         <button type="button" class="btn btn-primary btn-sm openpw">Get Plus</button>
       </div>
     </div>
@@ -878,24 +886,31 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         </section>
 
         <section class="panel">
-          <p class="panel-lab">3 · When each bill comes</p>
-          <p class="hint" style="margin:0 0 10px">Our guesses: change any of them to match how you'll book. Hotels often take a deposit when you book and the rest closer to the trip, so check your booking's terms.</p>
-          <div id="bBills"></div>
+          <p class="panel-lab">3 · What you can set aside</p>
+          <div class="fields">
+            <div class="f">
+              <label for="bMonthly">Each month</label>
+              <input id="bMonthly" type="number" min="0" step="25" inputmode="numeric">
+            </div>
+          </div>
+          <p class="hint" id="bMonthlyNote" style="margin:8px 0 12px"></p>
+          <div class="kpi" id="bKpi"></div>
         </section>
 
         <section class="panel">
-          <p class="panel-lab">4 · What to set aside</p>
-          <div class="kpi" id="bKpi"></div>
-          <p class="hint" id="bPlanNote" style="margin:0 0 10px"></p>
-          <details class="why" id="bScheduleWrap">
-            <summary>Month by month</summary>
-            <div class="whybody"><div class="bsched" id="bSchedule"></div></div>
-          </details>
+          <p class="panel-lab">4 · Your milestones</p>
+          <p class="hint" style="margin:0 0 10px">When the money you've put by covers each part of the trip, in the order most people book. Prices are our estimates; the price on the day you buy can be different.</p>
+          <ol class="bmiles" id="bMiles"></ol>
+        </section>
+
+        <section class="panel" id="bPassCheck">
+          <p class="panel-lab">5 · Is an annual pass worth it?</p>
+          <div id="bPassBody"></div>
         </section>
 
         </div>
         <section class="panel" id="memberBlock">
-          <p class="panel-lab">5 · Bring the total down: passes and DVC points</p>
+          <p class="panel-lab">6 · Passes and DVC points you already have</p>
           <div id="memberFields">
         <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
         <div id="passFields"></div>
@@ -1381,7 +1396,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="plans" id="plusPlans"></div>
     <ul class="feat">
       <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two months out to a year ahead, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>Your budget</b> — a page that works out what to set aside each month or paycheck so every bill is covered when it comes due, with the annual passes you hold and the DVC points you'd rent out counted in every total</span></li>
+      <li><span class="tick">✓</span><span><b>Your budget</b> — a page that works out what to set aside each month or paycheck and when you'll have enough for flights, hotel and tickets, plus whether an annual pass would pay for itself</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -5096,9 +5111,6 @@ document.addEventListener("click", async e=>{
  * "How do we pay for it?" Pure arithmetic on totals the comparison already
  * showed: nothing here is fetched. The bill timings are the traveler's own
  * (our defaults are labelled guesses), and so is every dollar typed in. */
-const BILL_WHEN = [["now","Now"],["6","6 months before"],["4","4 months before"],["3","3 months before"],
-  ["2","2 months before"],["1","1 month before"],["trip","During the trip"]];
-const BILL_DEFAULT = { travel:"6", rooms:"2", tickets:"2", deals:"2", onsite:"trip", food:"trip" };
 let budgetPrefs = store.get("budget", {});
 let budgetTripId = null;
 let budgetPushed = false;
@@ -5109,66 +5121,85 @@ function ymAdd(ym, n){ const [y,m] = ym.split("-").map(Number); const d = new Da
 function ymDiff(a, b){ const [ay,am] = a.split("-").map(Number), [by,bm] = b.split("-").map(Number); return (by-ay)*12 + (bm-am); }
 const ymLabel = ym => MONTHS[+ym.slice(5,7)-1]+" "+ym.slice(0,4);
 
-/** The trip's bills, in the order people meet them. Lines that come to $0
- *  are left out; whatever the pieces don't explain (deals, DVC take-home)
- *  is its own line so the bills always add up to the total. */
-function budgetBills(x){
+/**
+ * The trip's milestones, in the order most people book: getting there, the
+ * hotel, park tickets, then spending money for the trip itself. NOT a claim
+ * about when any bill is due (owner, 2026-10-08: no guesses about due
+ * dates); each one is simply "by now you'd have enough to buy this".
+ * Whatever the pieces don't explain (deals, DVC take-home) comes off the
+ * last step, or is its own step if it adds cost.
+ */
+function budgetSteps(x){
   const drive = x.transportMode === "drive";
-  const lines = [
-    { key:"travel", label: drive ? "Driving (gas and wear)" : "Flights", amt: x.flights + x.driving,
-      def: drive ? "trip" : BILL_DEFAULT.travel },
-    { key:"rooms", label:"Hotel rooms", amt: x.rooms, def: BILL_DEFAULT.rooms },
-    { key:"tickets", label:"Park tickets", amt: x.tickets, def: BILL_DEFAULT.tickets },
-    { key:"onsite", label:"Parking and transfers", amt: x.transport, def: BILL_DEFAULT.onsite },
-    { key:"food", label:"Food", amt: x.food, def: BILL_DEFAULT.food },
+  const steps = [
+    { key:"travel", what: drive ? "put the drive's gas money aside" : "buy your airline tickets", amt: x.flights + x.driving },
+    { key:"rooms", what:"pay for the hotel", amt: x.rooms },
+    { key:"tickets", what:"buy park tickets", amt: x.tickets },
+    { key:"spend", what:"have your spending money for the trip (food, parking and transfers)", amt: x.food + x.transport },
   ];
-  const rest = x.total - lines.reduce((s,l)=>s+l.amt, 0);
-  if(Math.abs(rest) >= 1) lines.push({ key:"deals", label: rest < 0 ? "Deals and credits" : "Other costs", amt: rest, def: BILL_DEFAULT.deals });
-  return lines.filter(l => Math.abs(l.amt) >= 1);
+  const rest = x.total - steps.reduce((s,l)=>s+l.amt, 0);
+  if(rest <= -1){
+    for(let i=steps.length-1, left=-rest; i>=0 && left>0; i--){ const take = Math.min(left, steps[i].amt); steps[i].amt -= take; left -= take; }
+  } else if(rest >= 1) steps.push({ key:"other", what:"cover everything else on this trip", amt: rest });
+  return steps.filter(st => st.amt >= 1);
 }
 
-/** Month index (0 = this month) a bill lands in, given how long until the trip. */
-function billMonth(when, T){
-  if(when === "now") return 0;
-  if(when === "trip") return T;
-  return Math.max(0, T - (+when || 0));
+/** The steady amount that has the whole trip put by in the arrival month. */
+function evenMonthly(toFind, T){ return Math.ceil(toFind / (T+1)); }
+
+/**
+ * When the pot first covers each milestone, saving `monthly` at the start of
+ * every month from this one (index 0) through the arrival month (index T).
+ * Pure. A milestone the pot never reaches by the trip is `at: null`.
+ */
+function budgetMilestones({ steps, T, monthly, saved, extra, extraAt, giftSaving }){
+  const pot = i => saved + giftSaving + (i >= extraAt ? extra : 0) + monthly * (i+1);
+  let cum = 0;
+  return steps.map(st => {
+    cum += st.amt;
+    let at = null;
+    for(let i=0;i<=T;i++) if(pot(i) >= cum - 0.5){ at = i; break; }
+    return { ...st, cum, at, short: at === null ? Math.ceil(cum - pot(T)) : 0 };
+  });
 }
 
 /**
- * What to set aside each month, starting this month, so the pot never runs
- * short when a bill comes due — and never more than that. Steps, not one
- * flat figure: a bill due early (flights bought now) needs money early, and
- * once it is paid the rest of the trip needs far less a month. One flat
- * amount sized for the early bill would keep you saving thousands you don't
- * need. Each step is the least steady amount that covers every bill up to
- * the one that pinches hardest; then it starts again from there.
+ * Annual pass break-even, from the comparison's own ticket line for that
+ * resort: what one person's park tickets cost for a trip like this one, and
+ * how many such trips (and park days) a year it takes for each pass to pay
+ * for itself. Pass prices come from /api/meta (the owner's numbers if set).
  */
-function budgetPlan({ bills, T, saved, extra, extraAt, giftSaving }){
-  const due = Array.from({length:T+1}, ()=>0);
-  for(const b of bills) due[b.at] += b.amt;
-  const income = due.map((_,i)=>(i === 0 ? saved + giftSaving : 0) + (i === extraAt ? extra : 0));
-  const rate = Array.from({length:T+1}, ()=>0);
-  let start = 0, carry = 0;
-  while(start <= T){
-    let best = 0, bestAt = T, cumDue = 0, cumIn = carry;
-    for(let i=start;i<=T;i++){
-      cumDue += due[i]; cumIn += income[i];
-      const r = (cumDue - cumIn) / (i - start + 1);
-      if(r > best + 1e-9){ best = r; bestAt = i; }
-    }
-    const r = Math.max(0, Math.ceil(best));
-    for(let i=start;i<=bestAt;i++){ rate[i] = r; carry += income[i] + r - due[i]; }
-    start = bestAt + 1;
-  }
-  const steps = [];
-  rate.forEach((r,i)=>{ const last = steps[steps.length-1]; if(last && last.r === r) last.to = i; else steps.push({ r, from:i, to:i }); });
-  const total = due.reduce((s,v)=>s+v, 0);
-  const toFind = Math.max(0, total - saved - extra - giftSaving);
-  const even = Math.ceil(toFind / (T+1));
+function passBreakEven(item){
+  const x = item.price;
+  const gate = x.membership && x.membership.pass ? x.membership.pass.ticketsWithoutPassUsd : x.tickets;
+  const payers = (x.ticketLines||[]).filter(l => l.group !== "infant").reduce((s,l)=>s+l.count, 0);
+  if(!payers || !(gate > 0)) return null;
+  const perPerson = gate / payers;
+  const days = (x.parkDays && x.parkDays.days) || 1;
+  return { perPerson, days, perDay: perPerson / days };
+}
+
+function passCheckHtml(){
   const rows = [];
-  let pot = 0;
-  for(let i=0;i<=T;i++){ pot += income[i] + rate[i] - due[i]; rows.push({ i, in: rate[i] + (i === extraAt ? extra : 0), out: due[i], pot }); }
-  return { steps, even, toFind, total, rows };
+  for(const prog of PASS_PROGRAMS){
+    const item = results.find(r => r.ok && r.resortId === prog.resortId);
+    const be = item && passBreakEven(item);
+    if(!be) continue;
+    rows.push(`<p style="margin:12px 0 4px"><b>${esc(item.resort.name)}</b> — ${esc(prog.label)}.
+      One person's park tickets for this trip come to about <b>${usd(be.perPerson)}</b> (${be.days} park day${be.days>1?"s":""}, about ${usd(be.perDay)} a day).</p>
+      <div class="bpasswrap"><table class="bpass"><thead><tr><th>Pass</th><th>Price a year</th><th>Pays for itself after</th></tr></thead><tbody>
+      ${prog.tiers.map(t => {
+        const trips = t.priceUsd / be.perPerson, dayCount = Math.ceil(t.priceUsd / be.perDay);
+        const verdict = trips <= 1
+          ? `<span class="good">This trip alone</span>`
+          : `${trips < 10 ? trips.toFixed(1) : Math.round(trips)} trips like this a year`;
+        return `<tr><td>${esc(t.label)}<small>${esc(t.eligibility)}</small></td><td class="n">${usd(t.priceUsd)}</td>
+          <td>${verdict}<small>about ${dayCount} park days at this trip's daily price</small></td></tr>`;
+      }).join("")}</tbody></table></div>`);
+  }
+  if(!rows.length) return `<p class="hint" style="margin:0">Only Walt Disney World and Disneyland sell passes we can price. Compare with one of them on the board to see the break-even.</p>`;
+  return `<p class="hint" style="margin:0">Per person, before tax. A pass also covers theme park parking (all of it or half, depending on the pass), which this doesn't count, so passes come out a little better than shown. Cheaper passes block out busy dates, so check yours covers when you'd go.</p>`
+    + rows.join("");
 }
 
 function budgetTrips(){ return results.filter(r=>r.ok).slice().sort((a,b)=>a.price.total-b.price.total); }
@@ -5193,47 +5224,43 @@ function renderBudget(){
 
   // Inputs, from what this visitor typed last time (this browser only).
   const num = id => Math.max(0, +$(id).value || 0);
-  for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"]])
+  for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"],["#bMonthly","monthly"]])
     if(document.activeElement !== $(id)) $(id).value = budgetPrefs[k] || "";
   const extraOpts = Array.from({length:T+1}, (_,i)=>ymAdd(now,i));
   const extraYm = extraOpts.includes(budgetPrefs.extraYm) ? budgetPrefs.extraYm : now;
   $("#bExtraMonth").innerHTML = extraOpts.map(ym=>`<option value="${ym}"${ym===extraYm?" selected":""}>${ymLabel(ym)}</option>`).join("");
 
-  const when = budgetPrefs.when || {};
-  const bills = budgetBills(x).map(b => ({ ...b, when: when[b.key] || b.def }))
-    .map(b => ({ ...b, at: billMonth(b.when, T) }));
-  $("#bBills").innerHTML = bills.map(b => `<div class="bbill"><b>${b.label}</b>
-      <span class="amt">${b.amt < 0 ? "−"+usd(-b.amt) : usd(b.amt)}</span>
-      <select data-bill="${b.key}" aria-label="When you'll pay for ${esc(b.label.toLowerCase())}">${BILL_WHEN.map(([v,l])=>
-        `<option value="${v}"${v===b.when?" selected":""}>${l}${v!=="now"&&v!=="trip"&&T-(+v)<0?" (that's now)":""}</option>`).join("")}</select></div>`).join("");
-
+  const saved = num("#bSaved"), extra = num("#bExtra");
   const giftAmt = Math.min(num("#bGiftAmt"), x.total);
   const giftSaving = Math.round(giftAmt * Math.min(30, num("#bGiftPct")) / 100);
-  const plan = budgetPlan({ bills, T, saved: num("#bSaved"), extra: num("#bExtra"),
-    extraAt: extraOpts.indexOf(extraYm), giftSaving });
-  const first = plan.steps[0], later = plan.steps.slice(1).filter(st=>st.r>0);
-  const span = st => st.from === st.to ? ymLabel(ymAdd(now,st.from)) : `${ymLabel(ymAdd(now,st.from))} to ${ymLabel(ymAdd(now,st.to))}`;
-  const steady = plan.steps.length === 1;
-  // A one-month first step is "due now", not a paycheck habit; the
-  // paycheck figure is the one that follows it.
-  const pay = first.from === first.to && later.length ? later[0] : first;
+  const toFind = Math.max(0, x.total - saved - extra - giftSaving);
+  const even = evenMonthly(toFind, T);
+  const typed = num("#bMonthly");
+  const monthly = typed > 0 ? typed : even;
+  $("#bMonthly").placeholder = String(even);
+  const months = T + 1;
+  $("#bMonthlyNote").textContent = toFind === 0
+    ? "What you have already covers the whole trip."
+    : typed > 0
+      ? `To have it all by ${ymLabel(tripYm)}, it takes ${usd(even)} a month (${months} month${months>1?"s":""}).`
+      : `Left blank, we use ${usd(even)} a month: what has it all put by in ${ymLabel(tripYm)}. Type what you can really manage and the milestones move.`;
   $("#bKpi").innerHTML = `
-    <div class="kpitile"><span class="k">Still to find</span><span class="v">${usd(plan.toFind)}</span>
+    <div class="kpitile"><span class="k">Still to find</span><span class="v">${usd(toFind)}</span>
       <span class="s">of ${usd(x.total)}${giftSaving?`, after ${usd(giftSaving)} from gift cards`:""}</span></div>
-    <div class="kpitile total"><span class="k">${steady ? "Each month" : first.from===first.to ? "This month" : "Each month, to start"}</span><span class="v">${usd(first.r)}</span>
-      <span class="s">${span(first)}${later.length?`, then ${usd(later[0].r)} a month`:""}</span></div>
-    <div class="kpitile"><span class="k">${pay===first?"Every two weeks":"Then every two weeks"}</span><span class="v">${usd(Math.ceil(pay.r*12/26))}</span>
-      <span class="s">or ${usd(Math.ceil(pay.r*12/52))} a week${pay===first&&later.length?", to start":""}</span></div>`;
-  const dueNow = bills.filter(b=>b.at===0).reduce((s,b)=>s+b.amt,0);
-  $("#bPlanNote").innerHTML = plan.toFind === 0
-    ? "What you have already covers it. Nothing more to set aside."
-    : steady
-      ? `Setting aside ${usd(first.r)} a month covers every bill by the time it comes due.`
-      : `The bills don't come evenly, so neither does the saving: ${plan.steps.filter(st=>st.r>0).map(st=>`<b>${usd(st.r)}</b> ${st.from===st.to?"in":"a month,"} ${span(st)}`).join("; ")}.`
-        + (dueNow>0 && first.from===first.to ? ` ${usd(dueNow)} of bills land this month. Moving one later in step 3 spreads it out; spread evenly to the trip it would be ${usd(plan.even)} a month.` : ` Spread evenly to the trip it would be ${usd(plan.even)} a month, if every bill could wait.`);
-  $("#bSchedule").innerHTML = `<span class="h">Month</span><span class="h n">Set aside</span><span class="h n">Bills</span><span class="h n">In the pot</span>`
-    + plan.rows.map(r=>`<span>${ymLabel(ymAdd(now,r.i))}</span><span class="n">${usd(r.in)}</span>
-      <span class="n${r.out>0?" due":""}">${r.out? (r.out<0?"−"+usd(-r.out):usd(r.out)) : "—"}</span><span class="n">${usd(Math.max(0,r.pot))}</span>`).join("");
+    <div class="kpitile total"><span class="k">Each month</span><span class="v">${usd(monthly)}</span>
+      <span class="s">${months} month${months>1?"s":""}, ${ymLabel(now)} to ${ymLabel(tripYm)}</span></div>
+    <div class="kpitile"><span class="k">Every two weeks</span><span class="v">${usd(Math.ceil(monthly*12/26))}</span>
+      <span class="s">or ${usd(Math.ceil(monthly*12/52))} a week</span></div>`;
+
+  const miles = budgetMilestones({ steps: budgetSteps(x), T, monthly, saved, extra,
+    extraAt: extraOpts.indexOf(extraYm), giftSaving });
+  $("#bMiles").innerHTML = miles.map(m => m.at === null
+    ? `<li class="short"><span class="when">Not by the trip<small>${usd(m.short)} short at this pace</small></span>
+        <span class="what">You'd still need to ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`
+    : `<li><span class="when">${m.at === 0 ? "This month" : "Month "+(m.at+1)}<small>${ymLabel(ymAdd(now,m.at))}</small></span>
+        <span class="what">You can ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`).join("");
+
+  $("#bPassBody").innerHTML = passCheckHtml();
 }
 
 function syncBudgetView(){
@@ -5262,13 +5289,9 @@ $("#budgetBtn").addEventListener("click", ()=>{
 $("#budgetBack").addEventListener("click", closeBudget);
 $("#budgetToSearch").addEventListener("click", closeBudget);
 $("#bTrip").addEventListener("change", e=>{ budgetTripId = e.target.value; renderBudget(); });
-for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"]])
+for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"],["#bMonthly","monthly"]])
   $(id).addEventListener("input", e=>{ budgetPrefs[k] = +e.target.value || 0; saveBudgetPrefs(); renderBudget(); });
 $("#bExtraMonth").addEventListener("change", e=>{ budgetPrefs.extraYm = e.target.value; saveBudgetPrefs(); renderBudget(); });
-$("#bBills").addEventListener("change", e=>{
-  const k = e.target.dataset && e.target.dataset.bill; if(!k) return;
-  budgetPrefs.when = { ...(budgetPrefs.when||{}), [k]: e.target.value }; saveBudgetPrefs(); renderBudget();
-});
 $("#bRecompare").addEventListener("click", async ()=>{
   const b = $("#bRecompare"); b.disabled = true; b.textContent = "Updating…";
   try { await runSearch(budgetTripId); } finally { b.disabled = false; b.textContent = "Update the totals"; }

@@ -86,6 +86,28 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, after #135 (PR #136) — budget page: milestones, not due dates; pass break-even
+
+- **No guesses about when bills are due** (owner: "That's bad. Instead just
+  put milestones"). The "when each bill comes" dropdowns and the stepped
+  plan are GONE. Now: (3) what you can set aside each month (blank = the
+  even amount that has it all by the arrival month, shown as the
+  placeholder); (4) **milestones** (`budgetSteps()` + `budgetMilestones()`):
+  in booking order (airline tickets / drive gas money, hotel, park tickets,
+  spending money = food + parking/transfers; deals and DVC credit come off
+  the last step), "Month 3 · Dec 2026: you can buy your airline tickets
+  $2,101", or "Not by the trip, $X short at this pace". No due-date claim.
+- **Annual pass break-even** (owner: "I LOVE the annual pass break even
+  check"), section 5: for WDW and Disneyland when the comparison priced
+  them, one person's park tickets for this trip (ticket line, or
+  `ticketsWithoutPassUsd` if a pass is applied, over non-infant ticket
+  holders) vs each tier's price: "N trips like this a year" (or "This trip
+  alone") and about how many park days. Says passes also cover parking
+  (not counted) and that cheaper passes block out busy dates. /api/meta
+  `passPrograms` now serves the owner's /admin pass prices when set.
+- Sections: 1 trip, 2 what you have, 3 set aside, 4 milestones, 5 pass
+  break-even, 6 passes/DVC you already hold.
+
 ### 2026-10-08, after #134 (PR #135) — a separate Plus BUDGET page; board lines gone; own discount free again
 
 - **Board sparklines REMOVED** (owner: they "take away from the plus 'When
@@ -103,8 +125,7 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   one-off money coming and when, gift cards bought at % off (the traveler's
   own figures, capped at 30%); (3) when each bill comes (flights, hotel
   rooms, tickets, parking/transfers, food, deals and credits), each a
-  dropdown (now / 6-1 months before / during the trip), defaults labelled
-  as guesses, no Disney payment policy asserted; (4) what to set aside:
+  dropdown (SUPERSEDED by #136: milestones, no due dates); (4) what to set aside:
   `budgetPlan()` gives STEPS, not one flat figure (the least steady amount
   covering every bill up to the one that pinches hardest, then again from
   there), so flights bought now don't keep you saving thousands you no
@@ -114,7 +135,7 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   The page's tool is Plus only in the UI (it is arithmetic on free numbers);
   the passes/DVC that move prices stay Plus on the server.
 - Not built (ask first): "What fits my budget?", "What would save the
-  most?", pass break-even. Never recommend loans, credit or insurance here.
+  most?" (pass break-even was built in #136). Never recommend loans, credit or insurance here.
 
 ### 2026-10-08, final (PR #134) — "Your budget" is Plus; the board's lines explained
 
