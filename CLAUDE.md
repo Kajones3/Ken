@@ -86,6 +86,25 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, final (PR #134) — "Your budget" is Plus; the board's lines explained
+
+- **Plus now = best months to go, YOUR BUDGET, saved searches, the PDF,
+  deal emails.** Owner: "move all the budget stuff to plus ... take the AP
+  stuff off of the free form. I feel it lacks value." Annual passes, DVC
+  points and the personal discount are ignored server-side without Plus
+  (`budgetFor()` in server.ts, applied in compare/calendar/months; checked
+  live: a free request with passes+DVC prices the same as a plain one). The
+  form's block is now "Your budget · Plus"; free visitors see a one-line
+  pitch, and the Promos card's "Have your own discount?" becomes a Plus
+  prompt. Supersedes the 2026-09-21 "Free, not Plus" note on passes/DVC.
+- **The "budget tab" tools proposed 10-08 are NOT built** ("What fits my
+  budget?", "What would save the most?", savings plan, pass break-even).
+  Ask before building; they'd live in this Plus block.
+- **Board sparkline** now says what it is: typical whole-trip total per
+  plannable month, "Best month: Jan · $4,421" underneath, every month's
+  total on hover. Each line is scaled to its own resort (compare shapes, not
+  heights).
+
 ### 2026-10-08, very last (PR #133) — LAX leads for Disneyland; WDW pass prices; sliding details
 
 - **Disneyland's primary airport is now LAX**, SNA the alternate (owner:

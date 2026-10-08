@@ -148,10 +148,8 @@ function paramsFrom(q: URLSearchParams): TripParams {
     cars: clamp(Number(q.get("cars") ?? 1), 0, 4),
     freeParking: q.get("freeParking") === "1",
     transportMode: "fly",
-    // Free, like the overrides they most resemble: a traveler correcting the
-    // app's picture of what THEY actually pay. Both are unverified claims
-    // about the traveler's own finances that never leave their own board,
-    // so there is nothing here to gate. `passes` is sent as
+    // Plus since 2026-10-08 (owner: "move all the budget stuff to plus");
+    // budgetFor() below drops these for anyone without Plus. `passes` is sent as
     // resort:tier:count triples so one query param carries a whole party's
     // holdings across the six-resort board.
     annualPasses: parsePassHoldings(
@@ -164,6 +162,19 @@ function paramsFrom(q: URLSearchParams): TripParams {
 }
 function clamp(n: number, lo: number, hi: number): number {
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : lo;
+}
+
+/**
+ * "Your budget" is Plus (owner, 2026-10-08): annual passes, DVC points you'd
+ * rent out, and a personal discount. Resolved from the session, never from
+ * the client, so a free request that sends them is simply priced without
+ * them, the same way it would be if the boxes were empty.
+ */
+function budgetFor(user: SessionUser | null, params: TripParams, overrides: Overrides): void {
+  if (user && isPlus(user.plusUntil)) return;
+  params.annualPasses = [];
+  params.dvcRental = null;
+  for (const ov of Object.values(overrides)) if (ov) delete ov.personalPromo;
 }
 
 /**
@@ -255,6 +266,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
+  budgetFor(user, params, overrides);
   const month = q.get("month") ?? todayISO().slice(0, 7);
   // A named holiday window (2026-09-25) narrows the scan to a real week
   // within the month instead of the whole thing — resolved server-side from
@@ -434,6 +446,7 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
+  budgetFor(user, params, overrides);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
   const mode = resortTransportMode(gettingThere, resort, params.origin);
@@ -475,6 +488,7 @@ async function months(q: URLSearchParams, user: SessionUser | null) {
   params.origin = resolveOrigin(params.origin).origin;
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
+  budgetFor(user, params, overrides);
   const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
   if (!resort) return { error: "unknown resort" };
   const mode = resortTransportMode(gettingThere, resort, params.origin);
