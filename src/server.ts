@@ -25,6 +25,7 @@ import {
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
+import { quoteMonths } from "./monthView.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
 import { setDealEmailsByToken, setDealEmailsForUser, dealEmailsOn } from "./dealEmails.js";
 import { getDb, type Db } from "./db.js";
@@ -459,6 +460,42 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
     };
   });
   return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };
+}
+
+/**
+ * "Best months to go" (Plus, owner 2026-10-08): one resort's typical
+ * whole-trip total for every plannable month, priced the way the board
+ * prices a month. Replaced the day-by-day calendar, whose per-day dollar
+ * figures claimed more precision than quarterly flight data can back (see
+ * monthView.ts). Plus is resolved from the session, never the client.
+ */
+async function months(q: URLSearchParams, user: SessionUser | null) {
+  if (!(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
+  const params = paramsFrom(q);
+  params.origin = resolveOrigin(params.origin).origin;
+  const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
+  const overrides = overridesFrom(q);
+  const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
+  if (!resort) return { error: "unknown resort" };
+  const mode = resortTransportMode(gettingThere, resort, params.origin);
+  const destination = resolveDestination(resort, q.get("destination"));
+  const trip = { ...params, ...(mode === "drive" ? driveBase : flyBase), destination };
+  const list = plannableMonths(todayISO());
+  const from = monthBounds(list[0]!)[0];
+  const to = monthBounds(list[list.length - 1]!)[1];
+  const book = await loadBook(db, {
+    origin: params.origin, destinations: [destination], resortIds: [resort.id],
+    from, to: addDaysISO(to, params.nights + 1), tripLength: bucketFor(params.nights),
+  });
+  // The board's stand-in for a short US hop with no flight price yet.
+  const home = ORIGIN_BY_IATA.get(params.origin);
+  const shortHop = !!home && haversineMiles(home.lat, home.lon, resort.lat, resort.lon) <= DRIVE_STAND_IN_MILES;
+  const fallback = mode !== "drive" && resort.region === "dom" && shortHop
+    ? { ...params, ...driveBase, destination } : undefined;
+  return {
+    resortId: resort.id, destination, pricesAsOf: book.oldestFetchedAt,
+    months: quoteMonths(book, resort, trip, overrides, list, fallback),
+  };
 }
 
 /**
@@ -1042,6 +1079,12 @@ const server = createServer(async (req, res) => {
 
     // --- pricing: reads the cache, personalized only by what the signed-in ---
     // --- user is entitled to (compare()/calendar() decide that internally). ---
+    if (url.pathname === "/api/months") {
+      const user = await currentUser(db, req);
+      const body = await months(url.searchParams, user);
+      if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
+      return send(200, body, { cache: "private, max-age=60" });
+    }
     if (url.pathname === "/api/compare" || url.pathname === "/api/calendar") {
       const user = await currentUser(db, req);
       const body = url.pathname === "/api/compare" ? await compare(url.searchParams, user) : await calendar(url.searchParams, user);

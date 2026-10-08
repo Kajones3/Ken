@@ -66,7 +66,7 @@ the account panel — not built yet].
 
 ## 5. Pricing the Magic Plus
 
-Plus is a paid add-on. Right now it includes the trip price calendar, saving
+Plus is a paid add-on. Right now it includes a month-by-month view of the best times to go, saving
 searches, the shareable PDF, and emails about new Disney deals. **We may
 change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a

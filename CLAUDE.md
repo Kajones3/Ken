@@ -84,7 +84,40 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 "Checked before buying" section, and everything listed under #121.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**746 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### 2026-10-08, last — Plus "best months to go" replaced the day-by-day calendar (PRs #129-#132)
+
+- **Plus is now: best months to go, saved searches, the PDF, deal emails.**
+  The daily trip price calendar is gone (owner agreed: per-day dollar
+  figures claimed more than our data backs; flights are one number per route
+  per QUARTER, paid fares all depart on the 15th, off-property hotels are one
+  sampled night a month). `src/monthView.ts` (pure, tested) prices every
+  plannable month with `typicalIn()`, exactly as the board prices a month,
+  so a month tile and the board's total for that month are the same number
+  (checked live: WDW March $4,960 both). Each month is labelled cheaper /
+  typical / pricier against that resort's OWN middle month (±5%), three
+  levels only. `GET /api/months?resort=` answers 402 without Plus; the board
+  sparkline now plots typical-by-month. Clicking a month re-runs the search
+  for it. `/api/calendar` multi-day still exists, still Plus, unused by the UI.
+- **The owner's story moved under the hero map** as a quiet caption, ending
+  "We make the budget. You take the trip." Hides with the hero after a search.
+- **Never recommend travel insurance** (owner). The WDW hurricane note no
+  longer does.
+- Phone hero: castle badges removed. "Which day should we price?" moved up
+  beside Nights so the park-days "?" note opens under its own row.
+- **Tab icon: owner still deciding** between globe and sparkle variations
+  (Claude suggested B2 simple globe + sparkle, or C3 sparkle on a dashed
+  orbit). Nothing that COUNTS the parks: a seventh resort (Abu Dhabi) is
+  coming, which will also need the "Six Disney resorts" headline reworded.
+  When picked: add PNG favicons + apple-touch-icon (Safari ignores SVG ones).
+- **Wait-time idea (owner, NOT built):** "The average wait in October for
+  rides at this resort was XX minutes last year." Needs a whole October of
+  recordings first (Oct 2026 completes Nov 1; Shanghai only since 10-03).
+  Remind the owner of the 2026-09-22 reason the card was dropped: these are
+  POSTED waits and the inflation differs by operator, so cross-resort
+  comparison is skewed; a per-resort "last October" line is safer than a
+  ranking. Ask before building.
 
 ### 2026-10-08, later — Render redeployed after #127; two hotel warnings explained
 
