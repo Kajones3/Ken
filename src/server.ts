@@ -304,7 +304,11 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // its own errors, and nothing below reads the result.
   const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
   const byOwner = !!user && !!ownerEmail && user.email.trim().toLowerCase() === ownerEmail;
-  void recordSearch(db, params.origin, [...destinationByResort.values()], month, !byOwner);
+  // The free sample PDF (sample=1) is our own fixed scenario, not a person
+  // asking about a route, so it must not steer tonight's paid lookups.
+  if (q.get("sample") !== "1") {
+    void recordSearch(db, params.origin, [...destinationByResort.values()], month, !byOwner);
+  }
 
   // A signed-in traveler's attraction picks, read from their own row —
   // never from the query string, so the client can say which account it is
