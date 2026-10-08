@@ -5009,14 +5009,18 @@ window.addEventListener("afterprint", () => { sampleDocReady = false; });
 
 /* One fixed, real scenario, priced live through the same free comparison
    anyone can run, so the sample always shows today's numbers. Picked
-   2026-10-08 from the "sample scan" workflow over the live database. The
-   owner asked for a big city where neither US park is in the top two; in
-   396 city/month/party combinations that never happened (Walt Disney World
-   was always first or second). The closest: a couple from New York in
-   April, where Paris is second and Hong Kong, Shanghai and Tokyo all come
-   in under Disneyland. If prices move, the sample is still honest; it just
-   tells a different story. */
-const SAMPLE_TRIP = { origin:"JFK", month:"2027-04", adults:2, ages:[], nights:6, who:"a couple from New York", lead:"dlp" };
+   2026-10-08 from the "sample scan" workflow over the live database (run
+   37844824482, six trip shapes). The owner asked for a big city where
+   neither US park is in the top two, or where Walt Disney World is only
+   about $100 cheaper. A family of four from Chicago, October 2027, nine
+   nights, Deluxe hotels and table-service meals, does both: Hong Kong
+   $15,053, Tokyo $15,084, Disneyland $15,116, Walt Disney World $15,155,
+   four resorts within $102. It only happens at the Deluxe end: Disney
+   World's Deluxe rooms cost far more than Hong Kong's or Tokyo's. If
+   prices move, the sample is still honest; it just tells a different
+   story. */
+const SAMPLE_TRIP = { origin:"ORD", month:"2027-10", adults:2, ages:[8,11], nights:9, tier:"2", food:"ts",
+  who:"a family of four from Chicago, Deluxe hotels and table-service meals", lead:"hkdl" };
 let sampleMode = false, sampleDocReady = false;
 
 function sampleMonth(){
@@ -5048,15 +5052,16 @@ $("#pdfSampleGo").addEventListener("click", async ()=>{
   try {
     params = { ...readParams(), origin: SAMPLE_TRIP.origin, adults: SAMPLE_TRIP.adults, seniors: 0,
       ages: SAMPLE_TRIP.ages, nights: SAMPLE_TRIP.nights, parkDays: null, needHotel: "yes", stay: "on",
-      tier: "1", rooms: 1, food: "mix", hopper: false, priceBasis: "typical", passes: [], dvcPoints: 0,
+      tier: SAMPLE_TRIP.tier, rooms: 1, food: SAMPLE_TRIP.food, hopper: false, priceBasis: "typical", passes: [], dvcPoints: 0,
       month: sampleMonth(), window: "", gettingThere: "fly", originPoint: null };
     const data = await apiGet("/api/compare", { ...tripQuery(), month: params.month, sample: "1",
       overrides: "{}", destinations: "{}" });
     results = data.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
     const priced = results.filter(r=>r.ok).sort((a,b)=>a.price.total - b.price.total);
     if(!priced.length) throw new Error("no prices");
-    // The sample leads with Paris, the surprise in this comparison, so the
-    // cover shows what this site is for; the price order stays in the file.
+    // The sample leads with the international resort the scan found
+    // cheapest, so the cover shows what this site is for; the price order
+    // stays in the file.
     selected = results.indexOf(priced.find(r=>r.resortId===SAMPLE_TRIP.lead) || priced[0]);
     openTrip = null; pdfChoice = null;
     sampleMode = true;

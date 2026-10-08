@@ -106,6 +106,18 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   Hong Kong $6,417, Shanghai $6,472, Tokyo $6,485, Disneyland $6,575. The
   sample's cover LEADS with Paris (`SAMPLE_TRIP.lead`). Change the scenario
   there if the owner prefers another.
+  **SUPERSEDED the same evening (PR #141):** the owner asked for one where
+  Walt Disney World is only ~$100 cheaper. The scan now tries six trip
+  shapes (Moderate/Deluxe/Value on property, off property, 6 and 9 nights);
+  run 37844824482 (2,340 scenarios) found **84 where the two cheapest are
+  both international, ALL at "9 nights, on property Deluxe, table
+  service"** (WDW Deluxe rooms cost far more than Hong Kong's or Tokyo's).
+  The sample is now **a family of four (kids 8, 11) from Chicago (ORD),
+  October 2027, 9 nights, Deluxe, table service**: Hong Kong $15,053, Tokyo
+  $15,084, Disneyland $15,116, WDW $15,155 (four resorts within $102),
+  cover leads with Hong Kong. Same caveat as below: international flights
+  are one figure for every US city (HK/Tokyo totals identical from ORD,
+  MIA, MSP), and Tokyo's and HK's Deluxe rates are partly guesses/derived.
 - **Side finding worth a look in the accuracy review:** for 2 adults, the
   international totals are identical from BWI, CLT, DTW, IAD, JFK, MIA and
   PHL (e.g. Paris $6,221 in March from all seven). International flights
