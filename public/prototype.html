@@ -454,6 +454,7 @@ a{color:var(--ink)}
 .bestflag{display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 7px}
 
 .spark{display:block}
+.sparkcap{display:block; font-size:10.5px; color:var(--muted); margin-top:2px; white-space:nowrap}
 .bar-wrap{min-width:0}
 .bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
 .seg{height:100%}
@@ -571,6 +572,7 @@ button.mtile:hover{border-color:var(--rule-strong)}
 .mtile.pricier .mlevel{color:var(--dv-hi-3)}
 .mtile.none{opacity:.55}
 .mtile.sel{outline:2px solid var(--accent-line); outline-offset:1px}
+.pluschip{display:inline-block; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:1px 6px; border-radius:6px; background:var(--accent-bg); color:var(--accent); vertical-align:1px}
 .calgate{position:relative}
 .calgate .mgrid{filter:blur(2px); opacity:.55; pointer-events:none; user-select:none}
 .calgate-cta{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px,calc(100% - 24px));
@@ -1033,12 +1035,17 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       </div>
     </div>
 
-    <!-- Passes and DVC. Behind a disclosure because most people have neither,
-         and in the form rather than in a detail card because it changes what
-         the board says, not just what one resort's card explains. -->
+    <!-- "Your budget" is Plus (owner, 2026-10-08): annual passes and DVC
+         points. The server ignores them without Plus (budgetFor() in
+         server.ts); this block only says so instead of offering boxes that
+         would do nothing. -->
     <details class="why" id="memberBlock">
-      <summary>Do you have an annual pass, or DVC points to rent out?</summary>
-      <div class="whybody">
+      <summary>Your budget <span class="pluschip">Plus</span> — annual passes and DVC points</summary>
+      <div class="whybody" id="memberGate" hidden>
+        <p class="hint" style="margin-top:0">With Plus, put the annual passes you already hold and the DVC points you'd rent out into every total, and add your own discount codes.</p>
+        <button type="button" class="btn btn-sm openpw">Get Plus</button>
+      </div>
+      <div class="whybody" id="memberFields">
         <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
         <div id="passFields"></div>
         <div class="fields">
@@ -1260,6 +1267,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="plans" id="plusPlans"></div>
     <ul class="feat">
       <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two months out to a year ahead, so you can see when to go</span></li>
+      <li><span class="tick">✓</span><span><b>Your budget</b> — the annual passes you hold, the DVC points you'd rent out and your own discount codes, counted in every total</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -1673,9 +1681,10 @@ function readParams(){
     hopper: $("#hopper").value === "1",
     crowdCare: $("#crowdCare").value,
     priceBasis: $("#priceBasis").value === "cheapest" ? "cheapest" : "typical",
-    passes: readPasses(),
-    dvcPoints: +$("#dvcPoints").value || 0,
-    dvcPerPoint: +$("#dvcPerPoint").value || 0,
+    // Plus only; the server ignores them otherwise (budgetFor()).
+    passes: session.plus ? readPasses() : [],
+    dvcPoints: session.plus ? (+$("#dvcPoints").value || 0) : 0,
+    dvcPerPoint: session.plus ? (+$("#dvcPerPoint").value || 0) : 0,
     month: $("#month").value,
     // Which real named week within the month to scan, if the picked month
     // has one and a sub-option was chosen — "" (the default "Whole month")
@@ -2073,7 +2082,7 @@ async function recompute(changedResortId){
 
 /* ============================ render: board ============================ */
 
-function unlocked(){ return true; }   // every board row is open; Plus is best months to go, saving, the PDF and deal emails
+function unlocked(){ return true; }   // every board row is open; Plus is best months to go, your budget, saving, the PDF and deal emails
 
 /** A free visitor's stand-in for "best months to go": eleven month tiles with
  *  made-up shades, blurred under a Plus prompt. Deterministic so it doesn't
@@ -2099,22 +2108,30 @@ function gatedSpark(){
     <path d="M3 18 L13 12 L23 16 L33 9 L43 14 L53 20 L63 24 L73 17 L83 11 L93 15 L103 8 L109 13" fill="none"
       stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
+/** The board's little line: the typical whole-trip total for each month you
+ *  can plan (Dec -> Oct), lowest month marked. Owner, 2026-10-08: "what are
+ *  these lines telling me?", so it now says so in words underneath and in a
+ *  hover list, instead of a bare squiggle. Each line is scaled to its own
+ *  resort, so compare SHAPES across rows, not heights. */
 function sparkSVG(pts){
-  const known = pts.map((p,i)=>({v:p.v, i})).filter(p=>p.v!==null);
+  const known = pts.map((p,i)=>({v:p.v, i, ym:p.ym})).filter(p=>p.v!==null);
   const W=112,H=30,pad=3;
-  if(!known.length) return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"></svg>`;
+  if(!known.length) return `<div class="spark"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"></svg></div>`;
   const vals = known.map(p=>p.v);
   const mn=Math.min(...vals), mx=Math.max(...vals);
   const x = i => pad + i*(W-2*pad)/((pts.length-1)||1);
   const y = v => H-pad - ((v-mn)/((mx-mn)||1))*(H-2*pad);
   const d = known.map((p,k)=>(k?"L":"M")+x(p.i).toFixed(1)+" "+y(p.v).toFixed(1)).join(" ");
   const best = known.reduce((b,p)=>p.v<b.v?p:b, known[0]);
-  return `<svg class="spark" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
-    aria-label="Typical trip total by month for the months you can plan">
+  const mon = ym => MONTHS[+ym.slice(5,7)-1];
+  const list = known.map(p=>mon(p.ym)+" "+usd(p.v)).join(" · ");
+  return `<div class="spark"><svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img"
+    aria-label="Typical trip total by month: ${list}">
+    <title>Typical trip total by month: ${list}</title>
     <path d="${d}" fill="none" stroke="var(--muted)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
     <circle cx="${x(best.i).toFixed(1)}" cy="${y(best.v).toFixed(1)}" r="4"
       fill="var(--accent-line)" stroke="var(--surface)" stroke-width="2"/>
-  </svg>`;
+  </svg><span class="sparkcap">Best month: ${mon(best.ym)} · ${usd(best.v)}</span></div>`;
 }
 
 /* The attraction match, on the board row where people actually decide.
@@ -2435,7 +2452,12 @@ function promosCard(item, x, promoList){
       <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"none":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
 
-  const personalForm = `
+  const personalForm = !session.plus ? `
+    <div class="li"><div class="l" style="width:100%">
+      <b>Have your own discount? <span class="pluschip">Plus</span></b>
+      <small>Annual Passholder, DVC, military, Florida resident or your own code, taken off this total</small>
+      <div style="margin-top:8px"><button class="btn btn-sm openpw">Get Plus</button></div>
+    </div></div>` : `
     <div class="li"><div class="l" style="width:100%">
       <b>Have your own discount?</b>
       <small>Annual Passholder, DVC, military, Florida resident, or your own code — your claim, not verified</small>
@@ -3477,7 +3499,7 @@ function openAuth(mode){
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, saved searches, the shareable PDF and emails about the latest Disney deals.";
+      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, your budget (passes, DVC points, your own discounts), saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -3781,6 +3803,9 @@ async function refreshSession(){
   // through a render, and a stale "Sign in" button after signing in is the
   // exact confusion this change exists to remove.
   syncAccountUi();
+  // "Your budget" is Plus: fields for members, a one-line pitch for everyone else.
+  $("#memberFields").hidden = !session.plus;
+  $("#memberGate").hidden = !!session.plus;
   // And point the form at their saved airport, which is why this runs on
   // boot rather than only when the account panel is opened.
   applyHomeAirport();
