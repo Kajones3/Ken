@@ -3496,6 +3496,8 @@ document.addEventListener("click", async e=>{
  * server-side from the session cookie on every request that matters, and
  * this is only the part that tells you about it. */
 function syncAccountUi(){
+  const pt = $("#printTop");
+  if(pt) pt.textContent = session.plus ? "Save as PDF" : "Save as PDF (Plus)";
   const on = session.authenticated;
   syncDealEmailsUi();
   $("#signinTop").hidden = on;
@@ -4870,6 +4872,20 @@ function buildPrintDoc(){
   const doc = $("#printDoc");
   const priced = results.filter(r=>r.ok);
   if(!priced.length){ doc.innerHTML = ""; return; }
+  // The PDF is Plus (owner, 2026-10-08: "The PDF doesn't appear to be
+  // blocked by plus"). Printing from the browser's own menu skips the
+  // button, so without Plus the printed page says what the PDF is instead
+  // of being the trip. A screenshot is always possible; this only stops the
+  // finished document from being free.
+  if(!session.plus){
+    doc.innerHTML = `<section class="pcover">
+      <p class="pbrand"><img src="/public/brand/mark.svg" alt="">Pricing the Magic</p>
+      <h1>The trip PDF is part of Plus</h1>
+      <p>With Plus, this page becomes a written plan for your trip: a cover for the resort you pick, what every
+      part costs, the booking links, and how the other resorts compare. Get Plus at pricingthemagic.com.</p>
+    </section>`;
+    return;
+  }
 
   // Price order, so a rank means something, and so the document reads the
   // same way the board does.
@@ -4896,6 +4912,7 @@ function buildPrintDoc(){
 /* ------------------------------ the picker ------------------------------ */
 
 function openPdfPicker(){
+  if(!session.plus){ openPw(); return; }
   const priced = results.filter(r=>r.ok);
   if(!priced.length){
     // Never end a click handler with a silent return: the user cannot tell
@@ -4922,7 +4939,7 @@ $("#printTop").addEventListener("click", openPdfPicker);
 $("#pdfPickCancel").addEventListener("click", closePdfPicker);
 $("#pdfPicker").addEventListener("click", e => { if(e.target.id === "pdfPicker") closePdfPicker(); });
 
-$("#pdfPickGo").addEventListener("click", ()=>{
+$("#pdfPickGo").addEventListener("click", async ()=>{
   const picked = [...$("#pdfPickList").querySelectorAll("input:checked")].map(i=>i.value);
   if(!picked.length){
     $("#pdfPickMsg").textContent = "Pick at least one resort.";
@@ -4931,8 +4948,32 @@ $("#pdfPickGo").addEventListener("click", ()=>{
   pdfChoice = picked;
   closePdfPicker();
   buildPrintDoc();
+  // The logo and cover map are images added a moment ago. Printing at once
+  // printed them blank (found 2026-10-08: neither had loaded when the print
+  // started), so wait for every picture first, at most a few seconds.
+  await printImagesReady($("#printDoc"));
   window.print();
 });
+
+/** Resolves once every image in `root` has loaded (or failed), or after
+ *  `ms`, whichever comes first, so a missing file can never block printing. */
+function printImagesReady(root, ms = 4000){
+  const imgs = [...root.querySelectorAll("img")];
+  const each = imgs.map(img => img.complete && img.naturalWidth
+    ? Promise.resolve()
+    : (img.decode ? img.decode() : new Promise(r => { img.onload = img.onerror = r; })).catch(()=>{}));
+  return Promise.race([Promise.all(each), new Promise(r => setTimeout(r, ms))]);
+}
+
+/* Ctrl+P builds the document inside the print event, with no time to fetch
+   pictures, so the brand art is fetched ahead: once when the page loads. */
+const BRAND_PRELOAD = [];
+function preloadBrandArt(){
+  if(BRAND_PRELOAD.length) return;
+  for(const src of ["mark.svg", ...RESORTS.map(r => `map-cover-${r.id}.svg`)]){
+    const img = new Image(); img.src = "/public/brand/" + src; BRAND_PRELOAD.push(img);
+  }
+}
 
 // Printing from the browser's own menu or Ctrl+P skips the dialog entirely,
 // so the document is built on the event the browser fires either way. Without
@@ -5356,6 +5397,7 @@ async function boot(){
   render();
   syncView();
   syncBudgetView();
+  preloadBrandArt();
   await loadSavedTrips();
 }
 boot();
