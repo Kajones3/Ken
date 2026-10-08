@@ -1290,7 +1290,7 @@ function rowsFor(resortId: string): ClimateRow[] {
 export const CLIMATE: Record<string, ClimateMonth[]> = {
   wdw: climate(rowsFor("wdw"),    [
       { months: mo(6, 11), emoji: "🌀",
-        text: "Atlantic hurricane season runs June through November. Direct hits are rare, but September is the peak and travel insurance is worth pricing." },
+        text: "Atlantic hurricane season runs June through November. Direct hits are rare, but September is the peak." },
       { months: mo(7, 8), emoji: "🥵",
         text: "The hottest, wettest stretch of the year — expect a heavy thunderstorm most afternoons, then sunshine again by evening." },
       { months: mo(12, 12), emoji: "🎄",
