@@ -66,8 +66,9 @@ the account panel — not built yet].
 
 ## 5. Pricing the Magic Plus
 
-Plus is a paid add-on. Right now it includes a month-by-month view of the best times to go, saving
-searches, the shareable PDF, and emails about new Disney deals. **We may
+Plus is a paid add-on. Right now it includes a month-by-month view of the best times to go, a
+budget page (a savings plan for the trip, and annual passes and DVC points
+counted in its totals), saving searches, the shareable PDF, and emails about new Disney deals. **We may
 change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a
 refund].

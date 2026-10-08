@@ -165,8 +165,10 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /**
- * "Your budget" is Plus (owner, 2026-10-08): annual passes, DVC points you'd
- * rent out, and a personal discount. Resolved from the session, never from
+ * "Your budget" is Plus (owner, 2026-10-08): annual passes and DVC points
+ * you'd rent out. A personal discount stays FREE (owner, same day: "Free
+ * visitors should still be able to enter their own numbers and
+ * discounts"). Resolved from the session, never from
  * the client, so a free request that sends them is simply priced without
  * them, the same way it would be if the boxes were empty.
  */
@@ -174,7 +176,6 @@ function budgetFor(user: SessionUser | null, params: TripParams, overrides: Over
   if (user && isPlus(user.plusUntil)) return;
   params.annualPasses = [];
   params.dvcRental = null;
-  for (const ov of Object.values(overrides)) if (ov) delete ov.personalPromo;
 }
 
 /**
