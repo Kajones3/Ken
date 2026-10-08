@@ -41,7 +41,7 @@ import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./ad
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
-import { parsePassHoldings, parseDvcRental, PASS_RESORTS, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
+import { parsePassHoldings, parseDvcRental, PASS_RESORTS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type GettingThereMode } from "./gettingThere.js";
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
@@ -742,7 +742,10 @@ const server = createServer(async (req, res) => {
       // one information-only line in the off-property hotel card (owner,
       // 2026-10-05). Never in a total; absent with fewer than 3 listings.
       vacationRentals: await rentalLines(db),
-      passPrograms: PASS_RESORTS,
+      // The owner's pass prices when set in /admin, so the budget page's
+      // break-even check uses the same numbers pricing does.
+      passPrograms: PASS_RESORTS.map((p) => ({ ...p, tiers: p.tiers.map((t) => ({ ...t,
+        priceUsd: settingsNow.find((v) => v.key === passPriceKey(p.resortId, t.id))?.value ?? t.priceUsd })) })),
       dvcTakeHomePerPoint: dvcDefault,
       // Each resort's suggested ticket length (the owner's number if set)
       // and the reason, so the "Park days" picker and the results can say
