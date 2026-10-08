@@ -281,7 +281,7 @@ export const RESORTS: Resort[] = [
     ],
   },
   {
-    id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "SNA",
+    id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "LAX",
     hotelSearchArea: "Anaheim, California",
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
@@ -300,7 +300,9 @@ export const RESORTS: Resort[] = [
     // on-property rows here are a convenience for the category picker, not a
     // claim that Disney markets them that way.
     onPropertyHotels: { url: "https://disneyland.disney.go.com/hotels/" },
-    altArrivalAirports: [{ iata: "LAX", label: "Los Angeles — about 45 min from the resort, often more fare options" }],
+    // LAX leads (owner, 2026-10-08: "always try to choose the biggest or most
+    // popular airport"): far more flights and fares than Orange County.
+    altArrivalAirports: [{ iata: "SNA", label: "Orange County (Santa Ana) — about 20 min from the resort, fewer flights" }],
     bands: { freeUnder: 3, child: [3, 9], adult: 10 },
     // base recalibrated against real 2026 published one-day pricing ($104-224,
     // researched — see CLAUDE.md): the old 148 sat *above* WDW's 132, which

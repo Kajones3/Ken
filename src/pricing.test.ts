@@ -398,7 +398,7 @@ test("excludeHotel wins over a nightly rate set on the same override", () => {
 
 test("a per-resort excludeHotel does not leak into another resort's pricing", () => {
   const wdwBook = fullBook("wdw", "MCO");
-  const dlrBook = fullBook("dlr", "SNA");
+  const dlrBook = fullBook("dlr", "LAX");
   const overrides: Overrides = { wdw: { excludeHotel: true } };
   const wdwResult = priceTrip(wdwBook, resortById("wdw"), base, overrides, START);
   const dlrResult = priceTrip(dlrBook, resortById("dlr"), base, overrides, START);

@@ -78,16 +78,20 @@ export interface PassProgram {
  */
 export const PASS_PROGRAMS: PassProgram[] = [
   {
+    // Walt Disney World prices raised 2026-10-06 (checked by web search
+    // 2026-10-08 across WDWMagic, WDW News Today, BlogMickey and Click
+    // Orlando, which agree): Incredi $1,629 -> $1,749, Sorcerer $1,099 ->
+    // $1,139, Pirate $869 -> $909, Pixie Dust $489 -> $499. Before tax.
     resortId: "wdw",
     label: "Annual Pass",
     tiers: [
-      { id: "incredi", label: "Incredi-Pass", priceUsd: 1629, parkingPct: 100, hopperIncluded: true,
+      { id: "incredi", label: "Incredi-Pass", priceUsd: 1749, parkingPct: 100, hopperIncluded: true,
         eligibility: "Anyone", perksVerified: true },
-      { id: "sorcerer", label: "Sorcerer Pass", priceUsd: 1099, parkingPct: 100, hopperIncluded: true,
+      { id: "sorcerer", label: "Sorcerer Pass", priceUsd: 1139, parkingPct: 100, hopperIncluded: true,
         eligibility: "Florida residents and DVC members", perksVerified: true },
-      { id: "pirate", label: "Pirate Pass", priceUsd: 869, parkingPct: 100, hopperIncluded: true,
+      { id: "pirate", label: "Pirate Pass", priceUsd: 909, parkingPct: 100, hopperIncluded: true,
         eligibility: "Florida residents", perksVerified: true },
-      { id: "pixie", label: "Pixie Dust Pass", priceUsd: 489, parkingPct: 100, hopperIncluded: true,
+      { id: "pixie", label: "Pixie Dust Pass", priceUsd: 499, parkingPct: 100, hopperIncluded: true,
         eligibility: "Florida residents", perksVerified: true },
     ],
   },

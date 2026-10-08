@@ -86,6 +86,28 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, very last (PR #133) — LAX leads for Disneyland; WDW pass prices; sliding details
+
+- **Disneyland's primary airport is now LAX**, SNA the alternate (owner:
+  "always try to choose the biggest or most popular airport"). Paid fares
+  already bought to SNA stay in the record and still price anyone who picks
+  SNA; LAX route evidence starts from its own BTS baseline + trend. Watch
+  the next coverage report: Disneyland demand moves to LAX routes.
+- **WDW annual passes raised 2026-10-06** (web-checked 10-08): Incredi
+  $1,749, Sorcerer $1,139, Pirate $909, Pixie Dust $499 (memberships.ts
+  defaults). **If the owner ever saved pass prices in /admin, those still
+  win** and need retyping. Multi-day WDW tickets did NOT change; only
+  one-day peak dates in late 2027 (Magic Kingdom/EPCOT $229), which our
+  multi-day table doesn't use.
+- **Words cut off both sides of the open details** (owner screenshot): the
+  board and detail boxes were `overflow:hidden`, which the browser can still
+  scroll sideways (focusing a button near the edge). Now `overflow:clip`
+  (can't scroll), `.cols` uses `minmax(0,1fr)`, cards wrap long words.
+  Couldn't reproduce the owner's exact overflow locally; the forced test
+  slid 413px before the fix, 0 after. Ask the owner to re-check.
+- **"Get help with the budget" tab: proposed, NOT built** (see the
+  conversation of 2026-10-08). Waiting on the owner.
+
 ### 2026-10-08, last — Plus "best months to go" replaced the day-by-day calendar (PRs #129-#132)
 
 - **Plus is now: best months to go, saved searches, the PDF, deal emails.**

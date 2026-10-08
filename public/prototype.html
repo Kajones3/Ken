@@ -430,7 +430,10 @@ a{color:var(--ink)}
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
 
-.board{list-style:none; margin:0; padding:0; background:var(--surface); border:1px solid var(--rule); border-radius:14px; overflow:hidden; box-shadow:var(--shadow)}
+/* overflow:clip, not hidden: a hidden box can still be scrolled sideways by
+   the browser (focusing a button near its edge does it), which slid the open
+   details left and cut words off both sides (owner, 2026-10-08). */
+.board{list-style:none; margin:0; padding:0; background:var(--surface); border:1px solid var(--rule); border-radius:14px; overflow:hidden; overflow:clip; box-shadow:var(--shadow)}
 .row{
   display:grid; grid-template-columns:34px minmax(190px,1.35fr) 116px minmax(200px,1.5fr) 150px 96px;
   gap:16px; align-items:center; padding:15px 16px; border-top:1px solid var(--rule);
@@ -541,7 +544,7 @@ tbody tr[data-open]{cursor:pointer}
 tbody tr[data-open].sel{background:var(--surface-2)}
 
 /* ---------- detail ---------- */
-.detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+.detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; overflow:clip; min-width:0}
 /* Inline detail: a child of the row's own grid, spanning every column so it
    sits directly under the row you opened instead of a separate section far
    down the page — collapsing it brings the board straight back into view. */
@@ -553,7 +556,7 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 .sec-lab{font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
 
 /* best months to go (replaced the day-by-day calendar, 2026-10-08) */
-.mgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px}
+.mgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:8px; min-width:0}
 .mtile{display:flex; flex-direction:column; gap:2px; text-align:left; padding:9px 10px; border-radius:10px;
   border:1px solid var(--rule); background:var(--surface-2); color:var(--ink); font:inherit; min-height:44px}
 button.mtile{cursor:pointer}
@@ -586,8 +589,9 @@ button.mtile:hover{border-color:var(--rule-strong)}
    official-page links line up across the grid instead of floating wherever
    each card's content happens to end. That alignment is most of what "uniform"
    means here — the eye follows a horizontal rule, not six ragged ones. */
-.cols{display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:26px; align-items:stretch}
-@media (max-width:1040px){ .cols{grid-template-columns:repeat(2,1fr)} }
+.cols{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:26px; align-items:stretch}
+@media (max-width:1040px){ .cols{grid-template-columns:repeat(2,minmax(0,1fr))} }
+.cols > *{min-width:0; overflow-wrap:anywhere}
 @media (max-width:620px){ .cols{grid-template-columns:1fr} }
 .card{border:1px solid var(--rule); border-radius:11px; padding:14px; background:var(--surface-2);
   display:flex; flex-direction:column}
