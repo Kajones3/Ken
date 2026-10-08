@@ -111,8 +111,13 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
     // Only runs since the record began (same marker as flights): before it,
     // hotel_samples didn't exist in production, so those searches were
     // never going to be "kept" there.
-    const refreshes = await db.query<{ started_at: unknown; finished_at: unknown; note: string; pulls: string; empty: string; failed: string }>(
+    // Also only runs that could log their searches: hotel_searches began
+    // with the 2026-10-05 refresh. The 2026-10-04 run's 4 empty searches
+    // (dlp/hkdl/shdr/tdr 2027-10) predate it, so nothing could record them,
+    // and they raised a false "left nothing" warning for a week.
+    const allRefreshes = await db.query<{ started_at: unknown; finished_at: unknown; note: string; pulls: string; empty: string; failed: string; early: boolean }>(
       `select r.started_at, r.finished_at, r.note,
+              r.finished_at < coalesce((select min(searched_at) from hotel_searches), '-infinity') as early,
               (select count(distinct (s.resort_id, s.month, s.pulled_at)) from hotel_samples s
                 where s.pulled_at >= r.started_at
                   and s.pulled_at <= coalesce(r.finished_at, now()) + interval '1 minute') as pulls,
@@ -128,6 +133,8 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
           and r.finished_at is not null`,
       [String(days)],
     );
+    const refreshes = { rows: allRefreshes.rows.filter((r) => !r.early) };
+    const earlyRuns = allRefreshes.rows.filter((r) => r.early);
     const slots = refreshes.rows.reduce((s, r) => s + slotCount(r.note), 0);
     const pulls = refreshes.rows.reduce((s, r) => s + n(r.pulls), 0);
     const empty = refreshes.rows.reduce((s, r) => s + n(r.empty), 0);
@@ -149,6 +156,9 @@ export async function dataIntake(db: Db, opts: { days?: number } = {}): Promise<
       + (empty ? `, ${fmt(empty)} came back with no prices from Google` : "")
       + (failed ? `, ${fmt(failed)} failed` : "")
       + (unexplained ? `, ${fmt(unexplained)} left nothing and aren't explained.` : "."));
+    if (earlyRuns.length) {
+      lines.push(`  (Not counted: ${fmt(earlyRuns.length)} refresh run(s), ${fmt(earlyRuns.reduce((s, r) => s + slotCount(r.note), 0))} searches, from before every search was logged. Any empty ones there are the known 2027-10 searches, not a new loss.)`);
+    }
     lines.push(`  Kept in total: ${fmt(n(hTotal.rows[0]?.c))} hotel rates across ${fmt(n(hTotal.rows[0]?.hotels))} hotels.`);
     if (slots > 0 && pulls === 0) {
       problems.push({

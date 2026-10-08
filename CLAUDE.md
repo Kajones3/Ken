@@ -84,7 +84,33 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 "Checked before buying" section, and everything listed under #121.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**745 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**746 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### 2026-10-08, later — Render redeployed after #127; two hotel warnings explained
+
+- **Owner redeployed Render on 2026-10-08** (after #128). The new look and
+  everything through #127 is live.
+- Hero tag line is now the owner's: "Help to decide the best time to explore
+  this small world." (was "Best for deciding when to go — not for locking in
+  today's price.").
+- **"4 of 60 paid hotel searches left nothing in the record" was a FALSE
+  alarm** (third time this pattern: an old run counted against a newer
+  check). The 7-day window held 5 refreshes (10-04 to 10-08, 12 slots each).
+  The 10-04 run (10:19 UTC, code of #112) predates `hotel_searches` (#116
+  merged 15:42 UTC that day), so its 4 known-empty `dlp/hkdl/shdr/tdr
+  2027-10` searches could never be logged. `dataIntake.ts` now counts only
+  refreshes that finished after the first `hotel_searches` row and prints the
+  older ones as "Not counted". Test pins it.
+- **"3 of 60 came back with no prices" is real but NOT a pattern yet.** From
+  the logs: 10-05 `shdr 2027-09` and `hkdl 2027-09` (check-in 2027-09-14,
+  ~344 days out), 10-06 `tdr 2027-10` (check-in 2027-10-01, ~360 days). The
+  same night dlp/hkdl/shdr 2027-10 at ~360 days DID price, and 10-07/10-08
+  had none empty. So it isn't simply distance; Google seems patchy for the
+  Asian resorts ~11-12 months out. **Not lowered** (`HOTEL_SEARCH_MAX_DAYS`
+  stays 360). If the same Asian months keep repeating empty, a per-region
+  limit (e.g. 330 for tdr/shdr/hkdl) is the next step; ask the owner first.
+  Each empty search waits ~10 days before it's retried, so the cost is ~1-2
+  searches a week.
 
 ### Session of 2026-10-07 to 10-08 in one table (PRs #124-#127)
 

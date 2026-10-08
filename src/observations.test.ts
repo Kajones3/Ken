@@ -270,6 +270,32 @@ test("hotel searches that came back empty are reported as empty, not as lost", a
   await db.close();
 });
 
+test("a refresh from before hotel searches were logged is not counted as a loss", async () => {
+  const db = await memoryDb();
+  await recordSince(db, "3 days");
+  // The 2026-10-04 shape: 3 slots, 2 kept, the empty one never logged.
+  await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written, note)
+                  values (gen_random_uuid(), 'refresh', now() - interval '2 days', now() - interval '47 hours', 3, 3,
+                          'hotel slots: wdw/2027-03 dlr/2027-03 tdr/2027-10')`);
+  await recordHotelSamples(db, [
+    { resort: "wdw", month: "2027-03", checkIn: "2027-03-14", rates: [{ name: "Motel", nightly: 99 }] },
+    { resort: "dlr", month: "2027-03", checkIn: "2027-03-14", rates: [{ name: "Inn", nightly: 120 }] },
+  ]);
+  await db.query(`update hotel_samples set pulled_at = now() - interval '47 hours 30 minutes'`);
+  // A later run, after logging began: everything accounted for.
+  await db.query(`insert into fetch_runs (id, job, started_at, finished_at, calls, rows_written, note)
+                  values (gen_random_uuid(), 'refresh', now() - interval '1 hour', now() - interval '50 minutes', 1, 1,
+                          'hotel slots: tdr/2027-09')`);
+  await db.query(`insert into hotel_searches (resort_id, month, check_in, priced, status, searched_at)
+                  values ('tdr','2027-09','2027-09-14',0,'ok', now() - interval '55 minutes')`);
+  const r = await dataIntake(db);
+  assert.equal(r.problems.find((p) => p.id === "intake-hotels-short"), undefined, "the old run's unlogged search is not an alarm");
+  const text = r.lines.join("\n");
+  assert.match(text, /1 made, 0 kept, 1 came back with no prices from Google\./);
+  assert.match(text, /Not counted: 1 refresh run\(s\), 3 searches/);
+  await db.close();
+});
+
 test("/admin hotel list sorts rentals into their own group and summarizes both", async () => {
   const db = await memoryDb();
   await recordHotelSamples(db, [{ resort: "wdw", month: "2027-03", checkIn: "2027-03-10", rates: [
