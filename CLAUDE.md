@@ -86,6 +86,33 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, after #137 (PRs #138-#139) — a free SAMPLE PDF; no city puts both US parks out of the top 2
+
+- **Free visitors get a sample PDF** (owner: "I want the free user to get a
+  sample PDF still"). "Save as PDF (Plus)" opens `#pdfSample`: "The PDF of
+  your own trip is part of Plus" + See a sample PDF / Get Plus. The sample
+  is priced LIVE through the free `/api/compare` (with `sample=1`, which
+  skips `recordSearch()` so it never steers paid lookups) for `SAMPLE_TRIP`
+  in prototype.html, built with `sampleMode` (cover says SAMPLE, no planner
+  name), printed, and the visitor's own search is put back untouched.
+  `sampleDocReady` stops the print event rebuilding it into the Plus notice.
+- **"Sample scan" workflow** (`src/jobs/sampleScan.ts`, read-only, no
+  demand recorded): every plannable month, all six resorts, 18 big
+  non-local cities, 2 adults and 2 adults + kids 8/11. **Run 37842541999
+  (live data): 0 of 396 had both US parks out of the top two. Walt Disney
+  World was first everywhere except Disneyland first from LAS/PHX/SFO/SEA
+  for the family.** Closest to the owner's ask, now the sample: **a couple
+  from New York (JFK), April 2027, 6 nights**: WDW $4,538, Paris $6,132,
+  Hong Kong $6,417, Shanghai $6,472, Tokyo $6,485, Disneyland $6,575. The
+  sample's cover LEADS with Paris (`SAMPLE_TRIP.lead`). Change the scenario
+  there if the owner prefers another.
+- **Side finding worth a look in the accuracy review:** for 2 adults, the
+  international totals are identical from BWI, CLT, DTW, IAD, JFK, MIA and
+  PHL (e.g. Paris $6,221 in March from all seven). International flights
+  are still priced as one figure for every East Coast city, so the
+  comparison can't yet show that New York to Paris is cheaper than
+  Charlotte to Paris.
+
 ### 2026-10-08, after #136 (PR #137) — the PDF is really Plus now; its logo and map print
 
 - **The PDF was never actually gated** (owner: "The PDF doesn't appear to be
