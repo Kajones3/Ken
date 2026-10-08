@@ -86,6 +86,23 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-08, after #136 (PR #137) — the PDF is really Plus now; its logo and map print
+
+- **The PDF was never actually gated** (owner: "The PDF doesn't appear to be
+  blocked by plus"). "Save as PDF" now opens the paywall without Plus (the
+  button reads "Save as PDF (Plus)"), and `buildPrintDoc()` prints a one-page
+  "The trip PDF is part of Plus" notice instead of the trip, so Ctrl+P from
+  the browser menu doesn't get around it. Client-side only by nature (the
+  page is already on screen); it stops the finished document being free,
+  not a screenshot.
+- **"The new branding isn't there"**: the cover's logo and map are `<img>`s
+  added right before `window.print()`, and neither had loaded when the print
+  started (checked in Chromium: `complete=false, naturalWidth=0`), so they
+  printed blank. Now the Save button waits for every picture
+  (`printImagesReady()`, 4 s cap) and the brand art is preloaded at boot
+  (`preloadBrandArt()`) so Ctrl+P has them too. Verified: logo + Tokyo
+  cover map in the rendered PDF.
+
 ### 2026-10-08, after #135 (PR #136) — budget page: milestones, not due dates; pass break-even
 
 - **No guesses about when bills are due** (owner: "That's bad. Instead just
