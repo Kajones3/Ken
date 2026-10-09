@@ -86,6 +86,19 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-09 — month tiles now follow "Which day should we price?"
+
+Owner (screenshot): board Paris **$8,412**, but the June "best months" tile
+(the same search) read **$9,170**. `/api/months` never read `basis`, so the
+tiles always priced the TYPICAL day while the board honors "the cheapest
+day we can find". `quoteMonths()` takes `basis` (tile total = cheapest-day
+total when asked), `months()` passes `q.get("basis")`, the caption says
+which day it priced, and a test pins tile = board for both. Locally the
+board and tiles already matched on a typical-day search (dlp/wdw/tdr June,
+same totals and same day), so basis is the one difference found between
+the two requests. **If the owner sees a mismatch with "a typical day"
+selected, it's something else: ask for that search's settings.**
+
 ### 2026-10-09 — the sample PDF is now a ~$5,000 family trip, led by Paris
 
 Owner: "bring the totals for the first few down to around $5k for a family

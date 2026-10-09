@@ -37,6 +37,19 @@ test("each month's total is the number the board quotes for that month", () => {
   assert.ok(rows[0]!.total! < rows[1]!.total!, "March's cheap fares show as a cheaper month");
 });
 
+test("with 'the cheapest day' picked, each tile is the board's cheapest-day total", () => {
+  // Owner, 2026-10-09: board Paris $8,412, June tile $9,170. The board
+  // honored "Which day should we price?" and the tiles did not.
+  const book = twoMonthBook();
+  const rows = quoteMonths(book, resortById("wdw"), PARAMS, {}, ["2027-03", "2027-04"], undefined, "cheapest");
+  for (const row of rows) {
+    const [from, to] = monthBounds(row.month);
+    const board = typicalIn(book, resortById("wdw"), PARAMS, {}, range(from, to));
+    assert.equal(row.total, Math.round(board.cheapest!.total), row.month);
+    assert.notEqual(row.total, Math.round(board.typical!.total), "the test book must tell the two apart");
+  }
+});
+
 test("a month with nothing priced is a gap, not a zero", () => {
   const rows = quoteMonths(twoMonthBook(), resortById("wdw"), PARAMS, {}, ["2027-03", "2027-06"]);
   assert.equal(rows[1]!.total, null);
