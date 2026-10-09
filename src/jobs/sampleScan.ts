@@ -34,6 +34,12 @@ const SHAPES: { label: string; nights: number; stay: TripParams["stay"]; tier: T
   { label: "6 nights, off property mid-range, mixed food", nights: 6, stay: "off", tier: 1, food: "mix" },
   { label: "9 nights, on property Moderate, mixed food", nights: 9, stay: "on", tier: 1, food: "mix" },
   { label: "9 nights, on property Deluxe, table service", nights: 9, stay: "on", tier: 2, food: "ts" },
+  // Owner, 2026-10-09: "bring the totals for the first few down to around
+  // $5k for a family of 4". Cheaper shapes for that search.
+  { label: "4 nights, on property Value, quick service", nights: 4, stay: "on", tier: 0, food: "qs" },
+  { label: "5 nights, on property Value, quick service", nights: 5, stay: "on", tier: 0, food: "qs" },
+  { label: "5 nights, off property budget, quick service", nights: 5, stay: "off", tier: 0, food: "qs" },
+  { label: "5 nights, on property Moderate, quick service", nights: 5, stay: "on", tier: 1, food: "qs" },
 ];
 
 interface Row { party: string; shape: string; origin: string; month: string; ranked: { id: string; name: string; dom: boolean; t: number }[] }
@@ -86,7 +92,14 @@ export async function scan(db: Db): Promise<string> {
   const bothIntl = rows.filter((r) => !r.ranked[0]!.dom && !r.ranked[1]!.dom);
   const byGap = [...rows].map((r) => ({ r, g: gap(r) })).sort((a, b) => b.g - a.g);
   const within = byGap.filter((x) => x.g >= -150);
-  return `${rows.length} scenarios priced (${PARTIES.length} parties x ${SHAPES.length} trip shapes x cities x months)\n`
+  // Family trips whose three cheapest resorts average closest to $5,000.
+  const fam = rows.filter((r) => r.party.includes("kids"))
+    .map((r) => ({ r, avg3: (r.ranked[0]!.t + r.ranked[1]!.t + r.ranked[2]!.t) / 3 }))
+    .filter((x) => Math.abs(x.avg3 - 5000) <= 600)
+    .sort((a, b) => Math.abs(a.avg3 - 5000) - Math.abs(b.avg3 - 5000));
+  return `## Family trips with the three cheapest averaging about $5,000 (${fam.length})\n`
+    + (fam.slice(0, 60).map((x) => `avg3 ${usd(x.avg3)} | ${line(x.r)}`).join("\n") || "(none)") + "\n\n"
+    + `${rows.length} scenarios priced (${PARTIES.length} parties x ${SHAPES.length} trip shapes x cities x months)\n`
     + `\n## Two cheapest both international (${bothIntl.length})\n` + (bothIntl.slice(0, 60).map(line).join("\n") || "(none)")
     + `\n\n## Walt Disney World within $150 of (or above) the cheapest international resort (${within.length})\n`
     + (within.slice(0, 60).map((x) => `${x.g >= 0 ? "WDW dearer by " : "WDW cheaper by "}${usd(Math.abs(x.g))} | ${line(x.r)}`).join("\n") || "(none)")
