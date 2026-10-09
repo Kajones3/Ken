@@ -86,6 +86,22 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-09, later — the sample PDF uses the owner's own settings: San Francisco, March 2027
+
+Owner (screenshot of their form): family of four (kids 11, 8), 6 nights,
+budget hotel OFF property, 1 car with free theme park parking, ALL table
+service, typical day; "get Disney World within $500 of an international
+park". The sample scan gained that exact shape (`extra: { cars,
+freeParking }`) and Raleigh-Durham. Run 37973487047 (live): **3 of 190**
+city-months qualify, all West Coast, March 2027: SFO (WDW $386 under
+Paris), SEA ($478), PHX ($487). Picked **SFO, March 2027**: Disneyland
+$6,933, WDW $8,975, Paris $9,361, Hong Kong $10,635, Shanghai $10,697, Tokyo
+$10,860. `SAMPLE_TRIP` now carries `cars`/`freeParking`; cover leads with
+Paris. From East Coast and central cities WDW is $1,000+ cheaper than any
+international park on this shape (intl flights are one figure for every US
+city, so only Orlando's own fare varies). Supersedes the Houston sample
+below.
+
 ### 2026-10-09 — month tiles now follow "Which day should we price?"
 
 Owner (screenshot): board Paris **$8,412**, but the June "best months" tile
