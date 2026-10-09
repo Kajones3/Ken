@@ -5080,7 +5080,7 @@ $("#pdfSampleGo").addEventListener("click", async ()=>{
   const saved = { params, results, selected, openTrip, pdfChoice };
   try {
     params = { ...readParams(), origin: SAMPLE_TRIP.origin, adults: SAMPLE_TRIP.adults, seniors: 0,
-      ages: SAMPLE_TRIP.ages, nights: SAMPLE_TRIP.nights, parkDays: null, needHotel: "yes", stay: "on",
+      ages: SAMPLE_TRIP.ages, nights: SAMPLE_TRIP.nights, parkDays: null, needHotel: "yes", stay: SAMPLE_TRIP.stay || "on",
       tier: SAMPLE_TRIP.tier, rooms: 1, food: SAMPLE_TRIP.food, hopper: false, priceBasis: "typical", passes: [], dvcPoints: 0,
       month: sampleMonth(), window: "", gettingThere: "fly", originPoint: null };
     const data = await apiGet("/api/compare", { ...tripQuery(), month: params.month, sample: "1",
