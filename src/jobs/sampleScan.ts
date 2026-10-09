@@ -11,7 +11,7 @@
  * calls and NO writes: it does not go through compare(), which records the
  * search as route demand and would steer tonight's paid lookups.
  */
-import { ORIGINS, RESORTS, bucketFor, isLocalRoute, plannableMonths } from "../config.js";
+import { ORIGINS, PLUS_ORIGINS, RESORTS, bucketFor, isLocalRoute, plannableMonths } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthBounds, todayISO } from "../dates.js";
 import { loadBook } from "../book.js";
@@ -27,7 +27,7 @@ const PARTIES: { label: string; adults: number; childAges: number[] }[] = [
  *  World is only like $100 cheaper. I've seen those a few times"). The
  *  first is the board's default; the rest are the settings most likely to
  *  close the gap (Deluxe rooms, staying off property, a longer stay). */
-const SHAPES: { label: string; nights: number; stay: TripParams["stay"]; tier: TripParams["tier"]; food: TripParams["food"] }[] = [
+const SHAPES: { label: string; nights: number; stay: TripParams["stay"]; tier: TripParams["tier"]; food: TripParams["food"]; extra?: Partial<TripParams> }[] = [
   { label: "6 nights, on property Moderate, mixed food", nights: 6, stay: "on", tier: 1, food: "mix" },
   { label: "6 nights, on property Deluxe, mixed food", nights: 6, stay: "on", tier: 2, food: "mix" },
   { label: "6 nights, on property Value, quick service", nights: 6, stay: "on", tier: 0, food: "qs" },
@@ -40,6 +40,11 @@ const SHAPES: { label: string; nights: number; stay: TripParams["stay"]; tier: T
   { label: "5 nights, on property Value, quick service", nights: 5, stay: "on", tier: 0, food: "qs" },
   { label: "5 nights, off property budget, quick service", nights: 5, stay: "off", tier: 0, food: "qs" },
   { label: "5 nights, on property Moderate, quick service", nights: 5, stay: "on", tier: 1, food: "qs" },
+  // Owner's own settings, 2026-10-09 (screenshot): off property budget, one
+  // car with free theme park parking, all table service. Wanted: WDW within
+  // $500 of an international park.
+  { label: "6 nights, off property budget, all table service, free parking", nights: 6, stay: "off", tier: 0, food: "ts",
+    extra: { cars: 1, freeParking: true } },
 ];
 
 interface Row { party: string; shape: string; origin: string; month: string; ranked: { id: string; name: string; dom: boolean; t: number }[] }
@@ -49,7 +54,8 @@ export async function scan(db: Db): Promise<string> {
   const from = monthBounds(months[0]!)[0];
   const to = monthBounds(months[months.length - 1]!)[1];
   const rows: Row[] = [];
-  for (const o of ORIGINS) {
+  // The nightly metros plus Raleigh-Durham, the owner's own test airport.
+  for (const o of [...ORIGINS, ...PLUS_ORIGINS.filter((x) => x.iata === "RDU")]) {
     // A short drive to a US resort would be priced as a drive on the
     // board; this scan only flies, so leave those cities out.
     if (RESORTS.some((r) => r.region === "dom" && isLocalRoute(o.iata, r.iata))) continue;
@@ -67,7 +73,7 @@ export async function scan(db: Db): Promise<string> {
     for (const party of PARTIES) for (const shape of SHAPES) {
       const base: TripParams = {
         origin: o.iata, adults: party.adults, childAges: party.childAges, nights: shape.nights,
-        stay: shape.stay, tier: shape.tier, food: shape.food, transportMode: "fly",
+        stay: shape.stay, tier: shape.tier, food: shape.food, transportMode: "fly", ...(shape.extra ?? {}),
       };
       const per = new Map<string, (number | null)[]>();
       for (const r of RESORTS) {
@@ -99,7 +105,13 @@ export async function scan(db: Db): Promise<string> {
     .map((r) => ({ r, avg3: (r.ranked[0]!.t + r.ranked[1]!.t) / 2 }))
     .sort((a, b) => Math.abs(a.r.ranked[0]!.t - 5000) + Math.abs(a.r.ranked[1]!.t - 5000)
       - Math.abs(b.r.ranked[0]!.t - 5000) - Math.abs(b.r.ranked[1]!.t - 5000));
-  return `## Family trips whose two cheapest are closest to $5,000 (of ${fam.length})\n`
+  const ownerShape = rows.filter((r) => r.party.includes("kids") && r.shape.includes("free parking"))
+    .map((r) => ({ r, g: gap(r) }))
+    .sort((a, b) => Math.abs(a.g) - Math.abs(b.g));
+  const within500 = ownerShape.filter((x) => Math.abs(x.g) <= 500);
+  return `## Owner's shape (family, 6 nights, off property budget, all table service): WDW within $500 of the cheapest international (${within500.length} of ${ownerShape.length})\n`
+    + (ownerShape.slice(0, 40).map((x) => `${x.g >= 0 ? "WDW dearer by " : "WDW cheaper by "}${usd(Math.abs(x.g))} | ${line(x.r)}`).join("\n") || "(none)") + "\n\n"
+    + `## Family trips whose two cheapest are closest to $5,000 (of ${fam.length})\n`
     + (fam.slice(0, 40).map((x) => `avg2 ${usd(x.avg3)} | ${line(x.r)}`).join("\n") || "(none)") + "\n\n"
     + `${rows.length} scenarios priced (${PARTIES.length} parties x ${SHAPES.length} trip shapes x cities x months)\n`
     + `\n## Two cheapest both international (${bothIntl.length})\n` + (bothIntl.slice(0, 60).map(line).join("\n") || "(none)")

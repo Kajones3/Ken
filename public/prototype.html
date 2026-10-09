@@ -5038,18 +5038,19 @@ window.addEventListener("afterprint", () => { sampleDocReady = false; });
 
 /* One fixed, real scenario, priced live through the same free comparison
    anyone can run, so the sample always shows today's numbers. Owner,
-   2026-10-09: "bring the totals for the first few down to around $5k for
-   a family of 4 ... Doesn't matter if it is the cheapest. [Paris] will be
-   the one the PDF picks first." Picked from the sample scan over the live
-   database (run 37964932922): a family of four from Houston, January 2027,
-   5 nights, a budget hotel off property, quick-service meals. Disneyland
-   $4,962, Walt Disney World $5,089, Paris $7,455, Shanghai $9,312, Hong
-   Kong $9,483, Tokyo $9,715. No overseas trip for four gets near $5,000:
-   four transatlantic seats alone cost about that. The cover leads with
-   Paris. If prices move, the sample is still honest; it just tells a
-   different story. (Before 10-09: Chicago, Oct 2027, 9 nights Deluxe.) */
-const SAMPLE_TRIP = { origin:"IAH", month:"2027-01", adults:2, ages:[8,11], nights:5, stay:"off", tier:"0", food:"qs",
-  who:"a family of four from Houston, a budget hotel and quick-service meals", lead:"dlp" };
+   2026-10-09, with their own settings (family of four, kids 11 and 8,
+   6 nights, budget hotel off property, one car with free theme park
+   parking, all table service): "If there was a way to get Disney World
+   within $500 of an international park ... that would be great for the
+   PDF." Sample scan run 37973487047 (live): only 3 of 190 city-months
+   did, all West Coast in March 2027; the closest is San Francisco:
+   Disneyland $6,933, Walt Disney World $8,975, Paris $9,361 (WDW $386
+   cheaper), Hong Kong $10,635, Shanghai $10,697, Tokyo $10,860. The cover
+   leads with Paris. If prices move, the sample is still honest; it just
+   tells a different story. (Before: Houston, Jan 2027, 5 nights, QS.) */
+const SAMPLE_TRIP = { origin:"SFO", month:"2027-03", adults:2, ages:[11,8], nights:6, stay:"off", tier:"0", food:"ts",
+  cars:1, freeParking:true,
+  who:"a family of four from San Francisco, a budget hotel and table-service meals", lead:"dlp" };
 let sampleMode = false, sampleDocReady = false;
 
 function sampleMonth(){
@@ -5082,6 +5083,7 @@ $("#pdfSampleGo").addEventListener("click", async ()=>{
     params = { ...readParams(), origin: SAMPLE_TRIP.origin, adults: SAMPLE_TRIP.adults, seniors: 0,
       ages: SAMPLE_TRIP.ages, nights: SAMPLE_TRIP.nights, parkDays: null, needHotel: "yes", stay: SAMPLE_TRIP.stay || "on",
       tier: SAMPLE_TRIP.tier, rooms: 1, food: SAMPLE_TRIP.food, hopper: false, priceBasis: "typical", passes: [], dvcPoints: 0,
+      cars: SAMPLE_TRIP.cars ?? 1, freeParking: !!SAMPLE_TRIP.freeParking,
       month: sampleMonth(), window: "", gettingThere: "fly", originPoint: null };
     const data = await apiGet("/api/compare", { ...tripQuery(), month: params.month, sample: "1",
       overrides: "{}", destinations: "{}" });
