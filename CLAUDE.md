@@ -86,6 +86,21 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-09 — the sample PDF is now a ~$5,000 family trip, led by Paris
+
+Owner: "bring the totals for the first few down to around $5k for a family
+of 4 ... Doesn't matter if it is the cheapest. [Paris] will be the one the
+PDF picks first." The sample scan gained four cheaper shapes (4-5 nights,
+Value/Moderate on property or budget off property, quick service) and a
+"family trips whose two cheapest are closest to $5,000" section. Run
+37964932922 (live): **no family trip has its THIRD resort near $5,000**
+(four overseas seats alone cost about that), so the target is the two
+cheapest. Picked: **family of four (kids 8, 11) from Houston (IAH),
+January 2027, 5 nights, budget hotel OFF property, quick service**:
+Disneyland $4,962, WDW $5,089, Paris $7,455, Shanghai $9,312, Hong Kong
+$9,483, Tokyo $9,715. `SAMPLE_TRIP` (prototype.html) now carries `stay`;
+`lead: "dlp"`. Dallas (DFW) the same month is nearly identical.
+
 ### 2026-10-09 — "Beyond the parks": spare days are time to see the city
 
 - **Why Paris prices highest on the 9-night sample despite 3 park days:**
