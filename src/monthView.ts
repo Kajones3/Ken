@@ -67,7 +67,7 @@ export function monthLevels(totals: (number | null)[], band = MONTH_TYPICAL_BAND
  */
 export function quoteMonths(
   book: PriceBook, resort: Resort, params: TripParams, overrides: Overrides,
-  months: string[], fallback?: TripParams,
+  months: string[], fallback?: TripParams, basis: "typical" | "cheapest" = "typical",
 ): MonthQuote[] {
   const rows = months.map((month) => {
     const [from, to] = monthBounds(month);
@@ -80,7 +80,12 @@ export function quoteMonths(
     }
     return {
       month,
-      total: pick.typical ? Math.round(pick.typical.total) : null,
+      // The tile quotes the same day the board does: the typical day, or the
+      // cheapest day when the traveler asked for that ("Which day should we
+      // price?"). Owner, 2026-10-09: the board said Paris $8,412 and the June
+      // tile $9,170 because the tiles always priced a typical day.
+      total: (basis === "cheapest" ? pick.cheapest : pick.typical)
+        ? Math.round((basis === "cheapest" ? pick.cheapest! : pick.typical!).total) : null,
       cheapest: pick.cheapest ? Math.round(pick.cheapest.total) : null,
       ...(drove ? { drove } : {}),
     };

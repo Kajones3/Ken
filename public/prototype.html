@@ -3345,7 +3345,7 @@ async function renderDetail(){
 
       <p class="sec-lab">Best months to go — the whole trip, flights, hotel, tickets and food${session.plus ? "" : " · Plus"}</p>
       ${session.plus ? `<div class="mgrid">${monthsHtml}</div>
-        <p class="hint" style="margin-top:8px">Each month is a typical arrival day, priced the way the board above prices a month, and compared with
+        <p class="hint" style="margin-top:8px">Each month is ${params.priceBasis === "cheapest" ? "the cheapest arrival day we can find" : "a typical arrival day"}, priced the way the board above prices a month, and compared with
         ${esc(r.name)}'s own middle month. Pick one to price it.</p>` : `<div class="calgate">
         <div class="mgrid" aria-hidden="true">${gatedMonthsHtml()}</div>
         <div class="calgate-cta"><b>The whole trip's typical cost for every month you can plan</b>

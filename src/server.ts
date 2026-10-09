@@ -513,7 +513,8 @@ async function months(q: URLSearchParams, user: SessionUser | null) {
     ? { ...params, ...driveBase, destination } : undefined;
   return {
     resortId: resort.id, destination, pricesAsOf: book.oldestFetchedAt,
-    months: quoteMonths(book, resort, trip, overrides, list, fallback),
+    months: quoteMonths(book, resort, trip, overrides, list, fallback,
+      q.get("basis") === "cheapest" ? "cheapest" : "typical"),
   };
 }
 
