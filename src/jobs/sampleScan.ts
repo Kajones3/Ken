@@ -92,13 +92,15 @@ export async function scan(db: Db): Promise<string> {
   const bothIntl = rows.filter((r) => !r.ranked[0]!.dom && !r.ranked[1]!.dom);
   const byGap = [...rows].map((r) => ({ r, g: gap(r) })).sort((a, b) => b.g - a.g);
   const within = byGap.filter((x) => x.g >= -150);
-  // Family trips whose three cheapest resorts average closest to $5,000.
+  // Family trips whose cheapest resort is closest to $5,000 (owner,
+  // 2026-10-09: "bring the totals for the first few down to around $5k for
+  // a family of 4"). avg2 = the two cheapest averaged.
   const fam = rows.filter((r) => r.party.includes("kids"))
-    .map((r) => ({ r, avg3: (r.ranked[0]!.t + r.ranked[1]!.t + r.ranked[2]!.t) / 3 }))
-    .filter((x) => Math.abs(x.avg3 - 5000) <= 600)
-    .sort((a, b) => Math.abs(a.avg3 - 5000) - Math.abs(b.avg3 - 5000));
-  return `## Family trips with the three cheapest averaging about $5,000 (${fam.length})\n`
-    + (fam.slice(0, 60).map((x) => `avg3 ${usd(x.avg3)} | ${line(x.r)}`).join("\n") || "(none)") + "\n\n"
+    .map((r) => ({ r, avg3: (r.ranked[0]!.t + r.ranked[1]!.t) / 2 }))
+    .sort((a, b) => Math.abs(a.r.ranked[0]!.t - 5000) + Math.abs(a.r.ranked[1]!.t - 5000)
+      - Math.abs(b.r.ranked[0]!.t - 5000) - Math.abs(b.r.ranked[1]!.t - 5000));
+  return `## Family trips whose two cheapest are closest to $5,000 (of ${fam.length})\n`
+    + (fam.slice(0, 40).map((x) => `avg2 ${usd(x.avg3)} | ${line(x.r)}`).join("\n") || "(none)") + "\n\n"
     + `${rows.length} scenarios priced (${PARTIES.length} parties x ${SHAPES.length} trip shapes x cities x months)\n`
     + `\n## Two cheapest both international (${bothIntl.length})\n` + (bothIntl.slice(0, 60).map(line).join("\n") || "(none)")
     + `\n\n## Walt Disney World within $150 of (or above) the cheapest international resort (${within.length})\n`
