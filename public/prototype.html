@@ -3121,6 +3121,7 @@ async function renderDetail(){
         </p>` : ""}
         ${item.noFlightsYet ? `<p class="spreadnote"><b>${esc(item.noFlightsYet)}.</b> We'll look up real flight prices for this route tonight.</p>` : ""}
         ${item.drivenBecauseClose ? `<p class="spreadnote"><b>${esc(item.drivenBecauseClose)}.</b></p>` : ""}
+        ${spareDays(item) ? `<p class="spreadnote"><b>Beyond the parks:</b> ${esc(spareDays(item).text)}</p>` : ""}
         ${autoDeals(x).length ? `<p class="spreadnote" style="color:var(--accent)"><b>This total relies on a deal:</b>
           ${autoDeals(x).map(a=>`${esc(a.label)} (&minus;${usd(a.amountUsd)})${a.conditions?`. Only if you qualify: ${esc(a.conditions)}`:""}`).join(" · ")}.
           Your arrival date is inside the deal's travel dates, so we took it off. Disney can end a deal early; turn it off under Promos &amp; discounts to see the price without it.</p>` : ""}
@@ -4796,6 +4797,33 @@ function landsHtml(item){
   return out.join("");
 }
 
+/* --------------------------- beyond the parks --------------------------- */
+
+/**
+ * The days a trip leaves OUTSIDE the parks (owner, 2026-10-09: "Someone who
+ * goes to Paris sees Disneyland AND Paris. It's a much bigger exposure to the
+ * real world"). Every resort gets the same nights, but each suggests its own
+ * park days, so 9 nights is 5 park days in Orlando and 3 in Paris. Full days
+ * = nights - 1 (arrival and departure are travel days) - park days. Shown
+ * only from 2 spare days up; null otherwise.
+ */
+function spareDays(item){
+  const r = item.resort, x = item.price;
+  if(!r || !r.beyondParks || !x) return null;
+  const nights = params.nights, park = daysOf(x);
+  const spare = nights - 1 - park;
+  if(spare < 2) return null;
+  const stay = params.stay === "none" ? ""
+    : " Our total keeps you at the same hotel every night; moving to another hotel for some of them would change the hotel line.";
+  return { spare, park, place: r.beyondParks.place,
+    text: `${park} park day${park===1?"":"s"} on a ${nights}-night trip leaves about ${spare} full days to explore ${r.beyondParks.place}. ${r.beyondParks.howToGetThere}${stay}` };
+}
+
+function beyondParksHtml(item){
+  const b = spareDays(item);
+  return b ? `<p>${esc(b.text)}</p>` : "";
+}
+
 /* ----------------------------- good to know ----------------------------- */
 
 // The city a country-wide figure understates. Hong Kong is its own figure.
@@ -4863,6 +4891,7 @@ function resortSectionHtml(item, rank, isLead){
     ["Getting there", gettingThereHtml(item)],
     ["Park tickets", ticketsHtml(item)],
     ["Where you'd stay", hotelHtml(item)],
+    ["Beyond the parks", beyondParksHtml(item)],
     ["Food", foodHtml(item)],
     ["Weather", weatherHtml(item)],
     ["What's there", landsHtml(item)],
