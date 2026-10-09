@@ -483,3 +483,14 @@ test("Plus passes are one-off, in price order, with the middle one highlighted",
   assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 30], [25, 183]]);
   assert.equal(PLUS_PASSES[1]!.id, PLUS_PASS_DEFAULT);
 });
+
+test("every resort says what's beyond the parks, in one short sentence", () => {
+  // Owner, 2026-10-09: the spare days at Paris or Tokyo are time to see the
+  // city, and the detail view and PDF say so. A resort missing it would
+  // silently drop that line.
+  for (const r of RESORTS) {
+    assert.ok(r.beyondParks, `${r.id} has no beyondParks`);
+    assert.ok(r.beyondParks!.place.length > 0 && r.beyondParks!.howToGetThere.endsWith("."), r.id);
+    assert.ok(r.beyondParks!.howToGetThere.length < 200, `${r.id} beyondParks is too long for one line`);
+  }
+});

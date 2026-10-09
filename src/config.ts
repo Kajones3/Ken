@@ -43,6 +43,14 @@ export interface Resort {
    *  The link searches the AREA, never the hotel we priced — that hotel is a
    *  one-night sample and often has no room on the traveler's dates. */
   hotelSearchArea?: string;
+  /** What's around the resort for the days you're NOT in the parks (owner,
+   *  2026-10-09: "Someone who goes to Disney World gets to see Disney World.
+   *  Someone who goes to Paris sees Disneyland AND Paris"). `place` names it
+   *  ("Paris"); `howToGetThere` is one short sentence. Shown in the detail
+   *  view and the PDF only when the trip leaves 2+ full days beyond the
+   *  suggested park days (`spareDays()` in prototype.html). Travel times are
+   *  from general knowledge, NOT fetched (same standing as the visa notes). */
+  beyondParks?: { place: string; howToGetThere: string };
   lat: number; lon: number; currency: string; parks: number;
   /** Each park and the lands inside it, for the "what does this resort
    *  actually have" half of the shared PDF. `parks` above stays the count
@@ -190,6 +198,7 @@ export const RESORTS: Resort[] = [
   {
     id: "wdw", name: "Walt Disney World", city: "Orlando, Florida", iata: "MCO",
     hotelSearchArea: "Lake Buena Vista, Florida",
+    beyondParks: { place: "Orlando", howToGetThere: "Universal Orlando and SeaWorld are a short drive away, and the Kennedy Space Center is about an hour east." },
     lat: 28.43, lon: -81.31, currency: "USD", parks: 4, region: "dom",
     note: "4 parks · park-hopper priced separately",
     parkList: [
@@ -283,6 +292,7 @@ export const RESORTS: Resort[] = [
   {
     id: "dlr", name: "Disneyland Resort", city: "Anaheim, California", iata: "LAX",
     hotelSearchArea: "Anaheim, California",
+    beyondParks: { place: "Los Angeles and the beaches", howToGetThere: "Hollywood, downtown Los Angeles and the Huntington and Newport beaches are each roughly 30 to 60 minutes by car, depending on traffic." },
     lat: 33.68, lon: -117.87, currency: "USD", parks: 2, region: "dom",
     note: "2 parks · walkable resort",
     parkList: [
@@ -340,6 +350,7 @@ export const RESORTS: Resort[] = [
   {
     id: "dlp", name: "Disneyland Paris", city: "Marne-la-Vallée, France", iata: "CDG",
     hotelSearchArea: "Chessy, France",
+    beyondParks: { place: "Paris", howToGetThere: "Central Paris is about 40 minutes on the RER A train from Marne-la-Vallée–Chessy, the station at the park gates." },
     lat: 49.01, lon: 2.55, currency: "EUR", parks: 2, region: "atl",
     note: "2 parks · already on dynamic pricing",
     parkList: [
@@ -401,6 +412,7 @@ export const RESORTS: Resort[] = [
   {
     id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
     hotelSearchArea: "Urayasu, Japan",
+    beyondParks: { place: "Tokyo", howToGetThere: "Tokyo Station is about 15 minutes from Maihama Station, at the resort, on the JR Keiyo Line." },
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
     note: "2 parks · run by Oriental Land Co. under license",
     parkList: [
@@ -489,6 +501,7 @@ export const RESORTS: Resort[] = [
   {
     id: "shdr", name: "Shanghai Disney Resort", city: "Pudong, Shanghai", iata: "PVG",
     hotelSearchArea: "Shanghai, China",
+    beyondParks: { place: "Shanghai", howToGetThere: "The city center is roughly an hour by metro, starting on Line 11 from Disney Resort station." },
     lat: 31.14, lon: 121.81, currency: "CNY", parks: 1, region: "pac",
     note: "1 park · tiered date pricing",
     parkList: [
@@ -561,6 +574,7 @@ export const RESORTS: Resort[] = [
   {
     id: "hkdl", name: "Hong Kong Disneyland", city: "Lantau Island, Hong Kong", iata: "HKG",
     hotelSearchArea: "Hong Kong",
+    beyondParks: { place: "Hong Kong", howToGetThere: "Central and Kowloon are roughly 30 to 40 minutes by MTR, changing trains at Sunny Bay." },
     lat: 22.31, lon: 113.91, currency: "HKD", parks: 1, region: "pac",
     note: "1 park · smallest of the six",
     parkList: [

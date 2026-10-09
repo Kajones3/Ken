@@ -86,6 +86,27 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-09 — "Beyond the parks": spare days are time to see the city
+
+- **Why Paris prices highest on the 9-night sample despite 3 park days:**
+  park days only move the TICKET line (Paris's 3 days are ~$1,600 cheaper
+  than WDW's 5 for the sample family). Flights (~$2,000-2,500 more for 4
+  across the Atlantic) and the hotel (all 9 nights at the Disneyland Hotel,
+  ~$730/night, a Claude draft) are what make it dear. Every resort gets the
+  same nights; each suggests its own park days.
+- **Owner picked B over shrinking Paris's nights** (2026-10-09): "Someone
+  who goes to Disney World gets to see Disney World. Someone who goes to
+  Paris sees Disneyland AND Paris. It's a much bigger exposure to the real
+  world." So nights stay the same everywhere, and the spare days are SAID:
+  `Resort.beyondParks` ({place, howToGetThere}, config.ts, travel times from
+  general knowledge, not fetched) + `spareDays()` in prototype.html (full
+  days = nights - 1 - park days, shown from 2 up) in the detail header and
+  a PDF "Beyond the parks" section: "3 park days on a 9-night trip leaves
+  about 5 full days to explore Paris. Central Paris is about 40 minutes on
+  the RER A ... Our total keeps you at the same hotel every night." Not on
+  the board. Pricing unchanged. **Option C (each resort suggests its own
+  nights) is NOT built**; the owner liked it too, so ask before building.
+
 ### 2026-10-08, after #137 (PRs #138-#139) — a free SAMPLE PDF; no city puts both US parks out of the top 2
 
 - **Free visitors get a sample PDF** (owner: "I want the free user to get a
