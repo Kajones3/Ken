@@ -48,35 +48,30 @@ jobs:
       - name: Find and inspect DB1C files
         run: |
           set +e
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          get() { curl -sSL --compressed -A "$UA" -H "Accept: text/html,application/xhtml+xml,*/*;q=0.8" -H "Accept-Language: en-US,en;q=0.9" "$1" -o "$2"; echo "  $1 -> exit $? size $(wc -c < "$2")"; }
+          echo "=== the raw file directory ==="
+          get "https://transtats.bts.gov/PREZIP/" dir.html
+          grep -oiE '[A-Za-z0-9_]*(DB1C|OD40|Origin_and_Destination)[A-Za-z0-9_]*\.zip' dir.html | sort -u | tail -60
+          echo "(first 400 bytes of the listing)"; head -c 400 dir.html; echo
           for page in \
             "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-market" \
-            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-product" \
-            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data"; do
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-product"; do
             echo "=== $page ==="
-            curl -sSL -A "Mozilla/5.0" "$page" -o page.html; echo "status $? size $(wc -c < page.html)"
-            grep -oiE 'href="[^"]*\.(zip|csv)[^"]*"' page.html | sort -u | head -80
+            get "$page" page.html
+            head -c 470 page.html; echo
+            grep -oiE 'href="[^"]*\.zip[^"]*"' page.html | sort -u | head -40
           done
-          echo "=== guesses on transtats PREZIP ==="
-          for y in 2025 2026; do for m in 1 2 3 4 5 6 7 8 9 10 11 12; do
-            for name in "Origin_and_Destination_Survey_DB1CMarket_${y}_${m}" "OD40_DB1CMarket_${y}_${m}" "DB1CMarket_${y}_${m}"; do
-              code=$(curl -s -o /dev/null -w "%{http_code}" -I "https://transtats.bts.gov/PREZIP/${name}.zip")
-              [ "$code" = "200" ] && echo "FOUND $name.zip"
-            done
-          done; done
-          echo "=== download the newest market zip found on the pages ==="
-          curl -sSL -A "Mozilla/5.0" "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-market" -o m.html
-          urls=$(grep -oiE 'href="[^"]*\.zip"' m.html | sed 's/href="//;s/"$//')
-          echo "$urls" | tail -5
-          last=$(echo "$urls" | tail -1)
-          case "$last" in http*) ;; /*) last="https://www.bts.gov$last";; esac
-          [ -n "$last" ] || { echo "no zip link found"; exit 0; }
-          echo "Fetching $last"
-          curl -sSL -A "Mozilla/5.0" "$last" -o c.zip; ls -la c.zip; unzip -l c.zip
+          echo "=== pick the newest DB1C market zip in the directory ==="
+          f=$(grep -oiE '[A-Za-z0-9_]*DB1C[A-Za-z0-9_]*[Mm]arket[A-Za-z0-9_]*\.zip' dir.html | sort -u | tail -1)
+          [ -n "$f" ] || { echo "none found by name"; exit 0; }
+          echo "Fetching $f"
+          curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/$f" -o c.zip; ls -la c.zip; unzip -l c.zip
           unzip -o c.zip -d c_out >/dev/null
           csv=$(ls c_out/* | head -1)
           echo "--- header ---"; head -1 "$csv"
           echo "--- rows ---"; wc -l "$csv"
-          echo "--- 5 rows with MCO ---"; grep -m 5 MCO "$csv"
+          echo "--- 5 rows from BNA to MCO ---"; grep '"BNA"' "$csv" | grep -m 5 '"MCO"'
           rm -rf c.zip c_out *.html
 
   debug:
