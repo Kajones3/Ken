@@ -528,6 +528,15 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`  ${o.iata.padEnd(7)}  ${o.list}  ${String(us).padStart(3)}  ${String(intl).padStart(4)}  ${intlDests.map((d) => String(n(d)).padStart(3)).join(" ")}  ${searchesBy.get(o.iata) ?? 0}`);
   }
   out.push("");
+  const afl = await db.query<{ file: string; n: string; loaded: unknown }>(
+    `select file, count(*) as n, max(loaded_at) as loaded from airport_fare_levels group by 1 order by 1`,
+  ).catch(() => ({ rows: [] as { file: string; n: string; loaded: unknown }[] }));
+  out.push(`  BTS airport fare tables held: ${afl.rows.map((r) => `${r.file} (${r.n})`).join(", ") || "none"}`);
+  const lv = await db.query<{ code: string; year: number; quarter: number; avg_fare_usd: string; adjusted_fare_usd: string | null }>(
+    `select code, year, quarter, avg_fare_usd, adjusted_fare_usd from airport_fare_levels
+      where code = any($1) order by code, year, quarter`, [homes],
+  ).catch(() => ({ rows: [] as { code: string; year: number; quarter: number; avg_fare_usd: string; adjusted_fare_usd: string | null }[] }));
+  for (const r of lv.rows) out.push(`    ${r.code} ${r.year} Q${r.quarter}: average fare $${Math.round(Number(r.avg_fare_usd))}${r.adjusted_fare_usd ? ` ($${Math.round(Number(r.adjusted_fare_usd))} in 2026 Q2 dollars)` : ""}`);
   out.push(`  Fares we bought from these airports: ${nb.rows.length}`);
   for (const r of nb.rows) out.push(`    ${r.origin}->${r.destination} departing ${String(r.depart_date).slice(0, 15)}: $${Math.round(Number(r.price_usd))}`);
   out.push("");
