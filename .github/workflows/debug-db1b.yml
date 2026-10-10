@@ -66,17 +66,22 @@ jobs:
             head -c 470 page.html; echo
             grep -oiE 'href="[^"]*\.zip[^"]*"' page.html | sort -u | head -40
           done
-          echo "=== pick the newest DB1C market zip in the directory ==="
-          f=$(grep -oiE '[A-Za-z0-9_]*DB1C[A-Za-z0-9_]*[Mm]arket[A-Za-z0-9_]*\.zip' dir.html | sort -u | tail -1)
+          echo "=== every DB1C file in the directory ==="
+          grep -iE 'DB1C' dir.txt
+          f=$(grep -oiE 'Origin_and_Destination_Survey_DB1C[A-Za-z]+_[0-9]+_[0-9]+\.zip' dir.txt | sort -u | tail -1)
           [ -n "$f" ] || { echo "none found by name"; exit 0; }
           echo "Fetching $f"
           curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/$f" -o c.zip; ls -la c.zip; unzip -l c.zip
-          unzip -o c.zip -d c_out >/dev/null
-          csv=$(ls c_out/* | head -1)
-          echo "--- header ---"; head -1 "$csv"
-          echo "--- rows ---"; wc -l "$csv"
-          echo "--- 5 rows from BNA to MCO ---"; grep '"BNA"' "$csv" | grep -m 5 '"MCO"'
-          rm -rf c.zip c_out *.html
+          inner=$(unzip -Z1 c.zip | grep -iE '\.csv$' | head -1)
+          echo "--- header ---"; unzip -p c.zip "$inner" | head -1
+          echo "--- first 3 rows ---"; unzip -p c.zip "$inner" | sed -n '2,4p'
+          echo "--- rows, and rows by year/month/quarter columns if present ---"
+          unzip -p c.zip "$inner" | awk -F',' '
+            NR==1 { for (i=1;i<=NF;i++) { h=$i; gsub(/"/,"",h); c[h]=i } next }
+            { n++; k=""; if ("Year" in c) k=k $c["Year"]; if ("Month" in c) k=k "-m" $c["Month"]; if ("Quarter" in c) k=k "-q" $c["Quarter"]; seen[k]++ }
+            END { print n " rows"; for (k in seen) print "  " k ": " seen[k] }'
+          echo "--- 5 rows with BNA ---"; unzip -p c.zip "$inner" | grep -m 5 '"BNA"'
+          rm -rf c.zip *.html dir.txt
 
   debug:
     if: inputs.db1c_probe != 'yes'
