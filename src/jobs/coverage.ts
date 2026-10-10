@@ -385,6 +385,43 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`  ${r.destination}: ${r.n} fares from ${r.routes} cities, bought median $${Math.round(Number(r.bought))}`
       + ` vs seed $${Math.round(Number(r.seed))} -> x${Number(r.ratio).toFixed(2)} (middle half x${Number(r.lo).toFixed(2)}-x${Number(r.hi).toFixed(2)})`);
   }
+  // Same, split by travel quarter: the seed's season shape (Q1 x0.85 ... Q3
+  // x1.37) is multiplied by ONE trend measured on whatever quarters we bought.
+  const pq = await db.query<{ region: string; q: number; n: string; ratio: string }>(
+    `with b as (
+       select o.origin, o.destination, extract(quarter from o.depart_date)::int as q, o.price_usd
+         from flight_observations o
+        where o.source = 'serpapi_flights' and o.destination in ('CDG','NRT','HND','PVG','HKG')
+     ), s as (
+       select distinct on (origin, destination, quarter) origin, destination, quarter,
+              coalesce(median_fare_usd, avg_fare_usd) as seed
+         from historical_fares where source = 'seed_guess'
+        order by origin, destination, quarter, year desc
+     )
+     select case when b.destination = 'CDG' then 'Europe' else 'Asia' end as region, b.q,
+            count(*) as n, percentile_cont(0.5) within group (order by b.price_usd / s.seed) as ratio
+       from b join s on s.origin = b.origin and s.destination = b.destination and s.quarter = b.q
+      group by 1, 2 order by 1, 2`,
+  );
+  for (const r of pq.rows) out.push(`  ${r.region} Q${r.q}: ${r.n} fares, bought/seed x${Number(r.ratio).toFixed(2)}`);
+  // Our bought fare (Google's MEDIAN itinerary) against Google's own
+  // "typical price" range for the same search.
+  const gi = await db.query<{ destination: string; n: string; bought: string; lo: string; hi: string; lowest: string; above: string }>(
+    `select o.destination, count(*) as n,
+            percentile_cont(0.5) within group (order by o.price_usd) as bought,
+            percentile_cont(0.5) within group (order by i.typical_low) as lo,
+            percentile_cont(0.5) within group (order by i.typical_high) as hi,
+            percentile_cont(0.5) within group (order by i.lowest_price) as lowest,
+            sum(case when o.price_usd > i.typical_high then 1 else 0 end) as above
+       from flight_observations o
+       join flight_insights i on i.origin = o.origin and i.destination = o.destination
+        and i.depart_date = o.depart_date and i.trip_length = o.trip_length
+        and abs(extract(epoch from (i.observed_at - o.observed_at))) < 3600
+      where o.source = 'serpapi_flights' and i.typical_low is not null
+      group by 1 order by 1`,
+  );
+  out.push("  Bought fare vs Google's own 'typical price' for the same search:");
+  for (const r of gi.rows) out.push(`    ${r.destination}: ${r.n} searches, our fare median $${Math.round(Number(r.bought))}, Google typical $${Math.round(Number(r.lo))}-$${Math.round(Number(r.hi))}, Google lowest $${Math.round(Number(r.lowest))}; ${r.above} above Google's typical range`);
   const stl = await db.query<{ destination: string; depart_date: unknown; price_usd: string; observed_at: unknown }>(
     `select destination, depart_date, price_usd, observed_at from flight_observations
       where source = 'serpapi_flights' and origin = 'STL' order by observed_at desc limit 20`,
