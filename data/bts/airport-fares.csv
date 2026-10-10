@@ -1,0 +1,469 @@
+year,quarter,kind,code,name,avg_fare_usd,adjusted_fare_usd,adjusted_base,passengers,passengers_note,rank,file
+2025,1,airport,LAX,"Los Angeles International (Los Angeles, CA)",408.38,427.82,2026Q2,1284083,"2025 domestic passengers, 10% sample",1,AverageFare_Q1_2025.xls
+2025,1,airport,ORD,"Chicago O'Hare International (Chicago-O'Hare, IL)",414.12,433.83,2026Q2,1089038,"2025 domestic passengers, 10% sample",2,AverageFare_Q1_2025.xls
+2025,1,airport,DEN,"Denver International (Denver, CO)",372.13,389.85,2026Q2,1023630,"2025 domestic passengers, 10% sample",3,AverageFare_Q1_2025.xls
+2025,1,airport,ATL,"Hartsfield-Jackson Atlanta International (Atlanta, GA)",441.88,462.92,2026Q2,1012618,"2025 domestic passengers, 10% sample",4,AverageFare_Q1_2025.xls
+2025,1,airport,BOS,"Logan International (Boston, MA)",368.53,386.08,2026Q2,986868,"2025 domestic passengers, 10% sample",5,AverageFare_Q1_2025.xls
+2025,1,airport,EWR,"Newark Liberty International (Newark, NJ)",428.51,448.91,2026Q2,940299,"2025 domestic passengers, 10% sample",6,AverageFare_Q1_2025.xls
+2025,1,airport,DFW,"Dallas/Fort Worth International (Dallas-DFW, TX)",442.24,463.29,2026Q2,894683,"2025 domestic passengers, 10% sample",7,AverageFare_Q1_2025.xls
+2025,1,airport,SEA,"Seattle/Tacoma International (Seattle, WA)",392.92,411.62,2026Q2,880202,"2025 domestic passengers, 10% sample",8,AverageFare_Q1_2025.xls
+2025,1,airport,MCO,"Orlando International (Orlando, FL)",293.96,307.96,2026Q2,845562,"2025 domestic passengers, 10% sample",9,AverageFare_Q1_2025.xls
+2025,1,airport,SFO,"San Francisco International (San Francisco, CA)",433.41,454.05,2026Q2,844286,"2025 domestic passengers, 10% sample",10,AverageFare_Q1_2025.xls
+2025,1,airport,PHX,"Phoenix Sky Harbor International (Phoenix, AZ)",388.81,407.32,2026Q2,825399,"2025 domestic passengers, 10% sample",11,AverageFare_Q1_2025.xls
+2025,1,airport,LGA,"LaGuardia (New York-La Guardia, NY)",337.53,353.6,2026Q2,795129,"2025 domestic passengers, 10% sample",12,AverageFare_Q1_2025.xls
+2025,1,airport,JFK,"John F. Kennedy International (New York-JFK, NY)",417.45,437.33,2026Q2,750626,"2025 domestic passengers, 10% sample",13,AverageFare_Q1_2025.xls
+2025,1,airport,LAS,"Harry Reid International (Las Vegas, NV)",296.55,310.67,2026Q2,675568,"2025 domestic passengers, 10% sample",14,AverageFare_Q1_2025.xls
+2025,1,airport,MSP,"Minneapolis-St Paul International (Minneapolis, MN)",456.15,477.86,2026Q2,657943,"2025 domestic passengers, 10% sample",15,AverageFare_Q1_2025.xls
+2025,1,airport,IAH,"George Bush Intercontinental/Houston (Houston-Intercontinental, TX)",429.02,449.45,2026Q2,627878,"2025 domestic passengers, 10% sample",16,AverageFare_Q1_2025.xls
+2025,1,airport,PHL,"Philadelphia International (Philadelphia, PA)",428.6,449.0,2026Q2,618958,"2025 domestic passengers, 10% sample",17,AverageFare_Q1_2025.xls
+2025,1,airport,SAN,"San Diego International (San Diego, CA)",369.24,386.82,2026Q2,596023,"2025 domestic passengers, 10% sample",18,AverageFare_Q1_2025.xls
+2025,1,airport,FLL,"Fort Lauderdale-Hollywood International (Fort Lauderdale, FL)",284.95,298.52,2026Q2,585196,"2025 domestic passengers, 10% sample",19,AverageFare_Q1_2025.xls
+2025,1,airport,DTW,"Detroit Metro Wayne County (Detroit, MI)",464.07,486.16,2026Q2,572843,"2025 domestic passengers, 10% sample",20,AverageFare_Q1_2025.xls
+2025,1,airport,DCA,"Ronald Reagan Washington National (Washington-Reagan National, DC)",381.42,399.59,2026Q2,547638,"2025 domestic passengers, 10% sample",21,AverageFare_Q1_2025.xls
+2025,1,airport,TPA,"Tampa International (Tampa, FL)",340.65,356.87,2026Q2,534514,"2025 domestic passengers, 10% sample",22,AverageFare_Q1_2025.xls
+2025,1,airport,BWI,"Baltimore/Washington International Thurgood Marshall (Baltimore, MD)",386.16,404.54,2026Q2,489183,"2025 domestic passengers, 10% sample",23,AverageFare_Q1_2025.xls
+2025,1,airport,MIA,"Miami International (Miami, FL)",370.19,387.82,2026Q2,478084,"2025 domestic passengers, 10% sample",24,AverageFare_Q1_2025.xls
+2025,1,airport,AUS,"Austin - Bergstrom International (Austin, TX)",429.52,449.97,2026Q2,472888,"2025 domestic passengers, 10% sample",25,AverageFare_Q1_2025.xls
+2025,1,airport,CLT,"Charlotte Douglas International (Charlotte, NC)",450.86,472.33,2026Q2,446301,"2025 domestic passengers, 10% sample",26,AverageFare_Q1_2025.xls
+2025,1,airport,PDX,"Portland International (Portland, OR)",391.2,409.82,2026Q2,441785,"2025 domestic passengers, 10% sample",27,AverageFare_Q1_2025.xls
+2025,1,airport,BNA,"Nashville International (Nashville, TN)",397.04,415.95,2026Q2,441195,"2025 domestic passengers, 10% sample",28,AverageFare_Q1_2025.xls
+2025,1,airport,SLC,"Salt Lake City International (Salt Lake City, UT)",471.9,494.37,2026Q2,434499,"2025 domestic passengers, 10% sample",29,AverageFare_Q1_2025.xls
+2025,1,airport,RDU,"Raleigh-Durham International (Raleigh/Durham, NC)",377.13,395.09,2026Q2,403082,"2025 domestic passengers, 10% sample",30,AverageFare_Q1_2025.xls
+2025,1,airport,SMF,"Sacramento International (Sacramento, CA)",383.75,402.03,2026Q2,367629,"2025 domestic passengers, 10% sample",31,AverageFare_Q1_2025.xls
+2025,1,airport,HNL,"Daniel K Inouye International (Honolulu, HI)",378.51,396.54,2026Q2,355128,"2025 domestic passengers, 10% sample",32,AverageFare_Q1_2025.xls
+2025,1,airport,MDW,"Chicago Midway International (Chicago-Midway, IL)",343.25,359.59,2026Q2,349329,"2025 domestic passengers, 10% sample",33,AverageFare_Q1_2025.xls
+2025,1,airport,STL,"St Louis Lambert International (St. Louis, MO)",440.26,461.23,2026Q2,317689,"2025 domestic passengers, 10% sample",34,AverageFare_Q1_2025.xls
+2025,1,airport,IAD,"Washington Dulles International (Washington-Dulles, DC)",487.14,510.33,2026Q2,316263,"2025 domestic passengers, 10% sample",35,AverageFare_Q1_2025.xls
+2025,1,airport,SJC,"Norman Y. Mineta San Jose International (San Jose, CA)",325.29,340.78,2026Q2,305263,"2025 domestic passengers, 10% sample",36,AverageFare_Q1_2025.xls
+2025,1,airport,MCI,"Kansas City International (Kansas City, MO)",458.58,480.42,2026Q2,297424,"2025 domestic passengers, 10% sample",37,AverageFare_Q1_2025.xls
+2025,1,airport,DAL,"Dallas Love Field (Dallas-Love Field, TX)",367.29,384.77,2026Q2,289935,"2025 domestic passengers, 10% sample",38,AverageFare_Q1_2025.xls
+2025,1,airport,IND,"Indianapolis International (Indianapolis, IN)",406.95,426.32,2026Q2,289135,"2025 domestic passengers, 10% sample",39,AverageFare_Q1_2025.xls
+2025,1,airport,CLE,"Cleveland-Hopkins International (Cleveland, OH)",379.61,397.69,2026Q2,275340,"2025 domestic passengers, 10% sample",40,AverageFare_Q1_2025.xls
+2025,1,airport,PIT,"Pittsburgh International (Pittsburgh, PA)",387.88,406.35,2026Q2,273272,"2025 domestic passengers, 10% sample",41,AverageFare_Q1_2025.xls
+2025,1,airport,OAK,"Oakland International (Oakland, CA)",323.48,338.88,2026Q2,268902,"2025 domestic passengers, 10% sample",42,AverageFare_Q1_2025.xls
+2025,1,airport,MSY,"Louis Armstrong New Orleans International (New Orleans, LA)",361.15,378.34,2026Q2,268725,"2025 domestic passengers, 10% sample",43,AverageFare_Q1_2025.xls
+2025,1,airport,SJU,"Luis Munoz Marin International (San Juan, PR)",284.93,298.5,2026Q2,262979,"2025 domestic passengers, 10% sample",44,AverageFare_Q1_2025.xls
+2025,1,airport,SAT,"San Antonio International (San Antonio, TX)",429.1,449.53,2026Q2,261417,"2025 domestic passengers, 10% sample",45,AverageFare_Q1_2025.xls
+2025,1,airport,CVG,"Cincinnati/Northern Kentucky International (Cincinnati, OH)",377.13,395.09,2026Q2,254552,"2025 domestic passengers, 10% sample",46,AverageFare_Q1_2025.xls
+2025,1,airport,SNA,"John Wayne Airport-Orange County (Santa Ana, CA)",423.32,443.47,2026Q2,254126,"2025 domestic passengers, 10% sample",47,AverageFare_Q1_2025.xls
+2025,1,airport,CMH,"John Glenn Columbus International (Columbus, OH)",435.37,456.1,2026Q2,244751,"2025 domestic passengers, 10% sample",48,AverageFare_Q1_2025.xls
+2025,1,airport,HOU,"William P Hobby (Houston-Hobby, TX)",374.01,391.81,2026Q2,229047,"2025 domestic passengers, 10% sample",49,AverageFare_Q1_2025.xls
+2025,1,airport,RSW,"Southwest Florida International (Fort Myers, FL)",356.51,373.48,2026Q2,215751,"2025 domestic passengers, 10% sample",50,AverageFare_Q1_2025.xls
+2025,1,airport,BDL,"Bradley International (Hartford, CT)",360.94,378.13,2026Q2,210677,"2025 domestic passengers, 10% sample",51,AverageFare_Q1_2025.xls
+2025,1,airport,ONT,"Ontario International (Ontario, CA)",384.21,402.51,2026Q2,198746,"2025 domestic passengers, 10% sample",52,AverageFare_Q1_2025.xls
+2025,1,airport,JAX,"Jacksonville International (Jacksonville, FL)",434.03,454.7,2026Q2,190561,"2025 domestic passengers, 10% sample",53,AverageFare_Q1_2025.xls
+2025,1,airport,BUR,"Bob Hope (Burbank, CA)",312.51,327.38,2026Q2,183243,"2025 domestic passengers, 10% sample",54,AverageFare_Q1_2025.xls
+2025,1,airport,MKE,"General Mitchell International (Milwaukee, WI)",458.09,479.9,2026Q2,179994,"2025 domestic passengers, 10% sample",55,AverageFare_Q1_2025.xls
+2025,1,airport,BUF,"Buffalo Niagara International (Buffalo, NY)",342.15,358.44,2026Q2,146872,"2025 domestic passengers, 10% sample",56,AverageFare_Q1_2025.xls
+2025,1,airport,RIC,"Richmond International (Richmond, VA)",418.64,438.57,2026Q2,145166,"2025 domestic passengers, 10% sample",57,AverageFare_Q1_2025.xls
+2025,1,airport,CHS,"Charleston AFB/International (Charleston, SC)",382.61,400.83,2026Q2,144183,"2025 domestic passengers, 10% sample",58,AverageFare_Q1_2025.xls
+2025,1,airport,OMA,"Eppley Airfield (Omaha, NE)",448.83,470.2,2026Q2,143403,"2025 domestic passengers, 10% sample",59,AverageFare_Q1_2025.xls
+2025,1,airport,BOI,"Boise Air Terminal (Boise, ID)",402.25,421.4,2026Q2,135151,"2025 domestic passengers, 10% sample",60,AverageFare_Q1_2025.xls
+2025,1,airport,ORF,"Norfolk International (Norfolk, VA)",425.83,446.1,2026Q2,135070,"2025 domestic passengers, 10% sample",61,AverageFare_Q1_2025.xls
+2025,1,airport,MEM,"Memphis International (Memphis, TN)",440.47,461.44,2026Q2,133439,"2025 domestic passengers, 10% sample",62,AverageFare_Q1_2025.xls
+2025,1,airport,ABQ,"Albuquerque International Sunport (Albuquerque, NM)",429.01,449.44,2026Q2,133295,"2025 domestic passengers, 10% sample",63,AverageFare_Q1_2025.xls
+2025,1,airport,PVD,"Rhode Island Tf Green International (Providence, RI)",323.24,338.63,2026Q2,123931,"2025 domestic passengers, 10% sample",64,AverageFare_Q1_2025.xls
+2025,1,airport,GRR,"Gerald R. Ford International (Grand Rapids, MI)",404.37,423.62,2026Q2,122792,"2025 domestic passengers, 10% sample",65,AverageFare_Q1_2025.xls
+2025,1,airport,SDF,"Louisville Muhammad Ali International (Louisville, KY)",425.71,445.98,2026Q2,122639,"2025 domestic passengers, 10% sample",66,AverageFare_Q1_2025.xls
+2025,1,airport,OKC,"Okc Will Rogers International (Oklahoma City, OK)",457.9,479.7,2026Q2,121164,"2025 domestic passengers, 10% sample",67,AverageFare_Q1_2025.xls
+2025,1,airport,ELP,"El Paso International (El Paso, TX)",400.78,419.86,2026Q2,120309,"2025 domestic passengers, 10% sample",68,AverageFare_Q1_2025.xls
+2025,1,airport,ANC,"Ted Stevens Anchorage International (Anchorage, AK)",576.59,604.04,2026Q2,113291,"2025 domestic passengers, 10% sample",69,AverageFare_Q1_2025.xls
+2025,1,airport,GEG,"Spokane International (Spokane, WA)",428.57,448.98,2026Q2,112587,"2025 domestic passengers, 10% sample",70,AverageFare_Q1_2025.xls
+2025,1,airport,OGG,"Kahului Airport (Kahului, HI)",326.12,341.65,2026Q2,112368,"2025 domestic passengers, 10% sample",71,AverageFare_Q1_2025.xls
+2025,1,airport,RNO,"Reno/Tahoe International (Reno, NV)",394.95,413.75,2026Q2,109805,"2025 domestic passengers, 10% sample",72,AverageFare_Q1_2025.xls
+2025,1,airport,LGB,"Long Beach Airport (Long Beach, CA)",334.33,350.25,2026Q2,102848,"2025 domestic passengers, 10% sample",73,AverageFare_Q1_2025.xls
+2025,1,airport,TUS,"Tucson International (Tucson, AZ)",436.06,456.82,2026Q2,102184,"2025 domestic passengers, 10% sample",74,AverageFare_Q1_2025.xls
+2025,1,airport,SYR,"Syracuse Hancock International (Syracuse, NY)",378.94,396.98,2026Q2,94536,"2025 domestic passengers, 10% sample",75,AverageFare_Q1_2025.xls
+2025,1,airport,DSM,"Des Moines International (Des Moines, IA)",416.61,436.45,2026Q2,91115,"2025 domestic passengers, 10% sample",76,AverageFare_Q1_2025.xls
+2025,1,airport,ALB,"Albany International (Albany, NY)",412.09,431.71,2026Q2,88845,"2025 domestic passengers, 10% sample",77,AverageFare_Q1_2025.xls
+2025,1,airport,TUL,"Tulsa International (Tulsa, OK)",463.98,486.07,2026Q2,88037,"2025 domestic passengers, 10% sample",78,AverageFare_Q1_2025.xls
+2025,1,airport,BHM,"Birmingham-Shuttlesworth International (Birmingham, AL)",515.58,540.13,2026Q2,87795,"2025 domestic passengers, 10% sample",79,AverageFare_Q1_2025.xls
+2025,1,airport,SRQ,"Sarasota/Bradenton International (Sarasota/Bradenton, FL)",324.76,340.22,2026Q2,86365,"2025 domestic passengers, 10% sample",80,AverageFare_Q1_2025.xls
+2025,1,airport,HPN,"Westchester County (White Plains, NY)",361.26,378.46,2026Q2,85416,"2025 domestic passengers, 10% sample",81,AverageFare_Q1_2025.xls
+2025,1,airport,SAV,"Savannah/Hilton Head International (Savannah, GA)",423.31,443.47,2026Q2,85268,"2025 domestic passengers, 10% sample",82,AverageFare_Q1_2025.xls
+2025,1,airport,ROC,"Frederick Douglass Grtr Rochester International (Rochester, NY)",382.67,400.89,2026Q2,81114,"2025 domestic passengers, 10% sample",83,AverageFare_Q1_2025.xls
+2025,1,airport,TYS,"McGhee Tyson (Knoxville, TN)",419.13,439.09,2026Q2,80983,"2025 domestic passengers, 10% sample",84,AverageFare_Q1_2025.xls
+2025,1,airport,KOA,"Ellison Onizuka Kona International at Keahole (Kona, HI)",318.31,333.47,2026Q2,75880,"2025 domestic passengers, 10% sample",85,AverageFare_Q1_2025.xls
+2025,1,airport,GSP,"Greenville-Spartanburg International (Greer, SC)",482.35,505.31,2026Q2,74606,"2025 domestic passengers, 10% sample",86,AverageFare_Q1_2025.xls
+2025,1,airport,PNS,"Pensacola International (Pensacola, FL)",414.9,434.65,2026Q2,72946,"2025 domestic passengers, 10% sample",87,AverageFare_Q1_2025.xls
+2025,1,airport,COS,"City of Colorado Springs Municipal (Colorado Springs, CO)",434.96,455.67,2026Q2,67750,"2025 domestic passengers, 10% sample",88,AverageFare_Q1_2025.xls
+2025,1,airport,MYR,"Myrtle Beach International (Myrtle Beach, SC)",332.97,348.83,2026Q2,67308,"2025 domestic passengers, 10% sample",89,AverageFare_Q1_2025.xls
+2025,1,airport,MSN,"Dane County Regional-Truax Field (Madison, WI)",516.13,540.7,2026Q2,67201,"2025 domestic passengers, 10% sample",90,AverageFare_Q1_2025.xls
+2025,1,airport,LIH,"Lihue Airport (Lihue, HI)",292.27,306.18,2026Q2,66233,"2025 domestic passengers, 10% sample",91,AverageFare_Q1_2025.xls
+2025,1,airport,FAT,"Fresno Yosemite International (Fresno, CA)",419.55,439.53,2026Q2,65689,"2025 domestic passengers, 10% sample",92,AverageFare_Q1_2025.xls
+2025,1,airport,PWM,"Portland International Jetport (Portland, ME)",414.34,434.07,2026Q2,65280,"2025 domestic passengers, 10% sample",93,AverageFare_Q1_2025.xls
+2025,1,airport,LIT,"Bill and Hillary Clinton Nat Adams Field (Little Rock, AR)",484.39,507.45,2026Q2,63818,"2025 domestic passengers, 10% sample",94,AverageFare_Q1_2025.xls
+2025,1,airport,XNA,"Northwest Arkansas National (Fayetteville, AR)",482.91,505.9,2026Q2,60392,"2025 domestic passengers, 10% sample",95,AverageFare_Q1_2025.xls
+2025,1,airport,BZN,"Bozeman Yellowstone International (Bozeman, MT)",456.91,478.67,2026Q2,56214,"2025 domestic passengers, 10% sample",96,AverageFare_Q1_2025.xls
+2025,1,airport,AVL,"Asheville Regional (Asheville, NC)",333.12,348.99,2026Q2,52773,"2025 domestic passengers, 10% sample",97,AverageFare_Q1_2025.xls
+2025,1,airport,PSP,"Palm Springs International (Palm Springs, CA)",428.4,448.8,2026Q2,52513,"2025 domestic passengers, 10% sample",98,AverageFare_Q1_2025.xls
+2025,1,airport,GSO,"Piedmont Triad International (Greensboro/High Point, NC)",474.41,497.0,2026Q2,52146,"2025 domestic passengers, 10% sample",99,AverageFare_Q1_2025.xls
+2025,1,airport,ICT,"Wichita Dwight D Eisenhower National (Wichita, KS)",456.26,477.99,2026Q2,50450,"2025 domestic passengers, 10% sample",100,AverageFare_Q1_2025.xls
+2025,1,airport,PIE,"St Pete Clearwater International (St. Petersburg, FL)",118.0,123.62,2026Q2,48668,"2025 domestic passengers, 10% sample",101,AverageFare_Q1_2025.xls
+2025,1,airport,SFB,"Orlando Sanford International (Sanford, FL)",121.14,126.91,2026Q2,48131,"2025 domestic passengers, 10% sample",102,AverageFare_Q1_2025.xls
+2025,1,airport,EUG,"Mahlon Sweet Field (Eugene, OR)",417.16,437.03,2026Q2,48046,"2025 domestic passengers, 10% sample",103,AverageFare_Q1_2025.xls
+2025,1,airport,CID,"The Eastern Iowa (Cedar Rapids/Iowa City, IA)",409.16,428.64,2026Q2,46040,"2025 domestic passengers, 10% sample",104,AverageFare_Q1_2025.xls
+2025,1,airport,HVN,"Tweed New Haven (New Haven, CT)",146.4,153.37,2026Q2,45855,"2025 domestic passengers, 10% sample",105,AverageFare_Q1_2025.xls
+2025,1,airport,HSV,"Huntsville International-Carl T Jones Field (Huntsville, AL)",535.93,561.45,2026Q2,44464,"2025 domestic passengers, 10% sample",106,AverageFare_Q1_2025.xls
+2025,1,airport,MDT,"Harrisburg International (Harrisburg, PA)",439.62,460.55,2026Q2,42667,"2025 domestic passengers, 10% sample",107,AverageFare_Q1_2025.xls
+2025,1,airport,ISP,"Long Island MacArthur (Islip, NY)",259.89,272.27,2026Q2,42627,"2025 domestic passengers, 10% sample",108,AverageFare_Q1_2025.xls
+2025,1,airport,LEX,"Blue Grass (Lexington, KY)",473.09,495.61,2026Q2,42439,"2025 domestic passengers, 10% sample",109,AverageFare_Q1_2025.xls
+2025,1,airport,MAF,"Midland International Air and Space Port (Midland/Odessa, TX)",435.24,455.96,2026Q2,41759,"2025 domestic passengers, 10% sample",110,AverageFare_Q1_2025.xls
+2025,1,airport,FSD,"Joe Foss Field (Sioux Falls, SD)",403.69,422.91,2026Q2,40697,"2025 domestic passengers, 10% sample",111,AverageFare_Q1_2025.xls
+2025,1,airport,AZA,"Mesa Gateway (Phoenix, AZ)",147.02,154.02,2026Q2,40330,"2025 domestic passengers, 10% sample",112,AverageFare_Q1_2025.xls
+2025,1,airport,MFE,"McAllen International (Mission/McAllen/Edinburg, TX)",376.94,394.89,2026Q2,39274,"2025 domestic passengers, 10% sample",113,AverageFare_Q1_2025.xls
+2025,1,airport,VPS,"Eglin AFB Destin Fort Walton Beach (Valparaiso, FL)",418.65,438.58,2026Q2,38296,"2025 domestic passengers, 10% sample",114,AverageFare_Q1_2025.xls
+2025,1,airport,ILM,"Wilmington International (Wilmington, NC)",490.49,513.84,2026Q2,38008,"2025 domestic passengers, 10% sample",115,AverageFare_Q1_2025.xls
+2025,1,airport,ITO,"Hilo International (Hilo, HI)",222.67,233.27,2026Q2,37948,"2025 domestic passengers, 10% sample",116,AverageFare_Q1_2025.xls
+2025,1,airport,SGF,"Springfield-Branson National (Springfield, MO)",454.0,475.61,2026Q2,37755,"2025 domestic passengers, 10% sample",117,AverageFare_Q1_2025.xls
+2025,1,airport,PGD,"Punta Gorda Airport (Punta Gorda, FL)",138.05,144.63,2026Q2,37063,"2025 domestic passengers, 10% sample",118,AverageFare_Q1_2025.xls
+2025,1,airport,MHT,"Manchester Boston Regional (Manchester, NH)",378.16,396.17,2026Q2,37031,"2025 domestic passengers, 10% sample",119,AverageFare_Q1_2025.xls
+2025,1,airport,BTV,"Patrick Leahy Burlington International (Burlington, VT)",475.85,498.51,2026Q2,36575,"2025 domestic passengers, 10% sample",120,AverageFare_Q1_2025.xls
+2025,1,airport,SBA,"Santa Barbara Municipal (Santa Barbara, CA)",465.04,487.18,2026Q2,36080,"2025 domestic passengers, 10% sample",121,AverageFare_Q1_2025.xls
+2025,1,airport,JAN,"Jackson Medgar Wiley Evers International (Jackson/Vicksburg, MS)",521.02,545.82,2026Q2,35868,"2025 domestic passengers, 10% sample",122,AverageFare_Q1_2025.xls
+2025,1,airport,ATW,"Appleton International (Appleton, WI)",390.33,408.91,2026Q2,35369,"2025 domestic passengers, 10% sample",123,AverageFare_Q1_2025.xls
+2025,1,airport,CAE,"Columbia Metropolitan (Columbia, SC)",518.18,542.85,2026Q2,35315,"2025 domestic passengers, 10% sample",124,AverageFare_Q1_2025.xls
+2025,1,airport,DAY,"James M Cox/Dayton International (Dayton, OH)",480.59,503.47,2026Q2,35189,"2025 domestic passengers, 10% sample",125,AverageFare_Q1_2025.xls
+2025,1,airport,ECP,"Northwest Florida Beaches International (Panama City, FL)",463.82,485.9,2026Q2,33188,"2025 domestic passengers, 10% sample",126,AverageFare_Q1_2025.xls
+2025,1,airport,RDM,"Roberts Field (Bend/Redmond, OR)",453.78,475.39,2026Q2,33127,"2025 domestic passengers, 10% sample",127,AverageFare_Q1_2025.xls
+2025,1,airport,FAR,"Hector International (Fargo, ND)",432.3,452.88,2026Q2,32694,"2025 domestic passengers, 10% sample",128,AverageFare_Q1_2025.xls
+2025,1,airport,CHA,"Lovell Field (Chattanooga, TN)",518.06,542.72,2026Q2,31471,"2025 domestic passengers, 10% sample",129,AverageFare_Q1_2025.xls
+2025,1,airport,LBB,"Lubbock Preston Smith International (Lubbock, TX)",458.55,480.38,2026Q2,30395,"2025 domestic passengers, 10% sample",130,AverageFare_Q1_2025.xls
+2025,1,airport,ABE,"Lehigh Valley International (Allentown/Bethlehem/Easton, PA)",262.94,275.45,2026Q2,29795,"2025 domestic passengers, 10% sample",131,AverageFare_Q1_2025.xls
+2025,1,airport,HRL,"Valley International (Harlingen/San Benito, TX)",315.32,330.34,2026Q2,29191,"2025 domestic passengers, 10% sample",132,AverageFare_Q1_2025.xls
+2025,1,airport,ACY,"Atlantic City International (Atlantic City, NJ)",155.6,163.0,2026Q2,28530,"2025 domestic passengers, 10% sample",133,AverageFare_Q1_2025.xls
+2025,1,airport,MFR,"Rogue Valley International - Medford (Medford, OR)",445.32,466.52,2026Q2,28387,"2025 domestic passengers, 10% sample",134,AverageFare_Q1_2025.xls
+2025,1,airport,SBN,"South Bend International (South Bend, IN)",356.86,373.85,2026Q2,27926,"2025 domestic passengers, 10% sample",135,AverageFare_Q1_2025.xls
+2025,1,airport,PSC,"Tri Cities (Pasco/Kennewick/Richland, WA)",467.25,489.5,2026Q2,27906,"2025 domestic passengers, 10% sample",136,AverageFare_Q1_2025.xls
+2025,1,airport,FAI,"Fairbanks International (Fairbanks, AK)",545.11,571.07,2026Q2,27618,"2025 domestic passengers, 10% sample",137,AverageFare_Q1_2025.xls
+2025,1,airport,PVU,"Provo Municipal (Provo, UT)",177.17,185.61,2026Q2,27400,"2025 domestic passengers, 10% sample",138,AverageFare_Q1_2025.xls
+2025,1,airport,FWA,"Fort Wayne International (Fort Wayne, IN)",398.52,417.5,2026Q2,26685,"2025 domestic passengers, 10% sample",139,AverageFare_Q1_2025.xls
+2025,1,airport,TLH,"Tallahassee International (Tallahassee, FL)",567.18,594.18,2026Q2,25686,"2025 domestic passengers, 10% sample",140,AverageFare_Q1_2025.xls
+2025,1,airport,MSO,"Missoula Montana (Missoula, MT)",476.37,499.05,2026Q2,25558,"2025 domestic passengers, 10% sample",141,AverageFare_Q1_2025.xls
+2025,1,airport,CAK,"Akron-Canton Regional (Akron, OH)",281.83,295.25,2026Q2,25340,"2025 domestic passengers, 10% sample",142,AverageFare_Q1_2025.xls
+2025,1,airport,BIL,"Billings Logan International (Billings, MT)",473.57,496.12,2026Q2,25278,"2025 domestic passengers, 10% sample",143,AverageFare_Q1_2025.xls
+2025,1,airport,STT,"Cyril E King (Charlotte Amalie, VI)",420.62,440.65,2026Q2,23386,"2025 domestic passengers, 10% sample",144,AverageFare_Q1_2025.xls
+2025,1,airport,BTR,"Baton Rouge Metropolitan/Ryan Field (Baton Rouge, LA)",537.13,562.7,2026Q2,22788,"2025 domestic passengers, 10% sample",145,AverageFare_Q1_2025.xls
+2025,1,airport,PIA,"General Downing - Peoria International (Peoria, IL)",340.85,357.08,2026Q2,22607,"2025 domestic passengers, 10% sample",146,AverageFare_Q1_2025.xls
+2025,1,airport,STS,"Charles M. Schulz - Sonoma County (Santa Rosa, CA)",281.1,294.48,2026Q2,21711,"2025 domestic passengers, 10% sample",147,AverageFare_Q1_2025.xls
+2025,1,airport,AMA,"Rick Husband Amarillo International (Amarillo, TX)",460.02,481.93,2026Q2,21618,"2025 domestic passengers, 10% sample",148,AverageFare_Q1_2025.xls
+2025,1,airport,FCA,"Glacier Park International (Kalispell, MT)",506.92,531.06,2026Q2,21498,"2025 domestic passengers, 10% sample",149,AverageFare_Q1_2025.xls
+2025,1,airport,ROA,"Roanoke Blacksburg Regional (Roanoke, VA)",490.44,513.79,2026Q2,21008,"2025 domestic passengers, 10% sample",150,AverageFare_Q1_2025.xls
+2025,1,airport,BQN,"Rafael Hernandez (Aguadilla, PR)",245.73,257.43,2026Q2,20736,"2025 domestic passengers, 10% sample",151,AverageFare_Q1_2025.xls
+2025,1,airport,CHO,"Charlottesville Albemarle (Charlottesville, VA)",505.96,530.05,2026Q2,20466,"2025 domestic passengers, 10% sample",152,AverageFare_Q1_2025.xls
+2025,1,airport,MLI,"Quad Cities International (Moline, IL)",415.69,435.48,2026Q2,20094,"2025 domestic passengers, 10% sample",153,AverageFare_Q1_2025.xls
+2025,1,airport,RAP,"Rapid City Regional (Rapid City, SD)",435.41,456.14,2026Q2,20028,"2025 domestic passengers, 10% sample",154,AverageFare_Q1_2025.xls
+2025,1,airport,SBP,"San Luis Obispo County Regional (San Luis Obispo, CA)",482.49,505.47,2026Q2,19797,"2025 domestic passengers, 10% sample",155,AverageFare_Q1_2025.xls
+2025,1,airport,FNT,"Bishop International (Flint, MI)",229.18,240.09,2026Q2,19789,"2025 domestic passengers, 10% sample",156,AverageFare_Q1_2025.xls
+2025,1,airport,CRP,"Corpus Christi International (Corpus Christi, TX)",486.01,509.15,2026Q2,19530,"2025 domestic passengers, 10% sample",157,AverageFare_Q1_2025.xls
+2025,1,airport,PAE,"Seattle Paine Field International (Everett, WA)",404.7,423.97,2026Q2,19523,"2025 domestic passengers, 10% sample",158,AverageFare_Q1_2025.xls
+2025,1,airport,SHV,"Shreveport Regional (Shreveport, LA)",486.18,509.33,2026Q2,19446,"2025 domestic passengers, 10% sample",159,AverageFare_Q1_2025.xls
+2025,1,airport,TVC,"Cherry Capital (Traverse City, MI)",454.41,476.05,2026Q2,19320,"2025 domestic passengers, 10% sample",160,AverageFare_Q1_2025.xls
+2025,1,airport,BGR,"Bangor International (Bangor, ME)",346.14,362.62,2026Q2,19034,"2025 domestic passengers, 10% sample",161,AverageFare_Q1_2025.xls
+2025,1,airport,GRB,"Green Bay Austin Straubel International (Green Bay, WI)",570.34,597.5,2026Q2,18187,"2025 domestic passengers, 10% sample",162,AverageFare_Q1_2025.xls
+2025,1,airport,BIS,"Bismarck Municipal (Bismarck/Mandan, ND)",421.89,441.98,2026Q2,17904,"2025 domestic passengers, 10% sample",163,AverageFare_Q1_2025.xls
+2025,1,airport,BLI,"Bellingham International (Bellingham, WA)",299.2,313.44,2026Q2,17664,"2025 domestic passengers, 10% sample",164,AverageFare_Q1_2025.xls
+2025,1,airport,AGS,"Augusta Regional at Bush Field (Augusta, GA)",536.83,562.39,2026Q2,17458,"2025 domestic passengers, 10% sample",165,AverageFare_Q1_2025.xls
+2025,1,airport,IDA,"Idaho Falls Regional (Idaho Falls, ID)",448.92,470.3,2026Q2,17151,"2025 domestic passengers, 10% sample",166,AverageFare_Q1_2025.xls
+2025,1,airport,DAB,"Daytona Beach International (Daytona Beach, FL)",464.92,487.05,2026Q2,16860,"2025 domestic passengers, 10% sample",167,AverageFare_Q1_2025.xls
+2025,1,airport,JAC,"Jackson Hole (Jackson, WY)",605.36,634.18,2026Q2,16840,"2025 domestic passengers, 10% sample",168,AverageFare_Q1_2025.xls
+2025,1,airport,TTN,"Trenton Mercer (Trenton, NJ)",173.26,181.51,2026Q2,16828,"2025 domestic passengers, 10% sample",169,AverageFare_Q1_2025.xls
+2025,1,airport,GNV,"Gainesville Regional (Gainesville, FL)",602.28,630.96,2026Q2,16639,"2025 domestic passengers, 10% sample",170,AverageFare_Q1_2025.xls
+2025,1,airport,EYW,"Key West International (Key West, FL)",421.95,442.04,2026Q2,16616,"2025 domestic passengers, 10% sample",171,AverageFare_Q1_2025.xls
+2025,1,airport,GPT,"Gulfport-Biloxi International (Gulfport/Biloxi, MS)",465.53,487.7,2026Q2,16550,"2025 domestic passengers, 10% sample",172,AverageFare_Q1_2025.xls
+2025,1,airport,MOB,"Mobile Regional (Mobile, AL)",529.94,555.17,2026Q2,15611,"2025 domestic passengers, 10% sample",173,AverageFare_Q1_2025.xls
+2025,1,airport,LFT,"Lafayette Regional Paul Fournet Field (Lafayette, LA)",570.35,597.51,2026Q2,14541,"2025 domestic passengers, 10% sample",174,AverageFare_Q1_2025.xls
+2025,1,airport,MRY,"Monterey Regional (Monterey, CA)",455.56,477.25,2026Q2,14130,"2025 domestic passengers, 10% sample",175,AverageFare_Q1_2025.xls
+2025,1,airport,AVP,"Wilkes Barre Scranton International (Scranton/Wilkes-Barre, PA)",422.52,442.64,2026Q2,14115,"2025 domestic passengers, 10% sample",176,AverageFare_Q1_2025.xls
+2025,1,airport,JNU,"Juneau International (Juneau, AK)",503.53,527.51,2026Q2,14056,"2025 domestic passengers, 10% sample",177,AverageFare_Q1_2025.xls
+2025,1,airport,GJT,"Grand Junction Regional (Grand Junction, CO)",520.98,545.79,2026Q2,13880,"2025 domestic passengers, 10% sample",178,AverageFare_Q1_2025.xls
+2025,1,airport,TRI,"Tri Cities (Bristol/Johnson City/Kingsport, TN)",604.49,633.27,2026Q2,12639,"2025 domestic passengers, 10% sample",179,AverageFare_Q1_2025.xls
+2025,1,airport,MLB,"Melbourne Orlando International (Melbourne, FL)",514.81,539.32,2026Q2,12470,"2025 domestic passengers, 10% sample",180,AverageFare_Q1_2025.xls
+2025,1,airport,BRO,"Brownsville South Padre Island International (Brownsville, TX)",415.44,435.22,2026Q2,12172,"2025 domestic passengers, 10% sample",181,AverageFare_Q1_2025.xls
+2025,1,airport,BFL,"Meadows Field (Bakersfield, CA)",514.92,539.43,2026Q2,11994,"2025 domestic passengers, 10% sample",182,AverageFare_Q1_2025.xls
+2025,1,airport,DRO,"Durango La Plata County (Durango, CO)",569.75,596.88,2026Q2,11912,"2025 domestic passengers, 10% sample",183,AverageFare_Q1_2025.xls
+2025,1,airport,CRW,"West Virginia International Yeager (Charleston/Dunbar, WV)",491.21,514.6,2026Q2,11747,"2025 domestic passengers, 10% sample",184,AverageFare_Q1_2025.xls
+2025,1,airport,ASE,"Aspen Pitkin County Sardy Field (Aspen, CO)",703.81,737.31,2026Q2,11153,"2025 domestic passengers, 10% sample",185,AverageFare_Q1_2025.xls
+2025,1,airport,BLV,"Scott AFB MidAmerica St Louis (Belleville, IL)",149.83,156.96,2026Q2,11114,"2025 domestic passengers, 10% sample",186,AverageFare_Q1_2025.xls
+2025,1,airport,GTF,"Great Falls International (Great Falls, MT)",437.25,458.07,2026Q2,10663,"2025 domestic passengers, 10% sample",187,AverageFare_Q1_2025.xls
+2025,1,airport,EVV,"Evansville Regional (Evansville, IN)",539.1,564.77,2026Q2,10601,"2025 domestic passengers, 10% sample",188,AverageFare_Q1_2025.xls
+2025,1,airport,FAY,"Fayetteville Regional/Grannis Field (Fayetteville, NC)",494.44,517.98,2026Q2,10527,"2025 domestic passengers, 10% sample",189,AverageFare_Q1_2025.xls
+2025,1,airport,MOT,"Minot International (Minot, ND)",393.72,412.47,2026Q2,10415,"2025 domestic passengers, 10% sample",190,AverageFare_Q1_2025.xls
+2025,1,airport,LCK,"Rickenbacker International (Columbus, OH)",154.2,161.54,2026Q2,10393,"2025 domestic passengers, 10% sample",191,AverageFare_Q1_2025.xls
+2025,1,airport,MGM,"Montgomery Regional (Montgomery, AL)",516.36,540.94,2026Q2,10260,"2025 domestic passengers, 10% sample",192,AverageFare_Q1_2025.xls
+2025,1,airport,MTJ,"Montrose Regional (Montrose/Delta, CO)",450.9,472.36,2026Q2,10218,"2025 domestic passengers, 10% sample",193,AverageFare_Q1_2025.xls
+2025,1,airport,ILG,"New Castle (Wilmington, DE)",170.33,178.44,2026Q2,10215,"2025 domestic passengers, 10% sample",194,AverageFare_Q1_2025.xls
+2025,1,airport,LRD,"Laredo International (Laredo, TX)",441.4,462.41,2026Q2,9858,"2025 domestic passengers, 10% sample",195,AverageFare_Q1_2025.xls
+2025,1,airport,BMI,"Central Il Regional Airport at Bloomington (Bloomington/Normal, IL)",489.94,513.27,2026Q2,9540,"2025 domestic passengers, 10% sample",196,AverageFare_Q1_2025.xls
+2025,1,airport,ORH,"Worcester Regional (Worcester, MA)",291.03,304.89,2026Q2,9491,"2025 domestic passengers, 10% sample",197,AverageFare_Q1_2025.xls
+2025,1,airport,RFD,"Chicago/Rockford International (Rockford, IL)",195.16,204.45,2026Q2,9435,"2025 domestic passengers, 10% sample",198,AverageFare_Q1_2025.xls
+2025,1,airport,STX,"Henry E. Rohlsen (Christiansted, VI)",374.01,391.82,2026Q2,8986,"2025 domestic passengers, 10% sample",199,AverageFare_Q1_2025.xls
+2025,1,airport,OAJ,"Albert J Ellis (Jacksonville/Camp Lejeune, NC)",507.01,531.15,2026Q2,8903,"2025 domestic passengers, 10% sample",200,AverageFare_Q1_2025.xls
+2025,1,airport,PSE,"Mercedita (Ponce, PR)",228.26,239.12,2026Q2,8826,"2025 domestic passengers, 10% sample",201,AverageFare_Q1_2025.xls
+2025,1,airport,SGU,"St George Regional (St. George, UT)",540.99,566.75,2026Q2,7927,"2025 domestic passengers, 10% sample",202,AverageFare_Q1_2025.xls
+2025,1,airport,EGE,"Eagle County Regional (Eagle, CO)",642.07,672.64,2026Q2,7923,"2025 domestic passengers, 10% sample",203,AverageFare_Q1_2025.xls
+2025,1,airport,SAF,"Santa Fe Regional (Santa Fe, NM)",529.75,554.97,2026Q2,7660,"2025 domestic passengers, 10% sample",204,AverageFare_Q1_2025.xls
+2025,1,airport,SCE,"State College Regional (State College, PA)",619.84,649.35,2026Q2,7557,"2025 domestic passengers, 10% sample",205,AverageFare_Q1_2025.xls
+2025,1,airport,ACV,"California Redwood Coast Humboldt County (Arcata/Eureka, CA)",467.52,489.78,2026Q2,7528,"2025 domestic passengers, 10% sample",206,AverageFare_Q1_2025.xls
+2025,1,airport,DLH,"Duluth International (Duluth, MN)",544.87,570.81,2026Q2,7375,"2025 domestic passengers, 10% sample",207,AverageFare_Q1_2025.xls
+2025,1,airport,PBG,"Plattsburgh International (Plattsburgh, NY)",187.56,196.49,2026Q2,6860,"2025 domestic passengers, 10% sample",208,AverageFare_Q1_2025.xls
+2025,1,airport,LAN,"Capital Region International (Lansing, MI)",424.08,444.27,2026Q2,6720,"2025 domestic passengers, 10% sample",209,AverageFare_Q1_2025.xls
+2025,1,airport,HDN,"Yampa Valley (Hayden, CO)",430.52,451.01,2026Q2,6709,"2025 domestic passengers, 10% sample",210,AverageFare_Q1_2025.xls
+2025,1,airport,XWA,"Williston Basin International (Williston, ND)",588.63,616.65,2026Q2,6630,"2025 domestic passengers, 10% sample",211,AverageFare_Q1_2025.xls
+2025,1,airport,LNK,"Lincoln Airport (Lincoln, NE)",554.9,581.32,2026Q2,6629,"2025 domestic passengers, 10% sample",212,AverageFare_Q1_2025.xls
+2025,1,airport,USA,"Concord Padgett Regional (Concord, NC)",98.38,103.06,2026Q2,6582,"2025 domestic passengers, 10% sample",213,AverageFare_Q1_2025.xls
+2025,1,airport,SWF,"New York Stewart International (Newburgh/Poughkeepsie, NY)",135.55,142.01,2026Q2,6432,"2025 domestic passengers, 10% sample",214,AverageFare_Q1_2025.xls
+2025,1,airport,MBS,"MBS International (Saginaw/Bay City/Midland, MI)",561.53,588.27,2026Q2,6283,"2025 domestic passengers, 10% sample",215,AverageFare_Q1_2025.xls
+2025,1,airport,HTS,"Tri-State/Milton J. Ferguson Field (Ashland, WV)",291.82,305.72,2026Q2,6189,"2025 domestic passengers, 10% sample",216,AverageFare_Q1_2025.xls
+2025,1,airport,MLU,"Monroe Regional (Monroe, LA)",602.26,630.94,2026Q2,6137,"2025 domestic passengers, 10% sample",217,AverageFare_Q1_2025.xls
+2025,1,airport,GRK,"Robert Gray AAF (Killeen, TX)",614.54,643.79,2026Q2,5882,"2025 domestic passengers, 10% sample",218,AverageFare_Q1_2025.xls
+2025,1,airport,LBE,"Arnold Palmer Regional (Latrobe, PA)",172.0,180.19,2026Q2,5672,"2025 domestic passengers, 10% sample",219,AverageFare_Q1_2025.xls
+2025,1,airport,AZO,"Kalamazoo/Battle Creek International (Kalamazoo, MI)",571.36,598.56,2026Q2,5637,"2025 domestic passengers, 10% sample",220,AverageFare_Q1_2025.xls
+2025,1,airport,HLN,"Helena Regional (Helena, MT)",556.3,582.78,2026Q2,5609,"2025 domestic passengers, 10% sample",221,AverageFare_Q1_2025.xls
+2025,1,airport,ABI,"Abilene Regional (Abilene, TX)",581.69,609.38,2026Q2,5572,"2025 domestic passengers, 10% sample",222,AverageFare_Q1_2025.xls
+2025,1,airport,ELM,"Elmira/Corning Regional (Elmira/Corning, NY)",311.17,325.98,2026Q2,5534,"2025 domestic passengers, 10% sample",223,AverageFare_Q1_2025.xls
+2025,1,airport,CPR,"Casper/Natrona County International (Casper, WY)",570.64,597.81,2026Q2,5500,"2025 domestic passengers, 10% sample",224,AverageFare_Q1_2025.xls
+2025,1,airport,BET,"Bethel Airport (Bethel, AK)",476.16,498.83,2026Q2,5442,"2025 domestic passengers, 10% sample",225,AverageFare_Q1_2025.xls
+2025,1,airport,ACK,"Nantucket Memorial (Nantucket, MA)",673.65,705.73,2026Q2,5436,"2025 domestic passengers, 10% sample",226,AverageFare_Q1_2025.xls
+2025,1,airport,LCH,"Lake Charles Regional (Lake Charles, LA)",498.8,522.55,2026Q2,5431,"2025 domestic passengers, 10% sample",227,AverageFare_Q1_2025.xls
+2025,1,airport,GFK,"Grand Forks International (Grand Forks, ND)",420.65,440.67,2026Q2,5419,"2025 domestic passengers, 10% sample",228,AverageFare_Q1_2025.xls
+2025,1,airport,KTN,"Ketchikan International (Ketchikan, AK)",515.09,539.61,2026Q2,5377,"2025 domestic passengers, 10% sample",229,AverageFare_Q1_2025.xls
+2025,1,airport,CWA,"Central Wisconsin (Mosinee, WI)",702.45,735.89,2026Q2,5375,"2025 domestic passengers, 10% sample",230,AverageFare_Q1_2025.xls
+2025,1,airport,COU,"Columbia Regional (Columbia, MO)",677.4,709.65,2026Q2,5375,"2025 domestic passengers, 10% sample",230,AverageFare_Q1_2025.xls
+2025,1,airport,RDD,"Redding Regional (Redding, CA)",489.24,512.54,2026Q2,5149,"2025 domestic passengers, 10% sample",232,AverageFare_Q1_2025.xls
+2025,1,airport,EWN,"Coastal Carolina Regional (New Bern/Morehead/Beaufort, NC)",523.38,548.3,2026Q2,5024,"2025 domestic passengers, 10% sample",233,AverageFare_Q1_2025.xls
+2025,1,airport,AEX,"Alexandria International (Alexandria, LA)",592.88,621.11,2026Q2,5014,"2025 domestic passengers, 10% sample",234,AverageFare_Q1_2025.xls
+2025,1,airport,LYH,"Lynchburg Regional/Preston Glenn Field (Lynchburg, VA)",575.34,602.73,2026Q2,4980,"2025 domestic passengers, 10% sample",235,AverageFare_Q1_2025.xls
+2025,1,airport,MHK,"Manhattan Regional (Manhattan/Ft. Riley, KS)",587.41,615.38,2026Q2,4941,"2025 domestic passengers, 10% sample",236,AverageFare_Q1_2025.xls
+2025,1,airport,SUN,"Friedman Memorial (Sun Valley/Hailey/Ketchum, ID)",609.81,638.84,2026Q2,4889,"2025 domestic passengers, 10% sample",237,AverageFare_Q1_2025.xls
+2025,1,airport,CMI,"University of Illinois/Willard (Champaign/Urbana, IL)",617.17,646.56,2026Q2,4867,"2025 domestic passengers, 10% sample",238,AverageFare_Q1_2025.xls
+2025,1,airport,RST,"Rochester International (Rochester, MN)",552.87,579.2,2026Q2,4832,"2025 domestic passengers, 10% sample",239,AverageFare_Q1_2025.xls
+2025,1,airport,VRB,"Vero Beach Regional (Vero Beach, FL)",160.21,167.84,2026Q2,4646,"2025 domestic passengers, 10% sample",240,AverageFare_Q1_2025.xls
+2025,1,airport,GUM,"Guam International (Guam, TT)",1550.03,1623.83,2026Q2,4466,"2025 domestic passengers, 10% sample",241,AverageFare_Q1_2025.xls
+2025,1,airport,TOL,"Eugene F Kranz Toledo Express (Toledo, OH)",192.39,201.55,2026Q2,4355,"2025 domestic passengers, 10% sample",242,AverageFare_Q1_2025.xls
+2025,1,airport,IAG,"Niagara Falls International (Niagara Falls, NY)",161.77,169.48,2026Q2,4190,"2025 domestic passengers, 10% sample",243,AverageFare_Q1_2025.xls
+2025,1,airport,YUM,"Yuma MCAS/Yuma International (Yuma, AZ)",679.33,711.67,2026Q2,4071,"2025 domestic passengers, 10% sample",244,AverageFare_Q1_2025.xls
+2025,1,airport,PHF,"Newport News/Williamsburg International (Newport News/Williamsburg, VA)",531.3,556.59,2026Q2,3955,"2025 domestic passengers, 10% sample",245,AverageFare_Q1_2025.xls
+2025,1,airport,SCK,"Stockton Metro (Stockton, CA)",120.82,126.57,2026Q2,3948,"2025 domestic passengers, 10% sample",246,AverageFare_Q1_2025.xls
+2025,1,airport,ITH,"Ithaca Tompkins International (Ithaca/Cortland, NY)",522.45,547.32,2026Q2,3911,"2025 domestic passengers, 10% sample",247,AverageFare_Q1_2025.xls
+2025,1,airport,GRI,"Central Nebraska Regional (Grand Island, NE)",331.98,347.79,2026Q2,3849,"2025 domestic passengers, 10% sample",248,AverageFare_Q1_2025.xls
+2025,1,airport,PSM,"Portsmouth International at Pease (Portsmouth, NH)",155.77,163.19,2026Q2,3847,"2025 domestic passengers, 10% sample",249,AverageFare_Q1_2025.xls
+2025,1,airport,SIT,"Sitka Rocky Gutierrez (Sitka, AK)",482.15,505.11,2026Q2,3745,"2025 domestic passengers, 10% sample",250,AverageFare_Q1_2025.xls
+2025,1,airport,CLL,"Easterwood Field (College Station/Bryan, TX)",596.03,624.41,2026Q2,3669,"2025 domestic passengers, 10% sample",251,AverageFare_Q1_2025.xls
+2025,1,airport,PUW,"Pullman Moscow Regional (Pullman, WA)",449.72,471.13,2026Q2,3643,"2025 domestic passengers, 10% sample",252,AverageFare_Q1_2025.xls
+2025,1,airport,HHH,"Hilton Head Airport (Hilton Head, SC)",451.43,472.92,2026Q2,3578,"2025 domestic passengers, 10% sample",253,AverageFare_Q1_2025.xls
+2025,1,airport,FLG,"Flagstaff Pulliam (Flagstaff, AZ)",626.03,655.84,2026Q2,3507,"2025 domestic passengers, 10% sample",254,AverageFare_Q1_2025.xls
+2025,1,airport,ADQ,"Kodiak Airport (Kodiak, AK)",566.49,593.46,2026Q2,3500,"2025 domestic passengers, 10% sample",255,AverageFare_Q1_2025.xls
+2025,1,airport,SPI,"Abraham Lincoln Capital (Springfield, IL)",234.51,245.67,2026Q2,3455,"2025 domestic passengers, 10% sample",256,AverageFare_Q1_2025.xls
+2025,1,airport,LWS,"Lewiston Nez Perce County (Lewiston, ID)",539.46,565.15,2026Q2,3448,"2025 domestic passengers, 10% sample",257,AverageFare_Q1_2025.xls
+2025,1,airport,SBY,"Salisbury-Ocean City/Wicomico Regional (Salisbury, MD)",684.07,716.64,2026Q2,3343,"2025 domestic passengers, 10% sample",258,AverageFare_Q1_2025.xls
+2025,1,airport,TYR,"Tyler Pounds Regional (Tyler, TX)",621.54,651.13,2026Q2,3286,"2025 domestic passengers, 10% sample",259,AverageFare_Q1_2025.xls
+2025,1,airport,ACT,"Waco Regional (Waco, TX)",582.42,610.15,2026Q2,3244,"2025 domestic passengers, 10% sample",260,AverageFare_Q1_2025.xls
+2025,1,airport,MVY,"Martha's Vineyard Airport (Martha's Vineyard, MA)",729.66,764.4,2026Q2,3230,"2025 domestic passengers, 10% sample",261,AverageFare_Q1_2025.xls
+2025,1,airport,FSM,"Fort Smith Regional (Fort Smith, AR)",683.73,716.28,2026Q2,3187,"2025 domestic passengers, 10% sample",262,AverageFare_Q1_2025.xls
+2025,1,airport,CSG,"Columbus Airport (Columbus, GA)",582.72,610.46,2026Q2,3020,"2025 domestic passengers, 10% sample",263,AverageFare_Q1_2025.xls
+2025,1,airport,ERI,"Erie International/Tom Ridge Field (Erie, PA)",376.49,394.41,2026Q2,2916,"2025 domestic passengers, 10% sample",264,AverageFare_Q1_2025.xls
+2025,1,airport,VLD,"Valdosta Regional (Valdosta, GA)",655.64,686.86,2026Q2,2803,"2025 domestic passengers, 10% sample",265,AverageFare_Q1_2025.xls
+2025,1,airport,HGR,"Hagerstown Regional-Richard A. Henson Field (Hagerstown, MD)",125.64,131.62,2026Q2,2783,"2025 domestic passengers, 10% sample",266,AverageFare_Q1_2025.xls
+2025,1,airport,SJT,"San Angelo Regional/Mathis Field (San Angelo, TX)",673.59,705.66,2026Q2,2754,"2025 domestic passengers, 10% sample",267,AverageFare_Q1_2025.xls
+2025,1,airport,ROW,"Roswell Air Center (Roswell, NM)",532.69,558.05,2026Q2,2702,"2025 domestic passengers, 10% sample",268,AverageFare_Q1_2025.xls
+2025,1,airport,EAT,"Pangborn Memorial (Wenatchee, WA)",565.35,592.27,2026Q2,2587,"2025 domestic passengers, 10% sample",269,AverageFare_Q1_2025.xls
+2025,1,airport,PGV,"Pitt Greenville (Greenville, NC)",516.68,541.28,2026Q2,2490,"2025 domestic passengers, 10% sample",270,AverageFare_Q1_2025.xls
+2025,1,airport,YKM,"Yakima Air Terminal/McAllister Field (Yakima, WA)",536.58,562.12,2026Q2,2476,"2025 domestic passengers, 10% sample",271,AverageFare_Q1_2025.xls
+2025,1,airport,GTR,"Golden Triangle Regional (Columbus, MS)",653.75,684.88,2026Q2,2412,"2025 domestic passengers, 10% sample",272,AverageFare_Q1_2025.xls
+2025,1,airport,LAW,"Lawton-Fort Sill Regional (Lawton/Fort Sill, OK)",574.08,601.42,2026Q2,2405,"2025 domestic passengers, 10% sample",273,AverageFare_Q1_2025.xls
+2025,1,airport,TXK,"Texarkana Regional-Webb Field (Texarkana, AR)",577.99,605.51,2026Q2,2325,"2025 domestic passengers, 10% sample",274,AverageFare_Q1_2025.xls
+2025,1,airport,MQT,"Marquette Sawyer Regional (Marquette, MI)",655.48,686.69,2026Q2,2316,"2025 domestic passengers, 10% sample",275,AverageFare_Q1_2025.xls
+2025,1,airport,OME,"Nome Airport (Nome, AK)",585.08,612.94,2026Q2,2311,"2025 domestic passengers, 10% sample",276,AverageFare_Q1_2025.xls
+2025,1,airport,CKB,"North Central West Virginia (Clarksburg/Fairmont, WV)",213.98,224.17,2026Q2,2195,"2025 domestic passengers, 10% sample",277,AverageFare_Q1_2025.xls
+2025,1,airport,GGG,"East Texas Regional (Longview, TX)",554.99,581.42,2026Q2,2190,"2025 domestic passengers, 10% sample",278,AverageFare_Q1_2025.xls
+2025,1,airport,BPT,"Jack Brooks Regional (Beaumont/Port Arthur, TX)",510.76,535.08,2026Q2,2120,"2025 domestic passengers, 10% sample",279,AverageFare_Q1_2025.xls
+2025,1,airport,OTZ,"Ralph Wien Memorial (Kotzebue, AK)",575.23,602.62,2026Q2,2107,"2025 domestic passengers, 10% sample",280,AverageFare_Q1_2025.xls
+2025,1,airport,SWO,"Stillwater Regional (Stillwater, OK)",561.76,588.51,2026Q2,2029,"2025 domestic passengers, 10% sample",281,AverageFare_Q1_2025.xls
+2025,1,airport,SLE,"McNary Field (Salem, OR)",127.36,133.42,2026Q2,1979,"2025 domestic passengers, 10% sample",282,AverageFare_Q1_2025.xls
+2025,1,airport,ALW,"Walla Walla Regional (Walla Walla, WA)",424.0,444.19,2026Q2,1977,"2025 domestic passengers, 10% sample",283,AverageFare_Q1_2025.xls
+2025,1,airport,DHN,"Dothan Regional (Dothan, AL)",764.73,801.14,2026Q2,1974,"2025 domestic passengers, 10% sample",284,AverageFare_Q1_2025.xls
+2025,1,airport,PPG,"Pago Pago International (Pago Pago, TT)",1264.33,1324.53,2026Q2,1942,"2025 domestic passengers, 10% sample",285,AverageFare_Q1_2025.xls
+2025,1,airport,LSE,"La Crosse Regional (La Crosse, WI)",684.75,717.35,2026Q2,1939,"2025 domestic passengers, 10% sample",286,AverageFare_Q1_2025.xls
+2025,1,airport,SCC,"Deadhorse Airport (Deadhorse, AK)",564.12,590.98,2026Q2,1933,"2025 domestic passengers, 10% sample",287,AverageFare_Q1_2025.xls
+2025,1,airport,BRW,"Wiley Post/Will Rogers Memorial (Barrow, AK)",566.74,593.72,2026Q2,1914,"2025 domestic passengers, 10% sample",288,AverageFare_Q1_2025.xls
+2025,1,airport,SPS,"Sheppard AFB/Wichita Falls Municipal (Wichita Falls, TX)",530.84,556.12,2026Q2,1907,"2025 domestic passengers, 10% sample",289,AverageFare_Q1_2025.xls
+2025,1,airport,BQK,"Brunswick Golden Isles (Brunswick, GA)",610.31,639.37,2026Q2,1856,"2025 domestic passengers, 10% sample",290,AverageFare_Q1_2025.xls
+2025,1,airport,TWF,"Joslin Field - Magic Valley Regional (Twin Falls, ID)",752.41,788.23,2026Q2,1848,"2025 domestic passengers, 10% sample",291,AverageFare_Q1_2025.xls
+2025,1,airport,BGM,"Greater Binghamton/Edwin A. Link Field (Binghamton, NY)",491.47,514.87,2026Q2,1769,"2025 domestic passengers, 10% sample",292,AverageFare_Q1_2025.xls
+2025,1,airport,CYS,"Cheyenne Regional/Jerry Olson Field (Cheyenne, WY)",555.35,581.79,2026Q2,1741,"2025 domestic passengers, 10% sample",293,AverageFare_Q1_2025.xls
+2025,1,airport,BJI,"Bemidji Regional (Bemidji, MN)",740.41,775.66,2026Q2,1737,"2025 domestic passengers, 10% sample",294,AverageFare_Q1_2025.xls
+2025,1,airport,STC,"St. Cloud Regional (St. Cloud, MN)",211.42,221.49,2026Q2,1726,"2025 domestic passengers, 10% sample",295,AverageFare_Q1_2025.xls
+2025,1,airport,GUC,"Gunnison-Crested Butte Regional (Gunnison, CO)",581.83,609.53,2026Q2,1725,"2025 domestic passengers, 10% sample",296,AverageFare_Q1_2025.xls
+2025,1,airport,ABY,"Southwest Georgia Regional (Albany, GA)",698.08,731.31,2026Q2,1697,"2025 domestic passengers, 10% sample",297,AverageFare_Q1_2025.xls
+2025,1,airport,CIU,"Chippewa County International (Sault Ste. Marie, MI)",767.43,803.97,2026Q2,1670,"2025 domestic passengers, 10% sample",298,AverageFare_Q1_2025.xls
+2025,1,airport,GCC,"Northeast Wyoming Regional (Gillette, WY)",622.49,652.13,2026Q2,1653,"2025 domestic passengers, 10% sample",299,AverageFare_Q1_2025.xls
+2025,1,airport,COD,"Yellowstone Regional (Cody, WY)",527.58,552.69,2026Q2,1631,"2025 domestic passengers, 10% sample",300,AverageFare_Q1_2025.xls
+2025,1,airport,GCK,"Garden City Regional (Garden City, KS)",558.8,585.4,2026Q2,1613,"2025 domestic passengers, 10% sample",301,AverageFare_Q1_2025.xls
+2025,1,airport,FLO,"Florence Regional (Florence, SC)",524.9,549.9,2026Q2,1496,"2025 domestic passengers, 10% sample",302,AverageFare_Q1_2025.xls
+2025,1,airport,SHR,"Sheridan County (Sheridan, WY)",696.74,729.92,2026Q2,1488,"2025 domestic passengers, 10% sample",303,AverageFare_Q1_2025.xls
+2025,1,airport,ART,"Watertown International (Watertown, NY)",460.04,481.94,2026Q2,1484,"2025 domestic passengers, 10% sample",304,AverageFare_Q1_2025.xls
+2025,1,airport,HOB,"Lea County Regional (Hobbs, NM)",434.18,454.85,2026Q2,1481,"2025 domestic passengers, 10% sample",305,AverageFare_Q1_2025.xls
+2025,1,airport,DIK,"Dickinson - Theodore Roosevelt Regional (Dickinson, ND)",540.46,566.2,2026Q2,1442,"2025 domestic passengers, 10% sample",306,AverageFare_Q1_2025.xls
+2025,1,airport,RHI,"Rhinelander/Oneida County (Rhinelander, WI)",797.67,835.65,2026Q2,1431,"2025 domestic passengers, 10% sample",307,AverageFare_Q1_2025.xls
+2025,1,airport,PLN,"Pellston Regional Emmet County (Pellston, MI)",811.18,849.81,2026Q2,1430,"2025 domestic passengers, 10% sample",308,AverageFare_Q1_2025.xls
+2025,1,airport,ABR,"Aberdeen Regional (Aberdeen, SD)",789.78,827.38,2026Q2,1417,"2025 domestic passengers, 10% sample",309,AverageFare_Q1_2025.xls
+2025,1,airport,PIH,"Pocatello Regional (Pocatello, ID)",749.19,784.86,2026Q2,1386,"2025 domestic passengers, 10% sample",310,AverageFare_Q1_2025.xls
+2025,1,airport,DLG,"Dillingham Airport (Dillingham, AK)",554.22,580.61,2026Q2,1385,"2025 domestic passengers, 10% sample",311,AverageFare_Q1_2025.xls
+2025,1,airport,LAL,"Lakeland Linder International (Lakeland, FL)",122.99,128.84,2026Q2,1361,"2025 domestic passengers, 10% sample",312,AverageFare_Q1_2025.xls
+2025,1,airport,SPN,"Francisco C. Ada Saipan International (Saipan, TT)",515.32,539.85,2026Q2,1357,"2025 domestic passengers, 10% sample",313,AverageFare_Q1_2025.xls
+2025,1,airport,PQI,"Presque Isle International (Presque Isle/Houlton, ME)",305.76,320.32,2026Q2,1349,"2025 domestic passengers, 10% sample",314,AverageFare_Q1_2025.xls
+2025,1,airport,SBD,"San Bernardino International (San Bernardino, CA)",108.9,114.08,2026Q2,1217,"2025 domestic passengers, 10% sample",315,AverageFare_Q1_2025.xls
+2025,1,airport,EAU,"Chippewa Valley Regional (Eau Claire, WI)",369.24,386.82,2026Q2,1210,"2025 domestic passengers, 10% sample",316,AverageFare_Q1_2025.xls
+2025,1,airport,RKS,"Southwest Wyoming Regional (Rock Springs, WY)",532.34,557.69,2026Q2,1198,"2025 domestic passengers, 10% sample",317,AverageFare_Q1_2025.xls
+2025,1,airport,IMT,"Ford (Iron Mountain/Kingsfd, MI)",610.27,639.33,2026Q2,1197,"2025 domestic passengers, 10% sample",318,AverageFare_Q1_2025.xls
+2025,1,airport,RIW,"Central Wyoming Regional (Riverton/Lander, WY)",532.53,557.88,2026Q2,1179,"2025 domestic passengers, 10% sample",319,AverageFare_Q1_2025.xls
+2025,1,airport,OGD,"Ogden-Hinckley (Ogden, UT)",146.34,153.31,2026Q2,1155,"2025 domestic passengers, 10% sample",320,AverageFare_Q1_2025.xls
+2025,1,airport,CMX,"Houghton County Memorial (Hancock/Houghton, MI)",550.18,576.37,2026Q2,1092,"2025 domestic passengers, 10% sample",321,AverageFare_Q1_2025.xls
+2025,1,airport,SUX,"Sioux Gateway Brig Gen Bud Day Field (Sioux City, IA)",481.35,504.27,2026Q2,1055,"2025 domestic passengers, 10% sample",322,AverageFare_Q1_2025.xls
+2025,1,airport,PSG,"Petersburg James A Johnson (Petersburg, AK)",464.17,486.27,2026Q2,1000,"2025 domestic passengers, 10% sample",323,AverageFare_Q1_2025.xls
+2025,1,airport,BRD,"Brainerd Lakes Regional (Brainerd, MN)",719.73,754.0,2026Q2,964,"2025 domestic passengers, 10% sample",324,AverageFare_Q1_2025.xls
+2025,1,airport,LAR,"Laramie Regional (Laramie, WY)",513.07,537.49,2026Q2,961,"2025 domestic passengers, 10% sample",325,AverageFare_Q1_2025.xls
+2025,1,airport,AKN,"King Salmon Airport (King Salmon, AK)",608.66,637.64,2026Q2,959,"2025 domestic passengers, 10% sample",326,AverageFare_Q1_2025.xls
+2025,1,airport,ESC,"Delta County (Escanaba, MI)",671.2,703.16,2026Q2,951,"2025 domestic passengers, 10% sample",327,AverageFare_Q1_2025.xls
+2025,1,airport,HYA,"Cape Cod Gateway (Hyannis, MA)",425.2,445.44,2026Q2,950,"2025 domestic passengers, 10% sample",328,AverageFare_Q1_2025.xls
+2025,1,airport,LBF,"North Platte Regional Airport Lee Bird Field (North Platte, NE)",557.01,583.53,2026Q2,919,"2025 domestic passengers, 10% sample",329,AverageFare_Q1_2025.xls
+2025,1,airport,BTM,"Bert Mooney (Butte, MT)",458.36,480.19,2026Q2,907,"2025 domestic passengers, 10% sample",330,AverageFare_Q1_2025.xls
+2025,1,airport,MEI,"Key Field (Meridian, MS)",543.88,569.77,2026Q2,844,"2025 domestic passengers, 10% sample",331,AverageFare_Q1_2025.xls
+2025,1,airport,JST,"John Murtha Johnstown-Cambria County (Johnstown, PA)",506.47,530.59,2026Q2,813,"2025 domestic passengers, 10% sample",332,AverageFare_Q1_2025.xls
+2025,1,airport,CDV,"Merle K Mudhole Smith (Cordova, AK)",515.43,539.97,2026Q2,811,"2025 domestic passengers, 10% sample",333,AverageFare_Q1_2025.xls
+2025,1,airport,VCT,"Victoria Regional (Victoria, TX)",521.82,546.66,2026Q2,783,"2025 domestic passengers, 10% sample",334,AverageFare_Q1_2025.xls
+2025,1,airport,OTH,"Southwest Oregon Regional (North Bend/Coos Bay, OR)",522.51,547.39,2026Q2,780,"2025 domestic passengers, 10% sample",335,AverageFare_Q1_2025.xls
+2025,1,airport,EKO,"Elko Regional (Elko, NV)",776.44,813.41,2026Q2,773,"2025 domestic passengers, 10% sample",336,AverageFare_Q1_2025.xls
+2025,1,airport,SLN,"Salina Regional (Salina, KS)",434.13,454.8,2026Q2,764,"2025 domestic passengers, 10% sample",337,AverageFare_Q1_2025.xls
+2025,1,airport,SMX,"Santa Maria Public/Capt. G. Allan Hancock Field (Santa Maria, CA)",100.96,105.77,2026Q2,739,"2025 domestic passengers, 10% sample",338,AverageFare_Q1_2025.xls
+2025,1,airport,HYS,"Hays Regional (Hays, KS)",463.24,485.3,2026Q2,735,"2025 domestic passengers, 10% sample",339,AverageFare_Q1_2025.xls
+2025,1,airport,CDC,"Cedar City Regional (Cedar City, UT)",494.6,518.15,2026Q2,732,"2025 domestic passengers, 10% sample",340,AverageFare_Q1_2025.xls
+2025,1,airport,APN,"Alpena County Regional (Alpena, MI)",715.75,749.83,2026Q2,707,"2025 domestic passengers, 10% sample",341,AverageFare_Q1_2025.xls
+2025,1,airport,JLN,"Joplin Regional (Joplin, MO)",487.79,511.02,2026Q2,681,"2025 domestic passengers, 10% sample",342,AverageFare_Q1_2025.xls
+2025,1,airport,HIB,"Range Regional (Hibbing, MN)",628.15,658.06,2026Q2,660,"2025 domestic passengers, 10% sample",343,AverageFare_Q1_2025.xls
+2025,1,airport,BFF,"Scottsbluff W Neb Regional Wm B Heilig Field (Scottsbluff, NE)",484.69,507.76,2026Q2,635,"2025 domestic passengers, 10% sample",344,AverageFare_Q1_2025.xls
+2025,1,airport,WRG,"Wrangell Airport (Wrangell, AK)",565.39,592.31,2026Q2,631,"2025 domestic passengers, 10% sample",345,AverageFare_Q1_2025.xls
+2025,1,airport,EAR,"Kearney Regional (Kearney, NE)",514.0,538.48,2026Q2,618,"2025 domestic passengers, 10% sample",346,AverageFare_Q1_2025.xls
+2025,1,airport,DEC,"Decatur Airport (Decatur, IL)",465.83,488.01,2026Q2,596,"2025 domestic passengers, 10% sample",347,AverageFare_Q1_2025.xls
+2025,1,airport,INL,"Falls International Einarson Field (International Falls, MN)",776.58,813.55,2026Q2,580,"2025 domestic passengers, 10% sample",348,AverageFare_Q1_2025.xls
+2025,1,airport,PRC,"Prescott Regional Ernest A Love Field (Prescott, AZ)",519.59,544.33,2026Q2,525,"2025 domestic passengers, 10% sample",349,AverageFare_Q1_2025.xls
+2025,1,airport,PIR,"Pierre Regional (Pierre, SD)",698.27,731.52,2026Q2,507,"2025 domestic passengers, 10% sample",350,AverageFare_Q1_2025.xls
+2025,1,airport,ALO,"Waterloo Regional (Waterloo, IA)",472.09,494.56,2026Q2,493,"2025 domestic passengers, 10% sample",351,AverageFare_Q1_2025.xls
+2025,1,airport,PIB,"Hattiesburg-Laurel Regional (Hattiesburg/Laurel, MS)",465.78,487.95,2026Q2,484,"2025 domestic passengers, 10% sample",352,AverageFare_Q1_2025.xls
+2025,1,airport,JMS,"Jamestown Regional (Jamestown, ND)",449.93,471.35,2026Q2,407,"2025 domestic passengers, 10% sample",353,AverageFare_Q1_2025.xls
+2025,1,airport,DVL,"Devils Lake Regional (Devils Lake, ND)",454.99,476.65,2026Q2,390,"2025 domestic passengers, 10% sample",354,AverageFare_Q1_2025.xls
+2025,1,airport,DBQ,"Dubuque Regional (Dubuque, IA)",482.16,505.12,2026Q2,388,"2025 domestic passengers, 10% sample",355,AverageFare_Q1_2025.xls
+2025,1,airport,LBL,"Liberal Mid-America Regional (Liberal, KS)",434.49,455.17,2026Q2,386,"2025 domestic passengers, 10% sample",356,AverageFare_Q1_2025.xls
+2025,1,airport,DDC,"Dodge City Regional (Dodge City, KS)",436.2,456.96,2026Q2,384,"2025 domestic passengers, 10% sample",357,AverageFare_Q1_2025.xls
+2025,1,airport,PAH,"Barkley Regional (Paducah, KY)",673.57,705.64,2026Q2,376,"2025 domestic passengers, 10% sample",358,AverageFare_Q1_2025.xls
+2025,1,airport,BFM,"Mobile International (Mobile, AL)",80.61,84.45,2026Q2,371,"2025 domestic passengers, 10% sample",359,AverageFare_Q1_2025.xls
+2025,1,airport,YAK,"Yakutat Airport (Yakutat, AK)",573.13,600.42,2026Q2,370,"2025 domestic passengers, 10% sample",360,AverageFare_Q1_2025.xls
+2025,1,airport,SHD,"Shenandoah Valley Regional (Staunton, VA)",567.7,594.73,2026Q2,349,"2025 domestic passengers, 10% sample",361,AverageFare_Q1_2025.xls
+2025,1,airport,LNS,"Lancaster Airport (Lancaster, PA)",186.27,195.13,2026Q2,320,"2025 domestic passengers, 10% sample",362,AverageFare_Q1_2025.xls
+2025,1,airport,VEL,"Vernal Regional (Vernal, UT)",615.29,644.59,2026Q2,303,"2025 domestic passengers, 10% sample",363,AverageFare_Q1_2025.xls
+2025,1,airport,FOD,"Fort Dodge Regional (Fort Dodge, IA)",423.53,443.7,2026Q2,298,"2025 domestic passengers, 10% sample",364,AverageFare_Q1_2025.xls
+2025,1,airport,BIH,"Bishop Airport (Bishop, CA)",477.63,500.37,2026Q2,296,"2025 domestic passengers, 10% sample",365,AverageFare_Q1_2025.xls
+2025,1,airport,ALS,"San Luis Valley Regional/Bergman Field (Alamosa, CO)",528.76,553.94,2026Q2,295,"2025 domestic passengers, 10% sample",366,AverageFare_Q1_2025.xls
+2025,1,airport,ATY,"Watertown Regional (Watertown, SD)",524.51,549.49,2026Q2,281,"2025 domestic passengers, 10% sample",367,AverageFare_Q1_2025.xls
+2025,1,airport,CVN,"Clovis Regional (Clovis, NM)",540.87,566.62,2026Q2,247,"2025 domestic passengers, 10% sample",368,AverageFare_Q1_2025.xls
+2025,1,airport,CNY,"Canyonlands Regional (Moab, UT)",444.5,465.66,2026Q2,241,"2025 domestic passengers, 10% sample",369,AverageFare_Q1_2025.xls
+2025,1,airport,LWB,"Greenbrier Valley (Lewisburg, WV)",508.22,532.42,2026Q2,236,"2025 domestic passengers, 10% sample",370,AverageFare_Q1_2025.xls
+2025,1,airport,LEB,"Lebanon Municipal (Lebanon-Hanover, NH)",450.83,472.29,2026Q2,231,"2025 domestic passengers, 10% sample",371,AverageFare_Q1_2025.xls
+2025,1,airport,MWA,"Veterans Airport of Southern Illinois (Marion/Herrin, IL)",566.6,593.58,2026Q2,227,"2025 domestic passengers, 10% sample",372,AverageFare_Q1_2025.xls
+2025,1,airport,MCW,"Mason City Municipal (Mason City, IA)",464.01,486.1,2026Q2,219,"2025 domestic passengers, 10% sample",373,AverageFare_Q1_2025.xls
+2025,1,airport,BKW,"Raleigh County Memorial (Beckley, WV)",643.14,673.76,2026Q2,206,"2025 domestic passengers, 10% sample",374,AverageFare_Q1_2025.xls
+2025,1,airport,OGS,"Ogdensburg International (Ogdensburg, NY)",129.09,135.24,2026Q2,204,"2025 domestic passengers, 10% sample",375,AverageFare_Q1_2025.xls
+2025,1,airport,MGW,"Morgantown Municipal Walter L Bill Hart Field (Morgantown, WV)",548.72,574.84,2026Q2,201,"2025 domestic passengers, 10% sample",376,AverageFare_Q1_2025.xls
+2025,1,airport,BHB,"Hancock County-Bar Harbor (Bar Harbor, ME)",465.81,487.99,2026Q2,193,"2025 domestic passengers, 10% sample",377,AverageFare_Q1_2025.xls
+2025,1,airport,TBN,"Waynesville-St. Robert Regional Forney Field (Fort Leonard Wood, MO)",416.43,436.26,2026Q2,177,"2025 domestic passengers, 10% sample",378,AverageFare_Q1_2025.xls
+2025,1,airport,PKB,"Mid-Ohio Valley Regional (Parkersburg, WV)",619.29,648.77,2026Q2,174,"2025 domestic passengers, 10% sample",379,AverageFare_Q1_2025.xls
+2025,1,airport,TEX,"Telluride Regional (Telluride, CO)",635.8,666.07,2026Q2,162,"2025 domestic passengers, 10% sample",380,AverageFare_Q1_2025.xls
+2025,1,airport,AUG,"Augusta State (Augusta/Waterville, ME)",467.18,489.42,2026Q2,161,"2025 domestic passengers, 10% sample",381,AverageFare_Q1_2025.xls
+2025,1,airport,CGI,"Cape Girardeau Regional (Cape Girardeau, MO)",583.3,611.07,2026Q2,155,"2025 domestic passengers, 10% sample",382,AverageFare_Q1_2025.xls
+2025,1,airport,RKD,"Knox County Regional (Rockland, ME)",465.52,487.68,2026Q2,152,"2025 domestic passengers, 10% sample",383,AverageFare_Q1_2025.xls
+2025,1,airport,IWD,"Gogebic-Iron County (Ironwood, MI)",582.15,609.87,2026Q2,148,"2025 domestic passengers, 10% sample",384,AverageFare_Q1_2025.xls
+2025,1,airport,MBL,"Manistee County-Blacker (Manistee/Ludington, MI)",573.33,600.63,2026Q2,145,"2025 domestic passengers, 10% sample",385,AverageFare_Q1_2025.xls
+2025,1,airport,PGA,"Page Municipal (Page, AZ)",463.36,485.42,2026Q2,143,"2025 domestic passengers, 10% sample",386,AverageFare_Q1_2025.xls
+2025,1,airport,IPL,"Imperial County (El Centro, CA)",388.16,406.64,2026Q2,141,"2025 domestic passengers, 10% sample",387,AverageFare_Q1_2025.xls
+2025,1,airport,DUJ,"DuBois Regional (DuBois, PA)",470.04,492.41,2026Q2,140,"2025 domestic passengers, 10% sample",388,AverageFare_Q1_2025.xls
+2025,1,airport,AOO,"Altoona-Blair County (Altoona, PA)",616.19,645.53,2026Q2,134,"2025 domestic passengers, 10% sample",389,AverageFare_Q1_2025.xls
+2025,1,airport,IRK,"Kirksville Regional (Kirksville, MO)",572.76,600.03,2026Q2,133,"2025 domestic passengers, 10% sample",390,AverageFare_Q1_2025.xls
+2025,1,airport,OWB,"Owensboro Daviess County Regional (Owensboro, KY)",492.5,515.95,2026Q2,129,"2025 domestic passengers, 10% sample",391,AverageFare_Q1_2025.xls
+2025,1,airport,LAF,"Purdue University (Lafayette, IN)",626.56,656.39,2026Q2,128,"2025 domestic passengers, 10% sample",392,AverageFare_Q1_2025.xls
+2025,1,airport,TUP,"Tupelo Regional (Tupelo, MS)",557.78,584.33,2026Q2,126,"2025 domestic passengers, 10% sample",393,AverageFare_Q1_2025.xls
+2025,1,airport,RUT,"Rutland - Southern Vermont Regional (Rutland, VT)",428.36,448.76,2026Q2,124,"2025 domestic passengers, 10% sample",394,AverageFare_Q1_2025.xls
+2025,1,airport,MKG,"Muskegon County (Muskegon, MI)",494.22,517.75,2026Q2,107,"2025 domestic passengers, 10% sample",395,AverageFare_Q1_2025.xls
+2025,1,airport,UIN,"Quincy Regional-Baldwin Field (Quincy, IL)",477.64,500.38,2026Q2,105,"2025 domestic passengers, 10% sample",396,AverageFare_Q1_2025.xls
+2025,1,airport,CEZ,"Cortez Municipal (Cortez, CO)",552.33,578.63,2026Q2,98,"2025 domestic passengers, 10% sample",397,AverageFare_Q1_2025.xls
+2025,1,airport,BRL,"Southeast Iowa Regional (Burlington, IA)",488.92,512.19,2026Q2,96,"2025 domestic passengers, 10% sample",398,AverageFare_Q1_2025.xls
+2025,1,airport,TVF,"Thief River Falls Regional (Thief River Falls, MN)",529.83,555.06,2026Q2,96,"2025 domestic passengers, 10% sample",398,AverageFare_Q1_2025.xls
+2025,1,airport,AIA,"Alliance Municipal (Alliance, NE)",525.79,550.83,2026Q2,92,"2025 domestic passengers, 10% sample",400,AverageFare_Q1_2025.xls
+2025,1,airport,MSL,"Northwest Alabama Regional (Muscle Shoals, AL)",582.29,610.01,2026Q2,91,"2025 domestic passengers, 10% sample",401,AverageFare_Q1_2025.xls
+2025,1,airport,PUB,"Pueblo Memorial (Pueblo, CO)",359.38,376.49,2026Q2,86,"2025 domestic passengers, 10% sample",402,AverageFare_Q1_2025.xls
+2025,1,airport,SLK,"Adirondack Regional (Saranac Lake/Lake Placid, NY)",486.53,509.69,2026Q2,86,"2025 domestic passengers, 10% sample",402,AverageFare_Q1_2025.xls
+2025,1,airport,MCK,"McCook Ben Nelson Regional (McCook, NE)",630.06,660.05,2026Q2,67,"2025 domestic passengers, 10% sample",404,AverageFare_Q1_2025.xls
+2025,1,airport,SDY,"Sidney Richland Regional (Sidney, MT)",420.86,440.89,2026Q2,67,"2025 domestic passengers, 10% sample",404,AverageFare_Q1_2025.xls
+2025,1,airport,HOM,"Homer Airport (Homer, AK)",768.22,804.8,2026Q2,66,"2025 domestic passengers, 10% sample",406,AverageFare_Q1_2025.xls
+2025,1,airport,DUT,"Unalaska Airport (Unalaska, AK)",1485.57,1556.3,2026Q2,64,"2025 domestic passengers, 10% sample",407,AverageFare_Q1_2025.xls
+2025,1,airport,BFD,"Bradford Regional (Bradford, PA)",434.36,455.04,2026Q2,62,"2025 domestic passengers, 10% sample",408,AverageFare_Q1_2025.xls
+2025,1,airport,SOW,"Show Low Regional (Show Low, AZ)",560.43,587.12,2026Q2,62,"2025 domestic passengers, 10% sample",408,AverageFare_Q1_2025.xls
+2025,1,airport,GLH,"Greenville Mid Delta (Greenville, MS)",508.4,532.61,2026Q2,61,"2025 domestic passengers, 10% sample",410,AverageFare_Q1_2025.xls
+2025,1,airport,VQS,"Antonio Rivera Rodriguez (Vieques, PR)",828.0,867.42,2026Q2,59,"2025 domestic passengers, 10% sample",411,AverageFare_Q1_2025.xls
+2025,1,airport,ADK,"Adak (Adak Island, AK)",827.14,866.52,2026Q2,57,"2025 domestic passengers, 10% sample",412,AverageFare_Q1_2025.xls
+2025,1,airport,MAZ,"Eugenio Maria de Hostos (Mayaguez, PR)",547.56,573.63,2026Q2,57,"2025 domestic passengers, 10% sample",412,AverageFare_Q1_2025.xls
+2025,1,airport,MSS,"Massena International-Richards Field (Massena, NY)",548.5,574.61,2026Q2,52,"2025 domestic passengers, 10% sample",414,AverageFare_Q1_2025.xls
+2025,1,airport,MKK,"Molokai (Hoolehua, HI)",440.29,461.25,2026Q2,39,"2025 domestic passengers, 10% sample",415,AverageFare_Q1_2025.xls
+2025,1,airport,HOT,"Memorial Field (Hot Springs, AR)",485.67,508.79,2026Q2,39,"2025 domestic passengers, 10% sample",415,AverageFare_Q1_2025.xls
+2025,1,airport,IPT,"Williamsport Regional (Williamsport, PA)",623.41,653.09,2026Q2,39,"2025 domestic passengers, 10% sample",415,AverageFare_Q1_2025.xls
+2025,1,airport,HRO,"Boone County (Harrison, AR)",546.6,572.62,2026Q2,30,"2025 domestic passengers, 10% sample",418,AverageFare_Q1_2025.xls
+2025,1,airport,CDR,"Chadron Municipal (Chadron, NE)",462.43,484.45,2026Q2,29,"2025 domestic passengers, 10% sample",419,AverageFare_Q1_2025.xls
+2025,1,airport,GDV,"Dawson Community (Glendive, MT)",515.0,539.52,2026Q2,29,"2025 domestic passengers, 10% sample",419,AverageFare_Q1_2025.xls
+2025,1,airport,ELD,"South Arkansas Regional at Goodwin Field (El Dorado, AR)",377.33,395.3,2026Q2,24,"2025 domestic passengers, 10% sample",421,AverageFare_Q1_2025.xls
+2025,1,airport,OLF,"L. M. Clayton (Wolf Point, MT)",524.38,549.34,2026Q2,19,"2025 domestic passengers, 10% sample",422,AverageFare_Q1_2025.xls
+2025,1,airport,PDT,"Eastern Oregon Regional at Pendleton (Pendleton, OR)",426.71,447.03,2026Q2,17,"2025 domestic passengers, 10% sample",423,AverageFare_Q1_2025.xls
+2025,1,airport,MKL,"Jackson Regional (Jackson, TN)",569.65,596.77,2026Q2,17,"2025 domestic passengers, 10% sample",423,AverageFare_Q1_2025.xls
+2025,1,airport,LNY,"Lanai Airport (Lanai, HI)",267.67,280.41,2026Q2,16,"2025 domestic passengers, 10% sample",425,AverageFare_Q1_2025.xls
+2025,1,airport,CPX,"Benjamin Rivera Noriega (Culebra, PR)",477.3,500.03,2026Q2,15,"2025 domestic passengers, 10% sample",426,AverageFare_Q1_2025.xls
+2025,1,airport,HVR,"Havre City-County (Havre, MT)",469.5,491.85,2026Q2,14,"2025 domestic passengers, 10% sample",427,AverageFare_Q1_2025.xls
+2025,1,airport,GGW,"Wokal Field Glasgow Valley County (Glasgow, MT)",578.5,606.04,2026Q2,12,"2025 domestic passengers, 10% sample",428,AverageFare_Q1_2025.xls
+2025,1,airport,VDZ,"Valdez Pioneer Field (Valdez, AK)",506.0,530.09,2026Q2,12,"2025 domestic passengers, 10% sample",428,AverageFare_Q1_2025.xls
+2025,1,airport,MCN,"Middle Georgia Regional (Macon, GA)",299.0,313.24,2026Q2,2,"2025 domestic passengers, 10% sample",430,AverageFare_Q1_2025.xls
+2026,2,airport,LGA,"New York LaGuardia, NY",404.0,,,1968518,2026 Q2 originating domestic passengers,1,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,JFK,"New York JFK, NY",497.0,,,1779060,2026 Q2 originating domestic passengers,2,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,LAS,"Las Vegas, NV",348.0,,,1624708,2026 Q2 originating domestic passengers,3,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,IAH,"Houston Bush, TX",489.0,,,1565738,2026 Q2 originating domestic passengers,4,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,PHL,"Philadelphia, PA",484.0,,,1560275,2026 Q2 originating domestic passengers,5,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,MSP,"Minneapolis/St. Paul, MN",486.0,,,1535275,2026 Q2 originating domestic passengers,6,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,SAN,"San Diego, CA",409.0,,,1521830,2026 Q2 originating domestic passengers,7,Table_8_Fares_at_Airports_with_1.5M-1.99M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,LAX,"Los Angeles, CA",500.0,,,3002990,2026 Q2 originating domestic passengers,1,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,ORD,"Chicago O'Hare, IL",403.0,,,2978513,2026 Q2 originating domestic passengers,2,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,ATL,"Atlanta, GA",489.0,,,2568273,2026 Q2 originating domestic passengers,3,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,DEN,"Denver, CO",418.0,,,2566928,2026 Q2 originating domestic passengers,4,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,DFW,"Dallas-Fort Worth, TX",496.0,,,2407573,2026 Q2 originating domestic passengers,5,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,SFO,"San Francisco, CA",521.0,,,2362410,2026 Q2 originating domestic passengers,6,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,BOS,"Boston, MA",443.0,,,2347458,2026 Q2 originating domestic passengers,7,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,SEA,"Seattle/Tacoma, WA",454.0,,,2261263,2026 Q2 originating domestic passengers,8,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,EWR,"Newark-Liberty, NJ",496.0,,,2208430,2026 Q2 originating domestic passengers,9,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,MCO,"Orlando, FL",329.0,,,2176745,2026 Q2 originating domestic passengers,10,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,PHX,"Phoenix, AZ",429.0,,,2129915,2026 Q2 originating domestic passengers,11,Table_7_Fares_at_Airports_with_2000000_plus_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,DTW,"Detroit, MI",527.0,,,1373045,2026 Q2 originating domestic passengers,1,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,TPA,"Tampa, FL",393.0,,,1366013,2026 Q2 originating domestic passengers,2,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,DCA,"Washington Reagan National, VA",435.0,,,1358100,2026 Q2 originating domestic passengers,3,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,FLL,"Ft. Lauderdale, FL",321.0,,,1329715,2026 Q2 originating domestic passengers,4,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,AUS,"Austin, TX",443.0,,,1285090,2026 Q2 originating domestic passengers,5,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,BNA,"Nashville, TN",424.0,,,1154633,2026 Q2 originating domestic passengers,6,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,PDX,"Portland, OR",437.0,,,1126568,2026 Q2 originating domestic passengers,7,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,MIA,"Miami, FL",419.0,,,1119843,2026 Q2 originating domestic passengers,8,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,BWI,"Baltimore, MD",440.0,,,1105233,2026 Q2 originating domestic passengers,9,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,SLC,"Salt Lake City, UT",518.0,,,1103063,2026 Q2 originating domestic passengers,10,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,CLT,"Charlotte, NC",532.0,,,1098303,2026 Q2 originating domestic passengers,11,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,airport,RDU,"Raleigh/Durham, NC",407.0,,,1081070,2026 Q2 originating domestic passengers,12,Table_9_Fares_at_Airports_with_1M-1.49M_Originating_Passengers_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Los Angeles - Greater,478.02,,,4818210,2026 Q2 originating domestic passengers,1,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,New York City - Greater,442.13,,,4059122,2026 Q2 originating domestic passengers,2,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Chicago - Greater,393.66,,,3699315,2026 Q2 originating domestic passengers,3,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,San Francisco - Greater,481.93,,,3561062,2026 Q2 originating domestic passengers,4,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Washington DC - Greater,460.91,,,3354518,2026 Q2 originating domestic passengers,5,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Dallas/Fort Worth - Greater,472.93,,,3107295,2026 Q2 originating domestic passengers,6,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Boston - Greater,438.18,,,2788152,2026 Q2 originating domestic passengers,7,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx
+2026,2,metro,,Houston - Greater,471.4,,,2116480,2026 Q2 originating domestic passengers,8,Table_12_Fares_at_Metropolitan_Areas_-_2nd_Quarter_2026.xlsx

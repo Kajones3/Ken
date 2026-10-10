@@ -88,6 +88,17 @@ export function pickWorstRoutes(
   return out;
 }
 
+/** "IAD-CDG-2027-03, IAD-NRT-2027-06" -> routes. Anything that isn't
+ *  AAA-BBB-YYYY-MM is refused loudly rather than skipped, since this spends
+ *  paid searches. Pure. */
+export function parseRouteList(text: string): PopularRoute[] {
+  return text.split(/[\s,]+/).filter(Boolean).map((item) => {
+    const m = /^([A-Z]{3})-([A-Z]{3})-(\d{4}-\d{2})$/.exec(item.trim().toUpperCase());
+    if (!m) throw new Error(`popular-routes: can't read "${item}" (want e.g. IAD-CDG-2027-03)`);
+    return { origin: m[1]!, destination: m[2]!, departMonth: m[3]!, searches: 0 };
+  });
+}
+
 export interface PopularRoutesOptions {
   limit?: number;
   datesPerMonth?: number;
@@ -96,6 +107,11 @@ export interface PopularRoutesOptions {
    *  trend that reads the same either way. */
   buckets?: number[];
   routes?: PopularRoute[];
+  /** Slots kept for rotation, stalest route first, so demand can never
+   *  take the whole night (found 2026-10-10: it had, every night, and 13 of
+   *  the 19 big airports had never had a fare bought). Default: a third of
+   *  the night, 6 of 18. */
+  rotationSlots?: number;
   /** Slots kept for the routes travelers see furthest off (idea 3). */
   worstSlots?: number;
   provider?: Pick<SerpApiFlightProvider, "quote" | "callsSpent" | "budgetRemaining">;
@@ -137,9 +153,11 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     }
   }
   const worstKeys = new Set(worst.map((r) => `${r.origin}|${r.destination}`));
+  const rotationSlots = opts.routes ? 0
+    : Math.max(0, Math.min(limit - worst.length, opts.rotationSlots ?? Number(process.env.POPULAR_ROUTES_ROTATION ?? Math.floor(limit / 3))));
   let routes = opts.routes
     ?? [...worst, ...(await popularRoutes(db, limit * 4)).filter(notFresh)
-      .filter((r) => !worstKeys.has(`${r.origin}|${r.destination}`)).slice(0, limit - worst.length)];
+      .filter((r) => !worstKeys.has(`${r.origin}|${r.destination}`)).slice(0, limit - worst.length - rotationSlots)];
 
   // Fill the rest of tonight's slots by rotation, stalest route first.
   // Demand still wins where it exists — someone actually asking about a
@@ -265,7 +283,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(0);
   }
   const db = await getDb();
-  const res = await runPopularRoutes(db);
+  // A one-off purchase of named routes, e.g. "IAD-CDG-2027-03,IAD-NRT-2027-06"
+  // (owner, 2026-10-10: buy a few Dulles international fares). Skips demand,
+  // rotation and the furthest-off pick; everything bought still goes into
+  // the record exactly as on a normal night.
+  const only = parseRouteList(process.env.POPULAR_ROUTES_ONLY ?? "");
+  if (only.length) console.log(`popular-routes: buying only ${only.map((r) => `${r.origin}->${r.destination} ${r.departMonth}`).join(", ")}`);
+  const res = await runPopularRoutes(db, only.length ? { routes: only } : {});
   console.log(
     `popular-routes done: ${res.routes} routes, ${res.calls} calls, ` +
     `${res.rows} real fares written, ${res.misses} with no fare, ${res.errors} errors`,

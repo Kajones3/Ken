@@ -12,8 +12,11 @@ name: Pricing the Magic popular routes
 # in-app live-fare button (~180/month) was removed. With the refresh's 12
 # hotel lookups a night that is ~900/month, ~100 left for manual runs.
 #
-# Slots are filled demand-first, then by rotation (routeDemand.ts's
-# rotationRoutes) stalest-route-first. Before launch route_searches is empty,
+# Slots: up to 6 for the routes we read furthest off, a third of the night
+# (6) always kept for rotation (routeDemand.ts's rotationRoutes,
+# stalest-route-first, one route per home airport at a time), and demand
+# gets the rest. Rotation used to get only what demand left, which by
+# 2026-10-10 was nothing: 13 of the 19 big airports had never been bought. Before launch route_searches is empty,
 # and without rotation the job re-bought the same few routes every night and
 # paid coverage never widened.
 #
@@ -40,6 +43,11 @@ on:
         required: false
         type: string
         default: "18"
+      routes:
+        description: "Buy ONLY these (e.g. IAD-CDG-2027-03,IAD-NRT-2027-06); blank = a normal night"
+        required: false
+        type: string
+        default: ""
 
 jobs:
   popular-routes:
@@ -63,3 +71,4 @@ jobs:
           POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '18' }}
           POPULAR_ROUTES_DATES: ${{ inputs.dates || '1' }}
           SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '18' }}
+          POPULAR_ROUTES_ONLY: ${{ inputs.routes || '' }}

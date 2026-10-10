@@ -84,7 +84,47 @@ nightly data jobs run in GitHub Actions and migrate themselves, so the DATA
 side works with or without a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**751 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
+**772 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### 2026-10-10, very last — nearby airports, BTS airport tables, rotation was starved
+
+Owner: "How much could I save by leaving out of DULLES instead of RDU?" (can
+drive to RDU, ATL, CLT, IAD) and "I like 1-3", then "Do we have
+international fares from each of the top 10 airports?"
+- **Answer (DB1C, March 2026 medians, round trip incl. tax):** to MCO RDU
+  $287, ATL $376, IAD $399, CLT $485; to LAX CLT $566, RDU $611, IAD $658,
+  ATL $687. Dulles is DEARER than RDU to Orlando (~$112/seat). Coverage
+  report section "Nearby home airports".
+- **ROTATION HAD NEVER RUN since the worst-routes change.** The record's
+  paid fares came from only 9 home airports (ATL, BWI, BOS, CLT, ORD 1, DEN,
+  MCI, BNA, RDU); 13 of the 19 free airports (DFW, DTW, IAH, LAS, LAX, MIA,
+  MSP, JFK, PHL, PHX, SFO, SEA, IAD) had NONE, domestic or international.
+  Cause: 6 worst-route slots + demand (the owner's own test searches,
+  which count in route_searches on purpose) filled all 18; rotation only got
+  leftovers. Fix: `rotationSlots` (`POPULAR_ROUTES_ROTATION`, default a
+  third of the limit = 6) always kept for rotation; demand gets the rest.
+  `rotationRoutes()` now deals never-bought routes one per airport at a time
+  (was alphabetical: DFW would have taken all nine first). Same 18/night.
+  Expect the "Fares bought, by home airport" table to fill ~6 new airports
+  a night. Dulles isn't top-10 domestically (rank ~35 by passengers) but is
+  a big international gateway. EWR (top 10) is not one of our origins.
+- **(1) Nearby airport line** (`src/nearbyAirports.ts`, /api/compare
+  `nearbyCheaper`): per US resort, our other airports within 375 straight
+  miles, same destination, same survey period (monthly DB1C first, else the
+  quarterly), the one saving the most if >= $40 and >= 5% a seat, and only
+  when its median is below the fare we quote from home. Flight card row
+  "Nearby airport · Charlotte (CLT) ... save ~$180" + a PDF sentence. Never
+  in the total. Drive time is a rough guess (x1.2 road, 62 mph). None for
+  international (surveys are domestic; our intl estimate is one figure).
+- **(2) The owner's BTS tables** (AverageFare_Q1_2025.xls, Tables 7/8/9/12
+  for 2026 Q2) are in `data/bts/raw/`, normalized into
+  `data/bts/airport-fares.csv`, loaded APPEND-ONLY into
+  `airport_fare_levels` by `npm run airport-fares` (a step in the BTS
+  monthly survey workflow; one load per file). They are all-destination
+  averages per airport, NOT route fares. New indicator in the Indicator
+  study: "Home airport's general price level" (`homeLevel`).
+- **(3) Dulles purchase:** popular-routes takes `routes` (workflow input,
+  `POPULAR_ROUTES_ONLY`, e.g. `IAD-CDG-2027-03`) to buy named routes once.
 
 ### 2026-10-10, last — BTS's monthly survey loaded; two new /admin tabs (PRs #149-#150)
 

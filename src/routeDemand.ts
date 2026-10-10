@@ -202,9 +202,9 @@ export async function rotationRoutes(
     seen.rows.map((r) => [`${r.origin}|${r.destination}`, r.last_bought ? new Date(r.last_bought).getTime() : 0]),
   );
 
-  const candidates: { origin: string; destination: string; at: number }[] = [];
-  for (const o of ORIGINS) {
-    for (const d of dests) {
+  const candidates: { origin: string; destination: string; at: number; turn: number }[] = [];
+  for (const [oi, o] of ORIGINS.entries()) {
+    for (const [di, d] of dests.entries()) {
       const key = `${o.iata}|${d}`;
       if (exclude.has(key)) continue;
       // Never buy a fare for a route nobody flies. LAX->LAX and LAX->SNA are
@@ -213,10 +213,15 @@ export async function rotationRoutes(
       // permanently at the FRONT of a stalest-first queue, re-bought every
       // cycle, paid for every time.
       if (isLocalRoute(o.iata, d)) continue;
-      candidates.push({ origin: o.iata, destination: d, at: lastBought.get(key) ?? 0 });
+      // `turn` deals routes out one per airport at a time, each airport
+      // starting at a different destination. Found 2026-10-10: ties used to
+      // break alphabetically, so a night's never-bought slots all went to
+      // one airport's nine routes before the next airport got any.
+      candidates.push({ origin: o.iata, destination: d, at: lastBought.get(key) ?? 0,
+        turn: (di - oi % dests.length + dests.length) % dests.length });
     }
   }
-  candidates.sort((a, b) => a.at - b.at || a.origin.localeCompare(b.origin) || a.destination.localeCompare(b.destination));
+  candidates.sort((a, b) => a.at - b.at || a.turn - b.turn || a.origin.localeCompare(b.origin) || a.destination.localeCompare(b.destination));
   return candidates.slice(0, limit).map((c) => ({
     origin: c.origin, destination: c.destination, departMonth, searches: 0,
   }));
