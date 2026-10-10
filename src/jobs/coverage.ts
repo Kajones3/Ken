@@ -464,6 +464,16 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   const bq = await db.query<{ year: number; quarter: number; n: string }>(
     `select year, quarter, count(*) as n from historical_fares where source = 'bts_db1b' group by 1,2 order by 1,2`,
   );
+  const bm = await db.query<{ year: number; month: number; routes: string; tickets: string; files: string }>(
+    `select year, month, count(*) as routes, sum(itin_count) as tickets, string_agg(distinct file, ',') as files
+       from historical_fares_monthly group by 1, 2 order by 1, 2`,
+  ).catch(() => ({ rows: [] }));
+  out.push(`  BTS monthly survey held (route-months / tickets): ${bm.rows.map((r) => `${r.year}-${String(r.month).padStart(2, "0")} ${r.routes}/${r.tickets}`).join(", ") || "none"}`);
+  const bmEx = await db.query<{ origin: string; destination: string; year: number; month: number; median_fare_usd: string; itin_count: number }>(
+    `select origin, destination, year, month, median_fare_usd, itin_count from historical_fares_monthly
+      where origin in ('BNA','ATL','STL','ORD') and destination in ('MCO','LAX') order by origin, destination, year, month`,
+  ).catch(() => ({ rows: [] }));
+  for (const r of bmEx.rows) out.push(`    ${r.origin}->${r.destination} ${r.year}-${String(r.month).padStart(2, "0")}: median $${Math.round(Number(r.median_fare_usd))} from ${r.itin_count} tickets`);
   out.push(`  BTS quarters held: ${bq.rows.map((r) => `${r.year} Q${r.quarter} (${r.n})`).join(", ")}`);
   out.push("");
 
