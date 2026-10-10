@@ -255,6 +255,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
     <a href="#flights">Flights &amp; hotels</a>
+    <a href="#signals">What moves the price</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -405,6 +406,49 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         job already favors routes people search.</p>
       <div id="rdRoutes"></div>
     </section>
+  </div>
+
+  <div class="page" data-page="signals">
+  <section class="sheet">
+    <h2>What moves the price</h2>
+    <p>Read only. This puts the evidence we already hold side by side, so you can see which signals line up with
+      real fares before any of them is allowed to change a number travelers see. Nothing on this page changes a
+      price or a crowd level.</p>
+    <p class="count" id="sigCount">Loading…</p>
+  </section>
+  <section class="sheet">
+    <h2>International: what we bought vs our starting guess</h2>
+    <p>Every international estimate starts from one flat guess ($754 to Europe, $1,087 to Asia, the same from
+      every US city), bent by a made-up season shape, then multiplied by <b>one</b> correction learned from the
+      fares we buy. If the destinations below sit far apart, one shared correction can't be right for all of them.
+      "x1.60" means real fares ran 1.6 times the starting guess.</p>
+    <div id="sigDest"></div>
+    <h3>By travel season</h3>
+    <p>The starting guess says July–September is 37% dearer than spring. If real fares disagree, summer trips
+      overseas read high.</p>
+    <div id="sigQuarter"></div>
+  </section>
+  <section class="sheet">
+    <h2>Our fare vs Google's "typical price"</h2>
+    <p>Two different questions. <b>Our fare</b> is the middle-priced flight for one specific date.
+      <b>Google's typical price</b> is what the <i>cheapest</i> seat on the route usually costs across the year,
+      often a budget airline on a quiet date. Ours sitting above Google's typical range is expected, not an error.</p>
+    <div id="sigGoogle"></div>
+  </section>
+  <section class="sheet">
+    <h2>Flight demand vs our crowd levels</h2>
+    <p>For each paid search, Google says whether prices are low, typical or high for that time. Here they are by
+      resort and travel month, beside our crowd level for the same month. Where "high" piles up in a month we call
+      quiet (or the other way round), that's a month worth a second look. A handful of searches proves nothing;
+      read the count first.</p>
+    <div id="sigLevels"></div>
+  </section>
+  <section class="sheet">
+    <h2>Government fare surveys we hold</h2>
+    <p>US routes start from the government's survey of what people actually paid. The quarterly survey ended in
+      June 2025; its monthly replacement is being added. Older quarters are kept, never replaced.</p>
+    <div id="sigSurveys"></div>
+  </section>
   </div>
 
   <div class="page" data-page="checks">
@@ -1327,6 +1371,38 @@ const ago = t => {
 };
 const mins = v => v == null ? "—" : `${v} min`;
 
+
+/* ------------------------- what moves the price ------------------------- */
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const xr = v => Number.isFinite(v) ? "x" + v.toFixed(2) : "—";
+async function loadSignals(){
+  const r = await fetch("/api/admin/signals");
+  if(!r.ok){ $("#sigCount").textContent = "Couldn't load this report."; return; }
+  const d = await r.json();
+  const intl = d.trends.find(t => t.kind === "intl"), dom = d.trends.find(t => t.kind === "domestic");
+  $("#sigCount").textContent = [
+    intl ? `International correction today: ${xr(intl.multiplier)} from ${intl.routes} routes.` : "",
+    dom ? `US correction today: ${xr(dom.multiplier)} from ${dom.routes} routes.` : "",
+  ].join(" ");
+  const tbl = (head, rows) => rows.length
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr>${head.map(h => `<th class="${h[1] ? "n" : ""}">${esc(h[0])}</th>`).join("")}</tr></thead>
+       <tbody>${rows.map(r => `<tr>${r.map((c, i) => `<td class="${head[i][1] ? "n" : ""}">${c}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`
+    : `<p class="count">Nothing yet.</p>`;
+  $("#sigDest").innerHTML = tbl([["Destination"],["Fares",1],["From cities",1],["Bought (middle)",1],["Starting guess",1],["Real / guess",1],["Middle half",1]],
+    d.byDestination.map(x => [`${esc(x.resort)} (${esc(x.destination)})`, x.fares, x.cities, money(Math.round(x.boughtMedian)),
+      money(Math.round(x.seedMedian)), `<b>${xr(x.ratio)}</b>`, `${xr(x.ratioLow)}–${xr(x.ratioHigh)}`]));
+  $("#sigQuarter").innerHTML = tbl([["Region"],["Travel months"],["Fares",1],["Real / guess",1]],
+    d.byQuarter.map(x => [esc(x.region), ["Jan–Mar","Apr–Jun","Jul–Sep","Oct–Dec"][x.quarter-1], x.fares, `<b>${xr(x.ratio)}</b>`]));
+  $("#sigGoogle").innerHTML = tbl([["Arriving at"],["Searches",1],["Our fare (middle)",1],["Google typical",1],["Google cheapest that day",1],["Ours above typical",1]],
+    d.vsGoogle.map(x => [`${esc(x.resort)} (${esc(x.destination)})`, x.searches, money(Math.round(x.ours)),
+      `${money(Math.round(x.typicalLow))}–${money(Math.round(x.typicalHigh))}`, money(Math.round(x.lowest)), `${x.above} of ${x.searches}`]));
+  $("#sigLevels").innerHTML = tbl([["Resort"],["Travel month"],["Searches",1],["Low",1],["Typical",1],["High",1],["Our crowd level"]],
+    d.priceLevels.map(x => [esc(x.resortName), MONTHS[x.month-1], x.searches, x.lowPct + "%", x.typicalPct + "%",
+      `<b>${x.highPct}%</b>`, x.crowd ? esc(x.crowd) + (x.crowdBasis === "dvcPoints" ? " (from points charts)" : " (our estimate)") : "—"]));
+  $("#sigSurveys").innerHTML = tbl([["Survey"],["Period"],["Routes",1],["Loaded"]],
+    d.surveys.map(x => [x.source === "bts_db1c" ? "Monthly survey (new)" : "Quarterly survey", `${x.year} Q${x.quarter}`, x.routes,
+      esc(String(x.loadedAt || "").slice(0, 10))]));
+}
 async function loadWaits(){
   const r = await fetch("/api/admin/wait-times");
   if(!r.ok){ $("#wCount").textContent = "Couldn't load the wait-time archive."; return; }
@@ -2092,6 +2168,7 @@ loadAttractions();
 loadDeals();
 loadFlights();
 loadWaits();
+loadSignals();
 loadChecks();
 loadStats();
 </script>

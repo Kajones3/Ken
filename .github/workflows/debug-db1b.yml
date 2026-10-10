@@ -80,16 +80,23 @@ jobs:
           [ -n "$f" ] || { echo "none found by name"; exit 0; }
           echo "Fetching $f"
           curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/$f" -o c.zip; ls -la c.zip; unzip -l c.zip
-          inner=$(unzip -Z1 c.zip | grep -iE '\.csv$' | head -1)
-          echo "--- header ---"; unzip -p c.zip "$inner" | head -1
-          echo "--- first 3 rows ---"; unzip -p c.zip "$inner" | sed -n '2,4p'
-          echo "--- rows, and rows by year/month/quarter columns if present ---"
-          unzip -p c.zip "$inner" | awk -F',' '
-            NR==1 { for (i=1;i<=NF;i++) { h=$i; gsub(/"/,"",h); c[h]=i } next }
-            { n++; k=""; if ("Year" in c) k=k $c["Year"]; if ("Month" in c) k=k "-m" $c["Month"]; if ("Quarter" in c) k=k "-q" $c["Quarter"]; seen[k]++ }
-            END { print n " rows"; for (k in seen) print "  " k ": " seen[k] }'
-          echo "--- 5 rows with BNA ---"; unzip -p c.zip "$inner" | grep -m 5 '"BNA"'
-          rm -rf c.zip *.html dir.txt
+          inner=$(unzip -Z1 c.zip | grep -iE '\.csv(\.zip)?$' | head -1)
+          echo "inner: $inner"
+          unzip -o c.zip "$inner" -d c_out >/dev/null
+          if echo "$inner" | grep -qi '\.zip$'; then unzip -o "c_out/$inner" -d c_out >/dev/null; fi
+          ls -la c_out
+          csv=$(ls c_out/*.csv c_out/*.CSV 2>/dev/null | head -1)
+          echo "csv: $csv"
+          echo "--- header ---"; head -1 "$csv"
+          echo "--- first 3 rows ---"; sed -n '2,4p' "$csv"
+          echo "--- rows, and by year/month/quarter if present ---"
+          awk -F',' '
+            NR==1 { for (i=1;i<=NF;i++) { h=$i; gsub(/"/,"",h); c[toupper(h)]=i } next }
+            { n++; k=""; if ("YEAR" in c) k=k $c["YEAR"]; if ("MONTH" in c) k=k "-m" $c["MONTH"]; if ("QUARTER" in c) k=k "-q" $c["QUARTER"]; seen[k]++ }
+            END { print n " rows"; for (k in seen) print "  " k ": " seen[k] }' "$csv"
+          echo "--- 5 rows with BNA ---"; grep -m 5 'BNA' "$csv"
+          echo "--- 5 rows with MCO ---"; grep -m 5 'MCO' "$csv"
+          rm -rf c.zip c_out *.html dir.txt
 
   debug:
     if: inputs.db1c_probe != 'yes'

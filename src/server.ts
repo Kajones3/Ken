@@ -34,6 +34,7 @@ import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COL
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
+import { loadFareSignals } from "./fareSignals.js";
 import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
@@ -1673,6 +1674,13 @@ const server = createServer(async (req, res) => {
         hotels: await loadHotelScoreboard(db),
         hotelList: await loadHotelList(db),
       }, { cache: "no-store" });
+    }
+
+    /* "What moves the price?" (fareSignals.ts): read-only evidence, side by
+     * side, before any signal is allowed to move a traveler's number. */
+    if (url.pathname === "/api/admin/signals" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await loadFareSignals(db), { cache: "no-store" });
     }
 
     /* The Lands page: each resort's lands exactly as the PDF prints them,
