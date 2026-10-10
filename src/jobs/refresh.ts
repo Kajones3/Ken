@@ -328,8 +328,13 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   // right now; the last good fare_trend row keeps serving estimates.
   const trend = await computeFareTrend(db);
   const intlTrend = await computeFareTrend(db, "intl");
+  // Its own try: a database without the monthly table yet must not stop the
+  // other two trends being written.
+  let monthlyTrend: { sampleRoutes: number } | null = null;
+  try { monthlyTrend = await computeFareTrend(db, "domestic_monthly"); } catch { monthlyTrend = null; }
   const trendNote = (trend ? `trend: ${trend.sampleRoutes} routes` : "trend: skipped (too few overlapping routes)")
-    + (intlTrend ? ` · intl trend: ${intlTrend.sampleRoutes} routes` : " · intl trend: skipped");
+    + (intlTrend ? ` · intl trend: ${intlTrend.sampleRoutes} routes` : " · intl trend: skipped")
+    + (monthlyTrend ? ` · monthly-survey trend: ${monthlyTrend.sampleRoutes} routes` : "");
   const hotelNote = paidSlots
     ? `hotel slots: ${paidSlots.map((x) => `${x.resortId}/${x.month}`).join(" ")}`
     : "hotel slots: no rotation";

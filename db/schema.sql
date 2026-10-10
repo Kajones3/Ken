@@ -860,3 +860,32 @@ create index if not exists hotel_searches_lookup on hotel_searches (resort_id, m
 -- by any vendor, but were tagged 'serpapi_hotels' alongside real Google rows.
 -- Label them for what they are, once.
 update hotel_rates set source = 'owner_base' where on_property and source = 'serpapi_hotels';
+
+-- BTS's MONTHLY fare survey (DB1C, "OD40": a 40% sample of tickets, monthly
+-- from July 2025), which replaced the quarterly DB1B survey after June 2025.
+-- One row per route and TRAVEL month, built from the Ticket file: round
+-- trips only, the whole ticket price (TotalAmount, taxes included), weighted
+-- by passengers. APPEND-ONLY (owner, 2026-10-10: "DONT DELETE THE DATA WE
+-- ALREADY HAVE"): loading a month again adds new rows beside the old ones,
+-- and readers take the newest load. historical_fares (the quarterly survey)
+-- is never touched by this. `purchase_window` keeps passengers per BTS
+-- booking-window group, for the indicator study.
+create table if not exists historical_fares_monthly (
+  id                  bigserial    primary key,
+  origin              char(3)      not null,
+  destination         char(3)      not null,
+  year                smallint     not null,
+  month               smallint     not null check (month between 1 and 12),
+  avg_fare_usd        numeric(9,2) not null check (avg_fare_usd > 0),
+  p25_fare_usd        numeric(9,2) not null,
+  median_fare_usd     numeric(9,2) not null,
+  p75_fare_usd        numeric(9,2) not null,
+  passengers_sampled  integer      not null default 0,
+  itin_count          integer      not null default 0,
+  purchase_window     jsonb,
+  source              text         not null default 'bts_db1c',
+  file                text,
+  loaded_at           timestamptz  not null default now()
+);
+create index if not exists historical_fares_monthly_route
+  on historical_fares_monthly (origin, destination, month, year, loaded_at desc);

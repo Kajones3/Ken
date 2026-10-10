@@ -154,5 +154,14 @@ export async function loadFareSignals(db: Db) {
       group by 1, 2, 3 order by 2, 3, 1`,
   )).rows.map((r) => ({ source: r.source, year: Number(r.year), quarter: Number(r.quarter), routes: Number(r.routes), loadedAt: r.fetched }));
 
-  return { trends, byDestination, byQuarter, vsGoogle, priceLevels, surveys };
+  // The monthly survey (DB1C), kept in its own append-only table.
+  const monthly = (await db.query<{ year: number; month: number; routes: string; tickets: string; fetched: unknown }>(
+    `select year, month, count(distinct (origin, destination)) as routes, sum(itin_count) as tickets, max(loaded_at) as fetched
+       from historical_fares_monthly group by 1, 2 order by 1, 2`,
+  ).catch(() => ({ rows: [] }))).rows.map((r) => ({
+    source: "bts_db1c", year: Number(r.year), quarter: 0, month: Number(r.month),
+    routes: Number(r.routes), tickets: Number(r.tickets), loadedAt: r.fetched,
+  }));
+
+  return { trends, byDestination, byQuarter, vsGoogle, priceLevels, surveys: [...surveys, ...monthly] };
 }

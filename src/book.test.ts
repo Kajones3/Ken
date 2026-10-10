@@ -94,3 +94,40 @@ test("a vacation rental already in the hotel cache is never offered as an off-pr
   assert.deepEqual(names, ["Hampton Inn Lake Buena Vista"]);
   await db.close();
 });
+
+test("BTS's monthly survey replaces the quarterly row only when its own correction exists (2026-10-10)", async () => {
+  const db = await memoryDb();
+  await seedTrend(db); // quarterly correction x1.2
+  await db.query(
+    `insert into historical_fares (origin,destination,year,quarter,avg_fare_usd,median_fare_usd,p25_fare_usd,p75_fare_usd)
+     values ('BNA','MCO',2025,1,400,400,350,450)`,
+  );
+  await db.query(
+    `insert into historical_fares_monthly (origin,destination,year,month,avg_fare_usd,median_fare_usd,p25_fare_usd,p75_fare_usd,itin_count,file)
+     values ('BNA','MCO',2026,3,500,500,420,600,120,'test.zip')`,
+  );
+  const req = { origin: "BNA", destinations: ["MCO"], resortIds: ["wdw"], from: "2027-03-01", to: "2027-03-31", tripLength: 7 };
+
+  // No monthly correction yet: the quarterly row and its correction stay in charge.
+  let est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  assert.equal(est!.med, 480);
+  assert.equal(est!.basisQuarter, "2025Q1");
+
+  // With one, the newer month wins and only its own correction moves it.
+  await db.query(
+    `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter, kind)
+     values ($1, 1.05, 1.0, 1.1, 4, '2026-03', 'domestic_monthly')`, [randomUUID()]);
+  est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  assert.equal(est!.med, 525);
+  assert.equal(est!.basisQuarter, "March 2026");
+
+  // A month with too few tickets is not trusted over the quarter.
+  await db.query(`update historical_fares_monthly set itin_count = 5`);
+  est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  assert.equal(est!.basisQuarter, "2025Q1");
+
+  // And the old quarterly row is still there, untouched.
+  const q = await db.query(`select count(*)::int as n from historical_fares where origin='BNA'`);
+  assert.equal(q.rows[0].n, 1);
+  await db.close();
+});

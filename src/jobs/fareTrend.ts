@@ -46,7 +46,16 @@ export function trimmedMultiplier(ratios: number[]): TrendResult | null {
  * real fares, and nothing was correcting them). Each moves only its own
  * baselines — see book.ts.
  */
-export async function computeFareTrend(db: Db, kind: "domestic" | "intl" = "domestic"): Promise<{ id: string; sampleRoutes: number } | null> {
+export type TrendKind = "domestic" | "intl" | "domestic_monthly";
+
+/**
+ * kind 'domestic_monthly' (2026-10-10) measures bought fares against BTS's
+ * MONTHLY survey (DB1C, historical_fares_monthly) for the same route and
+ * calendar month. It moves only estimates built on a monthly row, so a
+ * correction learned against a 2025 quarter is never stacked on a 2026 month.
+ */
+export async function computeFareTrend(db: Db, kind: TrendKind = "domestic"): Promise<{ id: string; sampleRoutes: number } | null> {
+  if (kind === "domestic_monthly") return computeMonthlyTrend(db);
   // Like for like, on both axes that matter:
   //   - MEDIAN vs MEDIAN, because the estimate this multiplier scales is a
   //     median. Comparing a current mean against a historical median would
@@ -119,6 +128,46 @@ export async function computeFareTrend(db: Db, kind: "domestic" | "intl" = "dome
     `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter, kind)
      values ($1,$2,$3,$4,$5,$6,$7)`,
     [id, result.multiplier, result.low, result.high, ratios.length, `${newestYear}Q${newestQuarter}`, kind],
+  );
+  return { id, sampleRoutes: ratios.length };
+}
+
+async function computeMonthlyTrend(db: Db): Promise<{ id: string; sampleRoutes: number } | null> {
+  const trusted = (process.env.FARE_TREND_SOURCES ?? "serpapi_flights")
+    .split(",").map((x) => x.trim()).filter(Boolean);
+  const current = await db.query<{ origin: string; destination: string; month: number; current_med: string }>(
+    `select origin, destination, extract(month from depart_date)::int as month,
+            percentile_cont(0.5) within group (order by price_usd) as current_med
+       from flight_prices
+      where fetched_at > now() - interval '21 days' and source = any($1)
+      group by origin, destination, month`,
+    [trusted],
+  );
+  // Newest survey year for each route and month, newest load of it.
+  const baseline = await db.query<{ origin: string; destination: string; month: number; year: number; median_fare_usd: string }>(
+    `select distinct on (origin, destination, month) origin, destination, month, year, median_fare_usd
+       from historical_fares_monthly
+      order by origin, destination, month, year desc, loaded_at desc`,
+  );
+  const map = new Map(baseline.rows.map((r) => [`${r.origin}|${r.destination}|${r.month}`, r]));
+  const ratios: number[] = [];
+  let newest = "";
+  for (const c of current.rows) {
+    const b = map.get(`${c.origin}|${c.destination}|${c.month}`);
+    if (!b) continue;
+    const cur = Number(c.current_med), base = Number(b.median_fare_usd);
+    if (!Number.isFinite(cur) || !Number.isFinite(base) || base <= 0) continue;
+    ratios.push(cur / base);
+    const label = `${b.year}-${String(b.month).padStart(2, "0")}`;
+    if (label > newest) newest = label;
+  }
+  const result = ratios.length >= 3 ? trimmedMultiplier(ratios) : null;
+  if (!result) return null;
+  const id = randomUUID();
+  await db.query(
+    `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter, kind)
+     values ($1,$2,$3,$4,$5,$6,'domestic_monthly')`,
+    [id, result.multiplier, result.low, result.high, ratios.length, newest],
   );
   return { id, sampleRoutes: ratios.length };
 }

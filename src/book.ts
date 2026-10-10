@@ -52,6 +52,9 @@ const TREND_APPLIES_TO = new Set(["bts_db1b", "seed_guess"]);
  * here. 3 matches that precedent rather than inventing a new number.
  */
 export const ROUTE_CORRECTION_MIN_SAMPLES = Number(process.env.ROUTE_CORRECTION_MIN_SAMPLES ?? 3);
+/** A month of BTS's monthly survey must hold at least this many sampled
+ *  round-trip tickets on a route before it replaces the quarterly row. */
+export const MONTHLY_MIN_TICKETS = Number(process.env.MONTHLY_MIN_TICKETS ?? 30);
 
 /**
  * Alt arrival airport -> that resort's primary airport (e.g. SHA -> PVG).
@@ -295,6 +298,7 @@ export async function loadBook(
   const historicals = new Map<string, {
     med: number; p25: number; p75: number; quarter: string;
     seasonMatched: boolean; applyTrend: boolean; fetchedAt: Date | null; seedGuess: boolean;
+    monthly?: boolean;
   }>();
   for (const route of new Set([...byRouteQuarter.keys(), ...newestByRoute.keys()])) {
     const r = byRouteQuarter.get(route) ?? newestByRoute.get(route)!;
@@ -322,6 +326,42 @@ export async function loadBook(
       // correct it — see the route-correction note below.
       fetchedAt: tsOf(r.fetched_at),
     });
+  }
+  // BTS's MONTHLY survey (DB1C, from July 2025; jobs/db1cBaseline.ts). Where
+  // it has this route in the trip's own calendar month, with enough tickets,
+  // it replaces the quarterly row: newer, and a month instead of a quarter
+  // (owner, 2026-10-10: "make sure we are pulling from the most recent month
+  // we can"). It is moved only by its OWN correction (fare_trend kind
+  // 'domestic_monthly', measured against these same monthly rows), so a
+  // correction learned against a 2025 quarter is never stacked on a 2026
+  // month; with no such correction yet, the quarterly row stays in charge.
+  // The quarterly rows are untouched and still answer every other month.
+  const monthlyTrendRow = await db.query(
+    `select multiplier, low_multiplier, high_multiplier from fare_trend where kind = 'domestic_monthly' order by computed_at desc limit 1`,
+  ).catch(() => ({ rows: [] as Record<string, unknown>[] }));
+  if (monthlyTrendRow.rows[0]) {
+    const wantMonth = Number(req.from.slice(5, 7));
+    const hm = await db.query(
+      `select distinct on (origin, destination) origin, destination, year, month,
+              median_fare_usd, p25_fare_usd, p75_fare_usd, itin_count
+         from historical_fares_monthly
+        where origin = $1 and destination = any($2) and month = $3
+        order by origin, destination, year desc, loaded_at desc`,
+      [req.origin, hfDestinations, wantMonth],
+    ).catch(() => ({ rows: [] as Record<string, unknown>[] }));
+    const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    for (const r of hm.rows) {
+      const med = Number(r.median_fare_usd);
+      if (!Number.isFinite(med) || med <= 0 || Number(r.itin_count) < MONTHLY_MIN_TICKETS) continue;
+      historicals.set(`${r.origin}|${r.destination}`, {
+        med, p25: Number(r.p25_fare_usd ?? med), p75: Number(r.p75_fare_usd ?? med),
+        quarter: `${MONTH_NAMES[Number(r.month) - 1]} ${r.year}`,
+        seasonMatched: true, applyTrend: true, seedGuess: false, monthly: true,
+        // Every bought fare counts as evidence against a survey of what was
+        // PAID last year; none of them built it, so nothing is circular.
+        fetchedAt: null,
+      });
+    }
   }
   // What the real fares we've actually bought on THESE routes say, versus
   // what each route's stored baseline predicted. This is the correction the
@@ -397,7 +437,7 @@ export async function loadBook(
   /** The owner's own median for one route/quarter/band, if they have said. */
   const ownerSays = (key: string, band: FareBand) => median(corrections.get(key)?.[band] ?? []);
 
-  const latestTrend = async (kind: "domestic" | "intl") => {
+  const latestTrend = async (kind: "domestic" | "intl" | "domestic_monthly") => {
     const ft = await db.query(
       `select multiplier, low_multiplier, high_multiplier from fare_trend where kind = $1 order by computed_at desc limit 1`,
       [kind],
@@ -406,7 +446,11 @@ export async function loadBook(
       ? { m: Number(ft.rows[0].multiplier), lo: Number(ft.rows[0].low_multiplier), hi: Number(ft.rows[0].high_multiplier) }
       : undefined;
   };
-  const trends = { domestic: await latestTrend("domestic"), intl: await latestTrend("intl") };
+  const trends = {
+    domestic: await latestTrend("domestic"),
+    intl: await latestTrend("intl"),
+    domestic_monthly: await latestTrend("domestic_monthly"),
+  };
 
   // Owner overrides for the numbers this app runs on. Loaded once per book,
   // beside the prices, so pricing.ts can stay pure and synchronous — see
@@ -473,7 +517,7 @@ export async function loadBook(
     // below (the "no evidence anywhere" guard included) is unaffected by
     // blending — it only changes HOW MUCH a real observation moves things,
     // never WHETHER one exists.
-    const trend = h.applyTrend ? trends[h.seedGuess ? "intl" : "domestic"] : undefined;
+    const trend = h.applyTrend ? trends[h.seedGuess ? "intl" : h.monthly ? "domestic_monthly" : "domestic"] : undefined;
     const baseM = h.applyTrend ? (trend?.m ?? 1) : 1;
     const obs = observedSince(`${dest}|${quarterOf(req.from)}`, h.fetchedAt)
       ?? (primary ? observedSince(`${primary}|${quarterOf(req.from)}`, h.fetchedAt) : undefined);
