@@ -31,9 +31,75 @@ on:
         required: false
         type: string
         default: "MCO"
+      db1c_probe:
+        description: "yes = look for BTS's new MONTHLY DB1C (OD40) files instead"
+        required: false
+        type: string
+        default: "no"
 
 jobs:
+  # 2026-10-10: DB1B ended after 2025 Q2. BTS replaced it from July 2025 with
+  # DB1C ("OD40"): monthly, a 40% sample. This finds the real file names and
+  # columns so a loader is written against them, not a guess. No database.
+  db1c:
+    if: inputs.db1c_probe == 'yes'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find and inspect DB1C files
+        run: |
+          set +e
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          get() { curl -sSL --compressed -A "$UA" -H "Accept: text/html,application/xhtml+xml,*/*;q=0.8" -H "Accept-Language: en-US,en;q=0.9" "$1" -o "$2"; echo "  $1 -> exit $? size $(wc -c < "$2")"; }
+          echo "=== the raw file directory ==="
+          get "https://transtats.bts.gov/PREZIP/" dir.html
+          sed 's/<br>/\n/g' dir.html | sed 's/<[^>]*>//g' > dir.txt
+          echo "files in the directory: $(grep -c '\.zip' dir.txt)"
+          echo "--- every file dated 2025 or 2026 ---"
+          grep -E '^ *[0-9]+/[0-9]+/(2025|2026) ' dir.txt | grep -viE 'ONTIME|On_Time|Reporting_Carrier' | head -150
+          echo "--- names with Origin, Survey, DB1, OD40, OD_ ---"
+          grep -iE 'Origin|Survey|DB1|OD40|OD_' dir.txt | tail -40
+          for page in \
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-market" \
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-product"; do
+            echo "=== $page ==="
+            get "$page" page.html
+            head -c 470 page.html; echo
+            grep -oiE 'href="[^"]*\.zip[^"]*"' page.html | sort -u | head -40
+          done
+          echo "=== TranStats pages that name DB1C (for the monthly Market/Coupon tables) ==="
+          for u in "https://www.transtats.bts.gov/DataIndex.asp" \
+                   "https://www.transtats.bts.gov/Tables.asp?QO_VQ=EGH" \
+                   "https://www.transtats.bts.gov/DatabaseInfo.asp?QO_VQ=EGH"; do
+            get "$u" t.html
+            grep -oiE '<a[^>]*href="[^"]*"[^>]*>[^<]*(DB1C|Origin and Destination|O&amp;D|OD40)[^<]*</a>' t.html | head -20
+            grep -oiE 'href="[^"]*(QO_VQ|gnoyr_VQ|Table_ID|DB_ID)=[^"]*"[^>]*>[^<]{0,80}' t.html | grep -iE 'DB1C|Origin|Market|Coupon|Ticket|OD' | head -30
+          done
+          echo "=== every DB1C file in the directory ==="
+          grep -iE 'DB1C' dir.txt
+          f=$(grep -oiE 'Origin_and_Destination_Survey_DB1C[A-Za-z]+_[0-9]+_[0-9]+\.zip' dir.txt | sort -u | tail -1)
+          [ -n "$f" ] || { echo "none found by name"; exit 0; }
+          echo "Fetching $f"
+          curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/$f" -o c.zip; ls -la c.zip; unzip -l c.zip
+          inner=$(unzip -Z1 c.zip | grep -iE '\.csv(\.zip)?$' | head -1)
+          echo "inner: $inner"
+          unzip -o c.zip "$inner" -d c_out >/dev/null
+          if echo "$inner" | grep -qi '\.zip$'; then unzip -o "c_out/$inner" -d c_out >/dev/null; fi
+          ls -la c_out
+          csv=$(ls c_out/*.csv c_out/*.CSV 2>/dev/null | head -1)
+          echo "csv: $csv"
+          echo "--- header ---"; head -1 "$csv"
+          echo "--- first 3 rows ---"; sed -n '2,4p' "$csv"
+          echo "--- rows, and by year/month/quarter if present ---"
+          awk -F',' '
+            NR==1 { for (i=1;i<=NF;i++) { h=$i; gsub(/"/,"",h); c[toupper(h)]=i } next }
+            { n++; k=""; if ("YEAR" in c) k=k $c["YEAR"]; if ("MONTH" in c) k=k "-m" $c["MONTH"]; if ("QUARTER" in c) k=k "-q" $c["QUARTER"]; seen[k]++ }
+            END { print n " rows"; for (k in seen) print "  " k ": " seen[k] }' "$csv"
+          echo "--- 5 rows with BNA ---"; grep -m 5 'BNA' "$csv"
+          echo "--- 5 rows with MCO ---"; grep -m 5 'MCO' "$csv"
+          rm -rf c.zip c_out *.html dir.txt
+
   debug:
+    if: inputs.db1c_probe != 'yes'
     runs-on: ubuntu-latest
     steps:
       - name: Download and inspect
