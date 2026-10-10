@@ -4,6 +4,7 @@
  *
  * Every endpoint reads the cache. None of them calls a provider.
  */
+import { loadNearbyCheaper, type NearbyCheaper } from "./nearbyAirports.js";
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
 import { SETTINGS, loadSettings, setSetting, applySettings, settingsMap } from "./settings.js";
@@ -337,6 +338,12 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // Plus trip pinned to real dates is not told about the wrong month.
   const crowdMonth = Number((explicitDate ?? `${month}-01`).slice(5, 7));
 
+  // A cheaper airport within a drive, per US resort (nearbyAirports.ts).
+  // Advice beside the total, never in it; a failure just leaves it out.
+  const nearby = await loadNearbyCheaper(db, params.origin,
+    RESORTS.filter((r) => r.region === "dom").map((r) => destinationByResort.get(r.id)!), month)
+    .catch(() => new Map<string, NearbyCheaper>());
+
   const results = RESORTS.map((resort) => {
     const iata = destinationByResort.get(resort.id)!;
     // A "Getting there" preset can send different resorts down different
@@ -400,8 +407,16 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     // we guessed they would mind is the app deciding for them.
     const crowd = crowdFor(resort.id, crowdMonthForRow, crowdDay) ?? undefined;
     const crowdWarning = crowdFlag(resort.id, crowdMonthForRow, crowdCare, crowdDay) ?? undefined;
+    const near = best && mode !== "drive" && !droveInstead && best.flights > 0 && best.perSeatFare > 0
+      ? nearby.get(iata) : undefined;
+    // Never "drive to save" when the fare we already quote from home is
+    // below what people typically pay from the other airport.
+    const nearOk = near && near.altMedian < best!.perSeatFare ? near : undefined;
+    const nearbyCheaper = nearOk
+      ? { ...nearOk, partySaving: Math.round(nearOk.savingPerSeat * best!.flights / best!.perSeatFare) }
+      : undefined;
     return best
-      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning,
+      ? { resortId: resort.id, name: resort.name, iata, ok: true as const, price: best, attractions, crowd, crowdWarning, nearbyCheaper,
           noFlightsYet: droveInstead ? `No flight prices yet for ${params.origin}→${iata} — priced as a drive for now` : undefined,
           drivenBecauseClose: drivenBecauseClose
             ? `${params.origin} is within driving distance of ${resort.name}, so it's priced as a drive, not a flight`

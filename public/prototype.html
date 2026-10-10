@@ -2848,6 +2848,10 @@ async function renderDetail(){
     + (lapInfants ? `<div class="li"><div class="l"><b>Lap infant${lapInfants>1?"s":""} × ${lapInfants}</b>
         <small>Under 2, traveling on a lap — priced at 10% of an adult fare</small></div>
         <div class="p">included</div></div>` : "")
+    + (!excludeFlights && item.nearbyCheaper ? (()=>{ const n = item.nearbyCheaper;
+        return `<div class="li"><div class="l"><b>Nearby airport · ${esc(n.name)} (${esc(n.origin)})</b>
+          <small>${esc(nearbySentence(n, p.origin, x.destination))} Not in this total.</small></div>
+          <div class="p" style="color:var(--ink-2)">save ~${usd(n.partySaving)}</div></div>`; })() : "")
     // No in-app "Check now" live-fare button any more (owner, 2026-09-25):
     // two flight buttons read as the same thing. Kayak is the one path.
     ;
@@ -4504,6 +4508,16 @@ function costTableHtml(item){
 
 /* --------------------------- getting there --------------------------- */
 
+/** "People flying from Charlotte to LAX paid about $45 a seat less ..."
+ *  (nearbyAirports.ts). One home for the card and the PDF. */
+function nearbySentence(n, home, dest){
+  const h = n.driveHours, whole = Math.floor(h);
+  const hrs = h % 1 ? (whole ? whole + "½" : "½") : String(h);
+  return `People flying ${n.origin} to ${dest} paid about ${usd(n.savingPerSeat)} a seat less than from ${home} `
+    + `(${n.period}: ${usd(n.altMedian)} against ${usd(n.homeMedian)}). For your party that's about ${usd(n.partySaving)}, `
+    + `about a ${hrs}-hour drive away, before gas and parking.`;
+}
+
 function gettingThereHtml(item){
   const pr = item.price, out = [];
   const r = item.resort;
@@ -4536,6 +4550,10 @@ function gettingThereHtml(item){
         That is an <b>estimate</b> ${est.seedGuess
           ? "built from typical fares from the US to this part of the world"
           : `built from what people actually paid on this route in ${esc(est.basisQuarter)}`}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
+      if(item.nearbyCheaper){
+        out.push(`<p>${esc(nearbySentence(item.nearbyCheaper, params.origin, pr.destination))}
+          It is not in the total.</p>`);
+      }
       if(f.cheaperFound){
         const c = f.cheaperFound;
         out.push(`<p>We also found a real fare of <b>${usd(c.price)}</b>${c.carrier ? ` on ${esc(c.carrier)}` : ""}${

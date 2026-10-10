@@ -28,6 +28,7 @@
  *    not as "no effect".
  */
 import type { Db } from "./db.js";
+import { loadHomeFareLevels } from "./airportFares.js";
 import { ALL_ORIGINS, RESORTS } from "./config.js";
 import { haversineMiles } from "./geo.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
@@ -133,6 +134,10 @@ export const INDICATORS: Indicator[] = [
   { key: "holiday", label: "Thanksgiving or Christmas week", unit: "a holiday-week departure", step: 1, source: "Travel date" },
   { key: "lead", label: "How far ahead it was searched", unit: "30 more days ahead", step: 1, source: "Search date vs travel date" },
   { key: "hub", label: "Size of the home airport", unit: "a home airport 10 times busier", step: 1, source: "Government fare survey passengers" },
+  // Owner, 2026-10-10: does a home airport that's dear in general mean dear
+  // to Disney too? BTS's average fare per airport, all destinations
+  // (airportFares.ts). 400 is roughly BTS's national average.
+  { key: "homeLevel", label: "Home airport's general price level", unit: "a home airport whose average fare is 10% higher", step: Math.log(1.1), source: "Government average fare per airport (your BTS tables)" },
   { key: "googleTypical", label: "Google's typical price for the route", unit: "a Google typical price twice as high", step: Math.log(2), source: "Google's answer to the same search" },
 ];
 
@@ -151,7 +156,9 @@ const ORIGIN_BY = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 
 /** One fare's indicator values, in INDICATORS order (googleTypical last), or
  *  null when the fare can't be placed (unknown airport). */
-export function featuresOf(row: FareRow, hubPax: Map<string, number>, withGoogle: boolean): number[] | null {
+export function featuresOf(
+  row: FareRow, hubPax: Map<string, number>, withGoogle: boolean, homeFare: Map<string, number> = new Map(),
+): number[] | null {
   const o = ORIGIN_BY.get(row.origin), d = DEST_BY_IATA.get(row.destination);
   if (!o || !d) return null;
   const month = Number(row.departDate.slice(5, 7));
@@ -167,6 +174,8 @@ export function featuresOf(row: FareRow, hubPax: Map<string, number>, withGoogle
     holidayFlightPremium(row.departDate as never) ? 1 : 0,
     leadDays / 30,
     Math.log10((hubPax.get(row.origin) ?? 0) + 1),
+    // No figure for an airport = the national average, so it moves nothing.
+    Math.log((homeFare.get(row.origin) ?? 400) / 400),
   ];
   if (withGoogle) {
     if (!row.googleTypicalMid || row.googleTypicalMid <= 0) return null;
@@ -263,6 +272,7 @@ export async function loadIndicatorStudy(db: Db) {
       where source like 'bts%' group by origin`,
   )).rows;
   const hubPax = new Map(hub.map((h) => [h.origin, Number(h.pax)]));
+  const homeFare = await loadHomeFareLevels(db).catch(() => new Map<string, number>());
   const iso = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v));
   const rows: FareRow[] = fares.map((f) => ({
     origin: f.origin.trim(), destination: f.destination.trim(),
@@ -274,7 +284,7 @@ export async function loadIndicatorStudy(db: Db) {
   const build = (withGoogle: boolean) => {
     const X: number[][] = [], P: number[] = [];
     for (const r of rows) {
-      const x = featuresOf(r, hubPax, withGoogle);
+      const x = featuresOf(r, hubPax, withGoogle, homeFare);
       if (x) { X.push(x); P.push(r.price); }
     }
     return { X, P };

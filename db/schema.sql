@@ -889,3 +889,29 @@ create table if not exists historical_fares_monthly (
 );
 create index if not exists historical_fares_monthly_route
   on historical_fares_monthly (origin, destination, month, year, loaded_at desc);
+
+-- BTS's published average fare per airport and per metro area (owner's
+-- downloads, 2026-10-10: AverageFare_Q1_2025.xls and Tables 7, 8, 9 and 12
+-- for 2026 Q2). An average over EVERY domestic destination from that
+-- airport, not a fare to Orlando, so it is a "how dear is this airport in
+-- general" figure. APPEND-ONLY, one load per file (airportFares.ts); the
+-- originals are kept in data/bts/raw/. `adjusted_fare_usd` is BTS's own
+-- inflation-adjusted figure where the file has one.
+create table if not exists airport_fare_levels (
+  id                 bigserial    primary key,
+  year               smallint     not null,
+  quarter            smallint     not null check (quarter between 1 and 4),
+  kind               text         not null check (kind in ('airport', 'metro')),
+  code               char(3),
+  name               text         not null,
+  avg_fare_usd       numeric(9,2) not null check (avg_fare_usd > 0),
+  adjusted_fare_usd  numeric(9,2),
+  adjusted_base      text,
+  passengers         bigint,
+  passengers_note    text,
+  rank               integer,
+  source             text         not null default 'bts_airport_fares',
+  file               text         not null,
+  loaded_at          timestamptz  not null default now()
+);
+create index if not exists airport_fare_levels_code on airport_fare_levels (code, year, quarter);

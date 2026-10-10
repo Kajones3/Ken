@@ -30,6 +30,12 @@ jobs:
       - run: npm run migrate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # BTS's average fare per airport (data/bts/airport-fares.csv): adds any
+      # file not loaded yet, append-only. Drop new rows into that CSV and
+      # run this workflow to load them. Cheap; nothing is downloaded.
+      - run: npm run airport-fares
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: Load new monthly files
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

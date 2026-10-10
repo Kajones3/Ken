@@ -249,3 +249,44 @@ test("the furthest-off routes get buying slots, either direction, in a month tha
        fresh: new Set(["ORD|MCO|2027-03"]) });
   assert.deepEqual(picked.map((p) => `${p.origin} ${p.departMonth}`), ["DEN 2026-12", "BOS 2027-03", "ORD 2027-01"]);
 });
+
+test("rotationRoutes spreads never-bought routes across home airports, not one airport's nine first", async () => {
+  // Found 2026-10-10: 13 of the 19 big airports had never had a fare bought,
+  // and alphabetical tie-breaking would have handed DFW all nine routes first.
+  const db = await memoryDb();
+  const picks = await rotationRoutes(db, 12, "2027-03");
+  assert.equal(new Set(picks.map((p) => p.origin)).size, 12);
+  assert.ok(new Set(picks.map((p) => p.destination)).size > 3, "and not all to the same airport either");
+  await db.close();
+});
+
+test("runPopularRoutes keeps rotation slots even when demand could fill the whole night", async () => {
+  // 2026-10-10: demand (mostly the owner's own test searches from a few
+  // airports) took every slot, every night, and rotation never ran.
+  const db = await memoryDb();
+  const month = (await import("./config.js")).plannableMonths(new Date().toISOString().slice(0, 10))[2]!;
+  for (const o of ["RDU", "BNA", "MCI", "STL", "CVG", "CLE"]) await recordSearch(db, o, ["MCO", "LAX", "SNA"], month);
+  const asked: string[] = [];
+  const stub = {
+    callsSpent: 0, budgetRemaining: 100,
+    async quote(origin: string, destination: string, departDate: string, tripLength: number) {
+      asked.push(`${origin}|${destination}`);
+      return { origin, destination, departDate, tripLength, priceUsd: 400, stops: 0, deepLink: "x" };
+    },
+  };
+  await runPopularRoutes(db, { limit: 8, datesPerMonth: 1, worstSlots: 0, rotationSlots: 3, provider: stub as never });
+  const demanded = new Set(["RDU", "BNA", "MCI", "STL", "CVG", "CLE"].flatMap((o) => ["MCO", "LAX", "SNA"].map((d) => `${o}|${d}`)));
+  const fromRotation = asked.filter((k) => !demanded.has(k));
+  assert.ok(fromRotation.length >= 3, `rotation should get its 3 slots, got ${fromRotation.length}: ${asked.join(", ")}`);
+  await db.close();
+});
+
+test("parseRouteList reads a named purchase and refuses anything it can't read", async () => {
+  const { parseRouteList } = await import("./jobs/popularRoutes.js");
+  assert.deepEqual(parseRouteList("iad-cdg-2027-03, IAD-NRT-2027-06"), [
+    { origin: "IAD", destination: "CDG", departMonth: "2027-03", searches: 0 },
+    { origin: "IAD", destination: "NRT", departMonth: "2027-06", searches: 0 },
+  ]);
+  assert.deepEqual(parseRouteList(""), []);
+  assert.throws(() => parseRouteList("IAD to Paris"));
+});
