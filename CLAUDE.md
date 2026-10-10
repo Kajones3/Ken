@@ -86,6 +86,36 @@ side works with or without a redeploy.
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **751 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-10, later — why international fares miss (live evidence, NOTHING in pricing changed yet)
+
+Owner: STL->Paris read ~$500/seat high, which put Paris above Disneyland;
+"Blank uses our estimate of $2,454" (an Asian resort) also off. Coverage run
+38059859409 (new section "International: bought fare vs seed guess"):
+- **How an international estimate is made:** seed $754 Europe / $1,087 Asia,
+  SAME for every US city, x the seed's quarter shape (Q1 .85, Q2 .90, **Q3
+  1.37**, Q4 1.10) x ONE intl trend (now **x1.648** from 64 routes). $2,454 =
+  1,087 x 1.37 x 1.648 exactly: a summer search, and Tokyo, Shanghai and Hong
+  Kong all get that same figure.
+- **The seed's summer bump is wrong.** Bought/seed by quarter: Asia Q1 1.47,
+  Q2 1.79, **Q3 1.28**, Q4 1.81; Europe Q1 1.52, Q2 1.74, **Q3 1.47**. Real
+  summer fares are NOT 37% above spring, but the one trend (learned mostly on
+  Q1/Q2 fares) is stacked on the +37%, so summer international reads high.
+  Paris summer = 754 x 1.37 x 1.648 = ~$1,700.
+- **Destinations differ, one trend fits none:** CDG x1.60, HKG x1.37, NRT
+  x1.79, HND x2.01, PVG x1.63. Hong Kong reads high, Tokyo low, same number.
+- **"Median itinerary" vs Google's typical:** intl mostly inside Google's
+  typical range (CDG $988 vs $710-1,150; PVG 5 of 7 above). Domestic is ALL
+  above Google's typical (MCO $427 vs $105-195): unexplained, check what
+  SerpApi's typical range measures before trusting either.
+- **No STL fare has ever been bought.**
+- **BTS DB1B ENDED at 2025 Q2.** BTS replaced it from July 2025 with DB1C
+  ("OD40"): MONTHLY, 40% sample; Jan-Mar 2026 published (BTS page 2026-06-17).
+  That is why a March 2027 search quotes 2025 Q1. A DB1C loader would give
+  fresher AND monthly domestic baselines. Not built; ask.
+- Proposed to the owner (not built): per-destination season shape learned
+  from bought fares + Google's typical range, replacing the flat seed shape;
+  or flip `flight.useCandidate` after the ~10-21 review.
+
 ### Session of 2026-10-08 to 10-10 in one table (PRs #128-#146)
 
 | PR | What |
