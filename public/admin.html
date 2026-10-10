@@ -256,6 +256,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#visitors">Visitors</a>
     <a href="#flights">Flights &amp; hotels</a>
     <a href="#signals">What moves the price</a>
+    <a href="#indicators">Indicator study</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -448,6 +449,41 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p>US routes start from the government's survey of what people actually paid. The quarterly survey ended in
       June 2025; its monthly replacement is being added. Older quarters are kept, never replaced.</p>
     <div id="sigSurveys"></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="indicators">
+  <section class="sheet">
+    <h2>Indicator study: what actually moves a fare</h2>
+    <p>Read only. Every paid fare we've bought goes into one regression (a ridge regression on the log of the fare,
+      so every effect reads as a percentage). It answers two questions: <b>which indicators really move the price</b>,
+      and <b>does knowing them make us more accurate</b> on fares the model never saw? Nothing here changes a price.</p>
+    <ul>
+      <li><b>Focus</b> ranks indicators by how much they move fares across the range we actually see. Start at the top.</li>
+      <li><b>Solid</b> means 200 refits on resampled fares agree on the direction; <b>maybe</b> mostly agree;
+        <b>not yet</b> means the data can't tell. "Can't tell yet" means our fares don't vary on it
+        (every paid fare departs on the 15th, for example).</li>
+      <li><b>Accuracy</b> is measured fairly: each fare is predicted by a model that was fitted without it.</li>
+    </ul>
+    <p class="count" id="indCount">Loading…</p>
+  </section>
+  <section class="sheet">
+    <h2>Model 1: route, season and timing</h2>
+    <div id="indStructure"></div>
+  </section>
+  <section class="sheet">
+    <h2>Model 2: the same, plus Google's typical price</h2>
+    <p>Only fares bought since Google's typical price started being kept (October 7), so fewer fares.</p>
+    <div id="indGoogle"></div>
+  </section>
+  <section class="sheet">
+    <h2>Not in the study yet</h2>
+    <ul>
+      <li><b>Budget airlines and number of airlines on a route</b>: comes from the government's monthly survey,
+        being loaded now.</li>
+      <li><b>Booking a few weeks out, and day of the week</b>: our paid fares are all bought months ahead and depart on
+        the 15th, so these need Google's price history and the free feed.</li>
+    </ul>
   </section>
   </div>
 
@@ -1382,6 +1418,7 @@ async function loadSignals(){
   const intl = d.trends.find(t => t.kind === "intl"), dom = d.trends.find(t => t.kind === "domestic");
   $("#sigCount").textContent = [
     intl ? `International correction today: ${xr(intl.multiplier)} from ${intl.routes} routes.` : "",
+    d.trends.find(t => t.kind === "domestic_monthly") ? `US correction for the monthly survey: ${xr(d.trends.find(t => t.kind === "domestic_monthly").multiplier)}.` : "",
     dom ? `US correction today: ${xr(dom.multiplier)} from ${dom.routes} routes.` : "",
   ].join(" ");
   const tbl = (head, rows) => rows.length
@@ -1400,8 +1437,36 @@ async function loadSignals(){
     d.priceLevels.map(x => [esc(x.resortName), MONTHS[x.month-1], x.searches, x.lowPct + "%", x.typicalPct + "%",
       `<b>${x.highPct}%</b>`, x.crowd ? esc(x.crowd) + (x.crowdBasis === "dvcPoints" ? " (from points charts)" : " (our estimate)") : "—"]));
   $("#sigSurveys").innerHTML = tbl([["Survey"],["Period"],["Routes",1],["Loaded"]],
-    d.surveys.map(x => [x.source === "bts_db1c" ? "Monthly survey (new)" : "Quarterly survey", `${x.year} Q${x.quarter}`, x.routes,
+    d.surveys.map(x => [x.source === "bts_db1c" ? "Monthly survey (new)" : "Quarterly survey",
+      x.month ? `${MONTHS[x.month-1]} ${x.year}` : `${x.year} Q${x.quarter}`, x.routes,
       esc(String(x.loadedAt || "").slice(0, 10))]));
+}
+
+/* ---------------------------- indicator study ---------------------------- */
+const VERDICT = { "solid": "Solid", "maybe": "Maybe", "not yet": "Not yet", "can't tell yet": "Can't tell yet" };
+function studyHtml(st){
+  if(!st) return `<p class="count">Not enough fares yet (needs 15).</p>`;
+  const acc = st.cv ? `<p><b>Accuracy on fares it never saw:</b> typically off by ${st.cv.medianOffPct}%, ${st.cv.within10Pct}% within 10%.
+    A plain model (one price per part of the world) is typically off by ${st.plainCv ? st.plainCv.medianOffPct + "%" : "—"}.
+    ${st.plainCv && st.cv.medianOffPct < st.plainCv.medianOffPct ? "The indicators help." : "The indicators don't beat the plain model yet."}</p>` : "";
+  const rows = st.effects.map((e, i) => `<tr>
+    <td class="n">${e.weightPct == null ? "—" : i + 1}</td>
+    <td><b>${esc(e.label)}</b><div class="meta">${esc(e.sentence)}</div></td>
+    <td class="n">${e.effectPct == null ? "—" : (e.effectPct >= 0 ? "+" : "") + e.effectPct + "%"}</td>
+    <td>${esc(VERDICT[e.verdict] || e.verdict)}${e.agreePct != null ? ` <span class="meta">(${e.agreePct}% of refits agree)</span>` : ""}</td>
+    <td class="n">${e.weightPct == null ? "—" : e.weightPct + "%"}</td>
+    <td class="meta">${esc(e.source)}</td></tr>`).join("");
+  return `<p class="count">${st.fares} fares.</p>${acc}
+    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th class="n">Focus</th><th>Indicator</th><th class="n">Effect</th>
+      <th>How sure</th><th class="n">Moves fares by</th><th>From</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+async function loadIndicators(){
+  const r = await fetch("/api/admin/indicators");
+  if(!r.ok){ $("#indCount").textContent = "Couldn't run the study."; return; }
+  const d = await r.json();
+  $("#indCount").textContent = `${d.fares} paid fares in the record. Refit just now.`;
+  $("#indStructure").innerHTML = studyHtml(d.structure);
+  $("#indGoogle").innerHTML = studyHtml(d.withGoogle);
 }
 async function loadWaits(){
   const r = await fetch("/api/admin/wait-times");
@@ -2169,6 +2234,7 @@ loadDeals();
 loadFlights();
 loadWaits();
 loadSignals();
+loadIndicators();
 loadChecks();
 loadStats();
 </script>

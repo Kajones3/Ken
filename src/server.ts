@@ -35,6 +35,7 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { loadScoreboard } from "./fareScoreboard.js";
 import { loadFareSignals } from "./fareSignals.js";
+import { loadIndicatorStudy } from "./indicatorStudy.js";
 import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
@@ -1678,6 +1679,14 @@ const server = createServer(async (req, res) => {
 
     /* "What moves the price?" (fareSignals.ts): read-only evidence, side by
      * side, before any signal is allowed to move a traveler's number. */
+    /* The indicator study (indicatorStudy.ts): a regression over every paid
+     * fare, read-only, refit on each visit (a few hundred rows, well under a
+     * second). */
+    if (url.pathname === "/api/admin/indicators" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await loadIndicatorStudy(db), { cache: "no-store" });
+    }
+
     if (url.pathname === "/api/admin/signals" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       return send(200, await loadFareSignals(db), { cache: "no-store" });

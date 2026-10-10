@@ -86,6 +86,50 @@ side works with or without a redeploy.
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **751 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-10, last — BTS's monthly survey loaded; two new /admin tabs (PRs #149-#150)
+
+- **BTS's monthly survey (DB1C) is wired** (owner: "Use the new numbers ...
+  DONT DELETE THE DATA WE ALREADY HAVE"). BTS's PREZIP folder holds ONE
+  new-format file so far: `Origin_and_Destination_Survey_DB1CTicket_2026_3.zip`
+  (March 2026, 1.1 GB, a zip holding csv.zip/asc.zip/parquet; ~10 min to
+  download; www.bts.gov pages block scripts, transtats PREZIP does not). It is
+  the TICKET file: `AirportGroupString` path ("BNA:SFO:BNA"), `RoundTrip`,
+  `TotalAmount` (WHOLE ticket incl. tax, NOT one leg), `Passengers`,
+  `SchFlYear/SchFlMonth` (travel month), `PurchaseWindowGroup`. 13M rows.
+  `src/jobs/db1cBaseline.ts`: out-and-back round trips only, turnaround =
+  destination, < $50 dropped (award tickets), passenger-weighted percentiles
+  per route and travel month into **`historical_fares_monthly`
+  (append-only; readers take newest load)**. `historical_fares` untouched.
+  Workflow **"Pricing the Magic BTS monthly survey"** (`bts-db1c.yml`) runs
+  the 6th monthly and loads every PREZIP DB1C file not yet loaded.
+- **book.ts** uses a monthly row (trip's calendar month, newest year, >=
+  `MONTHLY_MIN_TICKETS` 30) ONLY when `fare_trend` kind
+  **`domestic_monthly`** exists (refresh computes it nightly from bought
+  fares vs the same monthly rows, needs 3 routes); else the quarterly row as
+  before. Label reads "March 2026". Every bought fare counts as route
+  evidence against it (`fetchedAt: null`).
+- **/admin "What moves the price"** (`fareSignals.ts`, read-only): intl
+  bought/seed per destination and season, our fare vs Google typical, Google
+  price level by resort+month beside our crowd band, surveys held.
+- **/admin "Indicator study"** (`indicatorStudy.ts`, read-only): ridge
+  regression on log(fare) over every paid fare; per indicator effect %,
+  bootstrap verdict (solid/maybe/not yet/can't tell yet), "focus" rank;
+  5-fold CV vs a plain region-only model. Model 2 adds Google's typical
+  price. Owner uses boosted trees/linear regression at work; agreed path:
+  ridge now, boosted trees (two-stage: BTS microdata for structure + our
+  fares for today) once there are thousands of fares. Not built: budget
+  carrier / airline count indicators (from DB1C), purchase-window effect.
+- **Google's "typical price" is the cheapest seat's usual range**, not a
+  middle fare (checked in the kept raw answers: CLT->TPA Dec 15, 15
+  itineraries $304-$545, middle $433, Google typical $140-260, level
+  "high"). Our domestic fares above it is EXPECTED; the "unexplained" note
+  below is resolved.
+- Disneyland crowd bands use the 2026 Disneyland Hotel points chart; 2027
+  charts exist (Dec 2025). Ask the owner for a screenshot.
+- Crowds from flight patterns (owner wants it): proposed BTS T-100 monthly
+  passengers into MCO/LAX/SNA as a second source beside the points charts;
+  Google price level already on the signals tab. Not built.
+
 ### 2026-10-10, later — why international fares miss (live evidence, NOTHING in pricing changed yet)
 
 Owner: STL->Paris read ~$500/seat high, which put Paris above Disneyland;

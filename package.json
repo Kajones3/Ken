@@ -32,7 +32,8 @@
     "probe-wait-times": "tsx src/jobs/probeWaitTimes.ts",
     "probe-cruise-prices": "tsx src/jobs/probeCruisePrices.ts",
     "exchange-rates": "tsx src/jobs/exchangeRates.ts",
-    "wait-times": "tsx src/jobs/waitTimes.ts"
+    "wait-times": "tsx src/jobs/waitTimes.ts",
+    "bts-db1c": "tsx src/jobs/db1cBaseline.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

@@ -1,0 +1,58 @@
+name: Pricing the Magic BTS monthly survey
+
+# BTS's MONTHLY fare survey (DB1C, "OD40"), which replaced the quarterly
+# DB1B survey after June 2025. Checks BTS's file folder and loads every
+# monthly Ticket file we have not loaded yet, so new months arrive on their
+# own. Rows are ADDED to historical_fares_monthly, never replaced; see
+# src/jobs/db1cBaseline.ts. One file is ~1.1 GB and BTS sends it slowly
+# (about 10 minutes), hence the long timeout.
+on:
+  schedule:
+    - cron: "17 9 6 * *"   # the 6th of each month
+  workflow_dispatch:
+    inputs:
+      reload:
+        description: "Name of one file to load again even if loaded before (blank = only new files)"
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  db1c:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Load new monthly files
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          RELOAD: ${{ inputs.reload }}
+        run: |
+          set -e
+          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36"
+          curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/" -o dir.html
+          files=$(grep -oiE 'Origin_and_Destination_Survey_DB1CTicket_[0-9]+_[0-9]+\.zip' dir.html | sort -u)
+          echo "Monthly files at BTS:"; echo "$files"
+          loaded=$(npx tsx src/jobs/db1cLoaded.ts)
+          echo "Already loaded:"; echo "$loaded"
+          for f in $files; do
+            if echo "$loaded" | grep -qx "$f" && [ "$RELOAD" != "$f" ]; then echo "skip $f (loaded)"; continue; fi
+            echo "=== $f ==="
+            curl -sSL -A "$UA" "https://transtats.bts.gov/PREZIP/$f" -o c.zip
+            inner=$(unzip -Z1 c.zip | grep -iE '\.csv(\.zip)?$' | head -1)
+            unzip -o c.zip "$inner" -d c_out >/dev/null
+            rm -f c.zip
+            if echo "$inner" | grep -qi '\.zip$'; then unzip -o "c_out/$inner" -d c_out >/dev/null; rm -f "c_out/$inner"; fi
+            csv=$(ls c_out/*.csv | head -1)
+            DB1C_CSV_PATH="$csv" DB1C_FILE="$f" npm run bts-db1c
+            rm -rf c_out
+          done
+      - if: always()
+        run: rm -rf c.zip c_out dir.html
