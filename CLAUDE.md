@@ -70,21 +70,45 @@ now exists so it cannot recur silently.
 
 ---
 
-## START HERE — state as of 2026-10-08 (end of session)
+## START HERE — state as of 2026-10-10 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of **PR #127** plus
-this notes commit. Every PR through #127 is merged.
+in Render; delete it to launch). `master` is at the merge of **PR #146** plus
+this notes commit. Every PR through #146 is merged. **The owner redeployed
+Render after #146 and the sample PDF works on their phone (2026-10-10)**, so
+the live site matches master as of then. Still ask about a redeploy for
+anything merged after that.
 
-**Ask whether Render has been redeployed since #127 before trusting the live
-site.** The owner redeploys by hand; Render's build runs `npm run migrate`.
-The nightly data jobs run in GitHub Actions and migrate themselves, so the
-DATA side works with or without a redeploy. What only shows after a
-redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
-"Checked before buying" section, and everything listed under #121.
+The owner redeploys by hand; Render's build runs `npm run migrate`. The
+nightly data jobs run in GitHub Actions and migrate themselves, so the DATA
+side works with or without a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
+**751 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### Session of 2026-10-08 to 10-10 in one table (PRs #128-#146)
+
+| PR | What |
+|---|---|
+| #128-#132 | Render redeployed; Plus "best months to go" replaced the day-by-day calendar; owner's story under the hero map |
+| #133 | LAX leads for Disneyland; WDW pass prices raised; details no longer slide sideways |
+| #134-#136 | Plus = best months, budget, saved searches, PDF, deal emails; separate Plus **Budget page** (milestones, annual-pass break-even); board sparklines removed; "your own discount" free again |
+| #137 | The PDF is really Plus (free visitors print a Plus notice); logo and map wait to load before printing |
+| #138-#139 | Free **sample PDF** ("See a sample PDF") priced live; read-only **Sample scan** workflow (`src/jobs/sampleScan.ts`) |
+| #140-#141 | Sample scan tries six trip shapes; sample became Chicago family, Deluxe (superseded) |
+| #142 | **"Beyond the parks"**: spare days = time to explore the city (detail header + PDF section), pricing unchanged |
+| #143 | Sample became a ~$5,000 Houston family (superseded) |
+| #144 | Best-months tiles follow "Which day should we price?" (were always typical day) |
+| #145 | **Sample = the owner's own settings, San Francisco, March 2027**, cover leads with Paris |
+| #146 | Sample PDF printed one blank page on iPhone; fixed and **confirmed on the owner's phone** |
+
+**Nothing in this session touched a data job**, so governing rule #4 (prove
+the data stuck) had nothing new to verify; the standing daily check still
+applies. Open and NOT built from this session (ask first): Option C (each
+resort suggests its own nights), "What fits my budget?" / "What would save
+the most?", the wait-time "last October" line, the tab icon (owner still
+choosing). The pick-up list below (accuracy review ~10-21 to 10-28, hotels
+next) is still the plan.
 
 ### 2026-10-10 — the sample PDF printed ONE BLANK PAGE on the owner's phone
 
@@ -96,8 +120,8 @@ from the visitor's OWN search (none yet = empty). Fix: the sample stays held
 until the visitor runs a search or saves their own PDF (no `afterprint`
 reset), and a free visitor with no search who prints gets the Plus notice,
 never an empty page. Reproduced in Chromium by faking iOS's event order: old
-code 0 characters, new code the whole sample. **Not seen on a real iPhone;
-ask the owner to retry after redeploying.**
+code 0 characters, new code the whole sample. **Confirmed on the owner's
+phone after redeploy (2026-10-10): "The pdf worked."**
 
 ### 2026-10-09, later — the sample PDF uses the owner's own settings: San Francisco, March 2027
 
@@ -421,7 +445,7 @@ was found (all from the code and the 2026-10-07 coverage report):
 
 ### Pick up here FIRST next session (in this order)
 
-1. **Ask about the Render redeploy** (above).
+1. **Ask about the Render redeploy** for anything merged after #146.
 2. **Prove the data still sticks (governing rule #4).** Morning email's "Did
    the data stick?" or the "Pricing the Magic debug coverage" workflow: paid
    fares bought = kept (18/night), hotel searches made = kept, database size.
