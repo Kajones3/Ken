@@ -506,6 +506,28 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
       where source = 'serpapi_flights' and origin = any($1) order by destination, depart_date, origin`,
     [homes],
   );
+  // Owner, 2026-10-10: "Do we have international fares from each of the top
+  // 10 airports?" Every home airport we offer, with what we've bought from it.
+  const byOrigin = await db.query<{ origin: string; destination: string; n: string }>(
+    `select origin, destination, count(*) as n from flight_observations
+      where source = 'serpapi_flights' group by 1, 2`,
+  );
+  const searched = await db.query<{ origin: string; n: string }>(
+    `select origin, sum(searches) as n from search_days group by 1`,
+  ).catch(() => ({ rows: [] as { origin: string; n: string }[] }));
+  const searchesBy = new Map(searched.rows.map((r) => [r.origin, Number(r.n)]));
+  const { ORIGINS: FREE, PLUS_ORIGINS: PLUS } = await import("../config.js");
+  const intlDests = ["CDG", "NRT", "HND", "PVG", "HKG"];
+  out.push("## Fares bought, by home airport (all paid fares in the record)");
+  out.push("  airport  list  US  intl  CDG NRT HND PVG HKG  searches");
+  for (const o of [...FREE.map((x) => ({ ...x, list: "free" })), ...PLUS.map((x) => ({ ...x, list: "plus" }))]) {
+    const rows = byOrigin.rows.filter((r) => r.origin === o.iata);
+    const n = (d: string) => Number(rows.find((r) => r.destination === d)?.n ?? 0);
+    const intl = intlDests.reduce((s, d) => s + n(d), 0);
+    const us = rows.reduce((s, r) => s + Number(r.n), 0) - intl;
+    out.push(`  ${o.iata.padEnd(7)}  ${o.list}  ${String(us).padStart(3)}  ${String(intl).padStart(4)}  ${intlDests.map((d) => String(n(d)).padStart(3)).join(" ")}  ${searchesBy.get(o.iata) ?? 0}`);
+  }
+  out.push("");
   out.push(`  Fares we bought from these airports: ${nb.rows.length}`);
   for (const r of nb.rows) out.push(`    ${r.origin}->${r.destination} departing ${String(r.depart_date).slice(0, 15)}: $${Math.round(Number(r.price_usd))}`);
   out.push("");
