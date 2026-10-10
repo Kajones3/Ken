@@ -59,7 +59,7 @@ import { EXCHANGE_RATES, type Rate } from "./exchangeData.js";
 export const PRICE_LEVELS_REVIEWED = "2026-09-27";
 
 export const PRICE_LEVELS_SOURCE =
-  "World Bank International Comparison Program (2021, carried to 2025 by the World Bank) at today's exchange rate; Orlando and Los Angeles from the US Bureau of Economic Analysis (2024)";
+  "World Bank International Comparison Program and the US Bureau of Economic Analysis";
 
 interface Country {
   /** The place the figures describe, as said in a sentence. */

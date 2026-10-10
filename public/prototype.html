@@ -1193,7 +1193,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
 
     <div class="panel-foot">
-      <p class="hint" id="hint">Every number is an estimate until you type your own. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
+      <p class="hint" id="hint">Every number is an estimate built on what people have paid during a similar time of year. You can enter your own price and make the budget specifically fit your family. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
       <button class="btn-primary" id="run"><span id="runLabel">Compare six resorts</span></button>
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
@@ -2199,7 +2199,7 @@ async function runSearch(keepId){
     $("#hero").hidden = true;
   } catch(e){
     console.error(e);
-    $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not reach the pricing API</div>
+    $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not load prices</div>
       <div class="rmeta">${String((e && e.message) || e)}</div></div></li>`;
   } finally {
     if(token === searchToken) setSearchBusy(false);
@@ -4533,9 +4533,9 @@ function gettingThereHtml(item){
       out.push(`<p>Flights from ${esc(params.origin)} to ${esc(pr.destination)} usually run
         ${usd(est.low)} to ${usd(est.high)} a seat. We've priced them at <b>${usd(f.price)}</b>${
         f.price > est.med + 1 ? ", toward the expensive end on purpose, because an estimate that comes in low is the one that hurts when you book" : ""}.
-        That is an <b>estimate</b>, not a quote: ${est.seedGuess
-          ? "it is built from typical fares from the US to this part of the world, corrected against real fares we've bought"
-          : `it is built from what people actually paid on this route in ${esc(est.basisQuarter)}`}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
+        That is an <b>estimate</b> ${est.seedGuess
+          ? "built from typical fares from the US to this part of the world"
+          : `built from what people actually paid on this route in ${esc(est.basisQuarter)}`}${est.ownerCorrected ? ", corrected against a real fare we were told about" : ""}.</p>`);
       if(f.cheaperFound){
         const c = f.cheaperFound;
         out.push(`<p>We also found a real fare of <b>${usd(c.price)}</b>${c.carrier ? ` on ${esc(c.carrier)}` : ""}${
@@ -4631,8 +4631,7 @@ function ticketsHtml(item){
 
   // Said plainly, because it is the single weakest number in this document
   // and the one most likely to embarrass somebody at the checkout.
-  out.push(`<p class="pnote">Ticket prices are a maintained table, not a live feed &mdash; no Disney park publishes
-    a pricing API. Real admission is tiered by date in ways this flat curve only approximates, so check
+  out.push(`<p class="pnote">Ticket prices are a maintained table, not a live feed. Real admission is tiered by date in ways this flat curve only approximates, so check
     the official ticket page linked above before you budget on it.</p>`);
   return out.join("");
 }
@@ -4702,7 +4701,7 @@ function hotelHtml(item){
         ${fmtDate(pr.start)} to ${fmtDate(checkout)}. Or <a href="${esc(stayLink.alt)}">search the same area on Booking.com</a>.</p>`
     : `<p><a href="${esc(stayLink.href)}">${esc(stayLink.label)}</a> &mdash; Disney's own booking page. Disney's site
         can't take dates in a link, so enter ${fmtDate(pr.start)} to ${fmtDate(checkout)} once you're there.</p>`);
-  out.push(`<p class="pnote">Room rates are estimates from cached and researched prices, not quotes.</p>`);
+  out.push(`<p class="pnote">Room rates are estimates from researched prices, not quotes.</p>`);
   return out.join("");
 }
 
@@ -4745,7 +4744,7 @@ function foodHtml(item){
     }
   }
   out.push(`<p class="pnote">Food figures come from budget guides and are per person per day, scaled for
-    children. No API prices a family's meals.</p>`);
+    children.</p>`);
   return out.join("");
 }
 
@@ -4848,8 +4847,7 @@ function priceLevelHtml(r, withSource){
     a dinner that's $50 in Orlando is about $${here}${inLocal} here. Groceries cost ${esc(l.groceriesPhrase)} in Orlando.
     That's the world outside the gates; food inside the parks is Disney's own price, and the food line covers it.${
     city ? ` These figures are for ${esc(l.place)} as a whole, and ${city} itself usually runs a little higher.` : ""}${
-    withSource ? ` Source: ${esc(PRICE_LEVELS.source)}${
-      FX_AS_OF && inLocal ? `; exchange rate of ${esc(FX_AS_OF)}` : ""}.` : ""}${
+    withSource ? ` Source: ${esc(PRICE_LEVELS.source)}.` : ""}${
     FX_PLACEHOLDER && inLocal ? " <b>The exchange rate is a placeholder and has not been refreshed yet.</b>" : ""}`;
 }
 
