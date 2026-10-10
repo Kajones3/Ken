@@ -2180,6 +2180,7 @@ async function runSearch(keepId){
   // Carrying it into a new search would quietly drop resorts the traveler
   // never excluded.
   pdfChoice = null;
+  sampleDocReady = false;   // a new search, so the held sample PDF is done
   params = readParams();
   const token = ++searchToken;
   setSearchBusy(true);
@@ -4921,7 +4922,7 @@ let pdfChoice = null;
 function buildPrintDoc(){
   const doc = $("#printDoc");
   const priced = results.filter(r=>r.ok);
-  if(!priced.length){ doc.innerHTML = ""; return; }
+  if(!priced.length && (session.plus || sampleMode)){ doc.innerHTML = ""; return; }
   // The PDF is Plus (owner, 2026-10-08: "The PDF doesn't appear to be
   // blocked by plus"). Printing from the browser's own menu skips the
   // button, so without Plus the printed page says what the PDF is instead
@@ -4996,6 +4997,7 @@ $("#pdfPickGo").addEventListener("click", async ()=>{
     return;
   }
   pdfChoice = picked;
+  sampleDocReady = false;
   closePdfPicker();
   buildPrintDoc();
   // The logo and cover map are images added a moment ago. Printing at once
@@ -5031,8 +5033,12 @@ function preloadBrandArt(){
 // this work, one layer down.
 // A sample document built for the print dialog must not be rebuilt (into the
 // Plus notice) by the print event that dialog fires.
+// The sample stays held until the visitor searches or saves their own PDF,
+// NOT until "afterprint": on a phone (iOS Safari) window.print() returns at
+// once and afterprint fires before the page is drawn; the print sheet then
+// fires beforeprint again, which rebuilt the document from the visitor's own
+// (often empty) search and printed one blank page (owner, 2026-10-10).
 window.addEventListener("beforeprint", () => { if(!sampleDocReady) buildPrintDoc(); });
-window.addEventListener("afterprint", () => { sampleDocReady = false; });
 
 /* ------------------------------ the sample ------------------------------ */
 

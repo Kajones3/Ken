@@ -86,6 +86,19 @@ redeploy: the new look (name, logo, six-castle map, PDF cover), the /admin
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **749 tests**, and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-10 — the sample PDF printed ONE BLANK PAGE on the owner's phone
+
+Signed out, on a phone: "Save as PDF (Plus)" -> See a sample PDF gave one
+blank page. Cause: iOS Safari's `window.print()` returns at once, so
+`afterprint` fired before the page was drawn and cleared `sampleDocReady`;
+the print sheet then fired `beforeprint` again, which rebuilt `#printDoc`
+from the visitor's OWN search (none yet = empty). Fix: the sample stays held
+until the visitor runs a search or saves their own PDF (no `afterprint`
+reset), and a free visitor with no search who prints gets the Plus notice,
+never an empty page. Reproduced in Chromium by faking iOS's event order: old
+code 0 characters, new code the whole sample. **Not seen on a real iPhone;
+ask the owner to retry after redeploying.**
+
 ### 2026-10-09, later — the sample PDF uses the owner's own settings: San Francisco, March 2027
 
 Owner (screenshot of their form): family of four (kids 11, 8), 6 nights,
