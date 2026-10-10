@@ -102,6 +102,13 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
   (append-only; readers take newest load)**. `historical_fares` untouched.
   Workflow **"Pricing the Magic BTS monthly survey"** (`bts-db1c.yml`) runs
   the 6th monthly and loads every PREZIP DB1C file not yet loaded.
+- **VERIFIED 2026-10-10 (coverage run 38065398989):** load run 38064233729
+  wrote 177 route-months from the March 2026 file: **2026-03 158 routes /
+  458,680 tickets**, plus stray 2026-02 (7/9), 2026-04 (11/17), 2026-05 (1/1)
+  that `MONTHLY_MIN_TICKETS` keeps out. Quarterly rows unchanged (155 each for
+  2024Q3, 2025Q1, 2025Q2). Samples, March 2026 medians: ATL->MCO $376,
+  BNA->MCO $570, STL->MCO $507, ORD->MCO $472, ATL->LAX $687, STL->LAX $614.
+  The monthly correction first computes on the next nightly refresh.
 - **book.ts** uses a monthly row (trip's calendar month, newest year, >=
   `MONTHLY_MIN_TICKETS` 30) ONLY when `fare_trend` kind
   **`domestic_monthly`** exists (refresh computes it nightly from bought
