@@ -477,6 +477,39 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   out.push(`  BTS quarters held: ${bq.rows.map((r) => `${r.year} Q${r.quarter} (${r.n})`).join(", ")}`);
   out.push("");
 
+  // Owner, 2026-10-10: "I can drive to RDU, ATL, CLT or IAD. How much could I
+  // save by leaving out of Dulles instead of RDU?" Same destination, same
+  // month or quarter, side by side.
+  out.push("## Nearby home airports, same destination (survey medians, round trip incl. tax)");
+  const homes = ["RDU", "IAD", "DCA", "BWI", "CLT", "ATL", "RIC", "GSO", "ORF"];
+  const nm = await db.query<{ origin: string; destination: string; year: number; month: number; p25_fare_usd: string; median_fare_usd: string; p75_fare_usd: string; itin_count: number }>(
+    `select distinct on (origin, destination, year, month) origin, destination, year, month,
+            p25_fare_usd, median_fare_usd, p75_fare_usd, itin_count
+       from historical_fares_monthly where origin = any($1)
+      order by origin, destination, year, month, loaded_at desc`,
+    [homes],
+  ).catch(() => ({ rows: [] }));
+  for (const r of [...nm.rows].sort((a, b) => a.destination.localeCompare(b.destination) || a.year - b.year || a.month - b.month || Number(a.median_fare_usd) - Number(b.median_fare_usd))) {
+    out.push(`    monthly ${r.year}-${String(r.month).padStart(2, "0")} ${r.origin}->${r.destination}: p25 $${Math.round(Number(r.p25_fare_usd))} · median $${Math.round(Number(r.median_fare_usd))} · p75 $${Math.round(Number(r.p75_fare_usd))} (${r.itin_count} tickets)`);
+  }
+  const nq = await db.query<{ origin: string; destination: string; year: number; quarter: number; p25_fare_usd: string | null; median_fare_usd: string | null; p75_fare_usd: string | null; passengers_sampled: string | null }>(
+    `select origin, destination, year, quarter, p25_fare_usd, median_fare_usd, p75_fare_usd, passengers_sampled
+       from historical_fares where source = 'bts_db1b' and origin = any($1)
+      order by destination, year, quarter, median_fare_usd`,
+    [homes],
+  );
+  for (const r of nq.rows) {
+    out.push(`    quarterly ${r.year} Q${r.quarter} ${r.origin}->${r.destination}: p25 $${Math.round(Number(r.p25_fare_usd))} · median $${Math.round(Number(r.median_fare_usd))} · p75 $${Math.round(Number(r.p75_fare_usd))} (${r.passengers_sampled ?? "?"} passengers sampled)`);
+  }
+  const nb = await db.query<{ origin: string; destination: string; depart_date: unknown; price_usd: string }>(
+    `select origin, destination, depart_date, price_usd from flight_observations
+      where source = 'serpapi_flights' and origin = any($1) order by destination, depart_date, origin`,
+    [homes],
+  );
+  out.push(`  Fares we bought from these airports: ${nb.rows.length}`);
+  for (const r of nb.rows) out.push(`    ${r.origin}->${r.destination} departing ${String(r.depart_date).slice(0, 15)}: $${Math.round(Number(r.price_usd))}`);
+  out.push("");
+
   out.push("## Baseline sanity — are these round trips?");
   const nat = await nationalBtsAverage(db);
   if (!nat) {
