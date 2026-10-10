@@ -125,6 +125,15 @@ international fares from each of the top 10 airports?"
   study: "Home airport's general price level" (`homeLevel`).
 - **(3) Dulles purchase:** popular-routes takes `routes` (workflow input,
   `POPULAR_ROUTES_ONLY`, e.g. `IAD-CDG-2027-03`) to buy named routes once.
+- **VERIFIED 2026-10-10 (PR #152 merged, coverage run 38078461438):**
+  popular-routes run 38078150515 bought 12 IAD fares, "12 written"; the
+  record now holds IAD 2 US + 10 intl (was 0). BTS airport tables: 468 rows
+  held (430 + 8 + 11 + 7 + 12). IAD vs RDU, same dates: CDG Mar $1,138 vs
+  $1,057, Jun $1,323 vs $1,579; PVG Mar $1,161 vs $1,458, Jun $1,737 vs
+  $2,129; NRT Mar $1,578 vs $1,682; HKG Mar $1,227 vs $1,268, Jun $1,516 vs
+  $1,169; MCO Mar $325 vs $197. One fare each: noisy.
+- **Next nightly run** is the first with rotation slots: check the
+  coverage table "Fares bought, by home airport" gains ~6 airports a night.
 
 ### 2026-10-10, last — BTS's monthly survey loaded; two new /admin tabs (PRs #149-#150)
 
