@@ -13,6 +13,7 @@
  *
  * Touches nothing: select-only, no provider calls, no writes.
  */
+import { unzipBody } from "../rawResponses.js";
 import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
@@ -422,6 +423,38 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   );
   out.push("  Bought fare vs Google's own 'typical price' for the same search:");
   for (const r of gi.rows) out.push(`    ${r.destination}: ${r.n} searches, our fare median $${Math.round(Number(r.bought))}, Google typical $${Math.round(Number(r.lo))}-$${Math.round(Number(r.hi))}, Google lowest $${Math.round(Number(r.lowest))}; ${r.above} above Google's typical range`);
+  // 2026-10-10: our bought domestic fares sat ABOVE Google's own "typical
+  // price" on every search. Open a few of Google's whole answers (kept in
+  // provider_responses) and print what each part of the answer says, so we
+  // can tell what Google's typical range is measuring.
+  out.push("  Google's whole answer, a few domestic searches:");
+  const raws = await db.query<{ request: Record<string, string>; body_gz: Uint8Array; fetched_at: unknown }>(
+    `select request, body_gz, fetched_at from provider_responses
+      where kind = 'google_flights' and status = 200
+        and request->>'arrival_id' in ('MCO','LAX','SNA','TPA')
+      order by fetched_at desc limit 4`,
+  );
+  for (const r of raws.rows) {
+    try {
+      const j = JSON.parse(unzipBody(r.body_gz)) as {
+        best_flights?: { price?: number; type?: string; flights?: { airline?: string }[] }[];
+        other_flights?: { price?: number; type?: string; flights?: { airline?: string }[] }[];
+        price_insights?: { lowest_price?: number; typical_price_range?: number[]; price_level?: string; price_history?: [number, number][] };
+        search_parameters?: Record<string, unknown>;
+      };
+      const all = [...(j.best_flights ?? []), ...(j.other_flights ?? [])].filter((f) => (f.price ?? 0) > 0);
+      const prices = all.map((f) => f.price as number).sort((a, b) => a - b);
+      const pi = j.price_insights ?? {};
+      const hist = pi.price_history ?? [];
+      const q = r.request;
+      out.push(`    ${q.departure_id}->${q.arrival_id} ${q.outbound_date}..${q.return_date} adults=${q.adults} type=${q.type} (bought ${String(r.fetched_at).slice(4, 15)})`);
+      out.push(`      ${prices.length} itineraries: cheapest $${prices[0]}, median $${prices[Math.floor((prices.length - 1) / 2)]}, dearest $${prices[prices.length - 1]}; types ${[...new Set(all.map((f) => f.type))].join("/")}`);
+      out.push(`      cheapest 5 with airline: ${all.sort((a, b) => (a.price as number) - (b.price as number)).slice(0, 5).map((f) => `$${f.price} ${f.flights?.[0]?.airline ?? "?"}`).join(", ")}`);
+      out.push(`      Google: lowest $${pi.lowest_price}, typical ${JSON.stringify(pi.typical_price_range)}, level ${pi.price_level}; history ${hist.length} points, last ${hist.slice(-3).map((h) => `$${h[1]}`).join(" ")}`);
+    } catch (e) {
+      out.push(`    could not read one answer: ${(e as Error).message}`);
+    }
+  }
   const stl = await db.query<{ destination: string; depart_date: unknown; price_usd: string; observed_at: unknown }>(
     `select destination, depart_date, price_usd, observed_at from flight_observations
       where source = 'serpapi_flights' and origin = 'STL' order by observed_at desc limit 20`,

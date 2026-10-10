@@ -31,9 +31,56 @@ on:
         required: false
         type: string
         default: "MCO"
+      db1c_probe:
+        description: "yes = look for BTS's new MONTHLY DB1C (OD40) files instead"
+        required: false
+        type: string
+        default: "no"
 
 jobs:
+  # 2026-10-10: DB1B ended after 2025 Q2. BTS replaced it from July 2025 with
+  # DB1C ("OD40"): monthly, a 40% sample. This finds the real file names and
+  # columns so a loader is written against them, not a guess. No database.
+  db1c:
+    if: inputs.db1c_probe == 'yes'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Find and inspect DB1C files
+        run: |
+          set +e
+          for page in \
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-market" \
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-product" \
+            "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data"; do
+            echo "=== $page ==="
+            curl -sSL -A "Mozilla/5.0" "$page" -o page.html; echo "status $? size $(wc -c < page.html)"
+            grep -oiE 'href="[^"]*\.(zip|csv)[^"]*"' page.html | sort -u | head -80
+          done
+          echo "=== guesses on transtats PREZIP ==="
+          for y in 2025 2026; do for m in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            for name in "Origin_and_Destination_Survey_DB1CMarket_${y}_${m}" "OD40_DB1CMarket_${y}_${m}" "DB1CMarket_${y}_${m}"; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" -I "https://transtats.bts.gov/PREZIP/${name}.zip")
+              [ "$code" = "200" ] && echo "FOUND $name.zip"
+            done
+          done; done
+          echo "=== download the newest market zip found on the pages ==="
+          curl -sSL -A "Mozilla/5.0" "https://www.bts.gov/topics/airlines-and-airports/origin-and-destination-survey-data-market" -o m.html
+          urls=$(grep -oiE 'href="[^"]*\.zip"' m.html | sed 's/href="//;s/"$//')
+          echo "$urls" | tail -5
+          last=$(echo "$urls" | tail -1)
+          case "$last" in http*) ;; /*) last="https://www.bts.gov$last";; esac
+          [ -n "$last" ] || { echo "no zip link found"; exit 0; }
+          echo "Fetching $last"
+          curl -sSL -A "Mozilla/5.0" "$last" -o c.zip; ls -la c.zip; unzip -l c.zip
+          unzip -o c.zip -d c_out >/dev/null
+          csv=$(ls c_out/* | head -1)
+          echo "--- header ---"; head -1 "$csv"
+          echo "--- rows ---"; wc -l "$csv"
+          echo "--- 5 rows with MCO ---"; grep -m 5 MCO "$csv"
+          rm -rf c.zip c_out *.html
+
   debug:
+    if: inputs.db1c_probe != 'yes'
     runs-on: ubuntu-latest
     steps:
       - name: Download and inspect
