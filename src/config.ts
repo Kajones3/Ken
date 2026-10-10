@@ -365,8 +365,8 @@ export const RESORTS: Resort[] = [
     // traveler actually arrives at.
     altArrivalAirports: [],
     goodToKnow: [
-      "To be clear about which half is the awkward one: park tickets on their own ARE sold online, at tickets.disneylandparis.com, dated or undated, with no hotel attached. It is the ROOM WITHOUT TICKETS that Disney will not sell you online — call Disney directly for a room-only rate, or book the hotel through a third party such as Booking.com or Expedia and buy the park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
-      "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme — not 2026. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
+      "Park tickets on their own ARE sold online, at tickets.disneylandparis.com, dated or undated, with no hotel attached. It is the ROOM WITHOUT TICKETS that Disney will not sell you online — call Disney directly for a room-only rate, or book the hotel through a third party such as Booking.com or Expedia and buy the park tickets separately. Worth pricing both ways; which comes out cheaper depends on the dates and the package on offer.",
+      "Space Mountain (currently Star Wars Hyperspace Mountain) is confirmed to close at the end of 2027 for a months-long refurbishment back to its original 1995 Jules Verne theme. No reopening date is confirmed yet. Worth checking the closure calendar below before booking a trip built around this ride.",
     ],
     ticketUrl: "https://www.disneylandparis.com/en-gb/tickets/",
     // UNVERIFIED from this environment — every Disney domain is blocked by
@@ -420,7 +420,7 @@ export const RESORTS: Resort[] = [
       { name: "Tokyo DisneySea", lands: ["Mediterranean Harbor", "American Waterfront", "Port Discovery", "Lost River Delta", "Arabian Coast", "Mermaid Lagoon", "Mysterious Island", "Fantasy Springs"] },
     ],
     goodToKnow: [
-      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — checked at write time, always confirm current requirements before booking.",
+      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — just a valid passport and (usually) proof of an onward/return ticket. This is specifically for U.S. citizens; other nationalities should check their own requirements. Source: U.S. State Department Japan travel page (travel.state.gov) and the U.S. Embassy in Japan — always confirm current requirements before booking.",
       // Owner's call 2026-10-04: information only, never priced. The price is
       // one fan review's figure (Wandering in Disney, 2024), not Disney's.
       "Tokyo Disney Resort also sells Vacation Packages: a Disney hotel, park tickets for each day, ride tickets that skip most of the line for a few chosen attractions, and usually unlimited soft drinks and a restaurant reservation, all as one booking. One fan review put a Fantasy Springs package at about $700 a person; it varies with dates and hotel. Our total prices the hotel and tickets separately, which you can also book. A package is worth a look if Tokyo's newest rides matter to you, since they can be hard to get into otherwise.",
@@ -508,7 +508,7 @@ export const RESORTS: Resort[] = [
       { name: "Shanghai Disneyland", lands: ["Mickey Avenue", "Gardens of Imagination", "Fantasyland", "Treasure Cove", "Adventure Isle", "Tomorrowland", "Toy Story Land", "Zootopia"] },
     ],
     goodToKnow: [
-      "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — checked at write time, always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
+      "For U.S. passport holders: a visa is required to enter mainland China — you must get it before you travel (most U.S. tourists apply for a 10-year multiple-entry tourist visa). This is a different, separate requirement from Hong Kong's. Limited visa-free transit exemptions exist (up to 240 hours as of 2026) but generally only when continuing on to a third country, not for a simple round trip home. Source: U.S. State Department China travel page (travel.state.gov) — always confirm current requirements and processing time before booking, since a visa can take days to weeks to arrange.",
       "Guests with disabilities pay the reduced ticket price at Shanghai Disneyland — the same price as children (3-11) and seniors (60+), about 25% below a regular ticket. Choose that ticket type when you buy and bring documentation. Our totals price everyone else at the regular rate, so a party that qualifies will pay less than shown.",
     ],
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
@@ -581,7 +581,7 @@ export const RESORTS: Resort[] = [
       { name: "Hong Kong Disneyland", lands: ["Main Street, U.S.A.", "Adventureland", "Grizzly Gulch", "Mystic Point", "Toy Story Land", "Fantasyland", "Tomorrowland", "World of Frozen"] },
     ],
     goodToKnow: [
-      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — Hong Kong has its own immigration, separate from mainland China, even though mainland China requires a visa for most U.S. visitors. Just need a passport valid 6+ months. If your trip also includes mainland China (e.g. Shanghai Disney), that's a separate, additional visa requirement — see that resort's notes. Source: U.S. Consulate General Hong Kong & Macau — checked at write time, always confirm current requirements before booking.",
+      "For U.S. passport holders: no visa is required for tourist stays of 90 days or less — Hong Kong has its own immigration, separate from mainland China, even though mainland China requires a visa for most U.S. visitors. Just need a passport valid 6+ months. If your trip also includes mainland China (e.g. Shanghai Disney), that's a separate, additional visa requirement — see that resort's notes. Source: U.S. Consulate General Hong Kong & Macau — always confirm current requirements before booking.",
     ],
     closuresUrl: "https://wdwnt.com/refurbishments-and-closures/",
     closuresLabel: "Unofficial refurbishment tracker (WDWNT, not Disney)",

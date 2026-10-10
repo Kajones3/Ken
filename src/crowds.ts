@@ -59,7 +59,7 @@ export interface CrowdMonth {
 // where it came from. The dvcPoints line keeps the same shape.
 const BASIS_NOTES: Record<CrowdYear["basis"], string> = {
   dvcPoints:
-    "An estimate from how Disney prices its own hotel rooms across the year — this tells you what we estimate you would be walking into.",
+    "An estimate based on how Disney prices its own hotels throughout the year.",
   estimate:
     "An estimate from school holidays, national holidays and weather — this tells you what we estimate you would be walking into.",
 };
