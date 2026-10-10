@@ -66,6 +66,14 @@ jobs:
             head -c 470 page.html; echo
             grep -oiE 'href="[^"]*\.zip[^"]*"' page.html | sort -u | head -40
           done
+          echo "=== TranStats pages that name DB1C (for the monthly Market/Coupon tables) ==="
+          for u in "https://www.transtats.bts.gov/DataIndex.asp" \
+                   "https://www.transtats.bts.gov/Tables.asp?QO_VQ=EGH" \
+                   "https://www.transtats.bts.gov/DatabaseInfo.asp?QO_VQ=EGH"; do
+            get "$u" t.html
+            grep -oiE '<a[^>]*href="[^"]*"[^>]*>[^<]*(DB1C|Origin and Destination|O&amp;D|OD40)[^<]*</a>' t.html | head -20
+            grep -oiE 'href="[^"]*(QO_VQ|gnoyr_VQ|Table_ID|DB_ID)=[^"]*"[^>]*>[^<]{0,80}' t.html | grep -iE 'DB1C|Origin|Market|Coupon|Ticket|OD' | head -30
+          done
           echo "=== every DB1C file in the directory ==="
           grep -iE 'DB1C' dir.txt
           f=$(grep -oiE 'Origin_and_Destination_Survey_DB1C[A-Za-z]+_[0-9]+_[0-9]+\.zip' dir.txt | sort -u | tail -1)
