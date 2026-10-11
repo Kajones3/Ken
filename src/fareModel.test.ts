@@ -119,3 +119,48 @@ test("the switch: off = live formula, on = the candidate, never leaned", async (
   assert.equal(quotedEstimate(forced, "RDU", "MCO", "2027-03-10"), 375);
   await d.close();
 });
+
+test("each destination learns its own lever: Orlando reading low no longer drags Los Angeles", () => {
+  // Orlando fares run 1.3x their BTS median, LAX fares right on it. One
+  // shared US calibration would read Orlando low and LAX high.
+  const fares = [...US.map((o) => fare(o, "MCO", 390)), ...US.map((o) => fare(o, "LAX", 400))];
+  const base = [...US.map((o) => bts(o, "MCO", 300)), ...US.map((o) => bts(o, "LAX", 400)), bts("RDU", "MCO", 300), bts("RDU", "LAX", 400)];
+  const m = fitFareModel(inputs(fares, base));
+  const mco = m.predict("RDU", "MCO", "2027-03-10")!.value;
+  const lax = m.predict("RDU", "LAX", "2027-03-10")!.value;
+  // Shrunk by 8/(8+4): most of the way to each truth, far closer than a shared number.
+  assert.ok(Math.abs(mco / 390 - 1) < 0.06, `MCO ${mco}`);
+  assert.ok(Math.abs(lax / 400 - 1) < 0.06, `LAX ${lax}`);
+  assert.ok(m.levers.destination.MCO!.factor > m.levers.destination.LAX!.factor);
+});
+
+test("Europe and Asia each get their own calibration", () => {
+  const seed = (o: string, d: string): ModelBaseline => ({ origin: o, destination: d, quarter: 1, med: 1000, p25: 900, p75: 1100, source: "seed_guess" });
+  const origins = ["SEA", "SFO", "LAX", "DEN", "ORD", "ATL", "BOS", "MIA"];
+  // Same distance curve, but Asia fares sit 30% above Europe's.
+  const fares = [
+    ...origins.map((o) => fare(o, "CDG", Math.round(1.5 * routeMiles(o, "CDG")! ** 0.8))),
+    ...origins.map((o) => fare(o, "NRT", Math.round(1.95 * routeMiles(o, "NRT")! ** 0.8))),
+  ];
+  const m = fitFareModel(inputs(fares, origins.flatMap((o) => [seed(o, "CDG"), seed(o, "NRT")])));
+  assert.ok(m.levers.calibration.asia > m.levers.calibration.europe * 1.15,
+    `asia ${m.levers.calibration.asia} vs europe ${m.levers.calibration.europe}`);
+  assert.equal(m.predict("ATL", "CDG", "2027-03-10")!.parts.group, "europe");
+});
+
+test("a learned season replaces a wrong guessed one, and the monthly survey is preferred for US routes", () => {
+  // Summer fares sit right on the BTS quarter, but our fares say otherwise
+  // in Q3: six Q3 fares at 0.8x. The season lever learns most of that.
+  const q3 = (o: string, price: number) => fare(o, "MCO", price, { departDate: "2027-07-14" });
+  const btsQ3 = (o: string): ModelBaseline => ({ ...bts(o, "MCO", 300), quarter: 3 });
+  const fares = [...US.map((o) => fare(o, "MCO", 300)), ...US.slice(0, 6).map((o) => q3(o, 240))];
+  const m = fitFareModel(inputs(fares, [...US.map((o) => bts(o, "MCO", 300)), ...US.map(btsQ3), btsQ3("RDU"), bts("RDU", "MCO", 300)]));
+  const s = m.predict("RDU", "MCO", "2027-07-14")!.parts.season;
+  assert.ok(s < 0.92 && s > 0.8, `season ${s}`);
+
+  const mm = fitFareModel({ ...inputs(US.map((o) => fare(o, "MCO", 300)), [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)]),
+    monthly: [{ origin: "RDU", destination: "MCO", month: 3, med: 280, p25: 200, p75: 400 }] });
+  const p = mm.predict("RDU", "MCO", "2027-03-10")!;
+  assert.equal(p.parts.priorKind, "bts_monthly");
+  assert.equal(p.parts.prior, 280);
+});

@@ -304,13 +304,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <section class="sheet">
       <h2>How close our flight estimates are</h2>
       <p>Every night we buy about 18 real Google Flights fares, each the middle-priced flight for one route and
-        date. Each one is a test, read two ways:</p>
-      <ul>
-        <li><b>Shown now</b>: now that we've bought our fares, how far off is the number a traveler sees today for
-          that route and date? This includes everything the bought fares taught the estimate.</li>
-        <li><b>Candidate</b>: a second formula being tested. It is graded only on fares it did NOT learn from, and
-          travelers never see it until you switch to it below.</li>
-      </ul>
+        date. <b>Just before</b> buying each one we write down what a traveler would have seen and what the
+        candidate formula would have said. Those are the numbers at the top of this page: nothing could have
+        learned from the fare it is graded on, so they are the honest answer to &ldquo;how far off are we right
+        now?&rdquo; Every day they should get better; the week-by-week table says whether they are.</p>
       <p><b>Accurate</b> means within &plusmn;<span class="flZone">10</span>% of the real fare, <b>in either
         direction</b>: $100 low and $100 high are the same miss. (Change the &plusmn; in Rates &amp; settings,
         <code>flight.zonePct</code>; it only changes the grading.)</p>
@@ -329,7 +326,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         night, and can't be rebuilt for nights before it started.</p>
       <div id="flForecast"><p class="count">Loading…</p></div>
 
-      <h3>Live formula vs candidate</h3>
+      <h3>After learning: live vs candidate (the live column is flattered)</h3>
+      <p class="count">Graded on every fare we hold, AFTER the live formula has already learned from it, so its
+        column reads kinder than the truth. The candidate is graded leave-one-out. Use the before-buying numbers above
+        to judge; this table is here to see more fares at once.</p>
       <div id="flCompare"></div>
       <div id="flSwitch" style="margin-top:12px"></div>
 
@@ -2048,8 +2048,17 @@ function renderForecasts(fc){
       ${line("What travelers saw", fc[k].shown)}
       ${line("Live estimate alone", fc[k].live)}
       ${line("Candidate", fc[k].candidate)}` : "";
-  el.innerHTML = `<div class="tiles">${zt(fc.domestic.shown, "US, right now")}${zt(fc.international.shown, "International, right now")}
-      ${tile("Checked so far", num(fc.n), `since ${fc.since || "—"} · ${num(fc.shownKinds.realFare)} showed a real fare we held, ${num(fc.shownKinds.estimate)} an estimate`)}</div>
+  const pr = fc.progress;
+  const TREND = { better: "Better ✓", worse: "WORSE ✗", "about the same": "About the same", "too few fares": "Too few fares yet" };
+  const progressHtml = pr ? `<h4 style="margin:14px 0 6px">Are we getting better? This week vs last week</h4>
+    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Trend</th><th class="n">This week: typically off</th><th class="n">Within ±${z}%</th>
+      <th class="n">Last week: typically off</th><th class="n">Within ±${z}%</th></tr></thead>
+      <tbody>${pr.lines.map(l => `<tr><td>${l.group}, ${l.formula === "shown" ? "what travelers see" : "candidate"}</td>
+        <td class="n"${l.trend === "worse" ? ' style="color:var(--bad);font-weight:700"' : l.trend === "better" ? ' style="font-weight:700"' : ""}>${TREND[l.trend]}</td>
+        ${cell(offBy(l.thisWeek.typicalOffPct))}${cell(pc(l.thisWeek.inZonePct))}${cell(offBy(l.lastWeek.typicalOffPct))}${cell(pc(l.lastWeek.inZonePct))}</tr>`).join("")}</tbody></table></div>
+    ${pr.destinations.length ? `<p class="count" style="margin-top:8px">Where this week's misses are (+ = we read high), first place to look when a line gets worse:
+      ${pr.destinations.map(d => `${esc(d.destination)} ${signed(d.shownReads)} (candidate ${signed(d.candidateReads)}, ${num(d.n)})`).join(" · ")}</p>` : ""}` : "";
+  el.innerHTML = `${progressHtml}<div class="tiles" style="margin-top:12px">${tile("Checked so far", num(fc.n), `since ${fc.since || "—"} · ${num(fc.shownKinds.realFare)} showed a real fare we held, ${num(fc.shownKinds.estimate)} an estimate`)}</div>
     <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Fares</th><th class="n">Within ±${z}%</th><th class="n">Within ±5%</th>
       <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off</th><th class="n">Reads</th></tr></thead>
       <tbody>${grp("domestic", "US")}${grp("international", "International")}</tbody></table></div>
@@ -2078,7 +2087,13 @@ async function loadFlights(){
   const zt = (x, name) => x.n
     ? tile(name, x.inZonePct + "%", `within ±${s.zonePct}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
     : tile(name, "—", "no fares to test yet");
-  $("#flTiles").innerHTML = s.tested
+  const fcOk = fc && fc.n;
+  $("#flTiles").innerHTML = fcOk
+    ? zt(fc.domestic.shown, "US, what travelers see") + zt(fc.international.shown, "International, what travelers see")
+      + zt(fc.domestic.candidate, "US, candidate") + zt(fc.international.candidate, "International, candidate")
+      + tile("Travelers see", s.useCandidate ? "Candidate" : "Live formula",
+          (s.useCandidate ? "switched on below" : `lean US ${s.lean} · Intl ${s.leanIntl ?? s.lean}`) + ` · graded before buying, since ${fc.since}`)
+    : s.tested
     ? zt(seen.domestic, "US, what travelers see") + zt(seen.international, "International, what travelers see")
       + tile("Travelers see", s.useCandidate ? "Candidate" : "Live formula",
           s.useCandidate ? "switched on below" : `lean US ${s.lean} · Intl ${s.leanIntl ?? s.lean}`)
