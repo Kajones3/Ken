@@ -43,8 +43,12 @@ export type FetchedRates = { asOf: string; rates: Record<string, number> };
 /** Which currencies we actually need, derived from the resorts rather than
  *  listed a second time — adding a seventh resort must not silently leave
  *  its currency unfetched. USD is dropped: it is the base. */
+/** Currencies prices are SEEN in, beyond the resorts' own: Disneyland
+ *  Paris's UK ticket site prices in pounds (owner's check, 2026-10-11). */
+export const EXTRA_CURRENCIES = ["GBP"];
+
 export function neededCurrencies(resorts = RESORTS): string[] {
-  return [...new Set(resorts.map(r => r.currency))].filter(c => c !== "USD").sort();
+  return [...new Set([...resorts.map(r => r.currency), ...EXTRA_CURRENCIES])].filter(c => c !== "USD").sort();
 }
 
 /**

@@ -125,6 +125,10 @@ test("ticket wording: which band, how many days", () => {
   assert.equal(ticketBandFrom("Senior 60+"), "senior");
   assert.equal(ticketDaysFrom("1-Day Passport"), 1);
   assert.equal(ticketDaysFrom("4 day ticket"), 4);
+  assert.equal(ticketDaysFrom("3-day ticket, adult"), 3);
+  assert.equal(ticketDaysFrom("Three day park hopper"), 3);
+  // Not saying is not "1 day" (2026-10-11: a 3-day Paris ticket was read as 1).
+  assert.equal(ticketDaysFrom("tickets.disneylandparis.com"), null);
 });
 
 /* ----------------------------------- the math ---------------------------- */

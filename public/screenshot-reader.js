@@ -24,12 +24,14 @@ const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tess
 // directly followed by a comma-grouped number — "Y502,500", never "Y2".
 const BEFORE = [
   [/HK\s?\$$/i, "HKD"], [/US\s?\$$/i, "USD"], [/(RMB|CNY)\s?$/i, "CNY"], [/JPY\s?$/i, "JPY"],
-  [/EUR\s?$/i, "EUR"], [/USD\s?$/i, "USD"], [/HKD\s?$/i, "HKD"],
-  [/[¥￥]\s?$/, "YEN_SIGN"], [/€\s?$/, "EUR"], [/\$\s?$/, "USD"],
+  [/EUR\s?$/i, "EUR"], [/USD\s?$/i, "USD"], [/HKD\s?$/i, "HKD"], [/GBP\s?$/i, "GBP"],
+  // £ (2026-10-11): Disneyland Paris's UK ticket site prices in pounds, and
+  // without this a £ price was saved as euros.
+  [/[¥￥]\s?$/, "YEN_SIGN"], [/€\s?$/, "EUR"], [/£\s?$/, "GBP"], [/\$\s?$/, "USD"],
 ];
 const AFTER = [
   [/^\s?(yen|円)/i, "JPY"], [/^\s?JPY/i, "JPY"], [/^\s?(元|RMB|CNY|yuan)/i, "CNY"],
-  [/^\s?(HKD)/i, "HKD"], [/^\s?(EUR|€|euros?)/i, "EUR"], [/^\s?(USD|dollars?)/i, "USD"],
+  [/^\s?(HKD)/i, "HKD"], [/^\s?(EUR|€|euros?)/i, "EUR"], [/^\s?(GBP|pounds?)/i, "GBP"], [/^\s?(USD|dollars?)/i, "USD"],
 ];
 
 /**
@@ -141,6 +143,40 @@ export function findDates(text, today = new Date().toISOString().slice(0, 10)) {
   const out = [];
   for (const f of found) if (!out.includes(f.iso)) out.push(f.iso);
   return out;
+}
+
+/* ---------------------------------------------------- a ticket page */
+
+/**
+ * A park-ticket page ("Price per person · Adult (12+) £285 · Child (3-11)
+ * £268 · Save £93 per person with a 3-day ticket"). The first price on such
+ * a page is a calendar cell for some OTHER day, so it must not be taken
+ * (2026-10-11: a Paris check saved April 4's £297 as euros, split four ways,
+ * against a 1-day ticket). Returns the adult and child prices printed beside
+ * their labels, how many days the ticket covers, and whether the page says
+ * the prices are per person. Null when the page has no Adult/Child labels.
+ */
+export function readTicketPage(text, resortCurrency = "") {
+  const lab = (re) => { const m = re.exec(text); return m ? m.index + m[0].length : -1; };
+  const pa = lab(/\badult\b[^\n\d£€$¥]*(?:\(\s*\d+\s*\+?\s*\))?/i);
+  const pc = lab(/\bchild(?:ren)?\b[^\n\d£€$¥]*(?:\(\s*\d+\s*[-–]\s*\d+\s*\))?/i);
+  if (pa < 0 && pc < 0) return null;
+  // Prices after the labels, in order, marked with a currency.
+  const from = Math.min(...[pa, pc].filter((x) => x >= 0));
+  const priced = findAmounts(text.slice(from), resortCurrency).filter((a) => a.currency);
+  let adult = null, child = null;
+  if (pa >= 0 && pc >= 0) {
+    // Side by side ("Adult (12+)  Child (3-11)" then "£285  £268") or one
+    // after the other: either way the first price belongs to the first label.
+    const [first, second] = pa < pc ? ["adult", "child"] : ["child", "adult"];
+    const v = { adult: null, child: null };
+    v[first] = priced[0] || null; v[second] = priced[1] || null;
+    adult = v.adult; child = v.child;
+  } else if (pa >= 0) adult = priced[0] || null;
+  else child = priced[0] || null;
+  const d = /\b(\d{1,2})\s*-?\s*(?:day|jour)s?\b/i.exec(text);
+  const days = d && Number(d[1]) >= 1 && Number(d[1]) <= 10 ? Number(d[1]) : null;
+  return { adult, child, days, perPerson: /per\s+person|par\s+personne/i.test(text) };
 }
 
 /* ---------------------------------------------------- what it is about */
