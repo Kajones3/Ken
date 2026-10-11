@@ -14,6 +14,10 @@
  * Touches nothing: select-only, no provider calls, no writes.
  */
 import { unzipBody } from "../rawResponses.js";
+import { loadForecastScores } from "../fareForecasts.js";
+import { loadScoreboard } from "../fareScoreboard.js";
+import { loadModelInputs } from "../fareModelDb.js";
+import { fitFareModel, isInternational, leaveOneOut } from "../fareModel.js";
 import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
@@ -539,6 +543,55 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   for (const r of lv.rows) out.push(`    ${r.code} ${r.year} Q${r.quarter}: average fare $${Math.round(Number(r.avg_fare_usd))}${r.adjusted_fare_usd ? ` ($${Math.round(Number(r.adjusted_fare_usd))} in 2026 Q2 dollars)` : ""}`);
   out.push(`  Fares we bought from these airports: ${nb.rows.length}`);
   for (const r of nb.rows) out.push(`    ${r.origin}->${r.destination} departing ${String(r.depart_date).slice(0, 15)}: $${Math.round(Number(r.price_usd))}`);
+  out.push("");
+
+  // Owner, 2026-10-11: "Is our candidate formula actually working?" The
+  // Flights page's live column is graded partly on fares it already learned
+  // from; fare_forecasts holds what BOTH formulas said before each fare was
+  // bought, which is the fair head-to-head.
+  out.push("## Candidate vs live: the fair test (numbers written down BEFORE buying)");
+  try {
+    const fs = await loadForecastScores(db, 30);
+    const z = (x: { n: number; inZonePct: number | null; within5Pct: number | null; lowPct: number | null; highPct: number | null; typicalOffPct: number | null; medianPct: number | null }) =>
+      `n ${x.n} · within ±10% ${x.inZonePct ?? "-"}% · ±5% ${x.within5Pct ?? "-"}% · low ${x.lowPct ?? "-"}% · high ${x.highPct ?? "-"}% · typically off ${x.typicalOffPct ?? "-"}% · reads ${x.medianPct ?? "-"}%`;
+    out.push(`  since ${fs.since}, ${fs.n} graded, ${fs.noFare} with no fare; shown was a real fare ${fs.shownKinds.realFare}, an estimate ${fs.shownKinds.estimate}`);
+    for (const [label, g] of [["US", fs.domestic], ["International", fs.international]] as const) {
+      out.push(`  ${label}`);
+      out.push(`    shown to travelers: ${z(g.shown)}`);
+      out.push(`    live estimate:      ${z(g.live)}`);
+      out.push(`    candidate:          ${z(g.candidate)}`);
+    }
+    const sb = await loadScoreboard(db, 30);
+    out.push(`  Flights page (live partly in-sample, candidate leave-one-out):`);
+    out.push(`    US live ${z(sb.compare.live.domestic)}`);
+    out.push(`    US cand ${z(sb.compare.candidate.domestic)}`);
+    out.push(`    Intl live ${z(sb.compare.live.international)}`);
+    out.push(`    Intl cand ${z(sb.compare.candidate.international)}`);
+
+    // Where the candidate misses: real / candidate, by destination and quarter.
+    const inputs = await loadModelInputs(db, 90);
+    const idx = inputs.fares.map((_, i) => i);
+    const loo = leaveOneOut(inputs, idx);
+    const groups = new Map<string, number[]>();
+    const add = (k: string, v: number) => groups.set(k, [...(groups.get(k) ?? []), v]);
+    for (const [i, pred] of loo) {
+      const f = inputs.fares[i]!;
+      const r = f.price / pred;
+      const q = Math.ceil(Number(f.departDate.slice(5, 7)) / 3);
+      add(`dest ${f.destination}`, r);
+      add(`${isInternational(f.destination) ? "intl" : "US"} Q${q}`, r);
+    }
+    const med = (a: number[]) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]!; };
+    out.push("  Candidate (leave-one-out), real fare / candidate, median by group (1.00 = right on):");
+    for (const [k, v] of [...groups].sort()) out.push(`    ${k.padEnd(10)} ${med(v).toFixed(2)} (${v.length} fares)`);
+    const m = fitFareModel(inputs);
+    for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
+      const p = m.predict(o, d, dt as never);
+      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+    }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
   out.push("");
 
   out.push("## Baseline sanity — are these round trips?");
