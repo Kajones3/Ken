@@ -539,7 +539,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div class="cgrid">
       <div><label for="cAmount">Price</label><input type="text" id="cAmount" inputmode="decimal" placeholder="371,500"></div>
       <div><label for="cCur">Currency</label><select id="cCur">
-        <option>USD</option><option>JPY</option><option>EUR</option><option>CNY</option><option>HKD</option></select></div>
+        <option>USD</option><option>JPY</option><option>EUR</option><option>GBP</option><option>CNY</option><option>HKD</option></select></div>
       <div><label for="cPriceIs">That price is</label><select id="cPriceIs">
         <option value="whole_stay">For the whole stay</option><option value="per_night">Per night</option>
         <option value="per_person">Per person</option><option value="total">For everyone together</option>
@@ -1511,7 +1511,7 @@ $("#waitList").addEventListener("click", async e => {
  */
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const fmtD = iso => { if(!iso) return ""; const [y,m,d] = iso.split("-").map(Number); return `${MON3[m-1]} ${d}, ${y}`; };
-const CUR_SIGN = { USD:"$", JPY:"¥", EUR:"€", CNY:"¥", HKD:"HK$" };
+const CUR_SIGN = { USD:"$", JPY:"¥", EUR:"€", GBP:"£", CNY:"¥", HKD:"HK$" };
 const fmtLocal = (amt, cur) => (CUR_SIGN[cur] || "") + Number(amt).toLocaleString("en-US", { maximumFractionDigits: 2 })
   + (cur === "CNY" ? " (yuan)" : "");
 const fmtUsd = n => "$" + Math.round(Number(n)).toLocaleString("en-US");
@@ -1679,10 +1679,25 @@ async function readShot(file){
   const amounts = R.findAmounts(text, resortCur);
   const dates = R.findDates(text, todayLocal());
   const airports = R.findAirports(text);
-  const firstPriced = amounts.find(a => a.currency) || amounts[0];
-  if(firstPriced){ fill("#cAmount", firstPriced.amount); if(firstPriced.currency) fill("#cCur", firstPriced.currency); }
-  if(dates[0]) fill("#cStart", dates[0]);
-  if(dates[1] && dates[1] > dates[0]) fill("#cEnd", dates[1]);
+  // A ticket page: take the price beside "Adult", never the first calendar
+  // cell (2026-10-11: a Paris check saved another day's price that way).
+  const tix = $("#cCat").value === "ticket" && R.readTicketPage ? R.readTicketPage(text, resortCur) : null;
+  let ticketNote = "";
+  if(tix && (tix.adult || tix.child)){
+    const p = tix.adult || tix.child;
+    fill("#cAmount", p.amount); if(p.currency) fill("#cCur", p.currency);
+    $("#cPriceIs").value = "per_person";
+    fill("#cItem", `${tix.days ? tix.days + "-day " : ""}ticket, ${tix.adult ? "adult" : "child"}`);
+    ticketNote = ` This looks like a ticket page: we took the ${tix.adult ? "Adult" : "Child"} price${tix.days ? `, a ${tix.days}-day ticket` : ""}, per person.`
+      + (tix.adult && tix.child ? ` Save the Child price (${fmtLocal(tix.child.amount, tix.child.currency || $("#cCur").value)}) as a second check, with "child" in the name.` : "")
+      + (tix.days ? "" : " Say how many days the ticket is in the name (e.g. 3-day), or it can't be compared.")
+      + " Pick the FIRST PARK DAY yourself: a calendar's numbers aren't the day you chose.";
+  } else {
+    const firstPriced = amounts.find(a => a.currency) || amounts[0];
+    if(firstPriced){ fill("#cAmount", firstPriced.amount); if(firstPriced.currency) fill("#cCur", firstPriced.currency); }
+    if(dates[0]) fill("#cStart", dates[0]);
+    if(dates[1] && dates[1] > dates[0]) fill("#cEnd", dates[1]);
+  }
   if(airports[0] && $("#cCat").value === "flight") fill("#cFrom", airports[0]);
   if(!$("#cItem").value && $("#cCat").value !== "flight") fill("#cItem", R.guessName(text));
   if(!$("#cSource").value) fill("#cSource", ("Screenshot " + (file.name && file.name !== "image.png" ? file.name : "")).trim());
@@ -1695,7 +1710,7 @@ async function readShot(file){
     + (dates.length ? `<div class="chips">${dates.map(iso => `<span class="chip">${esc(fmtD(iso))}
         <button data-usestart="${iso}">Start</button><button data-useend="${iso}">End</button></span>`).join("")}</div>` : "");
   status.textContent = amounts.length
-    ? `Found ${amounts.length} price${amounts.length === 1 ? "" : "s"} and ${dates.length} date${dates.length === 1 ? "" : "s"}. The highlighted boxes are its best guess — check them against the picture (the Use / Start / End buttons swap in another), fill in the rest, then save.`
+    ? `Found ${amounts.length} price${amounts.length === 1 ? "" : "s"} and ${dates.length} date${dates.length === 1 ? "" : "s"}. The highlighted boxes are its best guess — check them against the picture (the Use / Start / End buttons swap in another), fill in the rest, then save.${ticketNote}`
     : "Couldn't find a price in that picture. Try a tighter crop of the price, or tick Japanese and Chinese if the page isn't in English.";
 }
 

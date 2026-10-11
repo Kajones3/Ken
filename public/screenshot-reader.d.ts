@@ -21,3 +21,5 @@ export function splitOffers(text: string, today?: string): ReadOffer[];
 export function guessDealLabel(text: string): string | null;
 export function findDollarsOff(text: string): number[];
 export function findColumnCuts(lum: ArrayLike<number>, width: number, height: number): number[];
+export function readTicketPage(text: string, resortCurrency?: string):
+  { adult: FoundAmount | null; child: FoundAmount | null; days: number | null; perPerson: boolean } | null;

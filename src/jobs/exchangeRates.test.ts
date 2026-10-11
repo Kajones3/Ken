@@ -26,7 +26,7 @@ test("the committed table has a row for every currency, USD included", () => {
 });
 
 test("a complete response builds a table", () => {
-  const payload = { base: "USD", date: "2026-09-18", rates: { EUR: 0.9123, JPY: 149.87, CNY: 7.0912, HKD: 7.7801 } };
+  const payload = { base: "USD", date: "2026-09-18", rates: { EUR: 0.9123, JPY: 149.87, CNY: 7.0912, HKD: 7.7801, GBP: 0.7512 } };
   const r = buildTable(payload, WANTED);
   assert.ok(r.ok);
   assert.equal(r.asOf, "2026-09-18");

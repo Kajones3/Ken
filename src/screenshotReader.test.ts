@@ -145,3 +145,31 @@ test("stray OCR marks come off a headline, real amounts stay", () => {
   assert.equal(cleanLabel("25% Off Rooms"), "25% Off Rooms");
   assert.equal(cleanLabel("$300 off"), "$300 off");
 });
+
+// The owner's Disneyland Paris ticket page (2026-10-11), as OCR reads it: a
+// calendar of other days' prices first, then the chosen day's prices.
+const PARIS_TICKETS = `Configure your selection
+April 2027
+Mo Tu We Th Fr Sa Su
+1 £297 2 £296 3 £296 4 £297
+5 £297 6 £296 7 £292 8 £301 9 £299 10 £293 11 £278
+12 £271 13 £270 14 £272 15 £285 16 17 18 £276
+Price per person
+Adult (12+)   Child (3-11)
+£285   £268
+Ticket Offer
+Save £93 per person with a 3-day ticket
+For visits until 15 October 2026, compared to 3 consecutive flexible 1 Day/2 Park dated tickets
+Total price £1,103.88`;
+
+test("a ticket page: the Adult and Child prices beside their labels, in pounds, per person, 3 days", async () => {
+  const { readTicketPage } = await import("../public/screenshot-reader.js");
+  const t = readTicketPage(PARIS_TICKETS, "EUR")!;
+  assert.deepEqual([t.adult!.amount, t.adult!.currency], [285, "GBP"]);
+  assert.deepEqual([t.child!.amount, t.child!.currency], [268, "GBP"]);
+  assert.equal(t.days, 3);
+  assert.equal(t.perPerson, true);
+  // The old way took the first calendar cell, and as euros: what went wrong.
+  assert.deepEqual([findAmounts(PARIS_TICKETS, "EUR")[0]!.amount, findAmounts(PARIS_TICKETS, "EUR")[0]!.currency], [297, "GBP"]);
+  assert.equal(readTicketPage("Disney Ambassador Hotel ¥74,300 per night", "JPY"), null);
+});

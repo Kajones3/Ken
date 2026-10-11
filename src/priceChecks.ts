@@ -331,10 +331,17 @@ export function ticketBandFrom(text: string): TicketBand {
   if (/child|kid/.test(s)) return "child";
   return "adult";
 }
-export function ticketDaysFrom(text: string): number {
-  const m = text.toLowerCase().match(/(\d+)\s*-?\s*day/);
-  const n = m ? Number(m[1]) : 1;
-  return n >= 1 && n <= 10 ? n : 1;
+/** How many park days a ticket covers, from its wording ("3-day ticket",
+ *  "1-Day Passport", "one day"). Null when it doesn't say: guessing 1 is how
+ *  a 3-day Paris ticket was once compared with our 1-day price (2026-10-11). */
+export function ticketDaysFrom(text: string): number | null {
+  const s = text.toLowerCase();
+  const words: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7 };
+  const w = s.match(/\b(one|two|three|four|five|six|seven)\s*-?\s*days?\b/);
+  if (w) return words[w[1]!]!;
+  const m = s.match(/(\d+)\s*-?\s*days?\b/);
+  const n = m ? Number(m[1]) : NaN;
+  return n >= 1 && n <= 10 ? n : null;
 }
 
 export interface Snapshot {
@@ -392,6 +399,7 @@ export async function snapshot(db: Db, v: CheckValue, unitUsd: number | null): P
     const band = ticketBandFrom(`${v.item} ${v.detail}`);
     out.matchKey = resort.id;
     if (!v.startDate) out.notCounted = "a ticket needs a start_date to compare with that day's price";
+    else if (days === null) out.notCounted = "say how many days the ticket covers (e.g. \"3-day ticket, adult\") so it's compared with the same ticket of ours";
     else {
       const dates = range(v.startDate, addDaysISO(v.startDate, days - 1));
       const { rows } = await db.query<Record<string, unknown>>(
