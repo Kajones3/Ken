@@ -34,11 +34,11 @@ export type Rate = { code: string; perUsd: number; name: string };
 
 /** Where these came from, and as of when. Rewritten by the generator. */
 export const EXCHANGE_SOURCE =
-  "European Central Bank reference rates via Frankfurter, generated 2026-10-02";
+  "European Central Bank reference rates via Frankfurter, generated 2026-10-11";
 
 /** The ECB reference date these rates are quoted for. Rewritten by the
  *  generator. Printed in the UI so a stale table shows itself. */
-export const EXCHANGE_AS_OF: string = "2026-10-01";
+export const EXCHANGE_AS_OF: string = "2026-10-09";
 
 /**
  * Keyed by the `currency` field on each resort in config.ts. USD is here as
@@ -48,10 +48,11 @@ export const EXCHANGE_AS_OF: string = "2026-10-01";
  */
 export const EXCHANGE_RATES: Record<string, Rate> = {
   USD: { code: "USD", perUsd: 1, name: "US dollar" },
-  CNY: { code: "CNY", perUsd: 6.705, name: "Chinese yuan" },
-  EUR: { code: "EUR", perUsd: 0.8851, name: "euro" },
-  HKD: { code: "HKD", perUsd: 7.847, name: "Hong Kong dollar" },
-  JPY: { code: "JPY", perUsd: 158, name: "Japanese yen" },
+  CNY: { code: "CNY", perUsd: 6.692, name: "Chinese yuan" },
+  EUR: { code: "EUR", perUsd: 0.8924, name: "euro" },
+  GBP: { code: "GBP", perUsd: 0.7564, name: "GBP" },
+  HKD: { code: "HKD", perUsd: 7.848, name: "Hong Kong dollar" },
+  JPY: { code: "JPY", perUsd: 158.3, name: "Japanese yen" },
 };
 
 /** True while the table is still the hand-seeded placeholder. The UI uses
