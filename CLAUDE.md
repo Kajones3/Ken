@@ -86,6 +86,24 @@ side works with or without a redeploy.
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **772 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-11 — "Is the candidate formula working?" (owner screenshot of /admin Flights)
+
+The Flights page's LIVE column is flattered (each fare sits in its own route
+correction); the candidate is leave-one-out. The fair test is
+`fare_forecasts` (both formulas written down BEFORE buying), now in the
+coverage report ("Candidate vs live: the fair test"). Run 38147862916,
+since 10-08, 79 graded, every shown number an estimate:
+- **US (33):** live 18% within ±10%, typically off 20.3%, reads +15.8% HIGH;
+  candidate 30%, 19.5%, reads +2.1%. Page claimed live 49% / 10.5%.
+- **Intl (46):** live 37%, 15.1%, reads -1.2%; candidate 24%, 17.5%, -5.9%.
+- Candidate misses (real / candidate, leave-one-out): MCO 1.28 (reads low),
+  HKG 0.87 (high), NRT 1.13, HND 1.16 (low), CDG 0.95, PVG 1.02; US Q3 1.54
+  and Q4 0.69 on 5-6 fares. One calibration per US/intl group, quarterly BTS
+  prior only (no monthly DB1C), seed season shape for intl.
+- Proposed, NOT built (owner to say): per-destination calibration in the
+  candidate; monthly DB1C prior; make the Flights page lead with the
+  before-buying numbers. Switch stays off (owner flips it).
+
 ### 2026-10-10, very last — nearby airports, BTS airport tables, rotation was starved
 
 Owner: "How much could I save by leaving out of DULLES instead of RDU?" (can
