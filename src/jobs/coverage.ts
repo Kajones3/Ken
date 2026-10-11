@@ -598,6 +598,17 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // Owner, 2026-10-11: a Paris ticket check read -6% when the real price was
+  // far above ours. The last few checks exactly as stored.
+  out.push("## Latest price checks, as stored");
+  const pc = await db.query<Record<string, unknown>>(
+    `select checked_on, resort_id, category, item, detail, start_date, end_date, adults, seniors, children_ages,
+            amount, currency, price_is, unit_usd, unit, match_key, model_usd, app_usd, not_counted, source
+       from price_checks order by created_at desc nulls last limit 6`,
+  ).catch(async () => db.query<Record<string, unknown>>(`select * from price_checks order by checked_on desc limit 6`));
+  for (const r of pc.rows) out.push("  " + JSON.stringify(r));
+  out.push("");
+
   out.push("## Baseline sanity — are these round trips?");
   const nat = await nationalBtsAverage(db);
   if (!nat) {
