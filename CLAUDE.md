@@ -126,6 +126,27 @@ side works with or without a redeploy.
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **772 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
 
+### 2026-10-11, last — a Paris ticket check read -6% when we were ~43% LOW (PR #158)
+
+Owner checked April 2027 Paris tickets: real 3-day adult **£285**, child
+£268 (tickets.disneylandparis.com, UK site, pounds); our board said $215
+adult. At the new GBP rate (0.7564/USD, ECB 2026-10-09) £285 = **$377**, so
+we read ~43% low. /admin said -6%. The stored row: item
+"tickets.disneylandparis.com", amount 297 (April 4's calendar cell, the
+FIRST price on the page), currency EUR (the reader had no £), price_is
+"total" (split 4 ways = $84/person), compared with our 1-DAY price ($89,
+no "3-day" in the name). Fixed: reader knows £/GBP and reads ticket pages
+(`readTicketPage()`: Adult/Child beside their labels, N-day, per person;
+start date left for the owner); GBP in the exchange job + dropdown;
+`ticketDaysFrom()` returns null when unsaid and the check is kept but not
+compared. **The wrong row is still stored**: owner to delete it in /admin
+and re-save (needs a Render redeploy for the reader fix).
+**Paris tickets are still the curve (base $78)** and ~43% low on this
+evidence; one corrected check only moves it a quarter of the way. Asked the
+owner for 1/2/3/4/5-day adult+child prices on one date to build a real
+`multiDayAdultUsd` table like WDW/Disneyland. Paris multi-day tickets are
+all 2-park.
+
 ### 2026-10-11, later — the candidate learns per destination; the honest numbers lead
 
 Owner: "each destination does need its own levers ... even between Asia and
