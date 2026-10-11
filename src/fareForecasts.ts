@@ -119,6 +119,8 @@ export interface ForecastScores {
   /** Newest day first: what travelers saw that day, graded. */
   daily: { day: string; n: number; shown: ZoneScore; candidate: ZoneScore }[];
   since: string | null;
+  /** This week vs last week (needs days >= 14 to see last week). */
+  progress?: Progress;
 }
 
 /** Pure: grade forecasts against the fares bought straight after them. */
@@ -151,6 +153,79 @@ export function scoreForecasts(rows: ForecastRow[], zonePct: number, noFare = 0)
   };
 }
 
+/* ------------- "Every single day our guesses should be getting better" -------------
+ * Owner, 2026-10-11. The before-buying grades (the honest ones) for the last
+ * 7 days against the 7 before, per group and per formula, with the
+ * destinations reading furthest off this week as the first place to look
+ * for why. Pure.
+ */
+export type Trend = "better" | "worse" | "about the same" | "too few fares";
+export interface ProgressLine {
+  group: "US" | "International"; formula: "shown" | "candidate";
+  thisWeek: ZoneScore; lastWeek: ZoneScore; trend: Trend;
+}
+export interface DestinationMiss { destination: string; n: number; shownReads: number | null; candidateReads: number | null }
+export interface Progress { lines: ProgressLine[]; destinations: DestinationMiss[] }
+
+/** Fewest fares per week in a group before a week is compared at all. */
+export const PROGRESS_MIN_FARES = 8;
+/** A change in "typically off" smaller than this many points is noise. */
+export const PROGRESS_NOISE_POINTS = 1.5;
+
+export function progressOf(rows: ForecastRow[], zonePct: number, now: Date = new Date()): Progress {
+  const zone = zonePct / 100;
+  const day = 86_400_000;
+  const inWeek = (r: ForecastRow, back: number) => {
+    const age = (now.getTime() - r.boughtAt.getTime()) / day;
+    return age >= back * 7 && age < (back + 1) * 7;
+  };
+  const errs = (rs: ForecastRow[], pick: (r: ForecastRow) => number | undefined) =>
+    rs.flatMap((r) => { const v = pick(r); return v === undefined || !(v > 0) ? [] : [v / r.price - 1]; });
+  const lines: ProgressLine[] = [];
+  for (const group of ["US", "International"] as const) {
+    const gr = rows.filter((r) => isInternational(r.destination) === (group === "International"));
+    for (const formula of ["shown", "candidate"] as const) {
+      const pick = (r: ForecastRow) => (formula === "shown" ? r.shown : r.candidate);
+      const thisWeek = scoreZone(errs(gr.filter((r) => inWeek(r, 0)), pick), zone);
+      const lastWeek = scoreZone(errs(gr.filter((r) => inWeek(r, 1)), pick), zone);
+      let trend: Trend = "too few fares";
+      if (thisWeek.n >= PROGRESS_MIN_FARES && lastWeek.n >= PROGRESS_MIN_FARES
+          && thisWeek.typicalOffPct !== null && lastWeek.typicalOffPct !== null) {
+        const d = thisWeek.typicalOffPct - lastWeek.typicalOffPct;
+        trend = d <= -PROGRESS_NOISE_POINTS ? "better" : d >= PROGRESS_NOISE_POINTS ? "worse" : "about the same";
+      }
+      lines.push({ group, formula, thisWeek, lastWeek, trend });
+    }
+  }
+  const week = rows.filter((r) => inWeek(r, 0));
+  const med = (xs: number[]) => {
+    if (!xs.length) return null;
+    const s = [...xs].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+    return Math.round((s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2) * 1000) / 10;
+  };
+  const destinations = [...new Set(week.map((r) => r.destination))].map((destination) => {
+    const rs = week.filter((r) => r.destination === destination);
+    return { destination, n: rs.length, shownReads: med(errs(rs, (r) => r.shown)), candidateReads: med(errs(rs, (r) => r.candidate)) };
+  }).sort((a, b) => Math.abs(b.shownReads ?? 0) - Math.abs(a.shownReads ?? 0));
+  return { lines, destinations };
+}
+
+/** Plain-language lines for the morning email, and a task when a group got worse. */
+export function progressReport(p: Progress): { lines: string[]; worse: ProgressLine[] } {
+  const name = (l: ProgressLine) => `${l.group}, ${l.formula === "shown" ? "what travelers see" : "candidate"}`;
+  const off = (z: ZoneScore) => (z.typicalOffPct === null ? "—" : `${z.typicalOffPct}%`);
+  const lines = p.lines.map((l) => `${name(l)}: typically off ${off(l.thisWeek)} this week (${l.thisWeek.n} fares, `
+    + `${l.thisWeek.inZonePct ?? "—"}% within the zone) vs ${off(l.lastWeek)} last week (${l.lastWeek.n}): ${l.trend.toUpperCase()}`);
+  const far = p.destinations.filter((d) => d.n >= 3 && d.shownReads !== null && Math.abs(d.shownReads) >= 10);
+  if (far.length) {
+    lines.push("Furthest off this week, where to look first (+ = we read high):");
+    for (const d of far.slice(0, 5)) {
+      lines.push(`  ${d.destination}: travelers saw ${d.shownReads! > 0 ? "+" : ""}${d.shownReads}%, candidate ${d.candidateReads === null ? "—" : (d.candidateReads > 0 ? "+" : "") + d.candidateReads + "%"} (${d.n} fares)`);
+    }
+  }
+  return { lines, worse: p.lines.filter((l) => l.trend === "worse") };
+}
+
 /** The last `days` days of forecasts, graded. Read-only. */
 export async function loadForecastScores(db: Db, days = 30): Promise<ForecastScores> {
   const settings = await settingsMap(db);
@@ -180,5 +255,5 @@ export async function loadForecastScores(db: Db, days = 30): Promise<ForecastSco
       live: n(r.live_estimate_usd), candidate: n(r.candidate_usd),
     });
   }
-  return scoreForecasts(rows, zonePct, noFare);
+  return { ...scoreForecasts(rows, zonePct, noFare), progress: progressOf(rows, zonePct) };
 }

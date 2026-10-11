@@ -19,6 +19,7 @@ import { parseRssItems } from "../rss.js";
 import { todayISO } from "../dates.js";
 import { ownerTasks, renderOwnerTasks, type OwnerTask } from "../ownerTasks.js";
 import { dataIntake, type IntakeReport } from "../dataIntake.js";
+import { loadForecastScores, progressReport, type Progress } from "../fareForecasts.js";
 
 export interface NewsDigestOptions {
   sender?: EmailSender;
@@ -32,6 +33,8 @@ export interface NewsDigestOptions {
   tasks?: OwnerTask[];
   /** Injected by tests; normally read from the database (dataIntake.ts). */
   intake?: IntakeReport;
+  /** Injected by tests; normally graded from fare_forecasts. */
+  progress?: Progress | null;
 }
 
 export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
@@ -83,9 +86,24 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   // chore list, and its summary is in every email, because keeping flight and
   // hotel data is one of the app's governing priorities (top of CLAUDE.md).
   const intake = opts.intake ?? await dataIntake(db);
+  // "Every single day our guesses should be getting better. If that is not
+  // the case, I want to know why" (owner, 2026-10-11). Graded only on
+  // numbers written down before each fare was bought (fare_forecasts).
+  const progress = opts.progress !== undefined ? opts.progress
+    : await loadForecastScores(db, 14).then((f) => f.progress ?? null).catch(() => null);
+  const prog = progress ? progressReport(progress) : null;
+  const progressTasks = (prog?.worse ?? []).map((l) => ({
+    id: `flight-accuracy-${l.group === "US" ? "us" : "intl"}-${l.formula}`,
+    title: `Flight estimates got WORSE this week: ${l.group}, ${l.formula === "shown" ? "what travelers see" : "the candidate"} `
+      + `(typically off ${l.thisWeek.typicalOffPct}% vs ${l.lastWeek.typicalOffPct}%)`,
+    why: "Our guesses should improve every day as fares are added. Ask Claude to find why (the destinations listed under "
+      + "\"Are our guesses getting better?\" are the first place to look) and how to fix it.",
+    side: "free" as const, blocking: false, source: "checked" as const,
+  }));
   const tasks = [
     ...(opts.tasks ?? await ownerTasks(db, { today: opts.todayISO ?? todayISO() })),
     ...intake.problems.map((t) => ({ ...t, source: "checked" as const })),
+    ...progressTasks,
   ].sort((a, b) => Number(b.blocking) - Number(a.blocking));
   const taskNote = renderOwnerTasks(tasks);
   const intakeNote = "Did the data stick? (daily check)\n\n" + intake.lines.join("\n");
@@ -104,6 +122,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const shouldSend = Boolean(ownerEmail);
   if (shouldSend) {
     const parts: string[] = [taskNote, intakeNote];
+    if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, this week vs last)\n\n" + prog.lines.join("\n"));
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")
         + "\n\n— Review and hand-add anything worth surfacing to a resort's goodToKnow in config.ts.");

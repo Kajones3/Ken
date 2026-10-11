@@ -70,6 +70,46 @@ now exists so it cannot recur silently.
 
 ---
 
+## ⛔ GOVERNING RULE 2 — OUR ALGORITHM ALWAYS LEARNS. DO NOT DELETE, SHORTEN OR MOVE.
+
+**The owner's words (2026-10-11):** "If the candidate formula is going to be
+'our algorithm' then it needs to learn from the information we add on. It
+cannot stay static. It should learn from everything we are finding is
+significant. ... Every single day our guesses should be getting better. If
+that is not the case, I want to know why and how we can fix it." And: "I need
+to get a regular and accurate picture of how well the site is predicting
+actual costs or the tool is useless."
+
+What that means in code. **Every session keeps all of these true:**
+
+1. **The candidate formula (`src/fareModel.ts`) is "our algorithm".** Every
+   lever in it is LEARNED from the record and refitted as fares arrive
+   (`loadFareModel`, 10-minute cache): group calibration (US, Europe, Asia),
+   a lever per destination, a season per group and quarter, day of week, the
+   route's own searches, Google's typical price, BTS monthly then quarterly
+   priors. Shrunk toward "no effect" until enough fares back it; NEVER a
+   fixed hand-set number standing in for something the data can teach.
+2. **Anything found to matter goes INTO the algorithm.** When the Indicator
+   study (`indicatorStudy.ts`), the signals tab, a coverage finding or the
+   owner shows something moves fares (e.g. Europe vs Asia, 2026-10-11), the
+   next step is a learned lever for it, graded before it ships. A finding
+   that only lives in a report is unfinished work.
+3. **Grade only on numbers written down BEFORE the fare was bought**
+   (`fare_forecasts`). That is the only honest accuracy figure. A score
+   computed after the formula has learned from the same fare (the old "Live
+   formula vs candidate" table) flattered live 49% vs a true 18% on
+   2026-10-11; never present such a number as "how accurate we are".
+4. **Every day: are we getting better?** The morning email's "Are our
+   guesses getting better?" section and /admin Flights' week-by-week table
+   (`progressOf()` in `fareForecasts.ts`) compare this week with last, per
+   US/International, for what travelers see and for the candidate, and list
+   the destinations furthest off. A WORSE line becomes an owner task. **When
+   a line is worse or flat for a week, Claude finds out why and proposes the
+   fix in the next session, unprompted.**
+5. **Changing the algorithm is fine; changing what travelers see is the
+   owner's call.** Improve the candidate freely (it only affects grading
+   until `flight.useCandidate` is on); the owner flips the switch.
+
 ## START HERE — state as of 2026-10-10 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
@@ -85,6 +125,30 @@ side works with or without a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
 **772 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### 2026-10-11, later — the candidate learns per destination; the honest numbers lead
+
+Owner: "each destination does need its own levers ... even between Asia and
+Europe there is a significant meaningful distinction"; make "always
+learning" a standing rule (GOVERNING RULE 2 above); "I need to get a regular
+and accurate picture".
+- `fareModel.ts`: groups US / Europe / Asia (`groupOf()`), each with its own
+  calibration (Europe/Asia shrink toward pooled international, n/(n+3)); a
+  destination lever per arrival airport (`DEST_SHRINK_K` 4); a season lever
+  per group+quarter (`SEASON_SHRINK_K` 6), which corrects the seed's wrong
+  summer bump; US prior prefers the BTS monthly survey (`ModelInputs.monthly`,
+  loaded in `fareModelDb.ts`, >= `MONTHLY_MIN_TICKETS`). `FareModel.levers`
+  exposes everything it believes; the coverage report prints them.
+- /admin Flights: the top tiles are the before-buying grades (what travelers
+  see + candidate, US and international); "Are we getting better? This week
+  vs last week" leads the before-buying section with the destinations
+  furthest off; the old table is relabeled "After learning ... flattered".
+- Morning email: "Are our guesses getting better?" section; a WORSE line is
+  an owner task (`flight-accuracy-*`, not blocking).
+- **Baseline to beat (candidate, before the change):** fair test since 10-08,
+  US 30% within ±10% / typically off 19.5%; International 24% / 17.5%.
+  Leave-one-out on the record: US 37% / 17.4%, Intl 37% / 15.1%. The new
+  levers' first before-buying grades arrive with the next nightly run.
 
 ### 2026-10-11 — "Is the candidate formula working?" (owner screenshot of /admin Flights)
 

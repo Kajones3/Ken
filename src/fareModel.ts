@@ -9,8 +9,23 @@
  * comparison useless. So this formula aims at the real middle fare, with no
  * deliberate lean in either direction.
  *
- * One estimate = prior x group calibration x day-of-week x route factor
- * (x the holiday premium, which pricing.ts adds, as it does today).
+ * One estimate = prior x group calibration x destination x season x
+ * day-of-week x route factor (x the holiday premium, which pricing.ts adds,
+ * as it does today). Every lever is LEARNED from the bought fares in the
+ * record and refitted as new ones arrive (owner, 2026-10-11: "It cannot
+ * stay static ... Every single day our guesses should be getting better").
+ * Each one is shrunk toward "no effect" until it has enough fares behind it.
+ *
+ *  - Groups (2026-10-11): US, Europe, Asia. The indicator study showed
+ *    Europe and Asia price differently, so they no longer share one
+ *    calibration.
+ *  - Destination (2026-10-11): each arrival airport's own lever on top of
+ *    its group (Orlando read ~22% low and Hong Kong ~13% high under one
+ *    shared number). n / (n + 4).
+ *  - Season (2026-10-11): each group's own quarter shape, learned from the
+ *    fares (the seeded guess's +37% summer bump was wrong). n / (n + 6).
+ *  - US prior prefers BTS's MONTHLY survey for the travel month (same
+ *    calendar month, enough tickets), else the quarterly one.
  *
  *  - Prior. US routes: the route's own BTS median for that quarter.
  *    International (or a US route with no BTS row): a price-by-distance line
@@ -48,6 +63,14 @@ export const ROUTE_SHRINK_K = 2;
 export const ROUTE_FACTOR_MIN = 0.25;
 export const ROUTE_FACTOR_MAX = 4;
 const DOW_SHRINK_K = 8;
+/** Destination lever: n / (n + K). */
+export const DEST_SHRINK_K = 4;
+/** Season lever per group and quarter: n / (n + K). */
+export const SEASON_SHRINK_K = 6;
+/** Group calibration: a group with fewer fares leans on the pooled one. */
+const GROUP_SHRINK_K = 3;
+/** Data-error guards for the learned levers, not limits on learning. */
+const LEVER_MIN = 0.4, LEVER_MAX = 2.5;
 const DOW_MIN = 0.85, DOW_MAX = 1.2;
 
 const RESORT_OF_AIRPORT = new Map(
@@ -67,9 +90,16 @@ export interface ModelBaseline {
   /** bts_db1b | seed_guess | sampled_live */
   source: string;
 }
+/** BTS's monthly survey row for a route and calendar month (newest year). */
+export interface ModelMonthly {
+  origin: string; destination: string; month: number; med: number; p25: number; p75: number;
+}
+export type FareGroup = "dom" | "europe" | "asia";
 export interface ModelInputs {
   fares: ModelFare[];
   baselines: ModelBaseline[];
+  /** Optional: the monthly survey, preferred over the quarterly prior for US routes. */
+  monthly?: ModelMonthly[];
   premiumPct: (key: string, fallback: number) => number;
   now: Date;
 }
@@ -78,13 +108,20 @@ export interface Prediction {
   value: number;
   /** p25/p75 shape to show a range around it. */
   lowRatio: number; highRatio: number;
-  parts: { prior: number; calibration: number; dayOfWeek: number; route: number; routeSearches: number;
-           priorKind: "bts" | "distance" };
+  parts: { prior: number; calibration: number; destination: number; season: number; dayOfWeek: number;
+           route: number; routeSearches: number; group: FareGroup;
+           priorKind: "bts" | "bts_monthly" | "distance" };
 }
 export interface FareModel {
   predict(origin: string, destination: string, date: ISODate): Prediction | undefined;
   /** For the scoreboard: how many fares each group was fitted on. */
   fitted: { domestic: number; international: number };
+  /** Every learned lever, for the report: what the formula believes today. */
+  levers: {
+    calibration: Record<FareGroup, number>;
+    destination: Record<string, { factor: number; fares: number }>;
+    season: Record<string, { factor: number; fares: number }>;
+  };
 }
 
 const median = (xs: number[]): number => {
@@ -99,6 +136,15 @@ export function isInternational(destination: string): boolean {
   const r = RESORT_OF_AIRPORT.get(destination);
   return !!r && r.region !== "dom";
 }
+
+export function groupOf(destination: string): FareGroup {
+  const r = RESORT_OF_AIRPORT.get(destination);
+  return !r || r.region === "dom" ? "dom" : r.region === "atl" ? "europe" : "asia";
+}
+
+/** exp(median of logs x n/(n+K)), held inside the data-error guard. */
+const shrunk = (logs: number[], k: number) =>
+  logs.length ? clamp(Math.exp(median(logs) * (logs.length / (logs.length + k))), LEVER_MIN, LEVER_MAX) : 1;
 
 export function routeMiles(origin: string, destination: string): number | undefined {
   const o = ORIGIN_BY_IATA.get(origin);
@@ -156,10 +202,17 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   };
   const dist = { dom: fitDistance(false), intl: fitDistance(true) };
 
-  const prior = (o: string, d: string, date: ISODate): { v: number; kind: "bts" | "distance"; shape?: ModelBaseline } | undefined => {
+  const monthly = new Map<string, ModelMonthly>();
+  for (const m of inp.monthly ?? []) monthly.set(`${m.origin}|${m.destination}|${m.month}`, m);
+  const monthlyFor = (o: string, d: string, month: number) =>
+    monthly.get(`${o}|${d}|${month}`) ?? (ALT_TO_PRIMARY.has(d) ? monthly.get(`${o}|${ALT_TO_PRIMARY.get(d)}|${month}`) : undefined);
+
+  const prior = (o: string, d: string, date: ISODate): { v: number; kind: "bts" | "bts_monthly" | "distance"; shape?: { med: number; p25: number; p75: number } } | undefined => {
     const intl = isInternational(d);
     const q = quarterOf(date);
     if (!intl) {
+      const m = monthlyFor(o, d, Number(date.slice(5, 7)));
+      if (m) return { v: m.med, kind: "bts_monthly", shape: m };
       const b = btsFor(o, d, q);
       if (b) return { v: b.med, kind: "bts", shape: b };
     }
@@ -174,20 +227,46 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   const rows = inp.fares.flatMap((f) => {
     const p = prior(f.origin, f.destination, f.departDate);
     if (!p) return [];
-    return [{ f, p: p.v, intl: isInternational(f.destination), h: hol(f.departDate) }];
+    return [{ f, p: p.v, intl: isInternational(f.destination), g: groupOf(f.destination),
+      q: quarterOf(f.departDate), h: hol(f.departDate) }];
   });
 
-  // Group calibration.
-  const calib = (intl: boolean) => {
-    const r = rows.filter((x) => x.intl === intl).map((x) => x.f.price / (x.p * x.h));
-    return r.length ? median(r) : 1;
+  // Group calibration: US, Europe, Asia. A group with few fares leans on
+  // the pooled international one (n / (n + 3)).
+  const logRatio = (x: (typeof rows)[number]) => Math.log(x.f.price / (x.p * x.h));
+  const intlPooled = rows.filter((x) => x.intl).map(logRatio);
+  const pooled = intlPooled.length ? median(intlPooled) : 0;
+  const calOf = (g: FareGroup) => {
+    const logs = rows.filter((x) => x.g === g).map(logRatio);
+    if (!logs.length) return Math.exp(g === "dom" ? 0 : pooled);
+    if (g === "dom") return Math.exp(median(logs));
+    const w = logs.length / (logs.length + GROUP_SHRINK_K);
+    return Math.exp(median(logs) * w + pooled * (1 - w));
   };
-  const cal = { dom: calib(false), intl: calib(true) };
+  const cal: Record<FareGroup, number> = { dom: calOf("dom"), europe: calOf("europe"), asia: calOf("asia") };
+
+  // Destination lever: what is left at each arrival airport after its group.
+  const byDest = new Map<string, number[]>();
+  for (const x of rows) {
+    byDest.set(x.f.destination, [...(byDest.get(x.f.destination) ?? []), Math.log(x.f.price / (x.p * x.h * cal[x.g]))]);
+  }
+  const dest = new Map([...byDest].map(([k, logs]) => [k, shrunk(logs, DEST_SHRINK_K)] as const));
+  const destOf = (d: string) => dest.get(d) ?? 1;
+
+  // Season lever: each group's own quarter shape, after destination.
+  const bySeason = new Map<string, number[]>();
+  for (const x of rows) {
+    const k = `${x.g} Q${x.q}`;
+    bySeason.set(k, [...(bySeason.get(k) ?? []), Math.log(x.f.price / (x.p * x.h * cal[x.g] * destOf(x.f.destination)))]);
+  }
+  const season = new Map([...bySeason].map(([k, logs]) => [k, shrunk(logs, SEASON_SHRINK_K)] as const));
+  const seasonOf = (g: FareGroup, q: number) => season.get(`${g} Q${q}`) ?? 1;
+  const levelOf = (x: (typeof rows)[number]) => x.p * x.h * cal[x.g] * destOf(x.f.destination) * seasonOf(x.g, x.q);
 
   // Day of week, pooled.
   const byDow = new Map<number, number[]>();
   for (const x of rows) {
-    const e = x.f.price / (x.p * x.h * (x.intl ? cal.intl : cal.dom));
+    const e = x.f.price / levelOf(x);
     const k = dowOf(x.f.departDate);
     byDow.set(k, [...(byDow.get(k) ?? []), Math.log(e)]);
   }
@@ -207,7 +286,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   const routeLogs = new Map<string, number[]>();
   for (const x of rows) {
     if (x.f.observedAt.getTime() < cutoff) continue;
-    const base = x.p * x.h * (x.intl ? cal.intl : cal.dom) * (dow.get(dowOf(x.f.departDate)) ?? 1);
+    const base = levelOf(x) * (dow.get(dowOf(x.f.departDate)) ?? 1);
     let r = x.f.price / base;
     if (x.f.insightMid) r = Math.sqrt(r * ((x.f.insightMid * insightScale) / base));
     const k = `${x.f.origin}|${x.f.destination}`;
@@ -216,11 +295,18 @@ export function fitFareModel(inp: ModelInputs): FareModel {
 
   return {
     fitted: { domestic: rows.filter((x) => !x.intl).length, international: rows.filter((x) => x.intl).length },
+    levers: {
+      calibration: cal,
+      destination: Object.fromEntries([...dest].map(([k, f]) => [k, { factor: f, fares: byDest.get(k)!.length }])),
+      season: Object.fromEntries([...season].map(([k, f]) => [k, { factor: f, fares: bySeason.get(k)!.length }])),
+    },
     predict(o, d, date) {
       const p = prior(o, d, date);
       if (!p) return undefined;
-      const intl = isInternational(d);
-      const c = intl ? cal.intl : cal.dom;
+      const g = groupOf(d);
+      const c = cal[g];
+      const de = destOf(d);
+      const se = seasonOf(g, quarterOf(date));
       const w = dow.get(dowOf(date)) ?? 1;
       const logs = routeLogs.get(`${o}|${d}`) ?? [];
       const route = logs.length
@@ -228,10 +314,11 @@ export function fitFareModel(inp: ModelInputs): FareModel {
         : 1;
       const shape = p.shape && p.shape.med > 0 ? p.shape : undefined;
       return {
-        value: Math.round(p.v * c * w * route * 100) / 100,
+        value: Math.round(p.v * c * de * se * w * route * 100) / 100,
         lowRatio: shape ? Math.min(1, shape.p25 / shape.med) : 0.85,
         highRatio: shape ? Math.max(1, shape.p75 / shape.med) : 1.2,
-        parts: { prior: Math.round(p.v), calibration: c, dayOfWeek: w, route, routeSearches: logs.length, priorKind: p.kind },
+        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, dayOfWeek: w, route,
+                 routeSearches: logs.length, group: g, priorKind: p.kind },
       };
     },
   };

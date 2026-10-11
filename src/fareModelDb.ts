@@ -5,9 +5,9 @@
  * baseline. Read-only.
  */
 import type { Db } from "./db.js";
-import { dateStr } from "./book.js";
+import { dateStr, MONTHLY_MIN_TICKETS } from "./book.js";
 import { settingsMap } from "./settings.js";
-import { fitFareModel, type FareModel, type ModelBaseline, type ModelFare, type ModelInputs } from "./fareModel.js";
+import { fitFareModel, type FareModel, type ModelBaseline, type ModelFare, type ModelInputs, type ModelMonthly } from "./fareModel.js";
 
 /** How far back the candidate learns from. Route evidence is narrower (45 days). */
 export const MODEL_TRAIN_DAYS = 90;
@@ -57,8 +57,23 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
       p25: Number(r.p25_fare_usd ?? med), p75: Number(r.p75_fare_usd ?? med), source: r.source ?? "bts_db1b",
     });
   }
+  // BTS's monthly survey: newest year per route and calendar month with
+  // enough tickets (the same floor book.ts uses). Absent table = none.
+  const mo = await db.query<{ origin: string; destination: string; month: number; median_fare_usd: string;
+    p25_fare_usd: string; p75_fare_usd: string }>(
+    `select distinct on (origin, destination, month)
+            origin, destination, month, median_fare_usd, p25_fare_usd, p75_fare_usd
+       from historical_fares_monthly where itin_count >= $1
+      order by origin, destination, month, year desc, loaded_at desc`,
+    [MONTHLY_MIN_TICKETS],
+  ).catch(() => ({ rows: [] as never[] }));
+  const monthly: ModelMonthly[] = mo.rows.flatMap((r) => {
+    const med = Number(r.median_fare_usd);
+    return med > 0 ? [{ origin: r.origin.trim(), destination: r.destination.trim(), month: Number(r.month), med,
+      p25: Number(r.p25_fare_usd), p75: Number(r.p75_fare_usd) }] : [];
+  });
   const settings = await settingsMap(db);
-  return { fares, baselines, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
+  return { fares, baselines, monthly, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
 }
 
 // Fitting reads a few thousand rows, so the live site keeps one fitted

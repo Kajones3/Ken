@@ -105,3 +105,26 @@ test("scoreForecasts grades a miss the same in either direction, split US / inte
   assert.deepEqual(s.daily.map((d) => [d.day, d.n]), [["2026-10-09", 1], ["2026-10-08", 3]], "newest night first");
   assert.equal(s.since, "2026-10-08");
 });
+
+test("progressOf: this week vs last week, before-buying grades, and where to look first", async () => {
+  const { progressOf, progressReport } = await import("./fareForecasts.js");
+  const now = new Date("2026-10-20T12:00:00Z");
+  const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000);
+  const rows = [
+    // Last week: US shown off by 20%, candidate by 10%.
+    ...Array.from({ length: 10 }, (_, i) => ({ destination: "MCO", boughtAt: at(8 + (i % 5)), price: 100, shown: 120, candidate: 110 })),
+    // This week: shown 5% off (better), candidate 25% off (worse).
+    ...Array.from({ length: 10 }, (_, i) => ({ destination: "MCO", boughtAt: at(1 + (i % 5)), price: 100, shown: 105, candidate: 75 })),
+    // International: too few fares to judge.
+    { destination: "NRT", boughtAt: at(2), price: 1000, shown: 900, candidate: 1000 },
+  ];
+  const p = progressOf(rows, 10, now);
+  const line = (g: string, f: string) => p.lines.find((l) => l.group === g && l.formula === f)!;
+  assert.equal(line("US", "shown").trend, "better");
+  assert.equal(line("US", "candidate").trend, "worse");
+  assert.equal(line("International", "shown").trend, "too few fares");
+  assert.deepEqual(p.destinations.map((d) => d.destination), ["NRT", "MCO"]);  // furthest off first
+  const r = progressReport(p);
+  assert.equal(r.worse.length, 1);
+  assert.ok(r.lines.some((l) => l.startsWith("US, candidate") && l.endsWith("WORSE")));
+});
