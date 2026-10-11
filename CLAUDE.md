@@ -149,6 +149,13 @@ and accurate picture".
   US 30% within ±10% / typically off 19.5%; International 24% / 17.5%.
   Leave-one-out on the record: US 37% / 17.4%, Intl 37% / 15.1%. The new
   levers' first before-buying grades arrive with the next nightly run.
+- **AFTER (coverage run 38149264118, same fares, leave-one-out):** US 46% /
+  15.9% (was 37% / 17.4%); Intl 40% / 11.9% (was 37% / 15.1%). Destination
+  misses (real / candidate): MCO 1.28 -> 1.07, HKG 0.87 -> 0.93, NRT 1.13 ->
+  1.00, HND 1.16 -> 1.02. Learned: calibration US 0.94, Europe 0.91, Asia
+  1.01; MCO lever 1.28, HKG 0.85, NRT 1.16, SNA 0.86. Still weak: US Q3 1.50
+  (5 fares), LAX 1.11. The before-buying grade needs ~a week of nights to
+  confirm.
 
 ### 2026-10-11 — "Is the candidate formula working?" (owner screenshot of /admin Flights)
 
