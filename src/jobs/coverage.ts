@@ -615,7 +615,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     const tp = await db.query<{ origin: string; destination: string; depart_date: unknown; trip_length: number; price_usd: string }>(
       `select distinct on (origin, destination, depart_date, trip_length)
               origin, destination, depart_date, trip_length, price_usd
-         from flight_observations where source = 'travelpayouts'
+         from flight_observations where source like 'travelpayouts%'
         order by origin, destination, depart_date, trip_length, observed_at desc`);
     const rows = tp.rows.map((r) => ({
       origin: r.origin, destination: r.destination, tripLength: r.trip_length, price: Number(r.price_usd),
@@ -626,7 +626,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`    ${pat.map((p) => `${WEEKDAYS[p.day]} ${p.factor.toFixed(2)} (${p.fares} fares, ${p.groups} route-months)`).join(" · ") || "no route-month has fares on two weekdays yet"}`);
     const lead = await db.query<{ b: string; n: string }>(
       `select width_bucket((depart_date - observed_at::date), 0, 390, 13)::text as b, count(*)::text as n
-         from flight_observations where source = 'travelpayouts' group by 1 order by 1::int`);
+         from flight_observations where source like 'travelpayouts%' group by 1 order by 1::int`);
     out.push(`  Free feed, how far ahead each fare was seen (30-day buckets): ${lead.rows.map((r) => `${(Number(r.b) - 1) * 30}-${Number(r.b) * 30}d ${r.n}`).join(", ") || "none"}`);
     const ph = await db.query<{ history: unknown; depart_date: unknown }>(
       `select history, depart_date from flight_insights where history is not null`);
