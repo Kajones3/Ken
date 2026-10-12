@@ -480,14 +480,13 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <section class="sheet">
     <h2>Weekday, booking ahead and airlines: where they stand</h2>
     <ul>
-      <li><b>Day of week</b> IS in the study ("Leaving Friday–Sunday" above) and in the candidate formula. The 15th
-        falls on a different weekday each month, but within one year each month has exactly one weekday (every paid
-        Monday is a March fare), so paid fares mix weekday up with month. The free feed separates them (same route
-        and month, different days): on 3,976 fares as of 2026-10-12, every weekday was within 2% of the others.
-        The free feed isn't in the formula yet.</li>
-      <li><b>Booking a few weeks out</b>: "How far ahead it was searched" above only covers the months-ahead range
-        we buy in. Google's price history and the free feed's lead times are in the coverage report; neither is
-        in the formula yet.</li>
+      <li><b>Day of week</b> is in the study ("Leaving Friday–Sunday" above) and in the candidate formula, which now takes it
+        from the free feed (the same route and month on different days, so route and season cancel): on 3,976 fares as of
+        2026-10-12, every weekday was within 2% of the others. Paid fares used to all leave on the 15th, which mixed weekday up
+        with month; since 2026-10-12 they rotate across the 8th–22nd by route.</li>
+      <li><b>Booking a few weeks out</b>: "How far ahead it was searched" above covers the months-ahead range we buy in.
+        Google's price history for the same flight barely moves over the ~2 months it shows. The free feed can't answer this:
+        it repeats the same stored price night after night.</li>
       <li><b>Budget airlines and number of airlines on a route</b>: the government's monthly survey is loaded, but
         we don't read its airline columns yet.</li>
     </ul>

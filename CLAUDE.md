@@ -113,10 +113,11 @@ What that means in code. **Every session keeps all of these true:**
 ## START HERE — state as of 2026-10-12 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of **PR #159** plus
-this notes commit. Every PR through #159 is merged. The owner last
-redeployed Render after #146 (2026-10-10). **PRs #147-#159 are NOT on the
-live site until the owner redeploys** — ask first thing. They carry: the
+in Render; delete it to launch). **The owner redeployed Render on
+2026-10-12, after #161** (one redeploy ships everything merged so far).
+The PR that followed (free feed in the candidate, rotating buy day, Model 2
+signals) changes /admin text and needs the NEXT redeploy to show there; its
+data and formula changes work without one (Actions jobs). Older note: They carry: the
 nearby-airport line, the new /admin Flights layout ("Are we getting
 better?"), the morning email's accuracy section, and the screenshot
 reader's £/ticket-page fix.
@@ -171,7 +172,8 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    then it pulls Paris tickets slightly the wrong way.
 4. **Governing rule #4 + #2:** read the morning email ("Did the data
    stick?", "Are our guesses getting better?") or run "Pricing the Magic
-   debug coverage". Check: paid fares bought = kept (18/night);
+   debug coverage". Check: paid fares bought = kept (18/night), and since
+   2026-10-12 their dates spread across the 8th-22nd (not all the 15th);
    ~18 `fare_forecasts` a night; the "Fares bought, by home airport" table
    gaining ~6 new airports a night (rotation slots, PR #152); the new
    candidate levers' before-buying grades vs the baseline below (US 30% /
@@ -180,6 +182,41 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
 5. **~2026-10-21 to 10-28: the accuracy review** (see the older list
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
+
+### 2026-10-12, later — free feed in the candidate; paid buy day rotates; Model 2 signals; the noise floor
+
+Owner: build the free-feed intake; "advantages and disadvantages of buying
+on the 15th only ... What is the solution?"; "keep building [Model 2] up";
+"likelihood we actually get to 90% correct prices within 10% error?"
+- **Candidate** (`fareModel.ts`): day of week from the free feed
+  (`ModelInputs.feed`, loaded in `fareModelDb.ts`, `FEED_DOW_MIN_FARES` 30
+  per weekday; falls back to paid fares); new **month lever** per group +
+  calendar month on top of the quarter (`MONTH_SHRINK_K` 6), which takes what
+  the paid "weekday" lever was learning. Leave-one-out on the record, run
+  38278808470 -> 38281439895: **US 38% / 16.9% -> 38% / 15.7%; Intl 37% /
+  12.3% -> 46% / 11.1%** (within ±10% / typically off). Feed weekdays all
+  0.98-1.01. Before-buying grades come from the next nights.
+- **Paid buy day ROTATES** (`sampleDates(month, 1, key)` in popularRoutes.ts):
+  8th-22nd by a hash of route+month (`MID_MONTH_FIRST_DAY`/`LAST_DAY`), same
+  route+month always the same day, same 18 searches/night. intl-sweep (2
+  dates) unchanged. **Governing rule #4: check the next popular-routes run**
+  (18 written / 18 kept, dates spread across the 8th-22nd, forecasts kept).
+- **Model 2** (`indicatorStudy.ts` `GOOGLE_INDICATORS`): + Google's price
+  level (-1/0/+1), log(itineraries), free-feed median for the same route +
+  month that week vs Google's typical (0 when none). Effects: price level
+  +12.4% (solid), options +8.8% (solid), feed not yet (only 9 of 114 fares
+  have one: the feed covers near months, we buy 2-11 months out). **CV did
+  not improve yet: 39% / 14.5% with Google's typical alone, 36% / 14.7% with
+  all** (114 fares; 3 points is ~3 fares). /admin shows both lines.
+- **The noise floor** (coverage "The noise floor"): Google's day-by-day
+  price history for the same flight: **67%** of days within 10% of the price
+  on the day we searched (6,648 days, 112 searches). Different days in the
+  same route+month (free feed): **50%** within 10% of the month's middle.
+  Paid re-buys of the same date: 0 (never re-bought). The free feed repeats
+  its stored price nightly, so it can't measure stability or booking ahead
+  (its "same flight on two days" read 93% / 0.0% apart: an artifact).
+  **So 90% within ±10% is not a realistic target**; ~60-70% within ±10% (or
+  ~90% within ±20%) is. Told the owner.
 
 ### 2026-10-12 — day of week: paid fares mix it with month; the free feed says it barely matters
 
