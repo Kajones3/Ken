@@ -183,6 +183,30 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, final — flight card says "Google Flights"; paid fares only to main airports
+
+Owner's screenshots, PIT->HKG Apr 5-11: our $1,619 (live estimate); Google's
+list $1,315-$1,895; Kayak $1,155-$1,561 per person; the SAME outbound
+(Alaska/Cathay via SEA) $1,895 on Google vs $1,397-$1,561 on Kayak. Our
+numbers are Google's middle fare while the card sends people to Kayak,
+which sells for less (booking sites, mixed-airline combos). Owner picked
+"1A": the flight card and the PDF now say "Our fares are the typical fare
+on Google Flights. Booking sites like Kayak often list the same trip for
+less, so check there before you buy" above the Kayak link ("send people to
+the cheapest place"). No % in the wording until the gap is MEASURED.
+**Paid fares are bought only into each resort's main airport** (owner: "not
+SNA anymore, only LAX"): `mainArrivalAirport()` / `isMainArrivalAirport()`
+in config.ts; rotation offers main airports only; demand, furthest-off and
+trend-anchor routes aimed at an alternate (SNA, TPA, HND) are bought at
+the main one (LAX, MCO, NRT), merged and re-checked against recentlyBought;
+intl-sweep defaults to main airports. Hand-named routes (`routes` input)
+and alternates named on purpose are still bought. Fares already bought into
+alternates stay in the record. Governing rule #4: check the next
+popular-routes run (18 written / 18 kept, no SNA/TPA/HND bought). Open:
+Tokyo's main is Narita (config); Haneda is closer to the resort; ask.
+Measuring the Kayak gap: NOT started; owner asked first what buying
+Google's "booking options" would teach (see the conversation).
+
 ### 2026-10-12, very last — "lean", not "reads"; is our international target too high? (PR #164)
 
 Owner read "reads +2%" as "2% of fares are too high". It is the miss on the MIDDLE

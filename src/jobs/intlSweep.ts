@@ -19,7 +19,7 @@
  * a hard per-run ceiling inside the provider. No SERPAPI_KEY, no spend.
  */
 import { randomUUID } from "node:crypto";
-import { ORIGINS } from "../config.js";
+import { ORIGINS, isMainArrivalAirport } from "../config.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
 import { getDb, type Db } from "../db.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
@@ -51,7 +51,9 @@ export async function runIntlSweep(db: Db, opts: IntlSweepOptions = {}) {
   const envDests = (process.env.INTL_SWEEP_DESTINATIONS ?? "")
     .split(",").map((d) => d.trim().toUpperCase()).filter(Boolean);
   const allIntl = internationalDestinations();
-  const requested = opts.destinations ?? (envDests.length ? envDests : allIntl);
+  // By default only each resort's main airport (owner, 2026-10-12); an
+  // alternate can still be named on purpose.
+  const requested = opts.destinations ?? (envDests.length ? envDests : allIntl.filter(isMainArrivalAirport));
   // Never let an env var widen this beyond the app's own international list.
   const destinations = requested.filter((d) => allIntl.includes(d));
   if (!destinations.length) {
