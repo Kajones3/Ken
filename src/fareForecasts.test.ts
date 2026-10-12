@@ -130,3 +130,23 @@ test("progressOf: this week vs last week, before-buying grades, and where to loo
   assert.equal(r.worse.length, 1);
   assert.ok(r.lines.some((l) => l.startsWith("US, candidate") && l.endsWith("WORSE")));
 });
+
+test("leanLines: says which way we lean in the owner's words, and how close separately", async () => {
+  const { leanLines, leanWords } = await import("./fareForecasts.js");
+  assert.equal(leanWords(15.8), "high by 16%");
+  assert.equal(leanWords(-5.9), "low by 6%");
+  assert.equal(leanWords(0.3), "even");
+  const at = new Date("2026-10-10T10:00:00Z");
+  // US: 2 far too low, 1 close, 2 far too high: the middle fare is +2%.
+  const rows: ForecastRow[] = [70, 80, 102, 130, 140].map((c) =>
+    ({ destination: "MCO", boughtAt: at, price: 100, shown: 116, candidate: c }));
+  const s = { ...scoreForecasts(rows, 10), informedBy: { domestic: 120, international: 90, feed: 4000 } };
+  const lines = leanLines(s);
+  assert.ok(lines.includes("  Our shown fares lean high by 16% on average."));
+  assert.ok(lines.includes("  Our candidate fares lean high by 2% on average."));
+  assert.ok(lines.some((l) => l.includes("candidate: 20% within ±10%, 40% more than 10% too low, 40% more than 10% too high")),
+    "the lean never stands alone: how close is said beside it");
+  assert.ok(lines.some((l) => l.startsWith("We are using 210 fares to inform our guesses (120 US and 90 international")
+    && l.includes("4,000 free-feed")));
+  assert.ok(!lines.some((l) => l.startsWith("International")), "no international fares, no international lines");
+});

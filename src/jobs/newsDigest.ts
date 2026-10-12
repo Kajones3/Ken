@@ -35,6 +35,8 @@ export interface NewsDigestOptions {
   intake?: IntakeReport;
   /** Injected by tests; normally graded from fare_forecasts. */
   progress?: Progress | null;
+  /** The flight lean summary; undefined = load it, null = none. */
+  lean?: string[] | null;
 }
 
 export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
@@ -89,8 +91,11 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   // "Every single day our guesses should be getting better. If that is not
   // the case, I want to know why" (owner, 2026-10-11). Graded only on
   // numbers written down before each fare was bought (fare_forecasts).
-  const progress = opts.progress !== undefined ? opts.progress
-    : await loadForecastScores(db, 14).then((f) => f.progress ?? null).catch(() => null);
+  // Same 30 days the /admin Flights page shows, so the two say the same thing.
+  const needScores = opts.progress === undefined || opts.lean === undefined;
+  const scores = needScores ? await loadForecastScores(db, 30).catch(() => null) : null;
+  const progress = opts.progress !== undefined ? opts.progress : scores?.progress ?? null;
+  const lean = opts.lean !== undefined ? opts.lean : scores?.lean?.length ? scores.lean : null;
   const prog = progress ? progressReport(progress) : null;
   const progressTasks = (prog?.worse ?? []).map((l) => ({
     id: `flight-accuracy-${l.group === "US" ? "us" : "intl"}-${l.formula}`,
@@ -122,6 +127,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const shouldSend = Boolean(ownerEmail);
   if (shouldSend) {
     const parts: string[] = [taskNote, intakeNote];
+    if (lean) parts.push("How our flight guesses lean (checked before buying, last 30 days)\n\n" + lean.join("\n"));
     if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, this week vs last)\n\n" + prog.lines.join("\n"));
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")

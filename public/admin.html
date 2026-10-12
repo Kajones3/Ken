@@ -328,7 +328,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
       <h3>After learning: live vs candidate (the live column is flattered)</h3>
       <p class="count">Graded on every fare we hold, AFTER the live formula has already learned from it, so its
-        column reads kinder than the truth. The candidate is graded leave-one-out. Use the before-buying numbers above
+        column looks kinder than the truth. The candidate is graded leave-one-out. Use the before-buying numbers above
         to judge; this table is here to see more fares at once.</p>
       <div id="flCompare"></div>
       <div id="flSwitch" style="margin-top:12px"></div>
@@ -339,8 +339,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         until you set it): 0 shows the cheap end of a route's usual range, 50 the middle, 100 the dear end. Graded on the
         formula before any bought fare corrects the route, because that is the part the lean moves. Only matters while
         travelers see the live formula; the candidate isn't leaned. &ldquo;Typically off by&rdquo; is how far a typical
-        estimate missed; the smallest number in each row is the best fit. <b>Reads high/low</b>: + means our number
-        was above the real fare.</p>
+        estimate missed; the smallest number in each row is the best fit. <b>Leans</b>: which way the middle fare tilts
+        (high = our number above the real fare); it says nothing about how close the rest are.</p>
       <div id="flLean"></div>
 
       <h3>Routes, furthest off first (by what travelers see now)</h3>
@@ -1990,7 +1990,7 @@ const RESORT_NAME = { wdw: "Walt Disney World", dlr: "Disneyland Resort", dlp: "
 function renderHotelScore(h){
   const g = h.graded;
   const zt = (x, name, sub) => x && x.n
-    ? tile(name, x.inZonePct + "%", `within ±${h.zonePct}% · ${num(x.n)} ${x.n === 1 ? sub.replace(/s$/, "") : sub} · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
+    ? tile(name, x.inZonePct + "%", `within ±${h.zonePct}% · ${num(x.n)} ${x.n === 1 ? sub.replace(/s$/, "") : sub} · typically off ${offBy(x.typicalOffPct)} · leans ${leanW(x.medianPct)}`)
     : tile(name, "—", "nothing to grade yet");
   $("#htTiles").innerHTML = zt(g.disney.all, "Disney hotels, what travelers see", "hotel-months")
     + zt(g.offProperty.all, "Off-property, between searches", "re-checks")
@@ -1998,10 +1998,10 @@ function renderHotelScore(h){
     + zt(g.ticketChecks, "Your ticket checks", "checks");
   const resortRows = list => list.length
     ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Resort</th><th class="n">Graded</th><th class="n">Accurate (±${h.zonePct}%)</th>
-        <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off by</th><th class="n">Reads</th></tr></thead>
+        <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off by</th><th class="n">Leans</th></tr></thead>
       <tbody>${list.map(x => `<tr><td>${esc(x.name)}</td><td class="n">${num(x.score.n)}</td><td class="n"><b>${x.score.inZonePct}%</b></td>
         <td class="n">${x.score.lowPct}%</td><td class="n">${x.score.highPct}%</td><td class="n">${offBy(x.score.typicalOffPct)}</td>
-        <td class="n">${signed(x.score.medianPct)}</td></tr>`).join("")}</tbody></table></div>` : "";
+        <td class="n">${leanW(x.score.medianPct)}</td></tr>`).join("")}</tbody></table></div>` : "";
   $("#htDisney").innerHTML = h.disney.rows.length
     ? resortRows(g.disney.byResort) + `<h4 style="margin:12px 0 4px">Hotels furthest off first (by what travelers see)</h4>
       <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Hotel</th><th>Month</th>
@@ -2055,6 +2055,8 @@ function renderHotelList(list){
 let flDays = 30;
 const signed = v => v === null || v === undefined ? "—" : (v > 0 ? "+" : "") + v + "%";
 const offBy = v => v === null || v === undefined ? "—" : v + "%";
+/* Same words as leanWords() in fareForecasts.ts: which way the middle fare tilts. */
+const leanW = v => v === null || v === undefined ? "—" : Math.round(Math.abs(v)) === 0 ? "even" : (v > 0 ? "high " : "low ") + Math.round(Math.abs(v)) + "%";
 /* "How far off are we right now": numbers written down before each fare was
  * bought, graded against it (fareForecasts.ts). */
 function renderForecasts(fc){
@@ -2065,11 +2067,11 @@ function renderForecasts(fc){
   }
   const z = fc.zonePct;
   const zt = (x, name) => x.n
-    ? tile(name, x.inZonePct + "%", `within ±${z}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
+    ? tile(name, x.inZonePct + "%", `within ±${z}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · leans ${leanW(x.medianPct)}`)
     : tile(name, "—", "no fares checked yet");
   const cell = v => `<td class="n">${v === null || v === undefined ? "—" : v}</td>`;
   const pc = v => v === null || v === undefined ? null : v + "%";
-  const line = (label, x) => x.n ? `<tr><td>${label}</td>${cell(num(x.n))}${cell(pc(x.inZonePct))}${cell(pc(x.within5Pct))}${cell(pc(x.lowPct))}${cell(pc(x.highPct))}${cell(offBy(x.typicalOffPct))}${cell(signed(x.medianPct))}</tr>` : "";
+  const line = (label, x) => x.n ? `<tr><td>${label}</td>${cell(num(x.n))}${cell(pc(x.inZonePct))}${cell(pc(x.within5Pct))}${cell(pc(x.lowPct))}${cell(pc(x.highPct))}${cell(offBy(x.typicalOffPct))}${cell(leanW(x.medianPct))}</tr>` : "";
   const grp = (k, name) => (fc[k].shown.n || fc[k].candidate.n) ? `
       <tr><th colspan="8" style="text-align:left">${name}</th></tr>
       ${line("What travelers saw", fc[k].shown)}
@@ -2083,20 +2085,24 @@ function renderForecasts(fc){
       <tbody>${pr.lines.map(l => `<tr><td>${l.group}, ${l.formula === "shown" ? "what travelers see" : "candidate"}</td>
         <td class="n"${l.trend === "worse" ? ' style="color:var(--bad);font-weight:700"' : l.trend === "better" ? ' style="font-weight:700"' : ""}>${TREND[l.trend]}</td>
         ${cell(offBy(l.thisWeek.typicalOffPct))}${cell(pc(l.thisWeek.inZonePct))}${cell(offBy(l.lastWeek.typicalOffPct))}${cell(pc(l.lastWeek.inZonePct))}</tr>`).join("")}</tbody></table></div>
-    ${pr.destinations.length ? `<p class="count" style="margin-top:8px">Where this week's misses are (+ = we read high), first place to look when a line gets worse:
-      ${pr.destinations.map(d => `${esc(d.destination)} ${signed(d.shownReads)} (candidate ${signed(d.candidateReads)}, ${num(d.n)})`).join(" · ")}</p>` : ""}` : "";
-  el.innerHTML = `${progressHtml}<div class="tiles" style="margin-top:12px">${tile("Checked so far", num(fc.n), `since ${fc.since || "—"} · ${num(fc.shownKinds.realFare)} showed a real fare we held, ${num(fc.shownKinds.estimate)} an estimate`)}</div>
+    ${pr.destinations.length ? `<p class="count" style="margin-top:8px">Which way each destination leaned this week (shown fares, then candidate), first place to look when a line gets worse:
+      ${pr.destinations.map(d => `${esc(d.destination)} ${leanW(d.shownReads)} (candidate ${leanW(d.candidateReads)}, ${num(d.n)})`).join(" · ")}</p>` : ""}` : "";
+  const leanHtml = (fc.lean || []).length ? `<div style="border:1px solid var(--line, #ccc);border-radius:10px;padding:12px;margin-bottom:12px">
+      <b>How our guesses lean</b>${fc.lean.map(l => /^\s/.test(l) ? `<div style="margin-left:14px">${esc(l.trim())}</div>`
+        : `<div style="margin-top:6px">${esc(l)}</div>`).join("")}</div>` : "";
+  el.innerHTML = `${leanHtml}${progressHtml}<div class="tiles" style="margin-top:12px">${tile("Checked so far", num(fc.n), `since ${fc.since || "—"} · ${num(fc.shownKinds.realFare)} showed a real fare we held, ${num(fc.shownKinds.estimate)} an estimate`)}</div>
     <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Fares</th><th class="n">Within ±${z}%</th><th class="n">Within ±5%</th>
-      <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off</th><th class="n">Reads</th></tr></thead>
+      <th class="n">Too low</th><th class="n">Too high</th><th class="n">Typically off</th><th class="n">Leans</th></tr></thead>
       <tbody>${grp("domestic", "US")}${grp("international", "International")}</tbody></table></div>
     <p class="count" style="margin-top:8px"><b>What travelers saw</b> is the number on the board: a real fare we already
       held for that date when the board uses one, otherwise the estimate. <b>Live estimate alone</b> is the live
       formula's estimate even where a real fare was shown. <b>Candidate</b> is the second formula, as it stood that night.
-      <b>Reads</b>: + means our number was above the real fare. With fewer than about 50 fares a group, treat a few
-      points either way as noise.</p>
+      <b>Too low / Within / Too high</b> add up to 100% of the fares. <b>Leans</b> is which way the middle fare
+      tilts, not a share of fares: misses both ways cancel out in it, so a small lean can sit beside a lot of misses.
+      With fewer than about 50 fares a group, treat a few points either way as noise.</p>
     <div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Night</th><th class="n">Fares</th><th class="n">Travelers saw: within ±${z}%</th>
-      <th class="n">Typically off</th><th class="n">Reads</th><th class="n">Candidate: within ±${z}%</th></tr></thead>
-      <tbody>${fc.daily.map(d => `<tr><td>${esc(d.day)}</td>${cell(num(d.n))}${cell(pc(d.shown.inZonePct))}${cell(offBy(d.shown.typicalOffPct))}${cell(signed(d.shown.medianPct))}${cell(pc(d.candidate.inZonePct))}</tr>`).join("")}</tbody></table></div>`;
+      <th class="n">Typically off</th><th class="n">Leans</th><th class="n">Candidate: within ±${z}%</th></tr></thead>
+      <tbody>${fc.daily.map(d => `<tr><td>${esc(d.day)}</td>${cell(num(d.n))}${cell(pc(d.shown.inZonePct))}${cell(offBy(d.shown.typicalOffPct))}${cell(leanW(d.shown.medianPct))}${cell(pc(d.candidate.inZonePct))}</tr>`).join("")}</tbody></table></div>`;
 }
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
@@ -2106,13 +2112,13 @@ async function loadFlights(){
   renderHotelScore(h);
   renderHotelList(hl || []);
   const g = (x, name) => x.n
-    ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · reads ${signed(x.medianPct)} · ${x.within15Pct}% within 15%`)
+    ? tile(name + ": typically off by", offBy(x.typicalOffPct), `${num(x.n)} fares · leans ${leanW(x.medianPct)} · ${x.within15Pct}% within 15%`)
     : tile(name, "—", "no fares to test yet");
   document.querySelectorAll(".flZone").forEach(el => el.textContent = s.zonePct);
   const cmp = s.compare;
   const seen = s.useCandidate ? cmp.candidate : cmp.live;
   const zt = (x, name) => x.n
-    ? tile(name, x.inZonePct + "%", `within ±${s.zonePct}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · reads ${signed(x.medianPct)}`)
+    ? tile(name, x.inZonePct + "%", `within ±${s.zonePct}% · ${num(x.n)} fares · typically off ${offBy(x.typicalOffPct)} · leans ${leanW(x.medianPct)}`)
     : tile(name, "—", "no fares to test yet");
   const fcOk = fc && fc.n;
   $("#flTiles").innerHTML = fcOk
@@ -2128,7 +2134,7 @@ async function loadFlights(){
   const row = (label, f, better) => `<tr><td>${label}</td>${["live", "candidate"].map(m => {
       const v = f(cmp[m]); const w = f(cmp[m === "live" ? "candidate" : "live"]);
       const bold = v !== null && w !== null && (better === "high" ? v > w : Math.abs(v) < Math.abs(w));
-      return `<td class="n"${bold ? ' style="font-weight:700"' : ""}>${v === null || v === undefined ? "—" : v + (label.includes("reads") ? "" : "%")}</td>`;
+      return `<td class="n"${bold ? ' style="font-weight:700"' : ""}>${v === null || v === undefined ? "—" : v + (label.startsWith("Leans") ? "" : "%")}</td>`;
     }).join("")}</tr>`;
   const grp = (k, name) => cmp.live[k].n || cmp.candidate[k].n ? `
       <tr><th colspan="3" style="text-align:left">${name} · ${num(cmp.live[k].n)} fares</th></tr>
@@ -2137,7 +2143,7 @@ async function loadFlights(){
       ${row(`Too low (over ${s.zonePct}% under)`, x => x[k].lowPct, "low")}
       ${row(`Too high (over ${s.zonePct}% over)`, x => x[k].highPct, "low")}
       ${row("Typically off by", x => x[k].typicalOffPct, "low")}
-      ${row("Overall reads (+ high, − low)", x => x[k].medianPct === null ? null : signed(x[k].medianPct), "low")}` : "";
+      ${row("Leans (the middle fare)", x => x[k].medianPct === null ? null : leanW(x[k].medianPct), "low")}` : "";
   const beat = s.daily.filter(d => d.live !== null && d.candidate !== null && d.candidate > d.live).length;
   const scored = s.daily.filter(d => d.live !== null && d.candidate !== null).length;
   $("#flCompare").innerHTML = s.tested ? `<div style="overflow-x:auto"><table class="ctab">
@@ -2146,8 +2152,8 @@ async function loadFlights(){
       <tr><th colspan="3" style="text-align:left">The comparison itself</th></tr>
       <tr><td>US vs international tilt (0 is fair)</td><td class="n">${cmp.live.tilt ?? "—"}</td><td class="n">${cmp.candidate.tilt ?? "—"}</td></tr>
       </tbody></table></div>
-      <p class="count" style="margin-top:8px">Bold = better of the two. <b>Tilt</b>: how many points more the US reads
-        high than international (negative = US reads lower). Far from 0 means one side looks cheaper than it is, which
+      <p class="count" style="margin-top:8px">Bold = better of the two. <b>Tilt</b>: how many points more the US leans
+        high than international (negative = US leans lower). Far from 0 means one side looks cheaper than it is, which
         breaks &ldquo;Orlando or Tokyo?&rdquo; even if each number is close. The live column is partly graded by fares it
         learned from, so it is flattered; the candidate is not.</p>
       <p><b>Candidate beat live on ${beat} of the last ${scored} days</b> (share of that day's fares within ±${s.zonePct}%).</p>
@@ -2171,9 +2177,9 @@ async function loadFlights(){
     if (r.ok) loadFlights();
   };
   const leanRow = (x, name, now) => x.n ? `<tr><td>${esc(name)} (${num(x.n)} ${x.n === 1 ? "fare" : "fares"})</td>${x.byLean.map(b =>
-      `<td class="n"${b.lean === x.bestLean ? ' style="font-weight:700"' : ""}>${offBy(b.typicalOffPct)}${b.lean === now ? " ◀ now" : ""}<br><span class="count">${signed(b.medianPct)}</span></td>`).join("")}</tr>` : "";
+      `<td class="n"${b.lean === x.bestLean ? ' style="font-weight:700"' : ""}>${offBy(b.typicalOffPct)}${b.lean === now ? " ◀ now" : ""}<br><span class="count">leans ${leanW(b.medianPct)}</span></td>`).join("")}</tr>` : "";
   $("#flLean").innerHTML = s.tested
-    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Typically off by / reads</th>${s.all.byLean.map(b =>
+    ? `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Typically off by / leans</th>${s.all.byLean.map(b =>
         `<th class="n">Lean ${b.lean}</th>`).join("")}</tr></thead>
       <tbody>${leanRow(s.domestic, "US", s.lean)}${leanRow(s.international, "International", s.leanIntl ?? s.lean)}</tbody></table></div>
       <p class="count" style="margin-top:8px">Best fit in bold. It's only a recommendation; the setting is yours to change.</p>`

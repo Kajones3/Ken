@@ -121,6 +121,59 @@ export interface ForecastScores {
   since: string | null;
   /** This week vs last week (needs days >= 14 to see last week). */
   progress?: Progress;
+  /** What the guesses are built from (the candidate's fit). */
+  informedBy?: InformedBy;
+  /** The plain-language lean summary (owner's wording), for /admin and the email. */
+  lean?: string[];
+}
+
+export interface InformedBy { domestic: number; international: number; feed: number }
+
+/* ------------- "Lean", not "reads" (owner, 2026-10-12) -------------
+ * "Reads +2%" was taken to mean "2% of fares are too high". It is the miss on
+ * the MIDDLE fare when every fare is lined up from most-too-low to
+ * most-too-high: which way we tilt, not how close we are. So it is said as a
+ * lean, in the owner's words, with how close we are said separately.
+ */
+/** "high by 16%", "low by 6%", or "even" within half a point. */
+export function leanWords(pct: number | null | undefined): string {
+  if (pct === null || pct === undefined) return "—";
+  const a = Math.round(Math.abs(pct));
+  return a === 0 ? "even" : `${pct > 0 ? "high" : "low"} by ${a}%`;
+}
+
+export function leanLines(s: ForecastScores): string[] {
+  const lines: string[] = [];
+  const g = (name: string, x: ForecastGroup) => {
+    if (!x.shown.n && !x.candidate.n) return;
+    lines.push(`${name} (${x.shown.n || x.candidate.n} fares checked before buying${s.since ? `, since ${s.since}` : ""}):`);
+    const lean = (who: string, z: ZoneScore) => z.n
+      ? (leanWords(z.medianPct) === "even"
+        ? `  Our ${who} fares don't lean high or low on average.`
+        : `  Our ${who} fares lean ${leanWords(z.medianPct)} on average.`)
+      : `  Our ${who} fares: none checked yet.`;
+    lines.push(lean("shown", x.shown), lean("candidate", x.candidate));
+    const close = (who: string, z: ZoneScore) => z.n
+      ? `${who}: ${z.inZonePct}% within ±${s.zonePct}%, ${z.lowPct}% more than ${s.zonePct}% too low, `
+        + `${z.highPct}% more than ${s.zonePct}% too high; a typical miss is ${z.typicalOffPct}% either way`
+      : "";
+    const c = [close("shown", x.shown), close("candidate", x.candidate)].filter(Boolean);
+    if (c.length) lines.push(`  How close (a separate question from the lean): ${c.join(". ")}.`);
+  };
+  g("US", s.domestic);
+  g("International", s.international);
+  const i = s.informedBy;
+  if (i) {
+    lines.push(`We are using ${(i.domestic + i.international).toLocaleString("en-US")} fares to inform our guesses `
+      + `(${i.domestic.toLocaleString("en-US")} US and ${i.international.toLocaleString("en-US")} international, bought from Google in the last 90 days)`
+      + (i.feed ? `, plus ${i.feed.toLocaleString("en-US")} free-feed fares for day of the week.` : "."));
+  }
+  if (lines.length) {
+    lines.push("\"On average\" means the middle fare: line every fare up from most too low to most too high and take the "
+      + "one in the middle, so one wild fare can't swing it. A small lean does NOT mean most fares are close: misses "
+      + "in both directions cancel out in the lean, which is why \"how close\" is shown beside it.");
+  }
+  return lines;
 }
 
 /** Pure: grade forecasts against the fares bought straight after them. */
@@ -218,9 +271,9 @@ export function progressReport(p: Progress): { lines: string[]; worse: ProgressL
     + `${l.thisWeek.inZonePct ?? "—"}% within the zone) vs ${off(l.lastWeek)} last week (${l.lastWeek.n}): ${l.trend.toUpperCase()}`);
   const far = p.destinations.filter((d) => d.n >= 3 && d.shownReads !== null && Math.abs(d.shownReads) >= 10);
   if (far.length) {
-    lines.push("Furthest off this week, where to look first (+ = we read high):");
+    lines.push("Furthest off this week, where to look first (which way each destination leans):");
     for (const d of far.slice(0, 5)) {
-      lines.push(`  ${d.destination}: travelers saw ${d.shownReads! > 0 ? "+" : ""}${d.shownReads}%, candidate ${d.candidateReads === null ? "—" : (d.candidateReads > 0 ? "+" : "") + d.candidateReads + "%"} (${d.n} fares)`);
+      lines.push(`  ${d.destination}: shown fares lean ${leanWords(d.shownReads)}, candidate ${leanWords(d.candidateReads)} (${d.n} fares)`);
     }
   }
   return { lines, worse: p.lines.filter((l) => l.trend === "worse") };
@@ -255,5 +308,13 @@ export async function loadForecastScores(db: Db, days = 30): Promise<ForecastSco
       live: n(r.live_estimate_usd), candidate: n(r.candidate_usd),
     });
   }
-  return { ...scoreForecasts(rows, zonePct, noFare), progress: progressOf(rows, zonePct) };
+  let informedBy: InformedBy | undefined;
+  try {
+    const m = await loadFareModel(db);
+    const feed = m.levers.dayOfWeekFrom === "free feed"
+      ? Object.values(m.levers.dayOfWeek).reduce((t, d) => t + d.fares, 0) : 0;
+    informedBy = { domestic: m.fitted.domestic, international: m.fitted.international, feed };
+  } catch { /* no model yet: the line is left out */ }
+  const scores: ForecastScores = { ...scoreForecasts(rows, zonePct, noFare), progress: progressOf(rows, zonePct), informedBy };
+  return { ...scores, lean: leanLines(scores) };
 }
