@@ -672,28 +672,38 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
          from p`, [minLead])).rows[0]!;
     const paid = await pairs(`source = 'serpapi_flights'`, 0);
     out.push(`  Paid fares bought twice (same route, date, trip length): ${paid.n} pairs; within 10% of each other ${paid.w10}%, within 5% ${paid.w5}%, typically apart ${paid.med}%`);
-    const feed = await pairs(`source like 'travelpayouts%'`, 60);
-    out.push(`  Free feed, same flight seen on two days, 60+ days out: ${feed.n} pairs; within 10% ${feed.w10}%, within 5% ${feed.w5}%, typically apart ${feed.med}%`);
-    out.push("  (However often reality lands within 10% of itself is roughly the ceiling for any formula.)");
-
-    // Booking ahead, from the free feed: the same route, date and trip length
-    // seen at different distances from departure, against its own middle.
-    const lead = await db.query<{ b: number; n: string; r: string }>(
-      `with o as (
-         select origin, destination, depart_date, trip_length, price_usd,
-                (depart_date - observed_at::date) as lead
-           from flight_observations where source like 'travelpayouts%' and depart_date > observed_at::date),
+    // The free feed can't answer this: it hands back the same stored price
+    // night after night, so "the same flight on two days" there is mostly
+    // the same number twice. Google's own day-by-day history can.
+    const hist = await db.query<{ history: unknown }>(`select history from flight_insights where history is not null`);
+    let pts = 0, in10 = 0;
+    for (const r of hist.rows) {
+      const h = (typeof r.history === "string" ? JSON.parse(r.history) : r.history) as [number, number][];
+      if (!Array.isArray(h) || h.length < 2) continue;
+      const last = h[h.length - 1]![1];
+      for (const [, p] of h.slice(0, -1)) { pts++; if (Math.abs(p - last) / last <= 0.10) in10++; }
+    }
+    out.push(`  Google's price history (the cheapest seat, day by day, up to ~2 months before we searched): ${pts} days from ${hist.rows.length} searches; ${pts ? Math.round((100 * in10) / pts) : 0}% within 10% of the price on the day we searched`);
+    // Different days in the same month: what quoting one number for a whole
+    // month (or a typical day) is up against.
+    const spread = await db.query<{ n: string; w10: string }>(
+      `with f as (
+         select distinct on (origin, destination, depart_date, trip_length)
+                origin, destination, depart_date, trip_length, price_usd
+           from flight_observations where source like 'travelpayouts%'
+          order by origin, destination, depart_date, trip_length, observed_at desc),
        g as (
-         select origin, destination, depart_date, trip_length,
-                percentile_cont(0.5) within group (order by price_usd) as mid, count(distinct lead / 15) as spans
-           from o group by 1, 2, 3, 4)
-       select (o.lead / 15)::int as b, count(*)::text as n,
-              round(percentile_cont(0.5) within group (order by (o.price_usd / g.mid))::numeric, 3)::text as r
-         from o join g using (origin, destination, depart_date, trip_length)
-        where g.spans >= 2
-        group by 1 order by 1`);
-    out.push(`  Free feed, booking ahead (same flight, price vs its own middle, by days before departure):`);
-    out.push(`    ${lead.rows.map((r) => `${r.b * 15}-${r.b * 15 + 15}d ${Number(r.r).toFixed(2)} (${r.n})`).join(" · ") || "no flight seen at two distances yet"}`);
+         select origin, destination, date_trunc('month', depart_date) as m, trip_length,
+                percentile_cont(0.5) within group (order by price_usd) as mid, count(*) as n
+           from f group by 1, 2, 3, 4)
+       select count(*)::text as n,
+              coalesce(round(100.0 * avg(case when abs(f.price_usd - g.mid) / g.mid <= 0.10 then 1 else 0 end)), 0)::text as w10
+         from f join g on g.origin = f.origin and g.destination = f.destination and g.trip_length = f.trip_length
+          and g.m = date_trunc('month', f.depart_date)
+        where g.n >= 3`);
+    const sp = spread.rows[0]!;
+    out.push(`  Free feed, different days in the same route and month: ${sp.n} fares; ${sp.w10}% within 10% of that month's middle`);
+    out.push("  (However often reality lands within 10% of itself is roughly the ceiling for any formula.)");
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
   }
