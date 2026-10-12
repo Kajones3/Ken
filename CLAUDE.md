@@ -183,6 +183,32 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, very last — "lean", not "reads"; is our international target too high? (PR #164)
+
+Owner read "reads +2%" as "2% of fares are too high". It is the miss on the MIDDLE
+fare (median signed error): which way we tilt, not how close. /admin and the
+morning email now say "Our shown fares lean high by 16% on average", "Our
+candidate fares lean high by 2% on average", "We are using N fares to inform
+our guesses" (`leanLines()` in fareForecasts.ts, one home for the wording), with
+within / too low / too high / typical miss said beside it. Every "Reads"
+column is "Leans". Don't bring "reads" back.
+Owner's real problem: "Omaha to Tokyo we show ~$2,000, Kayak $800-2,000, most
+at $1,200; that extra $800 makes Disney World the winner." (OMA is not one of
+our airports.) Coverage run 38307492770, new sections:
+- Inside each kept Google answer, the itinerary we keep (the middle one) vs
+  the most common price: US x1.01, Europe x1.03, Asia x1.03 (cheapest x0.81 /
+  0.84 / 0.86). Google lists only ~10-13 itineraries, so US and abroad are
+  measured the SAME way: no built-in tilt from the target itself.
+- MCI->HND, what travelers see today (live): Jan-Mar $1,292, Apr-Jun $1,662,
+  Jul-Sep $2,464, Oct/Dec $1,978 = the seed's season shape x one intl trend.
+  Real Tokyo fares we bought: Jan $1,121-1,395, Mar $1,578-2,284, Jun
+  $1,774-1,874. (That section's "bought from other cities" took the DEARER of
+  HND/NRT's medians; read with care.)
+- Asked the owner for the Kayak search (dates, airports) to compare with
+  Google's list for the same search. Kayak lists far more itineraries than
+  Google's ~10 (self-transfers, budget carriers), which may be the gap.
+- Ticket prices: owner says wrong too, "another session".
+
 ### 2026-10-12, last — BTS's airline columns read; why US misses; ideas toward 90%
 
 Owner: "can we read those columns please?" (airlines in the monthly
