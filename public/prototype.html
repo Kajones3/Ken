@@ -3188,15 +3188,6 @@ async function renderDetail(){
               <div class="v">${usd(x.flights)}</div><div class="s">all in</div></div>
           </div>`}
           ${fareCtl}
-          ${r.altArrivalAirports.length ? (()=>{
-            const alt = r.altArrivalAirports.find(a=>a.iata===x.destination);
-            const desc = alt ? alt.label : "Primary airport for " + r.name;
-            return `<div class="li"><div class="l"><b>Arrival airport</b><small>${desc}</small></div>
-              <div class="p"><select id="destSel" data-resort="${item.resortId}" aria-label="Arrival airport for ${r.name}">
-                <option value="${r.iata}"${x.destination===r.iata?" selected":""}>${r.iata}</option>
-                ${r.altArrivalAirports.map(a=>`<option value="${a.iata}"${x.destination===a.iata?" selected":""}>${a.iata}</option>`).join("")}
-              </select></div></div>`;
-          })() : ""}
           ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
@@ -5255,9 +5246,6 @@ document.addEventListener("change", e=>{
     if(e.target.id === "parkDaysOv") setOv(rid, "parkDays", Math.max(1, +e.target.value) || 0);
     if(e.target.id === "excludeHotelCk")   setExclude(rid, "excludeHotel", e.target.checked);
     if(e.target.id === "excludeFlightsCk") setExclude(rid, "excludeFlights", e.target.checked);
-  }
-  if(e.target.id === "destSel"){
-    setDestination(e.target.dataset.resort, e.target.value);
   }
 });
 document.addEventListener("click", e=>{

@@ -410,7 +410,8 @@ export const RESORTS: Resort[] = [
     ],
   },
   {
-    id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "NRT",
+    // Haneda is the main airport since 2026-10-12 (owner): closer to the resort.
+    id: "tdr", name: "Tokyo Disney Resort", city: "Urayasu, Japan", iata: "HND",
     hotelSearchArea: "Urayasu, Japan",
     beyondParks: { place: "Tokyo", howToGetThere: "Tokyo Station is about 15 minutes from Maihama Station, at the resort, on the JR Keiyo Line." },
     lat: 35.76, lon: 140.39, currency: "JPY", parks: 2, region: "pac",
@@ -439,7 +440,7 @@ export const RESORTS: Resort[] = [
     // as goodToKnow's visa notes: plausible and conventional, not checked.
     // The owner click-tests these; fix here if one 404s.
     onPropertyHotels: { url: "https://www.tokyodisneyresort.jp/en/hotel/" },
-    altArrivalAirports: [{ iata: "HND", label: "Haneda — closer to central Tokyo, often cheaper than Narita" }],
+    altArrivalAirports: [{ iata: "NRT", label: "Narita — about an hour from the resort" }],
     bands: { freeUnder: 4, child: [4, 11], junior: [12, 17], adult: 18 },
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an

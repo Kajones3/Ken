@@ -183,6 +183,20 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, after #166 — Haneda is Tokyo's main airport; travelers can't pick alternates
+
+Owner: "Haneda should be our main for Tokyo" and "I don't want the user to
+be able to pick [alternate airports] if we don't have recent data." `tdr.iata`
+is now **HND** (NRT the alternate). The arrival-airport picker is GONE from
+the flight card, and `resolveDestination()` in server.ts always returns the
+resort's main airport, so a saved search or old link naming SNA/TPA/NRT
+quietly prices LAX/MCO/HND. `altArrivalAirports` stays in config only so
+old fares and the free feed still map to their resort (the free refresh
+still fetches them; free, kept in the record). Paid buying now goes to HND
+for Tokyo (rotation, demand, intl-sweep). Tests that used NRT as Tokyo's
+primary now use HND. Supersedes "those airports still get a price for
+anyone who picks them" in the note below.
+
 ### 2026-10-12, final — flight card says "Google Flights"; paid fares only to main airports
 
 Owner's screenshots, PIT->HKG Apr 5-11: our $1,619 (live estimate); Google's

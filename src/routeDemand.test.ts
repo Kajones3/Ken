@@ -296,7 +296,7 @@ test("paid buying uses each resort's main airport only: SNA demand is bought at 
   // Rotation never offers an alternate arrival airport.
   const all = await rotationRoutes(db, 1000, "2027-03");
   assert.ok(all.length > 0);
-  for (const alt of ["SNA", "TPA", "HND"]) {
+  for (const alt of ["SNA", "TPA", "NRT"]) {
     assert.ok(!all.some((r) => r.destination === alt), `rotation offered ${alt}`);
   }
   assert.ok(all.some((r) => r.destination === "LAX") && all.some((r) => r.destination === "MCO"));
@@ -313,7 +313,7 @@ test("paid buying uses each resort's main airport only: SNA demand is bought at 
     },
   };
   await runPopularRoutes(db, { limit: 3, datesPerMonth: 1, worstSlots: 0, rotationSlots: 0, provider: stub as never });
-  assert.ok(!bought.some((b) => /-(SNA|TPA|HND)$/.test(b)), `bought an alternate: ${bought.join(", ")}`);
+  assert.ok(!bought.some((b) => /-(SNA|TPA|NRT)$/.test(b)), `bought an alternate: ${bought.join(", ")}`);
   assert.equal(bought.filter((b) => b === "ATL-LAX").length, 1, "SNA demand merged into one LAX purchase");
   await db.close();
 });
