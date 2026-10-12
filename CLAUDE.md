@@ -204,9 +204,10 @@ search unless you book, and we don't book.)
   2025; PPI international up 12% (3 months to August); PPI domestic up 19%.
   BLS skipped October 2025 (shutdown); `yearOverYear()` steps back past it.
 - **Board:** `/api/meta` `airfareIndex` -> `#airfareIndexNote` under the
-  results title: "**Airfares are up 23% from a year ago.** The government's
-  price index for airline tickets (Bureau of Labor Statistics), August 2026
-  compared with August 2025 ..." Words only, never in a total. Also in the
+  results title: "**Airfares are up 23% from a year ago.** (Source: Bureau
+  of Labor Statistics)". Nothing more (owner: "the user doesn't need to know
+  everything we do"); the months compared live in /admin and the email.
+  Words only, never in a total. Also in the
   morning email and /admin Flights ("Airfares, by the government's price
   indexes") and the coverage report.
 - **Candidate formula, two LEARNED levers** (`levers.index`, slope on

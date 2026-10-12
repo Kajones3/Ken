@@ -129,9 +129,9 @@ export function boardLine(cpi: YearOverYear | undefined): { headline: string; de
   if (!cpi) return undefined;
   return {
     headline: `Airfares are ${upDown(cpi.pct)} a year ago.`,
-    detail: `The government's price index for airline tickets (Bureau of Labor Statistics), `
-      + `${periodName(cpi.period)} compared with ${periodName(cpi.yearAgo)}. It follows what travelers paid `
-      + `for all US airline tickets, not one route; the fares on this board are already today's prices.`,
+    // Short on purpose (owner, 2026-10-12: "the user doesn't need to know
+    // everything we do"). The months compared stay in /admin and the email.
+    detail: `(Source: Bureau of Labor Statistics)`,
   };
 }
 
