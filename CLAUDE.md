@@ -183,6 +183,41 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, very end — hotels now USE Google's usual price and booking-site prices
+
+Owner: "WHY ARE WE NOT USING DATA?!?! That goes against our rule." Both had been
+kept in `hotel_samples.extra` since 10-06 and parked as "ask the owner first"
+(a finding living only in the record = unfinished work, governing rule 2).
+`src/hotelLearning.ts` (pure + one loader, tested):
+- `cheapestPlace()`: the starting price is the cheapest place to book (lead
+  rate or any booking site), the owner's "send people to the cheapest place".
+- `hotelAnchor(lead, extra, w)`: when Google says tonight is "X% less than
+  usual", blend toward the usual price (geometric) by weight `w`, LEARNED by
+  `learnHotels()`: every off-property hotel (no Disney, no rentals) Google
+  showed twice for the same resort+month 2+ days apart is a pair; the
+  weight (grid 0..1) that best predicts the later price from the earlier
+  pull's deal night, shrunk n/(n+20) (`USUAL_SHRINK_K`). 0 until pairs back it.
+- Used by: the refresh (computes the weight before the hotel pass, logs
+  "hotel usual-price weight", passes it to `SerpApiHotelProvider.usualWeight`,
+  which stretches `hotelAnchor` instead of the raw lead; the record keeps
+  Google's lead as it came) and `disneyEvidence.ts` (Google's Disney rates
+  count at the same blended price; `lead` kept beside `google`).
+- Report: coverage "Hotels: what Google tells us beyond the price, and how
+  close we are" (pairs, the weight, misses at weights 0/learned/best/0.5/1,
+  per resort before -> after, how often deals are flagged, booking sites vs
+  lead, plus the scoreboard's Disney / off-property / checks grades) and
+  /admin Flights & hotels "What Google tells us beyond the price".
+- Governing rule #4: the next refresh rewrites off-property hotel_rates from
+  the new anchor; check the morning data check (12 made / 12 kept) and the
+  coverage report after it.
+Free government data for INTERNATIONAL flights (owner asked): no US agency
+publishes international FARES by route (DB1B/DB1C are domestic). Free and
+useful: BTS T-100 International Segment (monthly nonstop seats/passengers by
+airport pair: which home airports fly nonstop to each region, and seasonal
+capacity) and BLS PPI "Scheduled passenger air transportation:
+International" (FRED PCU4811114811112, a monthly price index). GSA City Pair
+contract fares exist but are government fares. Proposed, not built.
+
 ### 2026-10-12, after #166 — Haneda is Tokyo's main airport; travelers can't pick alternates
 
 Owner: "Haneda should be our main for Tokyo" and "I don't want the user to

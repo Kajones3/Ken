@@ -603,6 +603,28 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // Owner, 2026-10-12: "WHY ARE WE NOT USING DATA?!" Google's usual hotel
+  // prices and booking-site prices now feed pricing; this is the report.
+  out.push("## Hotels: what Google tells us beyond the price, and how close we are (hotelLearning.ts)");
+  try {
+    const { loadHotelLearning, hotelLearningLines } = await import("../hotelLearning.js");
+    for (const l of hotelLearningLines(await loadHotelLearning(db))) out.push(`  ${l}`);
+    const { loadHotelScoreboard } = await import("../hotelScoreboard.js");
+    const hs = await loadHotelScoreboard(db);
+    const z = (name: string, x: { n: number; inZonePct: number | null; typicalOffPct: number | null; medianPct: number | null }) =>
+      out.push(`  ${name}: ${x.n ? `${x.inZonePct}% within ±${hs.zonePct}%, typically off ${x.typicalOffPct}%, middle leans ${x.medianPct}% (${x.n})` : "none yet"}`);
+    z("Disney hotels, what travelers see vs Google", hs.graded.disney.all);
+    z("Off-property, what we showed vs the next search", hs.graded.offProperty.all);
+    z("Your hotel price checks", hs.graded.hotelChecks.all);
+    for (const r of hs.graded.disney.byResort) z(`  Disney hotels at ${r.name}`, r.score);
+    for (const r of hs.disney.rows.slice(0, 12)) {
+      out.push(`    ${r.resort} ${r.hotel} ${r.month}: our base $${Math.round(r.ours)}, shown $${Math.round(r.shown)}, Google $${Math.round(r.google)} (shown ${r.shownPct > 0 ? "+" : ""}${r.shownPct}%)`);
+    }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
   // Owner, 2026-10-12: "Omaha to MCO we show $450, Kayak $400-700 with most
   // at ~$500: that works. Omaha to Tokyo we show $2,000, Kayak $800-2,000
   // with most at $1,200." Two questions, both read-only: (1) inside one

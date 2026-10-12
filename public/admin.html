@@ -373,6 +373,14 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         update, so it fills in over the next couple of weeks.</p>
       <div id="htPulls"></div>
 
+      <h3>What Google tells us beyond the price: usual prices and booking sites</h3>
+      <p>Every hotel search also says, per hotel, what each booking site charges and, when tonight is a deal, Google's
+        &ldquo;less than usual&rdquo; note. Since 2026-10-12 both are used: we price from the <b>cheapest place to book</b>,
+        and a deal night is blended toward Google's usual price by a weight the record teaches (hotels Google showed us
+        twice for the same month: which would have predicted the later price better?). It starts near 0 and grows only as
+        the pairs back it. The same price feeds Google's rates for Disney's own hotels above.</p>
+      <div id="htLearning"><p class="count">Loading…</p></div>
+
       <h3>Prices you've checked</h3>
       <p>Your own hotel and ticket checks, against what our model said that day. More detail is on the
         <a href="#checks">Prices you've checked</a> page.</p>
@@ -2107,7 +2115,9 @@ function renderForecasts(fc){
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
-  const { scoreboard: s, forecasts: fc, demand: d, hotels: h, hotelList: hl } = await r.json();
+  const { scoreboard: s, forecasts: fc, demand: d, hotels: h, hotelList: hl, hotelLearning: hlearn } = await r.json();
+  $("#htLearning").innerHTML = (hlearn || []).map(l => /^\s/.test(l) ? `<div class="count" style="margin-left:14px">${esc(l.trim())}</div>`
+    : `<div style="margin-top:6px">${esc(l)}</div>`).join("") || `<p class="count">Nothing yet.</p>`;
   renderForecasts(fc);
   renderHotelScore(h);
   renderHotelList(hl || []);

@@ -25,18 +25,20 @@ import { pickGasProvider } from "../gas/pick.js";
 import { computeFareTrend } from "./fareTrend.js";
 import { rotateHotelSlots, slotKeys, type HotelSlot } from "./hotelRotation.js";
 import { primeSettingsCache } from "../settings.js";
+import { loadHotelLearning } from "../hotelLearning.js";
 
 /**
  * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
  * off-property hotel data (see providers/serpapi.ts) without needing a real
  * flight token too, and vice versa — the two vendors are unrelated.
  */
-export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null): Provider {
+export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null, usualWeight = 0): Provider {
   const flights = process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
   if (!process.env.SERPAPI_KEY) return flights;
   const hotels = new SerpApiHotelProvider(
     undefined, undefined, hotelBudget(), paidHotelSlots,
   );
+  hotels.usualWeight = usualWeight;
   return {
     name: `${flights.name}+serpapi`,
     hotelSource: hotels.name,
@@ -240,7 +242,20 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
           limit: hotelBudget(),
         })
       : null);
-  const provider = opts.provider ?? pickProvider(paidSlots ? slotKeys(paidSlots) : null);
+  // What the record has taught about Google's "usual" hotel prices
+  // (hotelLearning.ts); a failure just prices tonight's hotels as Google
+  // quoted them.
+  let usualWeight = 0;
+  if (!opts.provider && process.env.SERPAPI_KEY) {
+    try {
+      const l = await loadHotelLearning(db);
+      usualWeight = l.usualWeight;
+      console.log(`refresh: hotel usual-price weight ${l.usualWeight} (best ${l.bestWeight}, ${l.dealPairs} deal pairs of ${l.pairs})`);
+    } catch (e) {
+      console.warn(`refresh: hotel learning skipped: ${(e as Error).message}`);
+    }
+  }
+  const provider = opts.provider ?? pickProvider(paidSlots ? slotKeys(paidSlots) : null, usualWeight);
 
   const runId = randomUUID();
   await db.query(`insert into fetch_runs (id, job, note) values ($1,'refresh',$2)`,
