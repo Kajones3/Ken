@@ -205,3 +205,40 @@ test("budget airlines: routes they crowd are learned to price lower, from US far
   // A route with no survey share gets no budget lever at all.
   assert.equal(m.predict("RDU", "MCO", "2027-03-10")?.parts.budget ?? 1, 1);
 });
+
+test("government airfare index: an old route survey is carried to today as far as the fares show", async () => {
+  const { shiftPeriod } = await import("./airfareIndex.js");
+  // Airline fares (CPI) sat at 100 through June 2025, then 125.
+  const cpiSa = new Map<string, number>();
+  for (let p = "2024-01"; p <= "2026-08"; p = shiftPeriod(p, 1)) cpiSa.set(p, p < "2025-07" ? 100 : 125);
+  const OLD = US, NEW = ["CLT", "LAS", "SFO", "IAH", "DTW", "PHL", "BWI", "MIA"];
+  const baselines = [...OLD.map((o) => ({ ...bts(o, "MCO", 300), year: 2024 })), ...NEW.map((o) => ({ ...bts(o, "MCO", 300), year: 2026 })),
+    { ...bts("RDU", "MCO", 300), year: 2024 }, { ...bts("SAN", "MCO", 300), year: 2026 }];
+  // Routes surveyed in 2024 really cost 25% more than their survey says; 2026 ones don't.
+  const fares = [...OLD.map((o) => fare(o, "MCO", 375)), ...NEW.map((o) => fare(o, "MCO", 300))];
+  const without = fitFareModel(inputs(fares, baselines));
+  const withIdx = fitFareModel({ ...inputs(fares, baselines), index: { cpiSa } });
+  assert.equal(without.levers.index.surveyAge.weight, 0);
+  // Learned, not assumed: the fares say "fully", shrunk by 16 / (16 + 20).
+  const w = withIdx.levers.index.surveyAge.weight;
+  assert.ok(w > 0.4 && w < 0.5, `weight ${w}`);
+  // An unbought 2024-surveyed route now reads above an unbought 2026 one.
+  const old = withIdx.predict("RDU", "MCO", "2027-03-10")!, fresh = withIdx.predict("SAN", "MCO", "2027-03-10")!;
+  assert.ok(old.value > fresh.value * 1.08, `${old.value} vs ${fresh.value}`);
+  assert.ok(old.parts.index > 1.08 && fresh.parts.index === 1);
+  // Without the index both read the same.
+  assert.equal(without.predict("RDU", "MCO", "2027-03-10")!.value, without.predict("SAN", "MCO", "2027-03-10")!.value);
+});
+
+test("government airfare index: when the fares don't follow it, it teaches nothing", async () => {
+  const { shiftPeriod } = await import("./airfareIndex.js");
+  const cpiSa = new Map<string, number>();
+  for (let p = "2024-01"; p <= "2026-08"; p = shiftPeriod(p, 1)) cpiSa.set(p, p < "2025-07" ? 100 : 125);
+  const NEW = ["CLT", "LAS", "SFO", "IAH", "DTW", "PHL", "BWI", "MIA"];
+  const baselines = [...US.map((o) => ({ ...bts(o, "MCO", 300), year: 2024 })), ...NEW.map((o) => ({ ...bts(o, "MCO", 300), year: 2026 }))];
+  const fares = [...US, ...NEW].map((o) => fare(o, "MCO", 330));
+  const m = fitFareModel({ ...inputs(fares, baselines), index: { cpiSa } });
+  assert.equal(m.levers.index.surveyAge.weight, 0);
+  // And every bought fare is from the same month, so fare age learns nothing either.
+  assert.equal(m.levers.index.fareAge.dom.weight, 0);
+});

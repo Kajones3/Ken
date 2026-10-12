@@ -34,7 +34,8 @@
     "exchange-rates": "tsx src/jobs/exchangeRates.ts",
     "wait-times": "tsx src/jobs/waitTimes.ts",
     "bts-db1c": "tsx src/jobs/db1cBaseline.ts",
-    "airport-fares": "tsx src/airportFares.ts"
+    "airport-fares": "tsx src/airportFares.ts",
+    "bls-airfares": "tsx src/jobs/blsAirfares.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.2.17",

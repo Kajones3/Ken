@@ -1,0 +1,31 @@
+name: Pricing the Magic BLS airfare index
+
+# The government's airfare price indexes (Bureau of Labor Statistics): the
+# consumer price index for airline fares and the producer price indexes for
+# international and domestic air travel. See src/airfareIndex.ts.
+# Free, no key needed (a BLS_API_KEY secret raises the daily limit). Rows are
+# ADDED to bls_series_values, never replaced; a month BLS revises gets a new
+# row. Weekly, because BLS publishes the CPI and PPI on different days
+# mid-month and a run with nothing new writes nothing.
+on:
+  schedule:
+    - cron: "41 13 * * 2"   # Tuesdays
+  workflow_dispatch:
+
+jobs:
+  bls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npm run bls-airfares
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          BLS_API_KEY: ${{ secrets.BLS_API_KEY }}

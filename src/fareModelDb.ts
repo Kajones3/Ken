@@ -7,6 +7,7 @@
 import type { Db } from "./db.js";
 import { dateStr, MONTHLY_MIN_TICKETS } from "./book.js";
 import { settingsMap } from "./settings.js";
+import { loadIndexSeries } from "./airfareIndex.js";
 import { fitFareModel, type FareModel, type ModelBaseline, type ModelFare, type ModelInputs, type ModelMonthly } from "./fareModel.js";
 
 /** How far back the candidate learns from. Route evidence is narrower (45 days). */
@@ -41,10 +42,10 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
   }).filter((x) => x.price > 0);
 
   // Newest year per route and quarter.
-  const b = await db.query<{ origin: string; destination: string; quarter: number; median_fare_usd: string | null;
+  const b = await db.query<{ origin: string; destination: string; quarter: number; year: number; median_fare_usd: string | null;
     avg_fare_usd: string; p25_fare_usd: string | null; p75_fare_usd: string | null; source: string | null }>(
     `select distinct on (origin, destination, quarter)
-            origin, destination, quarter, median_fare_usd, avg_fare_usd, p25_fare_usd, p75_fare_usd, source
+            origin, destination, quarter, year, median_fare_usd, avg_fare_usd, p25_fare_usd, p75_fare_usd, source
        from historical_fares
       order by origin, destination, quarter, year desc`,
   );
@@ -54,15 +55,15 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
     if (!(med > 0)) continue;
     baselines.push({
       origin: r.origin.trim(), destination: r.destination.trim(), quarter: Number(r.quarter), med,
-      p25: Number(r.p25_fare_usd ?? med), p75: Number(r.p75_fare_usd ?? med), source: r.source ?? "bts_db1b",
+      p25: Number(r.p25_fare_usd ?? med), p75: Number(r.p75_fare_usd ?? med), source: r.source ?? "bts_db1b", year: Number(r.year),
     });
   }
   // BTS's monthly survey: newest year per route and calendar month with
   // enough tickets (the same floor book.ts uses). Absent table = none.
-  const mo = await db.query<{ origin: string; destination: string; month: number; median_fare_usd: string;
+  const mo = await db.query<{ origin: string; destination: string; month: number; year: number; median_fare_usd: string;
     p25_fare_usd: string; p75_fare_usd: string; budget_share: string | null }>(
     `select distinct on (origin, destination, month)
-            origin, destination, month, median_fare_usd, p25_fare_usd, p75_fare_usd, budget_share
+            origin, destination, month, year, median_fare_usd, p25_fare_usd, p75_fare_usd, budget_share
        from historical_fares_monthly where itin_count >= $1
       order by origin, destination, month, year desc, loaded_at desc`,
     [MONTHLY_MIN_TICKETS],
@@ -71,7 +72,7 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
     const med = Number(r.median_fare_usd);
     return med > 0 ? [{ origin: r.origin.trim(), destination: r.destination.trim(), month: Number(r.month), med,
       p25: Number(r.p25_fare_usd), p75: Number(r.p75_fare_usd),
-      budgetShare: r.budget_share == null ? undefined : Number(r.budget_share) }] : [];
+      budgetShare: r.budget_share == null ? undefined : Number(r.budget_share), year: Number(r.year) }] : [];
   });
   // The free feed (stored as "travelpayouts+serpapi" by the refresh): the
   // latest fare per route, date and trip length, for day of week only.
@@ -87,7 +88,10 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
     departDate: dateStr(r.depart_date), tripLength: Number(r.trip_length), price: Number(r.price_usd) }))
     .filter((x) => x.price > 0);
   const settings = await settingsMap(db);
-  return { fares, baselines, monthly, feed, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
+  // The government's airfare indexes (airfareIndex.ts); none stored = none.
+  const series = await loadIndexSeries(db);
+  const index = { cpiSa: series.cpiSa, ppiIntl: series.ppiIntl };
+  return { fares, baselines, monthly, feed, index, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
 }
 
 // Fitting reads a few thousand rows, so the live site keeps one fitted

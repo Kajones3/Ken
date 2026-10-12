@@ -183,6 +183,43 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, after Duffel — the government's airfare indexes (BLS): kept, learned, on the board
+
+Owner: "We should be using BLS for international AND their CPI index. We
+should report the CPI index on our board so users can know airfares are
+(up/down) year over year." (Duffel rejected the same day: it charges per
+search unless you book, and we don't book.)
+- **Four BLS series** (`src/airfareIndex.ts`, `BLS_SERIES`): CPI airline
+  fares not seasonally adjusted (CUUR0000SETG01, the board line), the same
+  seasonally adjusted (CUSR0000SETG01, carries old surveys), PPI
+  international scheduled passenger air (PCU4811114811112, read as a
+  3-month average: it jumps 10%+ month to month) and PPI domestic
+  (PCU4811114811111). api.bls.gov is reachable from Claude's sandbox too.
+- **Kept append-only** in `bls_series_values` (a revised month = a new row,
+  readers take the newest fetch). Job `npm run bls-airfares`
+  (`src/jobs/blsAirfares.ts`), workflow "Pricing the Magic BLS airfare
+  index" (Tuesdays + dispatch). No key needed; a `BLS_API_KEY` secret
+  (free registration) raises the daily limit if the shared Actions IPs hit it.
+- As fetched 2026-10-12: CPI airline fares **August 2026 up 23%** on August
+  2025; PPI international up 12% (3 months to August); PPI domestic up 19%.
+  BLS skipped October 2025 (shutdown); `yearOverYear()` steps back past it.
+- **Board:** `/api/meta` `airfareIndex` -> `#airfareIndexNote` under the
+  results title: "**Airfares are up 23% from a year ago.** The government's
+  price index for airline tickets (Bureau of Labor Statistics), August 2026
+  compared with August 2025 ..." Words only, never in a total. Also in the
+  morning email and /admin Flights ("Airfares, by the government's price
+  indexes") and the coverage report.
+- **Candidate formula, two LEARNED levers** (`levers.index`, slope on
+  log(index change), 0-1.5, shrunk n/(n+20)): (a) **survey age**: each US
+  prior is carried by the CPI (SA) from its survey months to today (carries
+  ~1.11 for the March 2026 monthly survey, ~1.20-1.32 for the 2024Q3-2025Q2
+  quarterly ones); (b) **fare age**: older bought fares brought to today by
+  the CPI (US) or PPI international. (b) learns nothing until our 90-day
+  window spans months BLS has published (~mid-December 2026). Live formula
+  untouched. **Grade (governing rule 2):** the coverage report prints the
+  leave-one-out US/international with vs without the index; read it after
+  the first BLS run and tell the owner the numbers.
+
 ### 2026-10-12, very end — hotels now USE Google's usual price and booking-site prices
 
 Owner: "WHY ARE WE NOT USING DATA?!?! That goes against our rule." Both had been

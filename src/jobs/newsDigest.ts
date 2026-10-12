@@ -20,6 +20,7 @@ import { todayISO } from "../dates.js";
 import { ownerTasks, renderOwnerTasks, type OwnerTask } from "../ownerTasks.js";
 import { dataIntake, type IntakeReport } from "../dataIntake.js";
 import { loadForecastScores, progressReport, type Progress } from "../fareForecasts.js";
+import { loadIndexSeries, summarize } from "../airfareIndex.js";
 
 export interface NewsDigestOptions {
   sender?: EmailSender;
@@ -37,6 +38,8 @@ export interface NewsDigestOptions {
   progress?: Progress | null;
   /** The flight lean summary; undefined = load it, null = none. */
   lean?: string[] | null;
+  /** The government's airfare indexes, year over year; undefined = load, null = none. */
+  airfareIndex?: string[] | null;
 }
 
 export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
@@ -97,6 +100,8 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const progress = opts.progress !== undefined ? opts.progress : scores?.progress ?? null;
   const lean = opts.lean !== undefined ? opts.lean : scores?.lean?.length ? scores.lean : null;
   const prog = progress ? progressReport(progress) : null;
+  const airfareIndex = opts.airfareIndex !== undefined ? opts.airfareIndex
+    : await loadIndexSeries(db).then((s) => Object.keys(s).length ? summarize(s).lines : null).catch(() => null);
   const progressTasks = (prog?.worse ?? []).map((l) => ({
     id: `flight-accuracy-${l.group === "US" ? "us" : "intl"}-${l.formula}`,
     title: `Flight estimates got WORSE this week: ${l.group}, ${l.formula === "shown" ? "what travelers see" : "the candidate"} `
@@ -128,6 +133,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   if (shouldSend) {
     const parts: string[] = [taskNote, intakeNote];
     if (lean) parts.push("How our flight guesses lean (checked before buying, last 30 days)\n\n" + lean.join("\n"));
+    if (airfareIndex) parts.push("Airfares, by the government's price indexes (Bureau of Labor Statistics)\n\n" + airfareIndex.join("\n"));
     if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, this week vs last)\n\n" + prog.lines.join("\n"));
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")

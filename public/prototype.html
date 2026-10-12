@@ -1206,6 +1206,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <h2 id="resTitle">Six resorts, cheapest first</h2>
       <p class="res-sub" id="resSub"></p>
       <p class="hint" id="parkDaysNote" hidden></p>
+      <p class="hint" id="airfareIndexNote" hidden></p>
     </div>
     <div class="legend">
       <span class="lg"><i class="sw" style="background:var(--s1)"></i>Flights</span>
@@ -5503,6 +5504,15 @@ async function boot(){
   HOLIDAY_WINDOWS = meta.holidayWindows || {};
   if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);
   PLUS_PASSES = meta.plusPasses || [];
+  // The government's airline-fare price index, year over year (owner,
+  // 2026-10-12: "so users can know airfares are up/down year over year").
+  // Words only; it never moves a total.
+  const ai = meta.airfareIndex;
+  if(ai && ai.headline && $("#airfareIndexNote")){
+    const el = $("#airfareIndexNote");
+    el.innerHTML = `<b>${esc(ai.headline)}</b> ${esc(ai.detail)}`;
+    el.hidden = false;
+  }
   PLUS_PASS_DEFAULT = meta.plusPassDefault || PLUS_PASS_DEFAULT;
   renderPlusPlans();
   // Public, small, and needed by the shared PDF's "what's there" section
