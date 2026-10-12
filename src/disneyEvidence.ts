@@ -25,6 +25,7 @@ import type { Db } from "./db.js";
 import type { CountedCheck } from "./checkFactors.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
 import { dateStr } from "./book.js";
+import { hotelAnchor, loadHotelLearning, type HotelExtraLite } from "./hotelLearning.js";
 
 /** How far back a Google rate still counts. Disney reprices seasonally, so a
  *  rate from last spring says little about this one. */
@@ -32,16 +33,22 @@ export const GOOGLE_DISNEY_WINDOW_DAYS = 180;
 
 export interface GoogleDisneyRate {
   resortId: string; hotelId: string; hotelName: string; googleName: string;
-  night: string; google: number; ours: number | null; pulledAt: Date;
+  night: string;
+  /** What we count as Google's price: the cheapest place to book, blended
+   *  toward Google's usual price by the learned weight (hotelLearning.ts). */
+  google: number;
+  /** Google's lead rate as it came. */
+  lead: number;
+  ours: number | null; pulledAt: Date;
 }
 
 /** Every Google rate for a Disney hotel in the window, matched to our hotel
  *  and our raw rate for the same night (null when we hold none). */
-export async function googleDisneyRates(db: Db, days = GOOGLE_DISNEY_WINDOW_DAYS): Promise<GoogleDisneyRate[]> {
-  let rows: { resort_id: string; hotel_name: string; check_in: unknown; nightly_usd: string; pulled_at: unknown }[];
+export async function googleDisneyRates(db: Db, days = GOOGLE_DISNEY_WINDOW_DAYS, usualWeight = 0): Promise<GoogleDisneyRate[]> {
+  let rows: { resort_id: string; hotel_name: string; check_in: unknown; nightly_usd: string; pulled_at: unknown; extra: unknown }[];
   try {
-    rows = (await db.query<{ resort_id: string; hotel_name: string; check_in: unknown; nightly_usd: string; pulled_at: unknown }>(
-      `select resort_id, hotel_name, check_in, nightly_usd, pulled_at
+    rows = (await db.query<{ resort_id: string; hotel_name: string; check_in: unknown; nightly_usd: string; pulled_at: unknown; extra: unknown }>(
+      `select resort_id, hotel_name, check_in, nightly_usd, pulled_at, extra
          from hotel_samples
         where pulled_at > now() - ($1 || ' days')::interval
         order by pulled_at`,
@@ -54,12 +61,14 @@ export async function googleDisneyRates(db: Db, days = GOOGLE_DISNEY_WINDOW_DAYS
   const latest = new Map<string, GoogleDisneyRate>();
   for (const r of rows) {
     const hit = matchDisneyHotel(r.resort_id, r.hotel_name);
-    const google = Number(r.nightly_usd);
-    if (!hit || !(google > 0)) continue;
+    const lead = Number(r.nightly_usd);
+    if (!hit || !(lead > 0)) continue;
+    const extra = (typeof r.extra === "string" ? JSON.parse(r.extra) : r.extra) as HotelExtraLite | null;
+    const google = hotelAnchor(lead, extra, usualWeight);
     const night = dateStr(r.check_in);
     latest.set(`${hit.id}|${night}`, {
       resortId: r.resort_id, hotelId: hit.id, hotelName: hit.name, googleName: r.hotel_name,
-      night, google, ours: null,
+      night, google, lead, ours: null,
       pulledAt: r.pulled_at instanceof Date ? r.pulled_at : new Date(String(r.pulled_at)),
     });
   }
@@ -101,7 +110,8 @@ const cache = new WeakMap<object, { at: number; rates: GoogleDisneyRate[] }>();
 export async function cachedGoogleDisneyRates(db: Db): Promise<GoogleDisneyRate[]> {
   const hit = cache.get(db);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.rates;
-  const rates = await googleDisneyRates(db);
+  const w = await loadHotelLearning(db).then((l) => l.usualWeight).catch(() => 0);
+  const rates = await googleDisneyRates(db, GOOGLE_DISNEY_WINDOW_DAYS, w);
   cache.set(db, { at: Date.now(), rates });
   return rates;
 }

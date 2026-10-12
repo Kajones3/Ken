@@ -29,6 +29,7 @@ import { matchDisneyHotel } from "../disneyHotels.js";
 import { isRental } from "../rentals.js";
 import type { HotelQuote } from "./types.js";
 import { captureRaw, type RawResponse } from "../rawResponses.js";
+import { hotelAnchor } from "../hotelLearning.js";
 
 const BASE = "https://serpapi.com/search.json";
 
@@ -218,6 +219,10 @@ export class SerpApiHotelProvider {
   }
 
   get callsSpent(): number { return this.spent; }
+  /** How far a "deal" night is blended toward Google's usual price, learned
+   *  nightly from the record (hotelLearning.ts). 0 = the night as Google
+   *  priced it. Set by the refresh before any search. */
+  usualWeight = 0;
   /** Every off-property pull this run, as Google returned it (see hotelScoreboard.ts). */
   readonly pulls: { resort: string; month: string; checkIn: ISODate; rates: { name: string; nightly: number; kind?: string; extra?: unknown }[] }[] = [];
   /** Every paid search made, empty or failed ones included (hotel_searches). */
@@ -363,7 +368,10 @@ export class SerpApiHotelProvider {
       for (const a of anchors) {
         out.push({
           hotelId: a.hotelId, resortId, hotelName: a.hotelName, descriptor: a.descriptor,
-          stayDate: date, nightlyUsd: Math.round((a.anchorNightly / anchorFactor) * f * 100) / 100,
+          // The cheapest place to book it, blended toward Google's usual
+          // price when tonight was a deal (hotelLearning.ts); the record
+          // keeps Google's lead rate as it came.
+          stayDate: date, nightlyUsd: Math.round((hotelAnchor(a.anchorNightly, a.extra, this.usualWeight) / anchorFactor) * f * 100) / 100,
           tier: a.tier, onProperty: false, deepLink: a.deepLink,
         });
       }

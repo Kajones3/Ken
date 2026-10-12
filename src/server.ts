@@ -64,6 +64,7 @@ import {
 } from "./signinThrottle.js";
 import { requestReset, lookupReset, consumeReset, RESET_TOKEN_HOURS } from "./passwordReset.js";
 import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS } from "./verifyEmail.js";
+import { loadHotelLearning, hotelLearningLines } from "./hotelLearning.js";
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
@@ -1691,6 +1692,7 @@ const server = createServer(async (req, res) => {
         demand: await loadRouteDemand(db, days),
         hotels: await loadHotelScoreboard(db),
         hotelList: await loadHotelList(db),
+        hotelLearning: hotelLearningLines(await loadHotelLearning(db)),
       }, { cache: "no-store" });
     }
 
