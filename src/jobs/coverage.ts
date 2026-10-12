@@ -555,7 +555,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   try {
     const fs = await loadForecastScores(db, 30);
     const z = (x: { n: number; inZonePct: number | null; within5Pct: number | null; lowPct: number | null; highPct: number | null; typicalOffPct: number | null; medianPct: number | null }) =>
-      `n ${x.n} · within ±10% ${x.inZonePct ?? "-"}% · ±5% ${x.within5Pct ?? "-"}% · low ${x.lowPct ?? "-"}% · high ${x.highPct ?? "-"}% · typically off ${x.typicalOffPct ?? "-"}% · reads ${x.medianPct ?? "-"}%`;
+      `n ${x.n} · within ±10% ${x.inZonePct ?? "-"}% · ±5% ${x.within5Pct ?? "-"}% · low ${x.lowPct ?? "-"}% · high ${x.highPct ?? "-"}% · typically off ${x.typicalOffPct ?? "-"}% · middle fare leans ${x.medianPct ?? "-"}%`;
     out.push(`  since ${fs.since}, ${fs.n} graded, ${fs.noFare} with no fare; shown was a real fare ${fs.shownKinds.realFare}, an estimate ${fs.shownKinds.estimate}`);
     for (const [label, g] of [["US", fs.domestic], ["International", fs.international]] as const) {
       out.push(`  ${label}`);
@@ -597,6 +597,95 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
       out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+    }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  // Owner, 2026-10-12: "Omaha to MCO we show $450, Kayak $400-700 with most
+  // at ~$500: that works. Omaha to Tokyo we show $2,000, Kayak $800-2,000
+  // with most at $1,200." Two questions, both read-only: (1) inside one
+  // Google answer, where does the itinerary we keep (the MIDDLE one) sit
+  // against the cheapest and the most common price, US vs abroad? (2) what
+  // does a traveler see today for an international route we never bought?
+  out.push("## Inside one Google answer: the middle itinerary vs the most common price (last 30 days)");
+  try {
+    const ra = await db.query<{ request: unknown; body_gz: Uint8Array }>(
+      `select request, body_gz from provider_responses
+        where kind = 'google_flights' and status = 200 and fetched_at > now() - interval '30 days'`,
+    );
+    type Sp = { n: number; min: number; p25: number; mid: number; common: number; stops: number; twoStopShare: number; hours: number };
+    const per: Record<string, Sp[]> = { US: [], Europe: [], Asia: [] };
+    const q = (s: number[], f: number) => s[Math.min(s.length - 1, Math.floor(f * (s.length - 1)))]!;
+    for (const r of ra.rows) {
+      const req = (typeof r.request === "string" ? JSON.parse(r.request) : r.request) as Record<string, string>;
+      let json: { best_flights?: { price?: number; type?: string; flights?: unknown[]; total_duration?: number }[];
+                  other_flights?: { price?: number; type?: string; flights?: unknown[]; total_duration?: number }[] };
+      try { json = JSON.parse(unzipBody(r.body_gz)); } catch { continue; }
+      const all = [...(json.best_flights ?? []), ...(json.other_flights ?? [])].filter((f) => Number(f.price) > 0);
+      const rt = all.filter((f) => !f.type || /round/i.test(f.type));
+      const pool = (rt.length ? rt : all).sort((a, b) => a.price! - b.price!);
+      if (pool.length < 3) continue;
+      const prices = pool.map((f) => f.price!);
+      const pick = pool[Math.floor((pool.length - 1) / 2)]!;
+      // "Most common": the fullest 10%-wide price band, its middle.
+      let best = { count: 0, at: prices[0]! };
+      for (const p0 of prices) {
+        const c = prices.filter((p) => p >= p0 && p < p0 * 1.1).length;
+        if (c > best.count) best = { count: c, at: Math.sqrt(p0 * p0 * 1.1) };
+      }
+      const dest = String(req.arrival_id ?? "");
+      const region = !isInternational(dest) ? "US" : dest === "CDG" || dest === "ORY" ? "Europe" : "Asia";
+      per[region]!.push({ n: pool.length, min: prices[0]!, p25: q(prices, 0.25), mid: pick.price!, common: best.at,
+        stops: Math.max(0, (pick.flights?.length ?? 1) - 1),
+        twoStopShare: pool.filter((f) => (f.flights?.length ?? 1) >= 3).length / pool.length,
+        hours: (pick.total_duration ?? 0) / 60 });
+    }
+    const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)]! : NaN; };
+    for (const [region, xs] of Object.entries(per)) {
+      if (!xs.length) { out.push(`  ${region}: no kept answers`); continue; }
+      out.push(`  ${region}: ${xs.length} searches, ${Math.round(med(xs.map((x) => x.n)))} itineraries each (median).`
+        + ` Against the middle one we keep: cheapest x${med(xs.map((x) => x.min / x.mid)).toFixed(2)},`
+        + ` quarter-way up x${med(xs.map((x) => x.p25 / x.mid)).toFixed(2)},`
+        + ` most common price x${med(xs.map((x) => x.common / x.mid)).toFixed(2)}.`
+        + ` The middle one: ${med(xs.map((x) => x.stops))} stop(s), ${med(xs.map((x) => x.hours)).toFixed(1)} h outbound;`
+        + ` ${Math.round(med(xs.map((x) => x.twoStopShare)) * 100)}% of itineraries have 2+ stops.`);
+    }
+    out.push("  (x1.00 = the same as the fare we keep and grade against; below 1 = cheaper than it.)");
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+  out.push("## What a traveler sees today for an international route we never bought (Kansas City, the nearest origin to Omaha)");
+  try {
+    const { loadBook } = await import("../book.js");
+    const { quotedEstimate } = await import("../pricing.js");
+    const { loadFareModel } = await import("../fareModelDb.js");
+    const { plannableMonths } = await import("../config.js");
+    const model = await loadFareModel(db);
+    const bought = await db.query<{ destination: string; m: string; n: string; med: string }>(
+      `select destination, to_char(depart_date, 'YYYY-MM') as m, count(*)::text as n,
+              percentile_cont(0.5) within group (order by price_usd)::text as med
+         from flight_observations where source = 'serpapi_flights' and destination in ('HND','NRT','CDG')
+        group by 1, 2`,
+    );
+    for (const dest of ["HND", "CDG"]) {
+      const resort = RESORTS.find((r) => r.iata === dest || r.altArrivalAirports.some((a) => a.iata === dest))!;
+      const cells: string[] = [];
+      for (const m of plannableMonths(todayISO())) {
+        const date = `${m}-15`;
+        const book = await loadBook(db, { origin: "MCI", destinations: [dest], resortIds: [resort.id], from: date, to: date, tripLength: 7 }, { formula: "live" });
+        const live = quotedEstimate(book, "MCI", dest, date);
+        const cand = model.predict("MCI", dest, date)?.value;
+        const others = bought.rows.filter((r) => r.m === m && (dest === "CDG" ? r.destination === "CDG" : r.destination !== "CDG"));
+        const n = others.reduce((t, r) => t + Number(r.n), 0);
+        const otherMed = others.length ? Math.round(Math.max(...others.map((r) => Number(r.med)))) : null;
+        cells.push(`${m}: shown $${live ? Math.round(live) : "—"}, candidate $${cand ? Math.round(cand) : "—"}`
+          + (n ? `, bought from other cities $${otherMed} (${n})` : ""));
+      }
+      out.push(`  MCI -> ${dest}:`);
+      for (const c of cells) out.push(`    ${c}`);
     }
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
