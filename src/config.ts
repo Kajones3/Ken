@@ -890,6 +890,20 @@ export const RESORT_BY_ARRIVAL_AIRPORT = new Map(
 );
 
 /**
+ * Paid fares are bought ONLY into each resort's main airport (owner,
+ * 2026-10-12: "only buy fares for the main airports for each place ... not
+ * SNA anymore, only LAX"). Fares already bought into an alternate stay in the
+ * record and still count; alternates are still priced (baseline + trend, and
+ * the free feed). Demand for an alternate is bought at the main airport.
+ */
+export function mainArrivalAirport(iata: string): string {
+  return RESORT_BY_ARRIVAL_AIRPORT.get(iata)?.iata ?? iata;
+}
+export function isMainArrivalAirport(iata: string): boolean {
+  return RESORTS.some((r) => r.iata === iata);
+}
+
+/**
  * Below this, flying is not a thing anyone does — you drive.
  *
  * Picked against the real distances rather than by feel. Every origin the app

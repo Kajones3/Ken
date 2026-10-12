@@ -14,7 +14,7 @@
  * nightly job only ever needs "how many people asked about ATL-MCO in
  * March", never who they were.
  */
-import { ORIGINS, ALL_ORIGINS, RESORTS, isLocalRoute, firstPlannableMonth } from "./config.js";
+import { ORIGINS, ALL_ORIGINS, RESORTS, isLocalRoute, firstPlannableMonth, isMainArrivalAirport } from "./config.js";
 import type { Db } from "./db.js";
 
 export interface PopularRoute {
@@ -191,7 +191,8 @@ export async function rotationRoutes(
   db: Db, limit: number, departMonth: string, exclude: Set<string> = new Set(),
 ): Promise<PopularRoute[]> {
   if (limit <= 0) return [];
-  const dests = arrivalAirports();
+  // Paid buying uses each resort's main airport only (owner, 2026-10-12).
+  const dests = arrivalAirports().filter(isMainArrivalAirport);
   const seen = await db.query<{ origin: string; destination: string; last_bought: Date | null }>(
     `select origin, destination, max(fetched_at) as last_bought
        from flight_prices

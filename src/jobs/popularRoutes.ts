@@ -27,7 +27,7 @@ import { monthBounds, monthKey, quarterOf, todayISO, addDaysISO } from "../dates
 import { getDb, type Db } from "../db.js";
 import { popularRoutes, recentlyBought, rotationRoutes, trendAnchorRoutes, type PopularRoute } from "../routeDemand.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
-import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth, plannableMonths } from "../config.js";
+import { TRIP_BUCKETS, isLocalRoute, firstPlannableMonth, plannableMonths, mainArrivalAirport } from "../config.js";
 import { loadScoreboard, type RouteScore } from "../fareScoreboard.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 import { flushRaw } from "../rawResponses.js";
@@ -217,6 +217,25 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
       const key = `${a.origin}|${a.destination}|${a.departMonth}`;
       if (!seen.has(key)) { routes.push(a); seen.add(key); }
     }
+  }
+
+  // Main airports only (owner, 2026-10-12): demand, furthest-off routes and
+  // trend anchors aimed at an alternate (SNA, TPA, HND) are bought at that
+  // resort's main airport instead (LAX, MCO, NRT). Routes the owner names
+  // by hand (opts.routes) are bought as named.
+  if (!opts.routes) {
+    const seen = new Set<string>();
+    const moved: string[] = [];
+    routes = routes.flatMap((r) => {
+      const main = mainArrivalAirport(r.destination);
+      if (main !== r.destination) moved.push(`${r.origin}->${r.destination}`);
+      const m = { ...r, destination: main };
+      const key = `${m.origin}|${m.destination}|${m.departMonth}`;
+      if (seen.has(key) || !notFresh(m)) return [];
+      seen.add(key);
+      return [m];
+    });
+    if (moved.length) console.log(`popular-routes: bought at the main airport instead: ${moved.join(", ")}`);
   }
 
   // Backstop for the routes that did not come from rotation (which filters

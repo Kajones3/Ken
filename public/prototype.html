@@ -3200,6 +3200,7 @@ async function renderDetail(){
           ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
+          ${!excludeFlights ? `<p class="hint" style="margin:10px 0 0">Our fares are the typical fare on Google Flights. Booking sites like Kayak often list the same trip for less, so check there before you buy.</p>` : ""}
           <div class="foot">
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener" data-track="flights">See live fares on Kayak →</a>` : ""}
           </div>
@@ -4585,7 +4586,8 @@ function gettingThereHtml(item){
       out.push(`<p>For ${esc(partyPhrase(params))} that is <b>${usd(pr.flights)}</b> in all.</p>`);
     }
     if(pr.flights && links.kayakLink){
-      out.push(`<p><a href="${esc(links.kayakLink)}">See live fares on Kayak</a> &mdash; opens with your airports,
+      out.push(`<p>Our fares are the typical fare on Google Flights. Booking sites like Kayak often list the same
+        trip for less: <a href="${esc(links.kayakLink)}">see live fares on Kayak</a> &mdash; opens with your airports,
         dates and party filled in.</p>`);
     }
     if(pr.fareBelowFloor){

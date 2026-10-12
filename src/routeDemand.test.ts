@@ -214,7 +214,7 @@ test("a route+month bought recently is not re-bought the next night; its slot go
   // night and each night's fares overwrote the last, so 226 paid lookups left
   // 19 fares. A second night must buy DIFFERENT routes.
   const db = await memoryDb();
-  for (const d of ["MCO", "SNA"]) await recordSearch(db, "RDU", [d], "2027-03");
+  for (const d of ["MCO", "LAX"]) await recordSearch(db, "RDU", [d], "2027-03");
   const bought: string[] = [];
   const stub = {
     callsSpent: 0, budgetRemaining: 100,
@@ -225,7 +225,7 @@ test("a route+month bought recently is not re-bought the next night; its slot go
   };
   await runPopularRoutes(db, { limit: 4, datesPerMonth: 1, provider: stub as never });
   const night1 = new Set(bought);
-  assert.ok(night1.has("RDU|MCO|2027-03") && night1.has("RDU|SNA|2027-03"), "demand is bought first");
+  assert.ok(night1.has("RDU|MCO|2027-03") && night1.has("RDU|LAX|2027-03"), "demand is bought first");
   bought.length = 0;
   await runPopularRoutes(db, { limit: 4, datesPerMonth: 1, provider: stub as never });
   const repeats = bought.filter((k) => night1.has(k));
@@ -289,4 +289,31 @@ test("parseRouteList reads a named purchase and refuses anything it can't read",
   ]);
   assert.deepEqual(parseRouteList(""), []);
   assert.throws(() => parseRouteList("IAD to Paris"));
+});
+
+test("paid buying uses each resort's main airport only: SNA demand is bought at LAX, rotation skips alternates", async () => {
+  const db = await memoryDb();
+  // Rotation never offers an alternate arrival airport.
+  const all = await rotationRoutes(db, 1000, "2027-03");
+  assert.ok(all.length > 0);
+  for (const alt of ["SNA", "TPA", "HND"]) {
+    assert.ok(!all.some((r) => r.destination === alt), `rotation offered ${alt}`);
+  }
+  assert.ok(all.some((r) => r.destination === "LAX") && all.some((r) => r.destination === "MCO"));
+
+  // Demand for SNA (and a duplicate for LAX) becomes ONE LAX purchase.
+  for (let i = 0; i < 5; i++) await recordSearch(db, "ATL", ["SNA"], "2027-03");
+  for (let i = 0; i < 4; i++) await recordSearch(db, "ATL", ["LAX"], "2027-03");
+  const bought: string[] = [];
+  const stub = {
+    callsSpent: 0, budgetRemaining: 99,
+    async quote(origin: string, destination: string, departDate: string, tripLength: number) {
+      bought.push(`${origin}-${destination}`);
+      return { origin, destination, departDate, tripLength, priceUsd: 500, stops: 0, deepLink: "x" };
+    },
+  };
+  await runPopularRoutes(db, { limit: 3, datesPerMonth: 1, worstSlots: 0, rotationSlots: 0, provider: stub as never });
+  assert.ok(!bought.some((b) => /-(SNA|TPA|HND)$/.test(b)), `bought an alternate: ${bought.join(", ")}`);
+  assert.equal(bought.filter((b) => b === "ATL-LAX").length, 1, "SNA demand merged into one LAX purchase");
+  await db.close();
 });
