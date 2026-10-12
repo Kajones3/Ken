@@ -335,7 +335,7 @@ test("ticketLines: seniors get their own line at every resort, and the lines add
   // card used to lump seniors in with adults. Tokyo sells no senior ticket
   // (checked again 2026-09-27), so its seniors pay adult — but still get a
   // line that says so.
-  for (const [id, iata, sells] of [["hkdl", "HKG", true], ["shdr", "PVG", true], ["tdr", "NRT", false], ["wdw", "MCO", false]] as const) {
+  for (const [id, iata, sells] of [["hkdl", "HKG", true], ["shdr", "PVG", true], ["tdr", "HND", false], ["wdw", "MCO", false]] as const) {
     const r = resortById(id);
     const res = priceTrip(fullBook(id, iata), r, { ...base, adults: 3, seniors: 1, childAges: [7] }, {}, START);
     assert.ok(res.ok, id);
@@ -411,7 +411,7 @@ test("a per-resort excludeHotel does not leak into another resort's pricing", ()
 test("category falls back to the nearest available and says so", () => {
   const tdr = resortById("tdr");
   // Tokyo has value and deluxe on property, but no moderate.
-  const book = fullBook("tdr", "NRT", {
+  const book = fullBook("tdr", "HND", {
     nights: [night("ch", "Celebration", 172, "value", true), night("mc", "MiraCosta", 640, "deluxe", true)],
   });
   const r = priceTrip(book, tdr, { ...base, tier: 1, stay: "on" }, {}, START);
@@ -506,7 +506,7 @@ test("a dining plan is only available on-property; off-property falls back to co
 
 test("resorts without a dining plan fall back to counter service", () => {
   const tdr = resortById("tdr");
-  const book = fullBook("tdr", "NRT");
+  const book = fullBook("tdr", "HND");
   const r = priceTrip(book, tdr, { ...base, food: "plan" }, {}, START);
   assert.ok(r.ok);
   assert.equal(r.price.foodPlan, null);
@@ -1188,8 +1188,8 @@ test("international routes use their own lean, and follow the US one until it is
   };
   const both = { [ESTIMATE_LEAN_KEY]: 50, [INTL_ESTIMATE_LEAN_KEY]: 0 };
   assert.equal(fare("wdw", "MCO", both), 650);
-  assert.equal(fare("tdr", "NRT", both), 500);
-  assert.equal(fare("tdr", "NRT", { [ESTIMATE_LEAN_KEY]: 50 }), 650);
+  assert.equal(fare("tdr", "HND", both), 500);
+  assert.equal(fare("tdr", "HND", { [ESTIMATE_LEAN_KEY]: 50 }), 650);
 });
 
 /**
@@ -1254,7 +1254,7 @@ test("Park Hopper scales with ticket length where Disney publishes it", () => {
 test("Tokyo charges no Park Hopper even when one is asked for", () => {
   const tdr = resortById("tdr");
   assert.equal(tdr.ticket.hopperAdultUsd, undefined);
-  const book = fullBook("tdr", "NRT");
+  const book = fullBook("tdr", "HND");
   const on = priceTrip(book, tdr, { ...base, hopper: true }, {}, START);
   const off = priceTrip(book, tdr, { ...base, hopper: false }, {}, START);
   assert.ok(on.ok && off.ok);

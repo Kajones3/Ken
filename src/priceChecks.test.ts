@@ -279,7 +279,7 @@ test("a flight check is measured against our estimate, and nudges that route's e
   await db.query(
     `insert into historical_fares (origin, destination, year, quarter, avg_fare_usd, p25_fare_usd, median_fare_usd,
        p75_fare_usd, passengers_sampled, source, fetched_at)
-     values ('RDU','NRT', $1, $2, 1000, 900, 1000, 1100, 50, 'sampled_live', now())`,
+     values ('RDU','HND', $1, $2, 1000, 900, 1000, 1100, 50, 'sampled_live', now())`,
     [new Date().getUTCFullYear(), q]);
   const v = validateCheck({ resort: "tdr", category: "flight", from_airport: "RDU", start_date: start,
     end_date: addDaysISO(start, 5), amount: "2081" });
@@ -289,12 +289,12 @@ test("a flight check is measured against our estimate, and nudges that route's e
   const [c] = await listChecks(db);
   assert.equal(c!.matchKey, "RDU|tdr");
   assert.ok(c!.modelUsd! >= 1000 && c!.modelUsd! <= 1100 * 1.6, `our estimate that day, not ${c!.modelUsd}`);
-  const book = await loadBook(db, { origin: "RDU", destinations: ["NRT"], resortIds: ["tdr"], from: start, to: start, tripLength: 4 });
-  const est = book.flightEstimate!("RDU", "NRT")!;
+  const book = await loadBook(db, { origin: "RDU", destinations: ["HND"], resortIds: ["tdr"], from: start, to: start, tripLength: 4 });
+  const est = book.flightEstimate!("RDU", "HND")!;
   assert.ok(est.med > 1000, "the route's estimate moved toward the fare seen");
   assert.equal(est.checkAdjust?.n, 1);
-  const raw = await loadBook(db, { origin: "RDU", destinations: ["NRT"], resortIds: ["tdr"], from: start, to: start, tripLength: 4 }, { applyChecks: false });
-  assert.equal(raw.flightEstimate!("RDU", "NRT")!.med, 1000);
+  const raw = await loadBook(db, { origin: "RDU", destinations: ["HND"], resortIds: ["tdr"], from: start, to: start, tripLength: 4 }, { applyChecks: false });
+  assert.equal(raw.flightEstimate!("RDU", "HND")!.med, 1000);
 });
 
 test("the lead-time table reads one row per hotel stay, at its cheapest room", () => {

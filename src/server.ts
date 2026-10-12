@@ -210,10 +210,12 @@ function overridesFrom(q: URLSearchParams): Overrides {
  * Hong Kong's HKG) silently falls back to that resort's primary rather than
  * pricing against an unrelated airport.
  */
-function resolveDestination(resort: { iata: string; altArrivalAirports: { iata: string }[] }, requested: string | null): string {
-  if (!requested) return resort.iata;
-  const code = requested.toUpperCase().slice(0, 3);
-  if (code === resort.iata || resort.altArrivalAirports.some((a) => a.iata === code)) return code;
+function resolveDestination(resort: { iata: string; altArrivalAirports: { iata: string }[] }, _requested: string | null): string {
+  // Travelers price the main airport only (owner, 2026-10-12: "I don't want
+  // the user to be able to pick them if we don't have recent data"). Paid
+  // fares are bought only into the main airport, so an alternate would be
+  // priced from stale or no data. A saved search or old link that names an
+  // alternate (SNA, TPA, NRT) quietly gets the main airport.
   return resort.iata;
 }
 
