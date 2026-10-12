@@ -47,6 +47,21 @@
  *    route, month and trip length on different weekdays, so route and season
  *    cancel (dayOfWeek.ts). Otherwise pooled over bought fares, held near 1
  *    until a weekday has many fares. Kept within 0.85-1.2.
+ *  - Government airfare indexes (2026-10-12, owner: "We should be using BLS
+ *    for international AND their CPI index"; airfareIndex.ts). Two LEARNED
+ *    levers, each a slope on log(index change) shrunk n / (n + 20) and held
+ *    within 0-1.5 (0 = the index teaches nothing, 1 = prices move exactly
+ *    with it):
+ *    (a) survey age: BTS's route surveys are from 2024 Q3 to March 2026,
+ *        and airline fares moved ~20% since. Each US prior is carried by the
+ *        CPI for airline fares (seasonally adjusted) from its survey months
+ *        to today, to the power the fares teach. The calibration only fixes
+ *        ONE level for all surveys, so this is what lets a 2024 survey and a
+ *        2026 survey sit on the same footing.
+ *    (b) fare age: a fare bought months ago is brought to today's level by
+ *        the CPI (US) or the international producer price index (abroad,
+ *        3-month average: it is noisy). Learns nothing until our fares span
+ *        months BLS has published (BLS runs ~6 weeks behind).
  *  - Route factor: this route's own searches in the last 45 days, each one
  *    counted with Google's "typical price" from the same search (idea 2) as
  *    a second opinion. Shrunk toward 1 (n / (n + 2)), so one odd fare moves a
@@ -62,6 +77,7 @@ import { haversineMiles } from "./geo.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
 import { weekdayPattern, type DatedFare } from "./dayOfWeek.js";
+import { carryFrom, SMOOTH_MONTHS, type IndexSeries } from "./airfareIndex.js";
 
 export const USE_CANDIDATE_KEY = "flight.useCandidate";
 export const ZONE_PCT_KEY = "flight.zonePct";
@@ -85,6 +101,9 @@ export const MONTH_SHRINK_K = 6;
 export const BUDGET_SHRINK_K = 20;
 /** The free feed sets day of week once every weekday has this many fares. */
 export const FEED_DOW_MIN_FARES = 30;
+/** Index levers (survey age, fare age): slope shrunk by n / (n + K) fares. */
+export const INDEX_SHRINK_K = 20;
+const INDEX_W_MAX = 1.5;
 /** Feed weekday shrink: n / (n + K). Hundreds of fares = nearly full weight. */
 const FEED_DOW_SHRINK_K = 20;
 /** Group calibration: a group with fewer fares leans on the pooled one. */
@@ -109,12 +128,16 @@ export interface ModelBaseline {
   origin: string; destination: string; quarter: number; med: number; p25: number; p75: number;
   /** bts_db1b | seed_guess | sampled_live */
   source: string;
+  /** The survey's year, for carrying it to today by the airfare index. */
+  year?: number;
 }
 /** BTS's monthly survey row for a route and calendar month (newest year). */
 export interface ModelMonthly {
   origin: string; destination: string; month: number; med: number; p25: number; p75: number;
   /** Budget airlines' share of the route's passengers that month (0-1), when the survey says. */
   budgetShare?: number;
+  /** The survey's year. */
+  year?: number;
 }
 export type FareGroup = "dom" | "europe" | "asia";
 export interface ModelInputs {
@@ -124,6 +147,8 @@ export interface ModelInputs {
   monthly?: ModelMonthly[];
   /** Optional: the free feed's fares (Travelpayouts), for day of week. */
   feed?: DatedFare[];
+  /** Optional: the government's airfare indexes (airfareIndex.ts). */
+  index?: { cpiSa?: IndexSeries; ppiIntl?: IndexSeries };
   premiumPct: (key: string, fallback: number) => number;
   now: Date;
 }
@@ -134,6 +159,8 @@ export interface Prediction {
   lowRatio: number; highRatio: number;
   parts: { prior: number; calibration: number; destination: number; season: number; month: number; dayOfWeek: number; budget: number;
            route: number; routeSearches: number; group: FareGroup;
+           /** The survey-age index factor already inside `prior`. */
+           index: number;
            priorKind: "bts" | "bts_monthly" | "distance" };
 }
 export interface FareModel {
@@ -152,6 +179,11 @@ export interface FareModel {
     dayOfWeekFrom: "free feed" | "paid fares" | "none";
     /** Budget airlines: fares change by exp(slope x (share - mean share)) on US routes. */
     budget: { slope: number; meanShare: number; fares: number };
+    /** Government airfare index levers: learned weight (0-1.5) and fares behind it. */
+    index: {
+      surveyAge: { weight: number; fares: number; latest?: string };
+      fareAge: { dom: { weight: number; fares: number }; intl: { weight: number; fares: number } };
+    };
   };
 }
 
@@ -249,24 +281,77 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   const monthlyFor = (o: string, d: string, month: number) =>
     monthly.get(`${o}|${d}|${month}`) ?? (ALT_TO_PRIMARY.has(d) ? monthly.get(`${o}|${ALT_TO_PRIMARY.get(d)}|${month}`) : undefined);
 
-  const prior = (o: string, d: string, date: ISODate): { v: number; kind: "bts" | "bts_monthly" | "distance"; shape?: { med: number; p25: number; p75: number } } | undefined => {
+  // How far airline fares moved from a survey's months to today (CPI,
+  // seasonally adjusted). 1 without the index or the survey's year.
+  const cpi = inp.index?.cpiSa;
+  const surveyCarry = (year: number | undefined, months: number[]) =>
+    cpi && year ? carryFrom(cpi, months.map((m) => `${year}-${String(m).padStart(2, "0")}`), SMOOTH_MONTHS.cpiSa) : 1;
+  const rawPrior = (o: string, d: string, date: ISODate): { v: number; kind: "bts" | "bts_monthly" | "distance"; carry: number; dated?: boolean; shape?: { med: number; p25: number; p75: number } } | undefined => {
     const intl = isInternational(d);
     const q = quarterOf(date);
     if (!intl) {
-      const m = monthlyFor(o, d, Number(date.slice(5, 7)));
-      if (m) return { v: m.med, kind: "bts_monthly", shape: m };
+      const mn = Number(date.slice(5, 7));
+      const m = monthlyFor(o, d, mn);
+      if (m) return { v: m.med, kind: "bts_monthly", carry: surveyCarry(m.year, [mn]), dated: !!(cpi && m.year), shape: m };
       const b = btsFor(o, d, q);
-      if (b) return { v: b.med, kind: "bts", shape: b };
+      if (b) return { v: b.med, kind: "bts", carry: surveyCarry(b.year, [q * 3 - 2, q * 3 - 1, q * 3]), dated: !!(cpi && b.year), shape: b };
     }
     const line = intl ? dist.intl : dist.dom;
     const miles = routeMiles(o, d);
     if (!line || !miles) return undefined;
     const v = Math.exp(line.a + line.b * Math.log(miles)) * (intl ? seedSeason(o, d, q) : 1);
-    return { v, kind: "distance" };
+    return { v, kind: "distance", carry: 1 };
   };
 
+  // The index levers, learned before anything else: how much of each
+  // index's movement the bought fares actually show. A slope of log(miss)
+  // on log(index change), group by group (so a group's own level cancels),
+  // shrunk toward 0 (the index teaches nothing) until fares back it.
+  const indexSlope = (pts: { x: number; y: number; grp: string }[]) => {
+    const n = pts.length;
+    if (n < 5) return 0;
+    const by = new Map<string, { x: number; y: number }[]>();
+    for (const p of pts) by.set(p.grp, [...(by.get(p.grp) ?? []), p]);
+    let sxx = 0, sxy = 0;
+    for (const list of by.values()) {
+      const mx = list.reduce((a, p) => a + p.x, 0) / list.length;
+      const my = list.reduce((a, p) => a + p.y, 0) / list.length;
+      for (const p of list) { sxx += (p.x - mx) ** 2; sxy += (p.x - mx) * (p.y - my); }
+    }
+    if (sxx < 1e-4) return 0;
+    return clamp(sxy / sxx, 0, INDEX_W_MAX) * (n / (n + INDEX_SHRINK_K));
+  };
+  const fareCarry = (f: ModelFare): number => {
+    const intl = isInternational(f.destination);
+    const s = intl ? inp.index?.ppiIntl : inp.index?.cpiSa;
+    if (!s) return 1;
+    const obs = f.observedAt.toISOString().slice(0, 7);
+    return carryFrom(s, [obs], intl ? SMOOTH_MONTHS.ppiIntl : SMOOTH_MONTHS.cpiSa);
+  };
+  const raw = inp.fares.flatMap((f) => {
+    const p = rawPrior(f.origin, f.destination, f.departDate);
+    return p ? [{ f, p, g: groupOf(f.destination), y: Math.log(f.price / (p.v * hol(f.departDate))), fc: fareCarry(f) }] : [];
+  });
+  const surveyPts = raw.filter((x) => x.p.dated);
+  const wSurvey = indexSlope(surveyPts.map((x) => ({ x: Math.log(x.p.carry), y: x.y, grp: "dom" })));
+  const fareAgePts = (intl: boolean) => raw.filter((x) => (x.g !== "dom") === intl)
+    .map((x) => ({ x: Math.log(x.fc), y: x.y - wSurvey * Math.log(x.p.carry), grp: x.g }));
+  const wFareDom = indexSlope(fareAgePts(false)), wFareIntl = indexSlope(fareAgePts(true));
+  const prior = (o: string, d: string, date: ISODate) => {
+    const p = rawPrior(o, d, date);
+    if (!p) return undefined;
+    const index = Math.pow(p.carry, wSurvey);
+    return { ...p, v: p.v * index, index };
+  };
+  // Each bought fare at today's level (the fare-age lever); 1 until learned.
+  const fares = inp.fares.map((f) => {
+    const w = isInternational(f.destination) ? wFareIntl : wFareDom;
+    const k = w ? Math.pow(fareCarry(f), w) : 1;
+    return k === 1 ? f : { ...f, price: f.price * k, insightMid: f.insightMid ? f.insightMid * k : undefined };
+  });
+
   // Each fare's prior, once.
-  const rows = inp.fares.flatMap((f) => {
+  const rows = fares.flatMap((f) => {
     const p = prior(f.origin, f.destination, f.departDate);
     if (!p) return [];
     return [{ f, p: p.v, intl: isInternational(f.destination), g: groupOf(f.destination),
@@ -367,7 +452,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
 
   // Google's typical midpoint, put on the same footing as the fares we keep
   // (we keep the middle itinerary; Google's "typical" may sit a bit apart).
-  const pairs = inp.fares.filter((f) => f.insightMid && f.insightMid > 0).map((f) => f.price / f.insightMid!);
+  const pairs = fares.filter((f) => f.insightMid && f.insightMid > 0).map((f) => f.price / f.insightMid!);
   const insightScale = pairs.length >= 5 ? median(pairs) : 1;
 
   // Route evidence: each recent search, measured against everything above.
@@ -393,6 +478,13 @@ export function fitFareModel(inp: ModelInputs): FareModel {
         fares: feedDow.get(k)?.fares ?? byDow.get(k)?.length ?? 0 }])),
       dayOfWeekFrom: feedDow.size ? "free feed" : dow.size ? "paid fares" : "none",
       budget: { slope, meanShare, fares: bpts.length },
+      index: {
+        surveyAge: { weight: wSurvey, fares: surveyPts.length, latest: cpi ? [...cpi.keys()].sort().at(-1) : undefined },
+        fareAge: {
+          dom: { weight: wFareDom, fares: inp.index?.cpiSa ? raw.filter((x) => x.g === "dom").length : 0 },
+          intl: { weight: wFareIntl, fares: inp.index?.ppiIntl ? raw.filter((x) => x.g !== "dom").length : 0 },
+        },
+      },
     },
     predict(o, d, date) {
       const p = prior(o, d, date);
@@ -413,8 +505,8 @@ export function fitFareModel(inp: ModelInputs): FareModel {
         value: Math.round(p.v * c * de * se * mo * w * bu * route * 100) / 100,
         lowRatio: shape ? Math.min(1, shape.p25 / shape.med) : 0.85,
         highRatio: shape ? Math.max(1, shape.p75 / shape.med) : 1.2,
-        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, month: mo, dayOfWeek: w, budget: bu, route,
-                 routeSearches: logs.length, group: g, priorKind: p.kind },
+        parts: { prior: Math.round(p.v / p.index), calibration: c, destination: de, season: se, month: mo, dayOfWeek: w, budget: bu, route,
+                 routeSearches: logs.length, group: g, priorKind: p.kind, index: p.index },
       };
     },
   };

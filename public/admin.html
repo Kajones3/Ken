@@ -326,6 +326,13 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         night, and can't be rebuilt for nights before it started.</p>
       <div id="flForecast"><p class="count">Loading…</p></div>
 
+      <h3>Airfares, by the government's price indexes</h3>
+      <p class="count">From the Bureau of Labor Statistics, fetched weekly. They say how fares MOVED across the
+        country, never what one route costs. The board shows travelers the first line. The candidate formula uses the
+        consumer index to bring older route surveys up to today and the international index for older fares, each
+        only as far as our bought fares show it helps (the coverage report has the before/after).</p>
+      <div id="flIndex"><p class="count">Loading…</p></div>
+
       <h3>After learning: live vs candidate (the live column is flattered)</h3>
       <p class="count">Graded on every fare we hold, AFTER the live formula has already learned from it, so its
         column looks kinder than the truth. The candidate is graded leave-one-out. Use the before-buying numbers above
@@ -2115,7 +2122,10 @@ function renderForecasts(fc){
 async function loadFlights(){
   const r = await fetch(`/api/admin/flights?days=${flDays}`, { headers: { accept: "application/json" } });
   if(!r.ok){ $("#flTiles").innerHTML = `<p class="count">Couldn't load the flight scoreboard.</p>`; return; }
-  const { scoreboard: s, forecasts: fc, demand: d, hotels: h, hotelList: hl, hotelLearning: hlearn } = await r.json();
+  const { scoreboard: s, forecasts: fc, demand: d, hotels: h, hotelList: hl, hotelLearning: hlearn, airfareIndex: aIdx } = await r.json();
+  { const ai = aIdx || [];
+    $("#flIndex").innerHTML = ai.length ? ai.map(l => `<div class="count">${esc(l)}</div>`).join("")
+      : `<p class="count">Nothing stored yet.</p>`; }
   $("#htLearning").innerHTML = (hlearn || []).map(l => /^\s/.test(l) ? `<div class="count" style="margin-left:14px">${esc(l.trim())}</div>`
     : `<div style="margin-top:6px">${esc(l)}</div>`).join("") || `<p class="count">Nothing yet.</p>`;
   renderForecasts(fc);

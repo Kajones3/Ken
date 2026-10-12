@@ -923,3 +923,20 @@ create table if not exists airport_fare_levels (
   loaded_at          timestamptz  not null default now()
 );
 create index if not exists airport_fare_levels_code on airport_fare_levels (code, year, quarter);
+
+-- The government's airfare price indexes (Bureau of Labor Statistics,
+-- owner 2026-10-12: "We should be using BLS for international AND their CPI
+-- index"). One row per series, month and value as BLS published it.
+-- APPEND-ONLY: BLS revises preliminary months for up to four months, and a
+-- revision is a NEW row (readers take the newest fetch per series+month),
+-- so nothing is overwritten. src/airfareIndex.ts says what each series is.
+create table if not exists bls_series_values (
+  id           bigserial    primary key,
+  series_id    text         not null,
+  period       char(7)      not null,           -- 'YYYY-MM'
+  value        numeric(10,3) not null check (value > 0),
+  preliminary  boolean      not null default false,
+  source       text         not null default 'bls',
+  fetched_at   timestamptz  not null default now()
+);
+create index if not exists bls_series_values_key on bls_series_values (series_id, period, fetched_at desc);

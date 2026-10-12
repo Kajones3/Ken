@@ -594,10 +594,48 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`    month (on top of the quarter): ${Object.entries(L.month).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    budget airlines (US): slope ${L.budget.slope.toFixed(2)} per 100% share (mean share ${(100 * L.budget.meanShare).toFixed(0)}%, ${L.budget.fares} fares): a route 10 points above the mean prices ${((Math.exp(L.budget.slope * 0.1) - 1) * 100).toFixed(1)}%`);
     out.push(`    day of week, from ${L.dayOfWeekFrom}: ${Object.entries(L.dayOfWeek).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `${WEEKDAYS[Number(k)]} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+    const IX = L.index;
+    out.push(`    government airfare index (BLS, newest ${IX.surveyAge.latest ?? "none stored"}): survey-age weight ${IX.surveyAge.weight.toFixed(2)} (${IX.surveyAge.fares} US fares), `
+      + `fare-age weight US ${IX.fareAge.dom.weight.toFixed(2)} (${IX.fareAge.dom.fares}) / international ${IX.fareAge.intl.weight.toFixed(2)} (${IX.fareAge.intl.fares}). 0 = the index teaches nothing yet, 1 = fares move exactly with it.`);
+    // Graded before it counts (governing rule 2): the same leave-one-out
+    // test with the indexes taken out.
+    if (inputs.index?.cpiSa || inputs.index?.ppiIntl) {
+      const without = leaveOneOut({ ...inputs, index: undefined }, idx);
+      const grade = (map: Map<number, number>, intl: boolean) => {
+        const offs = [...map].filter(([i]) => isInternational(inputs.fares[i]!.destination) === intl)
+          .map(([i, pred]) => inputs.fares[i]!.price / pred - 1);
+        if (!offs.length) return "no fares";
+        const within = Math.round(100 * offs.filter((x) => Math.abs(x) <= 0.1).length / offs.length);
+        return `${within}% within ±10%, typically off ${(100 * med(offs.map(Math.abs))).toFixed(1)}% (${offs.length})`;
+      };
+      out.push(`    with vs without the index, leave-one-out: US ${grade(without, false)} -> ${grade(loo, false)}; `
+        + `international ${grade(without, true)} -> ${grade(loo, true)}`);
+    }
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
-      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x index ${p.parts.index.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
     }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  // Owner, 2026-10-12: "We should be using BLS for international AND their
+  // CPI index." What is stored, and what the board says.
+  out.push("## Government airfare indexes (Bureau of Labor Statistics, bls_series_values)");
+  try {
+    const { loadIndexSeries, summarize, BLS_SERIES } = await import("../airfareIndex.js");
+    const series = await loadIndexSeries(db);
+    const sum = summarize(series);
+    for (const l of sum.lines) out.push(`  ${l}`);
+    for (const [k, id] of Object.entries(BLS_SERIES)) {
+      const s = series[k as keyof typeof BLS_SERIES];
+      out.push(`  ${id}: ${s ? `${s.size} months, ${[...s.keys()].sort()[0]} to ${sum.latest[k as keyof typeof BLS_SERIES]}` : "none stored"}`);
+    }
+    const runs = await db.query<{ started_at: unknown; rows_written: number; errors: number; note: string }>(
+      `select started_at, rows_written, errors, note from fetch_runs where job = 'bls_airfares' order by started_at desc limit 3`);
+    for (const r of runs.rows) out.push(`  run ${String(r.started_at).slice(0, 24)}: ${r.rows_written} written, ${r.errors} errors, ${r.note}`);
+    out.push(`  Board line: ${sum.board?.line ?? "(none: nothing stored yet)"}`);
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
   }

@@ -65,6 +65,7 @@ import {
 import { requestReset, lookupReset, consumeReset, RESET_TOKEN_HOURS } from "./passwordReset.js";
 import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS } from "./verifyEmail.js";
 import { loadHotelLearning, hotelLearningLines } from "./hotelLearning.js";
+import { loadAirfareIndexSummary } from "./airfareIndex.js";
 
 const db = await getDb();
 const PORT = Number(process.env.PORT ?? 8080);
@@ -789,6 +790,10 @@ const server = createServer(async (req, res) => {
       // twelve (see firstPlannableMonth in config.ts). Sent from here so the
       // form and the paid overnight jobs share one rule.
       planMonths: plannableMonths(todayISO()),
+      // "Airfares are up 23% from a year ago" for the board (owner,
+      // 2026-10-12), from the government's airline-fare price index
+      // (airfareIndex.ts). Absent until the BLS job has stored it.
+      airfareIndex: (await loadAirfareIndexSummary(db).catch(() => undefined))?.board ?? null,
       plusPasses: PLUS_PASSES,
       plusPassDefault: PLUS_PASS_DEFAULT,
       holidayWindows: Object.fromEntries(
@@ -1693,6 +1698,7 @@ const server = createServer(async (req, res) => {
         hotels: await loadHotelScoreboard(db),
         hotelList: await loadHotelList(db),
         hotelLearning: hotelLearningLines(await loadHotelLearning(db)),
+        airfareIndex: (await loadAirfareIndexSummary(db).catch(() => undefined))?.lines ?? [],
       }, { cache: "no-store" });
     }
 
