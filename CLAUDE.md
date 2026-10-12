@@ -181,6 +181,33 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12 — day of week: paid fares mix it with month; the free feed says it barely matters
+
+Owner: "The 15th consistently lands on different days depending what month
+we are in. We should be learning from that AND travel payouts", and /admin's
+"Not in the study yet" wrongly said day of week wasn't measured (it was in
+the study and the candidate all along; text fixed). Coverage report gained
+"Day of week and booking ahead" (`weekdayPattern()` in `src/dayOfWeek.ts`;
+the candidate's weekday lever is now in `FareModel.levers.dayOfWeek`).
+Run 38278808470:
+- Paid fares by weekday: Sun 10, Mon 50, Tue 48, Wed 0, Thu 36, Fri 24, Sat 20.
+  Candidate learned Sun 1.08, Mon 1.01, Tue 1.03, Thu 0.97, Fri 0.92, Sat 1.02.
+  **Caveat:** within a year each month's 15th is ONE weekday (Fri = Jan 2027,
+  Mon = Mar, Tue = Jun/Dec), so this lever is mostly learning MONTH, not weekday.
+- **Free feed, same route+month+trip length, 3,976 fares:** every weekday
+  0.98-1.01. Day of week barely moves fares. The free feed is stored as
+  `travelpayouts+serpapi` (the refresh's combined provider name); match with
+  `like 'travelpayouts%'`.
+- Free feed lead times: most fares 0-90 days out (0-30d 4,396; 30-60d 2,603;
+  60-90d 1,531). Lead time NOT yet measured from it.
+- Google's price history (112 searches): flat (1.00) at every 30-day bucket
+  60-330 days out; it can't show "a few weeks out".
+- DB1C airline columns (budget carriers, airline count) still not read.
+- **Proposed, not built:** take the candidate's weekday lever from the free
+  feed (near 1.00) and give it a per-MONTH season lever for what the paid
+  "weekday" lever is really catching; grade before shipping.
+- Also fixed: priceChecks test expected GBP refused (converted since #158).
+
 ### 2026-10-11, last — a Paris ticket check read -6% when we were ~43% LOW (PR #158)
 
 Owner checked April 2027 Paris tickets: real 3-day adult **£285**, child

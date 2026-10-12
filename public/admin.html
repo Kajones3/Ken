@@ -478,10 +478,11 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <section class="sheet">
     <h2>Weekday, booking ahead and airlines: where they stand</h2>
     <ul>
-      <li><b>Day of week</b> IS in the study ("Leaving Friday–Sunday" above) and in the candidate formula, which
-        learns a lever per weekday. Paid fares all depart on the 15th, but the 15th falls on a different weekday
-        each month, so they do teach it. The free feed's weekday pattern (same route and month, different days)
-        is in the coverage report; it isn't in the formula yet.</li>
+      <li><b>Day of week</b> IS in the study ("Leaving Friday–Sunday" above) and in the candidate formula. The 15th
+        falls on a different weekday each month, but within one year each month has exactly one weekday (every paid
+        Monday is a March fare), so paid fares mix weekday up with month. The free feed separates them (same route
+        and month, different days): on 3,976 fares as of 2026-10-12, every weekday was within 2% of the others.
+        The free feed isn't in the formula yet.</li>
       <li><b>Booking a few weeks out</b>: "How far ahead it was searched" above only covers the months-ahead range
         we buy in. Google's price history and the free feed's lead times are in the coverage report; neither is
         in the formula yet.</li>
