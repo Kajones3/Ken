@@ -110,21 +110,76 @@ What that means in code. **Every session keeps all of these true:**
    owner's call.** Improve the candidate freely (it only affects grading
    until `flight.useCandidate` is on); the owner flips the switch.
 
-## START HERE — state as of 2026-10-10 (end of session)
+## START HERE — state as of 2026-10-12 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). `master` is at the merge of **PR #146** plus
-this notes commit. Every PR through #146 is merged. **The owner redeployed
-Render after #146 and the sample PDF works on their phone (2026-10-10)**, so
-the live site matches master as of then. Still ask about a redeploy for
-anything merged after that.
+in Render; delete it to launch). `master` is at the merge of **PR #159** plus
+this notes commit. Every PR through #159 is merged. The owner last
+redeployed Render after #146 (2026-10-10). **PRs #147-#159 are NOT on the
+live site until the owner redeploys** — ask first thing. They carry: the
+nearby-airport line, the new /admin Flights layout ("Are we getting
+better?"), the morning email's accuracy section, and the screenshot
+reader's £/ticket-page fix.
 
 The owner redeploys by hand; Render's build runs `npm run migrate`. The
 nightly data jobs run in GitHub Actions and migrate themselves, so the DATA
 side works with or without a redeploy.
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**772 tests** (all pass, 2026-10-10), and typecheck is clean. `npm run smoke` runs the pipeline.
+**777 tests** (all pass, 2026-10-11), and typecheck is clean. `npm run smoke` runs the pipeline.
+
+### Pick up here FIRST — session starting 2026-10-12 (supersedes older lists)
+
+1. **Ask about the Render redeploy** for #147-#159 (above).
+2. **The owner is bringing Paris ticket screenshots. Build Paris's real
+   multi-day table** (Paris is the last resort still on the ticket curve,
+   and it reads ~43% LOW: real April 2027 3-day adult £285 = $377 vs our
+   $215). What to ask for if the screenshots don't already show it: on ONE
+   arrival date (ideally 2027-04-15, a typical April day), the **1, 2, 3, 4
+   and 5-day ticket prices, adult (12+) AND child (3-11)**, from
+   tickets.disneylandparis.com (UK site, pounds). Paris multi-day tickets
+   all include both parks, so there is no separate hopper to price for
+   2+ days. A second date in a quieter month (e.g. January) would show how
+   much the 1-day price moves by season. How it's wired, so nothing is
+   re-derived:
+   - Convert at the committed GBP rate, **0.7564 GBP per USD** (ECB
+     2026-10-09, `src/exchangeData.ts`), and say the date in the comment.
+   - Store adult totals as `ticket.multiDayAdultUsd` on `dlp` in
+     `src/config.ts`, exactly like WDW (config.ts ~238) and Disneyland
+     (~329); the type is at ~157. `ticketMultiDay()` (pricing.ts ~1365)
+     uses the table only for the multi-day SHAPE (total / (1-day x days)).
+   - **The absolute level comes from somewhere else**: `seedTickets()` in
+     `src/jobs/refresh.ts` (~190) writes `ticket_prices` per date as
+     `ticket.base` (78 for Paris now) x the season curve, child =
+     `base x ticket.child` (0.84). So `base` must become the real 1-day
+     adult price on a typical day, and `child` the real child/adult ratio
+     (£268/£285 = 0.94 on the 3-day; check the 1-day). The ticket
+     base is code only (not an /admin setting); the hopper IS one
+     (`hopper.dlp.adult/child`, an owner value beats config). Look at the
+     WDW/DLR ticket tests, then add one pinning the 3-day April adult near
+     $377.
+   - Re-price the owner's sample trip after and say how much Paris moved
+     (it will rise; it changes which resort the sample PDF leads with too).
+   - `hopperAdultUsd: 45` / `hopperChildUsd: 38` are guesses; for Paris a
+     2+-day ticket already covers both parks, so they should only apply to
+     a 1-day ticket. Check `hopperPerTicket()` before changing.
+   - Update `docs/numbers-to-verify.md` in the same commit.
+3. **The wrong Paris price-check row is still stored** (item
+   "tickets.disneylandparis.com", 297 EUR, "total", compared with a 1-day
+   price). After the redeploy, the owner deletes it in /admin and re-saves
+   the screenshot; the reader now reads £, Adult/Child and N-day. Until
+   then it pulls Paris tickets slightly the wrong way.
+4. **Governing rule #4 + #2:** read the morning email ("Did the data
+   stick?", "Are our guesses getting better?") or run "Pricing the Magic
+   debug coverage". Check: paid fares bought = kept (18/night);
+   ~18 `fare_forecasts` a night; the "Fares bought, by home airport" table
+   gaining ~6 new airports a night (rotation slots, PR #152); the new
+   candidate levers' before-buying grades vs the baseline below (US 30% /
+   19.5% off, Intl 24% / 17.5%). A WORSE or flat week = find out why and
+   propose the fix, unprompted.
+5. **~2026-10-21 to 10-28: the accuracy review** (see the older list
+   further down for what to show). The owner flips `flight.useCandidate`.
+6. **Hotels** are the owner's next focus after that.
 
 ### 2026-10-11, last — a Paris ticket check read -6% when we were ~43% LOW (PR #158)
 
@@ -683,7 +738,7 @@ was found (all from the code and the 2026-10-07 coverage report):
   flight data build for 2-3 weeks before changing the flight formula or
   leans (leans now **US 50 / Intl 50**). Next look: **~2026-10-21 to 10-28**.
 
-### Pick up here FIRST next session (in this order)
+### (Superseded 2026-10-12) Pick-up list of 2026-10-08
 
 1. **Ask about the Render redeploy** for anything merged after #146.
 2. **Prove the data still sticks (governing rule #4).** Morning email's "Did
