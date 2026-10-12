@@ -38,6 +38,10 @@
  *    quarter, n / (n + 6). Until 2026-10-12 every paid fare left on the
  *    15th, so a month's paid fares were all ONE weekday and the old
  *    "day of week" lever was really learning months; this is where that goes.
+ *  - Budget airlines (2026-10-12): US routes where Spirit, Frontier and the
+ *    like carry more of the passengers price lower than their survey median
+ *    and our other levers say. One slope, learned from US fares, applied to
+ *    the route's budget share (BTS monthly survey), shrunk n / (n + 20).
  *  - Day of week (idea 5): from the FREE FEED when it has enough fares
  *    (owner, 2026-10-12: "learning from that AND travel payouts"): the same
  *    route, month and trip length on different weekdays, so route and season
@@ -77,6 +81,8 @@ export const DEST_SHRINK_K = 4;
 export const SEASON_SHRINK_K = 6;
 /** Month lever per group and calendar month, on top of the quarter: n / (n + K). */
 export const MONTH_SHRINK_K = 6;
+/** Budget-airline lever: the slope is shrunk by n / (n + K) US fares. */
+export const BUDGET_SHRINK_K = 20;
 /** The free feed sets day of week once every weekday has this many fares. */
 export const FEED_DOW_MIN_FARES = 30;
 /** Feed weekday shrink: n / (n + K). Hundreds of fares = nearly full weight. */
@@ -107,6 +113,8 @@ export interface ModelBaseline {
 /** BTS's monthly survey row for a route and calendar month (newest year). */
 export interface ModelMonthly {
   origin: string; destination: string; month: number; med: number; p25: number; p75: number;
+  /** Budget airlines' share of the route's passengers that month (0-1), when the survey says. */
+  budgetShare?: number;
 }
 export type FareGroup = "dom" | "europe" | "asia";
 export interface ModelInputs {
@@ -124,7 +132,7 @@ export interface Prediction {
   value: number;
   /** p25/p75 shape to show a range around it. */
   lowRatio: number; highRatio: number;
-  parts: { prior: number; calibration: number; destination: number; season: number; month: number; dayOfWeek: number;
+  parts: { prior: number; calibration: number; destination: number; season: number; month: number; dayOfWeek: number; budget: number;
            route: number; routeSearches: number; group: FareGroup;
            priorKind: "bts" | "bts_monthly" | "distance" };
 }
@@ -142,6 +150,8 @@ export interface FareModel {
     /** Day of week, 0 = Sunday, and which fares taught it. */
     dayOfWeek: Record<number, { factor: number; fares: number }>;
     dayOfWeekFrom: "free feed" | "paid fares" | "none";
+    /** Budget airlines: fares change by exp(slope x (share - mean share)) on US routes. */
+    budget: { slope: number; meanShare: number; fares: number };
   };
 }
 
@@ -225,6 +235,17 @@ export function fitFareModel(inp: ModelInputs): FareModel {
 
   const monthly = new Map<string, ModelMonthly>();
   for (const m of inp.monthly ?? []) monthly.set(`${m.origin}|${m.destination}|${m.month}`, m);
+  // Each US route's budget-airline share: its newest survey months averaged.
+  const shareAcc = new Map<string, number[]>();
+  for (const m of inp.monthly ?? []) {
+    if (m.budgetShare == null) continue;
+    const k = `${m.origin}|${m.destination}`;
+    shareAcc.set(k, [...(shareAcc.get(k) ?? []), m.budgetShare]);
+  }
+  const shareOf = (o: string, d: string): number | undefined => {
+    const v = shareAcc.get(`${o}|${d}`) ?? (ALT_TO_PRIMARY.has(d) ? shareAcc.get(`${o}|${ALT_TO_PRIMARY.get(d)}`) : undefined);
+    return v?.length ? v.reduce((a, b) => a + b, 0) / v.length : undefined;
+  };
   const monthlyFor = (o: string, d: string, month: number) =>
     monthly.get(`${o}|${d}|${month}`) ?? (ALT_TO_PRIMARY.has(d) ? monthly.get(`${o}|${ALT_TO_PRIMARY.get(d)}|${month}`) : undefined);
 
@@ -324,6 +345,26 @@ export function fitFareModel(inp: ModelInputs): FareModel {
     }
   }
 
+  // Budget airlines: one slope over US fares whose route has a share.
+  const bpts = rows.flatMap((x) => {
+    if (x.intl) return [];
+    const sh = shareOf(x.f.origin, x.f.destination);
+    return sh == null ? [] : [{ sh, r: Math.log(x.f.price / (levelOf(x) * (dow.get(dowOf(x.f.departDate)) ?? 1))) }];
+  });
+  const meanShare = bpts.length ? bpts.reduce((a, p) => a + p.sh, 0) / bpts.length : 0;
+  let slope = 0;
+  if (bpts.length >= 5) {
+    const mr = bpts.reduce((a, p) => a + p.r, 0) / bpts.length;
+    const sxx = bpts.reduce((a, p) => a + (p.sh - meanShare) ** 2, 0);
+    const sxy = bpts.reduce((a, p) => a + (p.sh - meanShare) * (p.r - mr), 0);
+    if (sxx > 1e-6) slope = clamp(sxy / sxx, -2, 2) * (bpts.length / (bpts.length + BUDGET_SHRINK_K));
+  }
+  const budgetOf = (o: string, d: string) => {
+    if (isInternational(d) || !slope) return 1;
+    const sh = shareOf(o, d);
+    return sh == null ? 1 : Math.exp(slope * (sh - meanShare));
+  };
+
   // Google's typical midpoint, put on the same footing as the fares we keep
   // (we keep the middle itinerary; Google's "typical" may sit a bit apart).
   const pairs = inp.fares.filter((f) => f.insightMid && f.insightMid > 0).map((f) => f.price / f.insightMid!);
@@ -334,7 +375,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   const routeLogs = new Map<string, number[]>();
   for (const x of rows) {
     if (x.f.observedAt.getTime() < cutoff) continue;
-    const base = levelOf(x) * (dow.get(dowOf(x.f.departDate)) ?? 1);
+    const base = levelOf(x) * (dow.get(dowOf(x.f.departDate)) ?? 1) * budgetOf(x.f.origin, x.f.destination);
     let r = x.f.price / base;
     if (x.f.insightMid) r = Math.sqrt(r * ((x.f.insightMid * insightScale) / base));
     const k = `${x.f.origin}|${x.f.destination}`;
@@ -351,6 +392,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
       dayOfWeek: Object.fromEntries([...dow].map(([k, f]) => [k, { factor: f,
         fares: feedDow.get(k)?.fares ?? byDow.get(k)?.length ?? 0 }])),
       dayOfWeekFrom: feedDow.size ? "free feed" : dow.size ? "paid fares" : "none",
+      budget: { slope, meanShare, fares: bpts.length },
     },
     predict(o, d, date) {
       const p = prior(o, d, date);
@@ -361,16 +403,17 @@ export function fitFareModel(inp: ModelInputs): FareModel {
       const se = seasonOf(g, quarterOf(date));
       const mo = monthOf(g, date);
       const w = dow.get(dowOf(date)) ?? 1;
+      const bu = budgetOf(o, d);
       const logs = routeLogs.get(`${o}|${d}`) ?? [];
       const route = logs.length
         ? clamp(Math.exp(median(logs) * (logs.length / (logs.length + ROUTE_SHRINK_K))), ROUTE_FACTOR_MIN, ROUTE_FACTOR_MAX)
         : 1;
       const shape = p.shape && p.shape.med > 0 ? p.shape : undefined;
       return {
-        value: Math.round(p.v * c * de * se * mo * w * route * 100) / 100,
+        value: Math.round(p.v * c * de * se * mo * w * bu * route * 100) / 100,
         lowRatio: shape ? Math.min(1, shape.p25 / shape.med) : 0.85,
         highRatio: shape ? Math.max(1, shape.p75 / shape.med) : 1.2,
-        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, month: mo, dayOfWeek: w, route,
+        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, month: mo, dayOfWeek: w, budget: bu, route,
                  routeSearches: logs.length, group: g, priorKind: p.kind },
       };
     },

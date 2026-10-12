@@ -592,10 +592,11 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`    destination: ${Object.entries(L.destination).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    season: ${Object.entries(L.season).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    month (on top of the quarter): ${Object.entries(L.month).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+    out.push(`    budget airlines (US): slope ${L.budget.slope.toFixed(2)} per 100% share (mean share ${(100 * L.budget.meanShare).toFixed(0)}%, ${L.budget.fares} fares): a route 10 points above the mean prices ${((Math.exp(L.budget.slope * 0.1) - 1) * 100).toFixed(1)}%`);
     out.push(`    day of week, from ${L.dayOfWeekFrom}: ${Object.entries(L.dayOfWeek).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `${WEEKDAYS[Number(k)]} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
-      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
     }
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
@@ -690,13 +691,15 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
         where source = 'serpapi_flights' and destination in ('MCO','TPA','LAX','SNA')`);
     const key = (o: string, d: string, m: number) => `${o}|${d}|${m}`;
     const byKey = new Map(mo.rows.map((r) => [key(r.origin.trim(), r.destination.trim(), r.month), r]));
-    const rowsU: { plain: number; noBudget: number; share: number }[] = [];
+    const rowsU: { plain: number; noBudget: number; share: number; w91?: number; w22?: number }[] = [];
     for (const f of paid.rows) {
       const d = f.depart_date instanceof Date ? f.depart_date.toISOString() : String(f.depart_date);
       const m = byKey.get(key(f.origin.trim(), f.destination.trim(), Number(d.slice(5, 7))));
       if (!m || !m.median_no_budget_usd) continue;
       const p = Number(f.price_usd);
-      rowsU.push({ plain: Math.log(p / Number(m.median_fare_usd)), noBudget: Math.log(p / Number(m.median_no_budget_usd)), share: Number(m.budget_share) });
+      const wm = js(m.window_medians);
+      rowsU.push({ plain: Math.log(p / Number(m.median_fare_usd)), noBudget: Math.log(p / Number(m.median_no_budget_usd)), share: Number(m.budget_share),
+        w91: wm["91UP"] ? Math.log(p / wm["91UP"]) : undefined, w22: wm["2290"] ? Math.log(p / wm["2290"]) : undefined });
     }
     const med = (a: number[]) => { const x = [...a].sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)]! : NaN; };
     const fit = (xs: number[]) => {
@@ -708,6 +711,9 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     if (rowsU.length) {
       out.push(`    against the plain survey median:            ${fit(rowsU.map((r) => r.plain))}`);
       out.push(`    against the median without budget airlines: ${fit(rowsU.map((r) => r.noBudget))}`);
+      const w91 = rowsU.filter((r) => r.w91 != null), w22 = rowsU.filter((r) => r.w22 != null);
+      out.push(`    against the median of tickets bought 91+ days ahead (${w91.length}): ${fit(w91.map((r) => r.w91!))}; plain median on the same fares: ${fit(w91.map((r) => r.plain))}`);
+      out.push(`    against the median of tickets bought 22-90 days ahead (${w22.length}): ${fit(w22.map((r) => r.w22!))}`);
       const lo = rowsU.filter((r) => r.share < 0.1), hi = rowsU.filter((r) => r.share >= 0.1);
       out.push(`    paid / plain median: routes under 10% budget airlines x${Math.exp(med(lo.map((r) => r.plain))).toFixed(2)} (${lo.length}), 10%+ budget x${Math.exp(med(hi.map((r) => r.plain))).toFixed(2)} (${hi.length})`);
     }

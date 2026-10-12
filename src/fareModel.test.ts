@@ -192,3 +192,16 @@ test("day of week comes from the free feed; paid fares' 'weekday' goes to the mo
   const noFeed = fitFareModel(inputs(paid, base));
   assert.equal(noFeed.levers.dayOfWeekFrom, "paid fares");
 });
+
+test("budget airlines: routes they crowd are learned to price lower, from US fares only", () => {
+  // Same BTS median everywhere; the budget-heavy routes really cost 30% less.
+  const heavy = new Set(["ATL", "BOS", "ORD", "DEN"]);
+  const fares = US.flatMap((o) => [1, 2, 3].map((i) => fare(o, "MCO", heavy.has(o) ? 280 : 400, { observedAt: daysAgo(60 + i) })));
+  const monthly = US.map((o) => ({ origin: o, destination: "MCO", month: 3, med: 400, p25: 320, p75: 500, budgetShare: heavy.has(o) ? 0.4 : 0 }));
+  const m = fitFareModel({ ...inputs(fares, US.map((o) => bts(o, "MCO", 400))), monthly });
+  assert.ok(m.levers.budget.slope < 0, `slope ${m.levers.budget.slope}`);
+  const atl = m.predict("ATL", "MCO", "2027-03-10")!, sea = m.predict("SEA", "MCO", "2027-03-10")!;
+  assert.ok(atl.value < sea.value * 0.85, `ATL ${atl.value} vs SEA ${sea.value}`);
+  // A route with no survey share gets no budget lever at all.
+  assert.equal(m.predict("RDU", "MCO", "2027-03-10")?.parts.budget ?? 1, 1);
+});
