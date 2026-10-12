@@ -121,6 +121,9 @@ export interface FareModel {
     calibration: Record<FareGroup, number>;
     destination: Record<string, { factor: number; fares: number }>;
     season: Record<string, { factor: number; fares: number }>;
+    /** Day of week, 0 = Sunday. The 15th lands on a different weekday each
+     *  month, so paid fares do teach this. */
+    dayOfWeek: Record<number, { factor: number; fares: number }>;
   };
 }
 
@@ -299,6 +302,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
       calibration: cal,
       destination: Object.fromEntries([...dest].map(([k, f]) => [k, { factor: f, fares: byDest.get(k)!.length }])),
       season: Object.fromEntries([...season].map(([k, f]) => [k, { factor: f, fares: bySeason.get(k)!.length }])),
+      dayOfWeek: Object.fromEntries([...dow].map(([k, f]) => [k, { factor: f, fares: byDow.get(k)!.length }])),
     },
     predict(o, d, date) {
       const p = prior(o, d, date);

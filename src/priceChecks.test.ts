@@ -52,7 +52,7 @@ test("amounts as the owner typed them: yen written out, symbols, and a blank cur
   const bare = parseMoney("2081", "", tdr);
   assert.ok(bare.ok && bare.currency === "USD" && bare.guessed, "a bare number is dollars, and says it guessed");
   assert.equal(parseMoney("", "", tdr).ok, false);
-  assert.equal(parseMoney("100", "GBP", tdr).ok, false, "a currency we can't convert is refused, not guessed");
+  assert.equal(parseMoney("100", "BRL", tdr).ok, false, "a currency we can't convert is refused, not guessed");
 });
 
 const tokyoHotel = {
