@@ -889,6 +889,14 @@ create table if not exists historical_fares_monthly (
 );
 create index if not exists historical_fares_monthly_route
   on historical_fares_monthly (origin, destination, month, year, loaded_at desc);
+-- The airlines on each route and month (owner, 2026-10-12): passengers by the
+-- airline that sold the ticket, the budget airlines' share, the median fare
+-- without them, and the median fare by how far ahead it was bought. Filled by
+-- loads from 2026-10-12 on; older loads keep nulls (readers take the newest).
+alter table historical_fares_monthly add column if not exists carriers jsonb;
+alter table historical_fares_monthly add column if not exists budget_share numeric(5,3);
+alter table historical_fares_monthly add column if not exists median_no_budget_usd numeric(9,2);
+alter table historical_fares_monthly add column if not exists window_medians jsonb;
 
 -- BTS's published average fare per airport and per metro area (owner's
 -- downloads, 2026-10-10: AverageFare_Q1_2025.xls and Tables 7, 8, 9 and 12

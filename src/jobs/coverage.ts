@@ -655,6 +655,67 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // correct prices within 10% error?" Two real fares for the SAME route,
   // date and trip length, seen on different days, show how far apart reality
   // is with itself. No formula can beat that.
+  // Owner, 2026-10-12: "can we read those columns please?" (the airline
+  // columns of BTS's monthly survey) and "Our US data seems SO off". Which
+  // survey figure lines up best with what our paid US fares actually cost?
+  out.push("## Airlines on each route (BTS monthly survey), and which survey figure fits our US fares");
+  try {
+    const mo = await db.query<{ origin: string; destination: string; month: number; median_fare_usd: string;
+      median_no_budget_usd: string | null; budget_share: string | null; carriers: unknown; window_medians: unknown; itin_count: number }>(
+      `select distinct on (origin, destination, month) origin, destination, month, median_fare_usd,
+              median_no_budget_usd, budget_share, carriers, window_medians, itin_count
+         from historical_fares_monthly where carriers is not null and itin_count >= 30
+        order by origin, destination, month, year desc, loaded_at desc`);
+    out.push(`  route-months with airline figures: ${mo.rows.length}`);
+    const js = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v) as Record<string, number>;
+    for (const r of mo.rows.filter((x) => ["ATL-MCO", "RDU-MCO", "CLT-MCO", "DEN-MCO", "ATL-LAX", "RDU-LAX"].includes(`${x.origin.trim()}-${x.destination.trim()}`))) {
+      const c = Object.entries(js(r.carriers)).sort((a, b) => b[1] - a[1]);
+      const tot = c.reduce((s, [, v]) => s + v, 0);
+      out.push(`    ${r.origin.trim()}->${r.destination.trim()} month ${r.month}: median $${Math.round(Number(r.median_fare_usd))}, without budget airlines $${r.median_no_budget_usd ? Math.round(Number(r.median_no_budget_usd)) : "-"}, budget share ${Math.round(100 * Number(r.budget_share))}%; airlines ${c.slice(0, 6).map(([k, v]) => `${k} ${Math.round((100 * v) / tot)}%`).join(", ")}`);
+      out.push(`      by how far ahead: ${Object.entries(js(r.window_medians)).sort().map(([k, v]) => `${k} $${Math.round(v)}`).join(", ")}`);
+    }
+    const all = await db.query<{ k: string; pax: string }>(
+      `select k, round(sum(v::numeric))::text as pax from (
+         select distinct on (origin, destination, month) window_medians, purchase_window
+           from historical_fares_monthly where carriers is not null
+          order by origin, destination, month, year desc, loaded_at desc) m,
+         jsonb_each_text(m.purchase_window) as w(k, v) group by k order by k`);
+    out.push(`  purchase-window groups (BTS's codes) and passengers: ${all.rows.map((r) => `${r.k} ${r.pax}`).join(", ")}`);
+
+    // Each US paid fare against the survey for the same route and calendar
+    // month: plain median vs median without budget airlines. After one
+    // overall scale, how far off is each? Lower = the better footing.
+    const paid = await db.query<{ origin: string; destination: string; depart_date: unknown; price_usd: string }>(
+      `select origin, destination, depart_date, price_usd from flight_observations
+        where source = 'serpapi_flights' and destination in ('MCO','TPA','LAX','SNA')`);
+    const key = (o: string, d: string, m: number) => `${o}|${d}|${m}`;
+    const byKey = new Map(mo.rows.map((r) => [key(r.origin.trim(), r.destination.trim(), r.month), r]));
+    const rowsU: { plain: number; noBudget: number; share: number }[] = [];
+    for (const f of paid.rows) {
+      const d = f.depart_date instanceof Date ? f.depart_date.toISOString() : String(f.depart_date);
+      const m = byKey.get(key(f.origin.trim(), f.destination.trim(), Number(d.slice(5, 7))));
+      if (!m || !m.median_no_budget_usd) continue;
+      const p = Number(f.price_usd);
+      rowsU.push({ plain: Math.log(p / Number(m.median_fare_usd)), noBudget: Math.log(p / Number(m.median_no_budget_usd)), share: Number(m.budget_share) });
+    }
+    const med = (a: number[]) => { const x = [...a].sort((p, q) => p - q); return x.length ? x[Math.floor(x.length / 2)]! : NaN; };
+    const fit = (xs: number[]) => {
+      const c = med(xs);
+      const offs = xs.map((x) => Math.abs(Math.exp(x - c) - 1));
+      return `scale x${Math.exp(c).toFixed(2)}, then typically off ${(100 * med(offs)).toFixed(1)}%, ${Math.round((100 * offs.filter((o) => o <= 0.1).length) / Math.max(1, offs.length))}% within ±10%`;
+    };
+    out.push(`  US paid fares with a survey row for the same route and calendar month: ${rowsU.length}`);
+    if (rowsU.length) {
+      out.push(`    against the plain survey median:            ${fit(rowsU.map((r) => r.plain))}`);
+      out.push(`    against the median without budget airlines: ${fit(rowsU.map((r) => r.noBudget))}`);
+      const lo = rowsU.filter((r) => r.share < 0.1), hi = rowsU.filter((r) => r.share >= 0.1);
+      out.push(`    paid / plain median: routes under 10% budget airlines x${Math.exp(med(lo.map((r) => r.plain))).toFixed(2)} (${lo.length}), 10%+ budget x${Math.exp(med(hi.map((r) => r.plain))).toFixed(2)} (${hi.length})`);
+    }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
   out.push("## The noise floor: the same flight, priced on two different days");
   try {
     const pairs = async (sourceSql: string, minLead: number) => (await db.query<{ n: string; w10: string; w5: string; med: string }>(

@@ -14,6 +14,8 @@
  *   Passengers          the row's sample weight
  *   SchFlYear/Month     the month the travel happens (not when it was bought)
  *   PurchaseWindowGroup how far ahead it was bought, BTS's own groups
+ *   IssuingCarrier      the airline that sold the ticket (owner, 2026-10-12:
+ *                       "can we read those columns please?")
  *
  * So unlike DB1B's Market file (one leg each, which we had to double), the
  * fare here is already the whole round trip. Only round trips whose path
@@ -36,6 +38,13 @@ import { parseCsvLine, weightedPercentile, originIatas, resortDestinations } fro
 
 export const DB1C_MIN_ROUND_TRIP_USD = 50;
 
+/** Budget ("ultra-low-cost") airlines by ticketing code: Spirit, Frontier,
+ *  Allegiant, Sun Country, Breeze, Avelo. Their bare fares leave out bags and
+ *  seats, so a route they crowd has a survey median well below what a
+ *  traveler with bags is quoted elsewhere. Southwest and JetBlue are not on
+ *  the list: their fares are not stripped the same way. */
+export const BUDGET_CARRIERS = new Set(["NK", "F9", "G4", "SY", "MX", "XP"]);
+
 /** The destination of a round trip that goes out and back the same way, or
  *  null. "BNA:SFO:BNA" -> SFO; "AVP:IAD:BNA:IAD:AVP" -> BNA; an open jaw
  *  ("MCO:IAH:DEN") or a one-way path -> null. */
@@ -53,6 +62,14 @@ export interface MonthlyAggregate {
   avgFareUsd: number; p25FareUsd: number; medianFareUsd: number; p75FareUsd: number;
   passengersSampled: number; itinCount: number;
   purchaseWindow: Record<string, number>;
+  /** Passengers by the airline that sold the ticket. Empty when the file has no IssuingCarrier. */
+  carriers: Record<string, number>;
+  /** Share of passengers on budget airlines (0-1), or null with no carrier column. */
+  budgetShare: number | null;
+  /** The median fare leaving budget airlines out, or null when none are left. */
+  medianNoBudgetUsd: number | null;
+  /** Median fare by purchase window group, for groups with 5+ tickets. */
+  windowMedians: Record<string, number>;
 }
 
 export async function aggregateDb1cFile(
@@ -64,14 +81,15 @@ export async function aggregateDb1cFile(
   const acc = new Map<string, {
     year: number; month: number; origin: string; destination: string;
     fareWeighted: number; passengers: number; itinCount: number;
-    samples: { fare: number; weight: number }[]; windows: Record<string, number>;
+    samples: { fare: number; weight: number; budget: boolean; win: string }[]; windows: Record<string, number>;
+    carriers: Record<string, number>;
   }>();
   const col = (name: string) => {
     const i = cols![name];
     if (i === undefined) throw new Error(`DB1C file has no ${name} column; columns are: ${Object.keys(cols!).join(", ")}`);
     return i;
   };
-  let iPath = 0, iRt = 0, iTotal = 0, iPax = 0, iYear = 0, iMonth = 0, iWin = -1;
+  let iPath = 0, iRt = 0, iTotal = 0, iPax = 0, iYear = 0, iMonth = 0, iWin = -1, iCarrier = -1;
 
   for await (const line of rl) {
     if (!line) continue;
@@ -82,6 +100,7 @@ export async function aggregateDb1cFile(
       iPath = col("AirportGroupString"); iRt = col("RoundTrip"); iTotal = col("TotalAmount");
       iPax = col("Passengers"); iYear = col("SchFlYear"); iMonth = col("SchFlMonth");
       iWin = cols["PurchaseWindowGroup"] ?? -1;
+      iCarrier = cols["IssuingCarrier"] ?? -1;
       continue;
     }
     if (Number(f[iRt]) !== 1) continue;
@@ -97,21 +116,29 @@ export async function aggregateDb1cFile(
     const key = `${route.origin}|${route.destination}|${year}|${month}`;
     const a = acc.get(key) ?? {
       year, month, origin: route.origin, destination: route.destination,
-      fareWeighted: 0, passengers: 0, itinCount: 0, samples: [], windows: {},
+      fareWeighted: 0, passengers: 0, itinCount: 0, samples: [], windows: {}, carriers: {},
     };
     a.fareWeighted += fare * pax;
     a.passengers += pax;
     a.itinCount += 1;
-    a.samples.push({ fare, weight: pax });
-    if (iWin >= 0) {
-      const w = (f[iWin] ?? "").trim() || "unknown";
-      a.windows[w] = (a.windows[w] ?? 0) + pax;
-    }
+    const win = iWin >= 0 ? (f[iWin] ?? "").trim() || "unknown" : "";
+    const carrier = iCarrier >= 0 ? (f[iCarrier] ?? "").trim() : "";
+    a.samples.push({ fare, weight: pax, budget: BUDGET_CARRIERS.has(carrier), win });
+    if (win) a.windows[win] = (a.windows[win] ?? 0) + pax;
+    if (carrier) a.carriers[carrier] = (a.carriers[carrier] ?? 0) + pax;
     acc.set(key, a);
   }
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
-  return [...acc.values()].map((a) => ({
+  const hasCarrier = iCarrier >= 0;
+  return [...acc.values()].map((a) => {
+    const noBudget = a.samples.filter((x) => !x.budget);
+    const budgetPax = a.samples.filter((x) => x.budget).reduce((s, x) => s + x.weight, 0);
+    const byWin = new Map<string, typeof a.samples>();
+    for (const x of a.samples) if (x.win) byWin.set(x.win, [...(byWin.get(x.win) ?? []), x]);
+    const windowMedians: Record<string, number> = {};
+    for (const [w, xs] of byWin) if (xs.length >= 5) windowMedians[w] = r2(weightedPercentile(xs, 0.5));
+    return {
     year: a.year, month: a.month, origin: a.origin, destination: a.destination,
     avgFareUsd: r2(a.fareWeighted / a.passengers),
     p25FareUsd: r2(weightedPercentile(a.samples, 0.25)),
@@ -120,7 +147,12 @@ export async function aggregateDb1cFile(
     passengersSampled: Math.round(a.passengers),
     itinCount: a.itinCount,
     purchaseWindow: a.windows,
-  }));
+    carriers: Object.fromEntries(Object.entries(a.carriers).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+    budgetShare: hasCarrier ? Math.round((budgetPax / a.passengers) * 1000) / 1000 : null,
+    medianNoBudgetUsd: hasCarrier && noBudget.length ? r2(weightedPercentile(noBudget, 0.5)) : null,
+    windowMedians,
+  };
+  });
 }
 
 /** Appends. Never updates or deletes: a second load of the same month sits
@@ -131,15 +163,17 @@ export async function insertMonthly(db: Db, rows: MonthlyAggregate[], file: stri
     const chunk = rows.slice(i, i + 400);
     const vals: unknown[] = [];
     const tuples = chunk.map((a, j) => {
-      const b = j * 13;
+      const b = j * 17;
       vals.push(a.origin, a.destination, a.year, a.month, a.avgFareUsd, a.p25FareUsd, a.medianFareUsd,
-        a.p75FareUsd, a.passengersSampled, a.itinCount, JSON.stringify(a.purchaseWindow), "bts_db1c", file);
-      return `(${Array.from({ length: 13 }, (_, k) => `$${b + k + 1}`).join(",")})`;
+        a.p75FareUsd, a.passengersSampled, a.itinCount, JSON.stringify(a.purchaseWindow), "bts_db1c", file,
+        JSON.stringify(a.carriers), a.budgetShare, a.medianNoBudgetUsd, JSON.stringify(a.windowMedians));
+      return `(${Array.from({ length: 17 }, (_, k) => `$${b + k + 1}`).join(",")})`;
     });
     await db.query(
       `insert into historical_fares_monthly
          (origin,destination,year,month,avg_fare_usd,p25_fare_usd,median_fare_usd,p75_fare_usd,
-          passengers_sampled,itin_count,purchase_window,source,file)
+          passengers_sampled,itin_count,purchase_window,source,file,
+          carriers,budget_share,median_no_budget_usd,window_medians)
        values ${tuples.join(",")}`,
       vals,
     );

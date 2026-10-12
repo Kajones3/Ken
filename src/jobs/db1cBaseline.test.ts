@@ -56,3 +56,32 @@ test("the monthly correction is measured against the monthly survey for the same
   assert.equal(row.rows[0].kind, "domestic_monthly");
   await db.close();
 });
+
+test("aggregate: the airlines on a route, the budget airlines' share and the median without them", async () => {
+  const H = "ItinID,SchFlYear,SchFlMonth,AirportGroupString,RoundTrip,Passengers,TotalAmount,PurchaseWindowGroup,IssuingCarrier";
+  const r = (fare: string, carrier: string, pax = "1.00", win = "21AP") => `1,2026,3,RDU:MCO:RDU,1.00,${pax},${fare},${win},${carrier}`;
+  const csv = [H,
+    r("120.00", "NK", "2.00"), r("140.00", "F9"),
+    r("300.00", "DL"), r("320.00", "DL"), r("340.00", "WN"),
+    r("310.00", "DL", "1.00", "2290"), r("315.00", "DL", "1.00", "2290"), r("320.00", "DL", "1.00", "2290"),
+    r("325.00", "DL", "1.00", "2290"), r("330.00", "DL", "1.00", "2290"),
+  ].join("\n");
+  const [m] = await aggregateDb1cFile(Readable.from([csv]), { origins: new Set(["RDU"]), destinations: new Set(["MCO"]) });
+  assert.deepEqual(m!.carriers, { NK: 2, F9: 1, DL: 7, WN: 1 });
+  assert.equal(m!.budgetShare, 0.273);            // 3 of 11 passengers
+  assert.equal(m!.medianNoBudgetUsd, 320);        // Delta and Southwest only
+  assert.ok(m!.medianFareUsd < 320, "budget fares pull the plain median down");
+  assert.equal(m!.windowMedians["2290"], 320);    // five tickets in that window
+  assert.equal(m!.windowMedians["21AP"], 140);    // budget-heavy window: cheap
+  const few = await aggregateDb1cFile(Readable.from([[H, r("300.00", "DL")].join("\n")]),
+    { origins: new Set(["RDU"]), destinations: new Set(["MCO"]) });
+  assert.deepEqual(few[0]!.windowMedians, {}, "a window with fewer than 5 tickets gets no median");
+});
+
+test("aggregate: a file without the airline column still loads, with no airline figures", async () => {
+  const csv = [HEAD, row("BNA:MCO:BNA", "1.00", "1.00", "300.00")].join("\n");
+  const [m] = await aggregateDb1cFile(Readable.from([csv]), { origins: new Set(["BNA"]), destinations: new Set(["MCO"]) });
+  assert.deepEqual(m!.carriers, {});
+  assert.equal(m!.budgetShare, null);
+  assert.equal(m!.medianNoBudgetUsd, null);
+});
