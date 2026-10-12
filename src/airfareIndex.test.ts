@@ -65,6 +65,6 @@ test("the job keeps everything: a revision is a NEW row, an unchanged month writ
   assert.equal(s.cpiNsa!.get("2026-08"), 305);
   const sum = summarize(s);
   assert.equal(sum.board!.pct, 22);
-  assert.match(sum.board!.detail, /August 2026 compared with August 2025/);
+  assert.equal(sum.board!.line, "Airfares are up 22% from a year ago. (Source: Bureau of Labor Statistics)");
   await db.close();
 });
