@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fitRidge, solve, runStudy, rng, featuresOf, INDICATORS, MODEL2_INDICATORS, type Indicator } from "./indicatorStudy.js";
+import { fitRidge, solve, runStudy, rng, featuresOf, airlineCount, INDICATORS, MODEL2_INDICATORS, type Indicator } from "./indicatorStudy.js";
 
 test("solve: a small linear system", () => {
   const x = solve([[2, 1], [1, 3]], [3, 5]);
@@ -68,4 +68,15 @@ test("model 2 reads Google's price level, its option count and the free feed's f
   const bare = featuresOf({ ...row, priceLevel: null, itineraries: null, feedMid: null }, hub, true)!;
   assert.equal(bare[MODEL2_INDICATORS.findIndex((i) => i.key === "priceLevel")], 0);
   assert.equal(bare[MODEL2_INDICATORS.findIndex((i) => i.key === "feed")], 0);
+});
+
+test("airline signals: share and count of airlines with 5%+ of the route", () => {
+  assert.equal(airlineCount({ DL: 70, NK: 20, WN: 7, F9: 3 }), 3);
+  assert.equal(airlineCount(JSON.stringify({ UA: 1 })), 1);
+  assert.equal(airlineCount(null), null);
+  const hub = new Map([["ATL", 100000]]);
+  const x = featuresOf({ origin: "ATL", destination: "MCO", departDate: "2027-03-10", observedAt: "2026-10-10", price: 300,
+    budgetShare: 0.25, airlines: 4 }, hub, false)!;
+  assert.equal(x[INDICATORS.findIndex((i) => i.key === "budgetShare")], 0.25);
+  assert.equal(x[INDICATORS.findIndex((i) => i.key === "airlines")], 4);
 });

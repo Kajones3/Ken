@@ -183,6 +183,39 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-12, last — BTS's airline columns read; why US misses; ideas toward 90%
+
+Owner: "can we read those columns please?" (airlines in the monthly
+survey) and "ideas on how to get to 90ish percent ... Our US data seems SO
+off". DB1C ticket columns include `IssuingCarrier`, `MktCarrierGroupString`,
+`OpCarrierGroupString`, `DwellTimeGroup`, `PurchaseWindowGroup` (codes:
+**21AP** = within 21 days, **2290** = 22-90, **91UP** = 91+).
+- `db1cBaseline.ts`: per route+month `carriers` (passengers by issuing
+  airline), `budget_share` (`BUDGET_CARRIERS` NK F9 G4 SY MX XP),
+  `median_no_budget_usd`, `window_medians` (5+ tickets). New columns,
+  append-only; March 2026 RELOADED (run 38284004973, 177 route-months; still
+  the only DB1C file BTS has published). DB1C is domestic only.
+- Indicator study: `budgetShare` + `airlines` (5%+ share) in both models.
+  **Model 1: 25% / 17.8% -> 35% / 15.9%** (within ±10% / typically off).
+  Budget share: -4.7% per 10 points ("maybe", 86%). Airline count: not yet.
+- Candidate: `levers.budget` (one US slope, n/(n+20)); learned -0.27 per
+  100% share. **LOO US 38% / 15.7% -> 39% / 15.6%** (run 38285648516).
+- Tested and REJECTED as the US starting point (19 March fares): median
+  without budget airlines (13.5% off vs plain 13.0%), 91+ day median (20.3%
+  vs 13.5%), 22-90 day median (14.5%). Paid March fares = 0.79 x the March
+  2026 survey median.
+- **Why US is off** (fair test, written down before buying): what travelers
+  see reads **+15.8% HIGH** on US (live formula), 21% within ±10%; the
+  candidate reads +2.1%, 28%. So a third of the US problem is BIAS in the
+  live formula that the candidate already fixes; the rest is scatter (same
+  route+month, different days: only 50% within 10% of the month middle).
+- Ideas given to the owner (none built beyond the above): flip
+  `flight.useCandidate` (or lower the US lean) for the bias; more paid fares
+  per busy US route (route evidence is the strongest lever; a bigger SerpApi
+  plan multiplies it); a steadier target from the kept whole Google answers
+  (the "median itinerary" moves with how many itineraries Google lists);
+  boosted trees once more DB1C months arrive.
+
 ### 2026-10-12, later — free feed in the candidate; paid buy day rotates; Model 2 signals; the noise floor
 
 Owner: build the free-feed intake; "advantages and disadvantages of buying

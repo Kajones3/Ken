@@ -60,9 +60,9 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
   // BTS's monthly survey: newest year per route and calendar month with
   // enough tickets (the same floor book.ts uses). Absent table = none.
   const mo = await db.query<{ origin: string; destination: string; month: number; median_fare_usd: string;
-    p25_fare_usd: string; p75_fare_usd: string }>(
+    p25_fare_usd: string; p75_fare_usd: string; budget_share: string | null }>(
     `select distinct on (origin, destination, month)
-            origin, destination, month, median_fare_usd, p25_fare_usd, p75_fare_usd
+            origin, destination, month, median_fare_usd, p25_fare_usd, p75_fare_usd, budget_share
        from historical_fares_monthly where itin_count >= $1
       order by origin, destination, month, year desc, loaded_at desc`,
     [MONTHLY_MIN_TICKETS],
@@ -70,7 +70,8 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
   const monthly: ModelMonthly[] = mo.rows.flatMap((r) => {
     const med = Number(r.median_fare_usd);
     return med > 0 ? [{ origin: r.origin.trim(), destination: r.destination.trim(), month: Number(r.month), med,
-      p25: Number(r.p25_fare_usd), p75: Number(r.p75_fare_usd) }] : [];
+      p25: Number(r.p25_fare_usd), p75: Number(r.p75_fare_usd),
+      budgetShare: r.budget_share == null ? undefined : Number(r.budget_share) }] : [];
   });
   // The free feed (stored as "travelpayouts+serpapi" by the refresh): the
   // latest fare per route, date and trip length, for day of week only.

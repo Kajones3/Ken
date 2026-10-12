@@ -142,6 +142,11 @@ export const INDICATORS: Indicator[] = [
   // to Disney too? BTS's average fare per airport, all destinations
   // (airportFares.ts). 400 is roughly BTS's national average.
   { key: "homeLevel", label: "Home airport's general price level", unit: "a home airport whose average fare is 10% higher", step: Math.log(1.1), source: "Government average fare per airport (your BTS tables)" },
+  // Owner, 2026-10-12: read the airline columns of BTS's monthly survey.
+  // Same route, the travel month if surveyed, else the route's newest month.
+  // International routes aren't in the survey: 0 (the Europe/Asia rows carry them).
+  { key: "budgetShare", label: "Budget airlines' share of the route", unit: "a route 10 points more budget-airline", step: 0.1, source: "BTS monthly survey (Spirit, Frontier, Allegiant, Sun Country, Breeze, Avelo)" },
+  { key: "airlines", label: "Number of airlines on the route", unit: "one more airline with 5%+ of the route", step: 1, source: "BTS monthly survey" },
 ];
 
 /** Model 2 adds these, in this order, after the structure indicators. */
@@ -162,6 +167,10 @@ export interface FareRow {
   itineraries?: number | null;
   /** The free feed's median cheapest fare for the same route, month and trip length, that week. */
   feedMid?: number | null;
+  /** Budget airlines' share of the route's passengers (0-1), from the monthly survey. */
+  budgetShare?: number | null;
+  /** Airlines with 5%+ of the route's passengers. */
+  airlines?: number | null;
 }
 
 const LEVEL: Record<string, number> = { low: -1, typical: 0, high: 1 };
@@ -196,6 +205,8 @@ export function featuresOf(
     Math.log10((hubPax.get(row.origin) ?? 0) + 1),
     // No figure for an airport = the national average, so it moves nothing.
     Math.log((homeFare.get(row.origin) ?? 400) / 400),
+    row.budgetShare ?? 0,
+    row.airlines ?? 0,
   ];
   if (withGoogle) {
     if (!row.googleTypicalMid || row.googleTypicalMid <= 0) return null;
@@ -278,11 +289,22 @@ export function runStudy(rows: number[][], prices: number[], indicators: Indicat
 
 /* ------------------------------ the loader ------------------------------ */
 
+/** Airlines with at least 5% of a route's passengers, from the survey's
+ *  passengers-by-airline map; null when there is none. */
+export function airlineCount(carriers: unknown): number | null {
+  const c = (typeof carriers === "string" ? JSON.parse(carriers) : carriers) as Record<string, number> | null;
+  if (!c || typeof c !== "object") return null;
+  const v = Object.values(c).map(Number).filter((x) => x > 0);
+  const tot = v.reduce((s, x) => s + x, 0);
+  return tot > 0 ? v.filter((x) => x / tot >= 0.05).length : null;
+}
+
 export async function loadIndicatorStudy(db: Db) {
   const fares = (await db.query<{ origin: string; destination: string; depart_date: unknown; observed_at: unknown; price_usd: string;
-    lo: string | null; hi: string | null; price_level: string | null; itineraries: number | null; feed_mid: string | null }>(
+    lo: string | null; hi: string | null; price_level: string | null; itineraries: number | null; feed_mid: string | null;
+    budget_share: string | null; carriers: unknown }>(
     `select o.origin, o.destination, o.depart_date, o.observed_at, o.price_usd, i.typical_low as lo, i.typical_high as hi,
-            i.price_level, i.itineraries, fd.feed_mid
+            i.price_level, i.itineraries, fd.feed_mid, sv.budget_share, sv.carriers
        from flight_observations o
        left join lateral (
          select typical_low, typical_high, price_level, itineraries from flight_insights i
@@ -300,6 +322,11 @@ export async function loadIndicatorStudy(db: Db) {
             and f.depart_date < (date_trunc('month', o.depart_date) + interval '1 month')::date
             and f.observed_at between o.observed_at - interval '7 days' and o.observed_at + interval '1 day'
        ) fd on true
+       left join lateral (
+         select budget_share, carriers from historical_fares_monthly h
+          where h.origin = o.origin and h.destination = o.destination and h.carriers is not null and h.itin_count >= 30
+          order by (h.month = extract(month from o.depart_date)) desc, h.year desc, h.loaded_at desc limit 1
+       ) sv on true
       where o.source = 'serpapi_flights' and o.price_usd > 0`,
   )).rows;
   const hub = (await db.query<{ origin: string; pax: string }>(
@@ -316,6 +343,8 @@ export async function loadIndicatorStudy(db: Db) {
     googleTypicalMid: f.lo != null && f.hi != null ? (Number(f.lo) + Number(f.hi)) / 2 : null,
     priceLevel: f.price_level, itineraries: f.itineraries == null ? null : Number(f.itineraries),
     feedMid: f.feed_mid == null ? null : Number(f.feed_mid),
+    budgetShare: f.budget_share == null ? null : Number(f.budget_share),
+    airlines: airlineCount(f.carriers),
   }));
 
   const build = (withGoogle: boolean) => {
