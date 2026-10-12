@@ -23,9 +23,13 @@
  *  - Each effect's confidence comes from 200 bootstrap refits (resample the
  *    fares, refit, see how much the effect wobbles). An effect whose sign
  *    flips across refits is "not yet", however big it looks.
- *  - An indicator that doesn't vary in our data (every paid fare departs on
- *    the 15th, so day of week barely varies) is reported as "can't tell yet",
- *    not as "no effect".
+ *  - An indicator that doesn't vary in our data is reported as "can't tell
+ *    yet", not as "no effect".
+ *
+ * Model 2 (owner, 2026-10-12: "keep building that one up") adds what each
+ * paid search hands us for free: Google's typical price, Google's own "prices
+ * are high/low right now", how many flight options Google found, and the free
+ * feed's cheapest fare for the same route and month in the same week.
  */
 import type { Db } from "./db.js";
 import { loadHomeFareLevels } from "./airportFares.js";
@@ -138,13 +142,29 @@ export const INDICATORS: Indicator[] = [
   // to Disney too? BTS's average fare per airport, all destinations
   // (airportFares.ts). 400 is roughly BTS's national average.
   { key: "homeLevel", label: "Home airport's general price level", unit: "a home airport whose average fare is 10% higher", step: Math.log(1.1), source: "Government average fare per airport (your BTS tables)" },
-  { key: "googleTypical", label: "Google's typical price for the route", unit: "a Google typical price twice as high", step: Math.log(2), source: "Google's answer to the same search" },
 ];
+
+/** Model 2 adds these, in this order, after the structure indicators. */
+export const GOOGLE_INDICATORS: Indicator[] = [
+  { key: "googleTypical", label: "Google's typical price for the route", unit: "a Google typical price twice as high", step: Math.log(2), source: "Google's answer to the same search" },
+  { key: "priceLevel", label: "Google says prices are high or low right now", unit: "Google saying \"high\" instead of \"typical\"", step: 1, source: "Google's answer to the same search" },
+  { key: "options", label: "How many flight options Google found", unit: "twice as many flight options", step: Math.log(2), source: "Google's answer to the same search" },
+  { key: "feed", label: "The free feed's cheapest fare, same route and month", unit: "a free-feed fare twice as high, compared with Google's typical price", step: Math.log(2), source: "Travelpayouts, the same week (no fare = counted as in line with Google)" },
+];
+export const MODEL2_INDICATORS: Indicator[] = [...INDICATORS, ...GOOGLE_INDICATORS];
 
 export interface FareRow {
   origin: string; destination: string; departDate: string; observedAt: string; price: number;
   googleTypicalMid?: number | null;
+  /** Google's price_level: "low" | "typical" | "high". */
+  priceLevel?: string | null;
+  /** How many itineraries Google returned. */
+  itineraries?: number | null;
+  /** The free feed's median cheapest fare for the same route, month and trip length, that week. */
+  feedMid?: number | null;
 }
+
+const LEVEL: Record<string, number> = { low: -1, typical: 0, high: 1 };
 
 const DEST_BY_IATA = new Map<string, { lat: number; lon: number; region: string }>();
 for (const r of RESORTS) {
@@ -154,8 +174,8 @@ for (const r of RESORTS) {
 }
 const ORIGIN_BY = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 
-/** One fare's indicator values, in INDICATORS order (googleTypical last), or
- *  null when the fare can't be placed (unknown airport). */
+/** One fare's indicator values, in INDICATORS order (then GOOGLE_INDICATORS
+ *  for model 2), or null when the fare can't be placed (unknown airport). */
 export function featuresOf(
   row: FareRow, hubPax: Map<string, number>, withGoogle: boolean, homeFare: Map<string, number> = new Map(),
 ): number[] | null {
@@ -180,6 +200,10 @@ export function featuresOf(
   if (withGoogle) {
     if (!row.googleTypicalMid || row.googleTypicalMid <= 0) return null;
     x.push(Math.log(row.googleTypicalMid));
+    x.push(LEVEL[String(row.priceLevel ?? "").toLowerCase()] ?? 0);
+    // No count = 10 options, about the middle of what Google returns.
+    x.push(Math.log(row.itineraries && row.itineraries > 0 ? row.itineraries : 10));
+    x.push(row.feedMid && row.feedMid > 0 ? Math.log(row.feedMid / row.googleTypicalMid) : 0);
   }
   return x;
 }
@@ -255,16 +279,27 @@ export function runStudy(rows: number[][], prices: number[], indicators: Indicat
 /* ------------------------------ the loader ------------------------------ */
 
 export async function loadIndicatorStudy(db: Db) {
-  const fares = (await db.query<{ origin: string; destination: string; depart_date: unknown; observed_at: unknown; price_usd: string; lo: string | null; hi: string | null }>(
-    `select o.origin, o.destination, o.depart_date, o.observed_at, o.price_usd, i.typical_low as lo, i.typical_high as hi
+  const fares = (await db.query<{ origin: string; destination: string; depart_date: unknown; observed_at: unknown; price_usd: string;
+    lo: string | null; hi: string | null; price_level: string | null; itineraries: number | null; feed_mid: string | null }>(
+    `select o.origin, o.destination, o.depart_date, o.observed_at, o.price_usd, i.typical_low as lo, i.typical_high as hi,
+            i.price_level, i.itineraries, fd.feed_mid
        from flight_observations o
        left join lateral (
-         select typical_low, typical_high from flight_insights i
+         select typical_low, typical_high, price_level, itineraries from flight_insights i
           where i.origin = o.origin and i.destination = o.destination
             and i.depart_date = o.depart_date and i.trip_length = o.trip_length
             and abs(extract(epoch from (i.observed_at - o.observed_at))) < 3600
           order by i.observed_at desc limit 1
        ) i on true
+       left join lateral (
+         select percentile_cont(0.5) within group (order by f.price_usd) as feed_mid
+           from flight_observations f
+          where f.source like 'travelpayouts%' and f.origin = o.origin and f.destination = o.destination
+            and f.trip_length = o.trip_length
+            and f.depart_date >= date_trunc('month', o.depart_date)::date
+            and f.depart_date < (date_trunc('month', o.depart_date) + interval '1 month')::date
+            and f.observed_at between o.observed_at - interval '7 days' and o.observed_at + interval '1 day'
+       ) fd on true
       where o.source = 'serpapi_flights' and o.price_usd > 0`,
   )).rows;
   const hub = (await db.query<{ origin: string; pax: string }>(
@@ -279,6 +314,8 @@ export async function loadIndicatorStudy(db: Db) {
     departDate: iso(f.depart_date).slice(0, 10), observedAt: iso(f.observed_at),
     price: Number(f.price_usd),
     googleTypicalMid: f.lo != null && f.hi != null ? (Number(f.lo) + Number(f.hi)) / 2 : null,
+    priceLevel: f.price_level, itineraries: f.itineraries == null ? null : Number(f.itineraries),
+    feedMid: f.feed_mid == null ? null : Number(f.feed_mid),
   }));
 
   const build = (withGoogle: boolean) => {
@@ -291,7 +328,13 @@ export async function loadIndicatorStudy(db: Db) {
   };
   const a = build(false);
   const b = build(true);
-  const structure = a.X.length >= 15 ? runStudy(a.X, a.P, INDICATORS.slice(0, -1), "structure") : null;
-  const withGoogle = b.X.length >= 15 ? runStudy(b.X, b.P, INDICATORS, "withGoogle") : null;
-  return { fares: rows.length, structure, withGoogle, ranAt: new Date().toISOString() };
+  const structure = a.X.length >= 15 ? runStudy(a.X, a.P, INDICATORS, "structure") : null;
+  const withGoogle = b.X.length >= 15 ? runStudy(b.X, b.P, MODEL2_INDICATORS, "withGoogle") : null;
+  // Did the signals added on 2026-10-12 help? The same fares with only
+  // Google's typical price added (model 2 as it was), graded the same way.
+  const typicalOnly = INDICATORS.length + 1;
+  const before = b.X.length >= 15 ? crossValidate(b.X.map((x) => x.slice(0, typicalOnly)), b.P.map((p) => Math.log(p))) : null;
+  const withFeed = rows.filter((r) => r.feedMid && r.feedMid > 0).length;
+  return { fares: rows.length, structure, withGoogle,
+    model2: { beforeNewSignals: before, withFeedFare: withFeed }, ranAt: new Date().toISOString() };
 }

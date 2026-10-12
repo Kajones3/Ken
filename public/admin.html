@@ -472,7 +472,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   </section>
   <section class="sheet">
     <h2>Model 2: the same, plus Google's typical price</h2>
-    <p>Only fares bought since Google's typical price started being kept (October 7), so fewer fares.</p>
+    <p>Only fares bought since Google's typical price started being kept (October 7), so fewer fares. Model 2 also reads
+      Google's own "prices are high/low right now", how many flight options Google found, and the free feed's cheapest fare
+      for the same route and month that week.</p>
     <div id="indGoogle"></div>
   </section>
   <section class="sheet">
@@ -1472,6 +1474,12 @@ async function loadIndicators(){
   $("#indCount").textContent = `${d.fares} paid fares in the record. Refit just now.`;
   $("#indStructure").innerHTML = studyHtml(d.structure);
   $("#indGoogle").innerHTML = studyHtml(d.withGoogle);
+  if(d.withGoogle && d.withGoogle.cv && d.model2 && d.model2.beforeNewSignals){
+    const b = d.model2.beforeNewSignals, n = d.withGoogle.cv;
+    $("#indGoogle").insertAdjacentHTML("afterbegin", `<p><b>Signals added 2026-10-12</b> (Google's price level, how many flight options,
+      the free feed's fare): with them ${n.within10Pct}% within 10%, typically off ${n.medianOffPct}%; with Google's typical price alone
+      ${b.within10Pct}% and ${b.medianOffPct}%. ${d.model2.withFeedFare} fares had a free-feed fare the same week.</p>`);
+  }
 }
 async function loadWaits(){
   const r = await fetch("/api/admin/wait-times");

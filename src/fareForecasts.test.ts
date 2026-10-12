@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { memoryDb, type Db } from "./db.js";
-import { runPopularRoutes } from "./jobs/popularRoutes.js";
+import { runPopularRoutes, sampleDates } from "./jobs/popularRoutes.js";
 import { loadBook } from "./book.js";
 import { quotedEstimate } from "./pricing.js";
 import { loadForecastScores, scoreForecasts, type ForecastRow } from "./fareForecasts.js";
@@ -29,11 +29,13 @@ const stub = (price: number | null) => ({
   },
 });
 const ROUTE = [{ origin: "ATL", destination: "MCO", departMonth: "2027-03", searches: 1 }];
-const BOOK = { origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"], from: "2027-03-15", to: "2027-03-15", tripLength: 7 };
+// The day popular-routes buys for ATL-MCO in March (it rotates by route).
+const DAY = sampleDates("2027-03", 1, "ATL-MCO")[0]!;
+const BOOK = { origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"], from: DAY, to: DAY, tripLength: 7 };
 
 test("the forecast is written down BEFORE the fare, so it never learns from the fare it is graded on", async () => {
   const db = await seeded();
-  const before = quotedEstimate(await loadBook(db, BOOK, { formula: "live" }), "ATL", "MCO", "2027-03-15")!;
+  const before = quotedEstimate(await loadBook(db, BOOK, { formula: "live" }), "ATL", "MCO", DAY)!;
   assert.ok(before > 0);
 
   const res = await runPopularRoutes(db, { routes: ROUTE, datesPerMonth: 1, provider: stub(600) as never });
@@ -50,7 +52,7 @@ test("the forecast is written down BEFORE the fare, so it never learns from the 
 
   // The bought fare now pulls the route's estimate toward itself: grading
   // today's number against it would flatter us. The forecast doesn't.
-  const after = quotedEstimate(await loadBook(db, BOOK, { formula: "live" }), "ATL", "MCO", "2027-03-15")!;
+  const after = quotedEstimate(await loadBook(db, BOOK, { formula: "live" }), "ATL", "MCO", DAY)!;
   assert.ok(after > before, `the estimate learned from the fare (${before} -> ${after})`);
   await db.close();
 });
