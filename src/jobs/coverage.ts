@@ -18,6 +18,7 @@ import { loadForecastScores } from "../fareForecasts.js";
 import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
 import { fitFareModel, isInternational, leaveOneOut } from "../fareModel.js";
+import { weekdayPattern, WEEKDAYS } from "../dayOfWeek.js";
 import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
@@ -589,10 +590,60 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`  What the candidate has learned: calibration US ${L.calibration.dom.toFixed(2)} · Europe ${L.calibration.europe.toFixed(2)} · Asia ${L.calibration.asia.toFixed(2)}`);
     out.push(`    destination: ${Object.entries(L.destination).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    season: ${Object.entries(L.season).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+    out.push(`    day of week: ${Object.entries(L.dayOfWeek).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `${WEEKDAYS[Number(k)]} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
       out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
     }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  // Owner, 2026-10-12: "The 15th consistently lands on different days
+  // depending what month we are in. We should be learning from that AND
+  // travel payouts." What each source says about weekday and lead time.
+  out.push("## Day of week and booking ahead: what the data says");
+  try {
+    const paid = await db.query<{ dow: number; n: string; dom: string; intl: string }>(
+      `select extract(dow from depart_date)::int as dow, count(*)::text as n,
+              count(*) filter (where destination in ('MCO','TPA','SNA','LAX'))::text as dom,
+              count(*) filter (where destination not in ('MCO','TPA','SNA','LAX'))::text as intl
+         from flight_observations where source = 'serpapi_flights' group by 1 order by 1`);
+    out.push("  Paid fares by departure weekday (all depart the 15th):");
+    out.push(`    ${paid.rows.map((r) => `${WEEKDAYS[r.dow]} ${r.n} (US ${r.dom}, intl ${r.intl})`).join(" · ") || "none"}`);
+    const tp = await db.query<{ origin: string; destination: string; depart_date: unknown; trip_length: number; price_usd: string }>(
+      `select distinct on (origin, destination, depart_date, trip_length)
+              origin, destination, depart_date, trip_length, price_usd
+         from flight_observations where source like 'travelpayouts%'
+        order by origin, destination, depart_date, trip_length, observed_at desc`);
+    const rows = tp.rows.map((r) => ({
+      origin: r.origin, destination: r.destination, tripLength: r.trip_length, price: Number(r.price_usd),
+      departDate: r.depart_date instanceof Date ? r.depart_date.toISOString().slice(0, 10) : String(r.depart_date).slice(0, 10),
+    }));
+    const pat = weekdayPattern(rows);
+    out.push(`  Free feed (Travelpayouts): ${rows.length} distinct route-date fares; weekday vs the same route, month and trip length:`);
+    out.push(`    ${pat.map((p) => `${WEEKDAYS[p.day]} ${p.factor.toFixed(2)} (${p.fares} fares, ${p.groups} route-months)`).join(" · ") || "no route-month has fares on two weekdays yet"}`);
+    const lead = await db.query<{ b: string; n: string }>(
+      `select width_bucket((depart_date - observed_at::date), 0, 390, 13)::text as b, count(*)::text as n
+         from flight_observations where source like 'travelpayouts%' group by 1 order by 1::int`);
+    out.push(`  Free feed, how far ahead each fare was seen (30-day buckets): ${lead.rows.map((r) => `${(Number(r.b) - 1) * 30}-${Number(r.b) * 30}d ${r.n}`).join(", ") || "none"}`);
+    const ph = await db.query<{ history: unknown; depart_date: unknown }>(
+      `select history, depart_date from flight_insights where history is not null`);
+    const byLead = new Map<number, number[]>();
+    for (const r of ph.rows) {
+      const h = (typeof r.history === "string" ? JSON.parse(r.history) : r.history) as [number, number][];
+      if (!Array.isArray(h) || h.length < 2) continue;
+      const dep = Date.parse((r.depart_date instanceof Date ? r.depart_date.toISOString() : String(r.depart_date)).slice(0, 10) + "T00:00:00Z");
+      const last = h[h.length - 1]![1];
+      for (const [t, p] of h) {
+        const b = Math.floor((dep - t * 1000) / 86_400_000 / 30);
+        byLead.set(b, [...(byLead.get(b) ?? []), p / last]);
+      }
+    }
+    const med = (a: number[]) => { const x = [...a].sort((p, q) => p - q); return x[Math.floor(x.length / 2)]!; };
+    out.push(`  Google's price history: ${ph.rows.length} searches carry one. Price vs the day we searched, by months before departure:`);
+    out.push(`    ${[...byLead].sort(([a], [b]) => a - b).map(([b, v]) => `${b * 30}-${b * 30 + 30}d ${med(v).toFixed(2)} (${v.length} points)`).join(" · ") || "none"}`);
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
   }

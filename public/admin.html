@@ -461,8 +461,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <ul>
       <li><b>Focus</b> ranks indicators by how much they move fares across the range we actually see. Start at the top.</li>
       <li><b>Solid</b> means 200 refits on resampled fares agree on the direction; <b>maybe</b> mostly agree;
-        <b>not yet</b> means the data can't tell. "Can't tell yet" means our fares don't vary on it
-        (every paid fare departs on the 15th, for example).</li>
+        <b>not yet</b> means the data can't tell. "Can't tell yet" means our fares don't vary on it.</li>
       <li><b>Accuracy</b> is measured fairly: each fare is predicted by a model that was fitted without it.</li>
     </ul>
     <p class="count" id="indCount">Loading…</p>
@@ -477,12 +476,18 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div id="indGoogle"></div>
   </section>
   <section class="sheet">
-    <h2>Not in the study yet</h2>
+    <h2>Weekday, booking ahead and airlines: where they stand</h2>
     <ul>
-      <li><b>Budget airlines and number of airlines on a route</b>: comes from the government's monthly survey,
-        being loaded now.</li>
-      <li><b>Booking a few weeks out, and day of the week</b>: our paid fares are all bought months ahead and depart on
-        the 15th, so these need Google's price history and the free feed.</li>
+      <li><b>Day of week</b> IS in the study ("Leaving Friday–Sunday" above) and in the candidate formula. The 15th
+        falls on a different weekday each month, but within one year each month has exactly one weekday (every paid
+        Monday is a March fare), so paid fares mix weekday up with month. The free feed separates them (same route
+        and month, different days): on 3,976 fares as of 2026-10-12, every weekday was within 2% of the others.
+        The free feed isn't in the formula yet.</li>
+      <li><b>Booking a few weeks out</b>: "How far ahead it was searched" above only covers the months-ahead range
+        we buy in. Google's price history and the free feed's lead times are in the coverage report; neither is
+        in the formula yet.</li>
+      <li><b>Budget airlines and number of airlines on a route</b>: the government's monthly survey is loaded, but
+        we don't read its airline columns yet.</li>
     </ul>
   </section>
   </div>
