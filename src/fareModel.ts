@@ -10,7 +10,7 @@
  * deliberate lean in either direction.
  *
  * One estimate = prior x group calibration x destination x season x
- * day-of-week x route factor (x the holiday premium, which pricing.ts adds,
+ * month x day-of-week x route factor (x the holiday premium, which pricing.ts adds,
  * as it does today). Every lever is LEARNED from the bought fares in the
  * record and refitted as new ones arrive (owner, 2026-10-11: "It cannot
  * stay static ... Every single day our guesses should be getting better").
@@ -34,8 +34,15 @@
  *    fare cannot swing it.
  *  - Group calibration: the median of real / prior across the group. This is
  *    what the nightly trend does today, measured fresh.
- *  - Day of week (idea 5): pooled across ALL bought fares, held near 1 until
- *    a weekday has many fares, and kept within 0.85-1.2.
+ *  - Month (2026-10-12): each group's own calendar month, on top of its
+ *    quarter, n / (n + 6). Until 2026-10-12 every paid fare left on the
+ *    15th, so a month's paid fares were all ONE weekday and the old
+ *    "day of week" lever was really learning months; this is where that goes.
+ *  - Day of week (idea 5): from the FREE FEED when it has enough fares
+ *    (owner, 2026-10-12: "learning from that AND travel payouts"): the same
+ *    route, month and trip length on different weekdays, so route and season
+ *    cancel (dayOfWeek.ts). Otherwise pooled over bought fares, held near 1
+ *    until a weekday has many fares. Kept within 0.85-1.2.
  *  - Route factor: this route's own searches in the last 45 days, each one
  *    counted with Google's "typical price" from the same search (idea 2) as
  *    a second opinion. Shrunk toward 1 (n / (n + 2)), so one odd fare moves a
@@ -50,6 +57,7 @@ import { RESORTS, ORIGIN_BY_IATA } from "./config.js";
 import { haversineMiles } from "./geo.js";
 import { quarterOf, type ISODate } from "./dates.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
+import { weekdayPattern, type DatedFare } from "./dayOfWeek.js";
 
 export const USE_CANDIDATE_KEY = "flight.useCandidate";
 export const ZONE_PCT_KEY = "flight.zonePct";
@@ -67,6 +75,12 @@ const DOW_SHRINK_K = 8;
 export const DEST_SHRINK_K = 4;
 /** Season lever per group and quarter: n / (n + K). */
 export const SEASON_SHRINK_K = 6;
+/** Month lever per group and calendar month, on top of the quarter: n / (n + K). */
+export const MONTH_SHRINK_K = 6;
+/** The free feed sets day of week once every weekday has this many fares. */
+export const FEED_DOW_MIN_FARES = 30;
+/** Feed weekday shrink: n / (n + K). Hundreds of fares = nearly full weight. */
+const FEED_DOW_SHRINK_K = 20;
 /** Group calibration: a group with fewer fares leans on the pooled one. */
 const GROUP_SHRINK_K = 3;
 /** Data-error guards for the learned levers, not limits on learning. */
@@ -100,6 +114,8 @@ export interface ModelInputs {
   baselines: ModelBaseline[];
   /** Optional: the monthly survey, preferred over the quarterly prior for US routes. */
   monthly?: ModelMonthly[];
+  /** Optional: the free feed's fares (Travelpayouts), for day of week. */
+  feed?: DatedFare[];
   premiumPct: (key: string, fallback: number) => number;
   now: Date;
 }
@@ -108,7 +124,7 @@ export interface Prediction {
   value: number;
   /** p25/p75 shape to show a range around it. */
   lowRatio: number; highRatio: number;
-  parts: { prior: number; calibration: number; destination: number; season: number; dayOfWeek: number;
+  parts: { prior: number; calibration: number; destination: number; season: number; month: number; dayOfWeek: number;
            route: number; routeSearches: number; group: FareGroup;
            priorKind: "bts" | "bts_monthly" | "distance" };
 }
@@ -121,9 +137,11 @@ export interface FareModel {
     calibration: Record<FareGroup, number>;
     destination: Record<string, { factor: number; fares: number }>;
     season: Record<string, { factor: number; fares: number }>;
-    /** Day of week, 0 = Sunday. The 15th lands on a different weekday each
-     *  month, so paid fares do teach this. */
+    /** Group + calendar month ("dom 3"), on top of the quarter. */
+    month: Record<string, { factor: number; fares: number }>;
+    /** Day of week, 0 = Sunday, and which fares taught it. */
     dayOfWeek: Record<number, { factor: number; fares: number }>;
+    dayOfWeekFrom: "free feed" | "paid fares" | "none";
   };
 }
 
@@ -264,9 +282,32 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   }
   const season = new Map([...bySeason].map(([k, logs]) => [k, shrunk(logs, SEASON_SHRINK_K)] as const));
   const seasonOf = (g: FareGroup, q: number) => season.get(`${g} Q${q}`) ?? 1;
-  const levelOf = (x: (typeof rows)[number]) => x.p * x.h * cal[x.g] * destOf(x.f.destination) * seasonOf(x.g, x.q);
+  const quarterLevel = (x: (typeof rows)[number]) => x.p * x.h * cal[x.g] * destOf(x.f.destination) * seasonOf(x.g, x.q);
 
-  // Day of week, pooled.
+  // Day of week from the free feed, when every weekday has enough fares. Set
+  // first, so the month lever below is measured with weekday taken out.
+  const feedDow = new Map<number, { factor: number; fares: number }>();
+  const pat = weekdayPattern(inp.feed ?? []);
+  if (pat.length === 7 && pat.every((p) => p.fares >= FEED_DOW_MIN_FARES)) {
+    for (const p of pat) {
+      const w = p.fares / (p.fares + FEED_DOW_SHRINK_K);
+      feedDow.set(p.day, { factor: clamp(Math.exp(Math.log(p.factor) * w), DOW_MIN, DOW_MAX), fares: p.fares });
+    }
+  }
+  const feedDowOf = (d: ISODate) => feedDow.get(dowOf(d))?.factor ?? 1;
+  const monthNo = (d: ISODate) => Number(d.slice(5, 7));
+
+  // Month lever: what each calendar month adds to its quarter, per group.
+  const byMonth = new Map<string, number[]>();
+  for (const x of rows) {
+    const k = `${x.g} ${monthNo(x.f.departDate)}`;
+    byMonth.set(k, [...(byMonth.get(k) ?? []), Math.log(x.f.price / (quarterLevel(x) * feedDowOf(x.f.departDate)))]);
+  }
+  const monthLever = new Map([...byMonth].map(([k, logs]) => [k, shrunk(logs, MONTH_SHRINK_K)] as const));
+  const monthOf = (g: FareGroup, d: ISODate) => monthLever.get(`${g} ${monthNo(d)}`) ?? 1;
+  const levelOf = (x: (typeof rows)[number]) => quarterLevel(x) * monthOf(x.g, x.f.departDate);
+
+  // Day of week: the free feed's, else pooled over bought fares.
   const byDow = new Map<number, number[]>();
   for (const x of rows) {
     const e = x.f.price / levelOf(x);
@@ -274,9 +315,13 @@ export function fitFareModel(inp: ModelInputs): FareModel {
     byDow.set(k, [...(byDow.get(k) ?? []), Math.log(e)]);
   }
   const dow = new Map<number, number>();
-  for (const [k, logs] of byDow) {
-    const w = logs.length / (logs.length + DOW_SHRINK_K);
-    dow.set(k, clamp(Math.exp(median(logs) * w), DOW_MIN, DOW_MAX));
+  if (feedDow.size) {
+    for (const [k, v] of feedDow) dow.set(k, v.factor);
+  } else {
+    for (const [k, logs] of byDow) {
+      const w = logs.length / (logs.length + DOW_SHRINK_K);
+      dow.set(k, clamp(Math.exp(median(logs) * w), DOW_MIN, DOW_MAX));
+    }
   }
 
   // Google's typical midpoint, put on the same footing as the fares we keep
@@ -302,7 +347,10 @@ export function fitFareModel(inp: ModelInputs): FareModel {
       calibration: cal,
       destination: Object.fromEntries([...dest].map(([k, f]) => [k, { factor: f, fares: byDest.get(k)!.length }])),
       season: Object.fromEntries([...season].map(([k, f]) => [k, { factor: f, fares: bySeason.get(k)!.length }])),
-      dayOfWeek: Object.fromEntries([...dow].map(([k, f]) => [k, { factor: f, fares: byDow.get(k)!.length }])),
+      month: Object.fromEntries([...monthLever].map(([k, f]) => [k, { factor: f, fares: byMonth.get(k)!.length }])),
+      dayOfWeek: Object.fromEntries([...dow].map(([k, f]) => [k, { factor: f,
+        fares: feedDow.get(k)?.fares ?? byDow.get(k)?.length ?? 0 }])),
+      dayOfWeekFrom: feedDow.size ? "free feed" : dow.size ? "paid fares" : "none",
     },
     predict(o, d, date) {
       const p = prior(o, d, date);
@@ -311,6 +359,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
       const c = cal[g];
       const de = destOf(d);
       const se = seasonOf(g, quarterOf(date));
+      const mo = monthOf(g, date);
       const w = dow.get(dowOf(date)) ?? 1;
       const logs = routeLogs.get(`${o}|${d}`) ?? [];
       const route = logs.length
@@ -318,10 +367,10 @@ export function fitFareModel(inp: ModelInputs): FareModel {
         : 1;
       const shape = p.shape && p.shape.med > 0 ? p.shape : undefined;
       return {
-        value: Math.round(p.v * c * de * se * w * route * 100) / 100,
+        value: Math.round(p.v * c * de * se * mo * w * route * 100) / 100,
         lowRatio: shape ? Math.min(1, shape.p25 / shape.med) : 0.85,
         highRatio: shape ? Math.max(1, shape.p75 / shape.med) : 1.2,
-        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, dayOfWeek: w, route,
+        parts: { prior: Math.round(p.v), calibration: c, destination: de, season: se, month: mo, dayOfWeek: w, route,
                  routeSearches: logs.length, group: g, priorKind: p.kind },
       };
     },

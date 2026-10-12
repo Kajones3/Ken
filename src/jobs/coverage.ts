@@ -19,6 +19,7 @@ import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
 import { fitFareModel, isInternational, leaveOneOut } from "../fareModel.js";
 import { weekdayPattern, WEEKDAYS } from "../dayOfWeek.js";
+import { loadIndicatorStudy } from "../indicatorStudy.js";
 import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
@@ -590,10 +591,11 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push(`  What the candidate has learned: calibration US ${L.calibration.dom.toFixed(2)} · Europe ${L.calibration.europe.toFixed(2)} · Asia ${L.calibration.asia.toFixed(2)}`);
     out.push(`    destination: ${Object.entries(L.destination).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    season: ${Object.entries(L.season).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
-    out.push(`    day of week: ${Object.entries(L.dayOfWeek).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `${WEEKDAYS[Number(k)]} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+    out.push(`    month (on top of the quarter): ${Object.entries(L.month).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+    out.push(`    day of week, from ${L.dayOfWeekFrom}: ${Object.entries(L.dayOfWeek).sort(([a], [b]) => Number(a) - Number(b)).map(([k, v]) => `${WEEKDAYS[Number(k)]} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
-      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+      out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
     }
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
@@ -610,7 +612,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
               count(*) filter (where destination in ('MCO','TPA','SNA','LAX'))::text as dom,
               count(*) filter (where destination not in ('MCO','TPA','SNA','LAX'))::text as intl
          from flight_observations where source = 'serpapi_flights' group by 1 order by 1`);
-    out.push("  Paid fares by departure weekday (all depart the 15th):");
+    out.push("  Paid fares by departure weekday (the 15th until 2026-10-12, then the 8th-22nd by route):");
     out.push(`    ${paid.rows.map((r) => `${WEEKDAYS[r.dow]} ${r.n} (US ${r.dom}, intl ${r.intl})`).join(" · ") || "none"}`);
     const tp = await db.query<{ origin: string; destination: string; depart_date: unknown; trip_length: number; price_usd: string }>(
       `select distinct on (origin, destination, depart_date, trip_length)
@@ -644,6 +646,80 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     const med = (a: number[]) => { const x = [...a].sort((p, q) => p - q); return x[Math.floor(x.length / 2)]!; };
     out.push(`  Google's price history: ${ph.rows.length} searches carry one. Price vs the day we searched, by months before departure:`);
     out.push(`    ${[...byLead].sort(([a], [b]) => a - b).map(([b, v]) => `${b * 30}-${b * 30 + 30}d ${med(v).toFixed(2)} (${v.length} points)`).join(" · ") || "none"}`);
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  // Owner, 2026-10-12: "What is the likelihood we actually get to 90%
+  // correct prices within 10% error?" Two real fares for the SAME route,
+  // date and trip length, seen on different days, show how far apart reality
+  // is with itself. No formula can beat that.
+  out.push("## The noise floor: the same flight, priced on two different days");
+  try {
+    const pairs = async (sourceSql: string, minLead: number) => (await db.query<{ n: string; w10: string; w5: string; med: string }>(
+      `with o as (
+         select origin, destination, depart_date, trip_length, price_usd, observed_at::date as day
+           from flight_observations where ${sourceSql} and (depart_date - observed_at::date) >= $1),
+       p as (
+         select abs(b.price_usd - a.price_usd) / a.price_usd as gap
+           from o a join o b on a.origin = b.origin and a.destination = b.destination
+            and a.depart_date = b.depart_date and a.trip_length = b.trip_length and b.day > a.day)
+       select count(*)::text as n,
+              coalesce(round(100.0 * avg(case when gap <= 0.10 then 1 else 0 end)), 0)::text as w10,
+              coalesce(round(100.0 * avg(case when gap <= 0.05 then 1 else 0 end)), 0)::text as w5,
+              coalesce(round(100 * percentile_cont(0.5) within group (order by gap)::numeric, 1), 0)::text as med
+         from p`, [minLead])).rows[0]!;
+    const paid = await pairs(`source = 'serpapi_flights'`, 0);
+    out.push(`  Paid fares bought twice (same route, date, trip length): ${paid.n} pairs; within 10% of each other ${paid.w10}%, within 5% ${paid.w5}%, typically apart ${paid.med}%`);
+    // The free feed can't answer this: it hands back the same stored price
+    // night after night, so "the same flight on two days" there is mostly
+    // the same number twice. Google's own day-by-day history can.
+    const hist = await db.query<{ history: unknown }>(`select history from flight_insights where history is not null`);
+    let pts = 0, in10 = 0;
+    for (const r of hist.rows) {
+      const h = (typeof r.history === "string" ? JSON.parse(r.history) : r.history) as [number, number][];
+      if (!Array.isArray(h) || h.length < 2) continue;
+      const last = h[h.length - 1]![1];
+      for (const [, p] of h.slice(0, -1)) { pts++; if (Math.abs(p - last) / last <= 0.10) in10++; }
+    }
+    out.push(`  Google's price history (the cheapest seat, day by day, up to ~2 months before we searched): ${pts} days from ${hist.rows.length} searches; ${pts ? Math.round((100 * in10) / pts) : 0}% within 10% of the price on the day we searched`);
+    // Different days in the same month: what quoting one number for a whole
+    // month (or a typical day) is up against.
+    const spread = await db.query<{ n: string; w10: string }>(
+      `with f as (
+         select distinct on (origin, destination, depart_date, trip_length)
+                origin, destination, depart_date, trip_length, price_usd
+           from flight_observations where source like 'travelpayouts%'
+          order by origin, destination, depart_date, trip_length, observed_at desc),
+       g as (
+         select origin, destination, date_trunc('month', depart_date) as m, trip_length,
+                percentile_cont(0.5) within group (order by price_usd) as mid, count(*) as n
+           from f group by 1, 2, 3, 4)
+       select count(*)::text as n,
+              coalesce(round(100.0 * avg(case when abs(f.price_usd - g.mid) / g.mid <= 0.10 then 1 else 0 end)), 0)::text as w10
+         from f join g on g.origin = f.origin and g.destination = f.destination and g.trip_length = f.trip_length
+          and g.m = date_trunc('month', f.depart_date)
+        where g.n >= 3`);
+    const sp = spread.rows[0]!;
+    out.push(`  Free feed, different days in the same route and month: ${sp.n} fares; ${sp.w10}% within 10% of that month's middle`);
+    out.push("  (However often reality lands within 10% of itself is roughly the ceiling for any formula.)");
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  out.push("## Indicator study (the /admin tab), graded on fares each model never saw");
+  try {
+    const st = await loadIndicatorStudy(db);
+    const cv = (c: { medianOffPct: number; within10Pct: number } | null | undefined) =>
+      c ? `${c.within10Pct}% within ±10%, typically off ${c.medianOffPct}%` : "not enough fares";
+    out.push(`  Model 1 (route, season, timing): ${st.structure?.fares ?? 0} fares; ${cv(st.structure?.cv)}; plain model ${cv(st.structure?.plainCv)}`);
+    out.push(`  Model 2 (+ Google's typical price only, as before 2026-10-12): ${cv(st.model2.beforeNewSignals)}`);
+    out.push(`  Model 2 (+ price level, flight options, free-feed fare): ${st.withGoogle?.fares ?? 0} fares; ${cv(st.withGoogle?.cv)}; ${st.model2.withFeedFare} fares had a free-feed fare that week`);
+    for (const e of st.withGoogle?.effects ?? []) {
+      out.push(`    ${e.label}: ${e.effectPct == null ? "can't tell" : `${e.effectPct >= 0 ? "+" : ""}${e.effectPct}%`} (${e.verdict}${e.agreePct != null ? `, ${e.agreePct}% agree` : ""}), moves fares ${e.weightPct ?? "-"}%`);
+    }
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);
   }

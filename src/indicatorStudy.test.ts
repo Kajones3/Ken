@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fitRidge, solve, runStudy, rng, featuresOf, INDICATORS, type Indicator } from "./indicatorStudy.js";
+import { fitRidge, solve, runStudy, rng, featuresOf, INDICATORS, MODEL2_INDICATORS, type Indicator } from "./indicatorStudy.js";
 
 test("solve: a small linear system", () => {
   const x = solve([[2, 1], [1, 3]], [3, 5]);
@@ -46,10 +46,26 @@ test("runStudy finds a real effect, calls a constant one 'can't tell yet', and b
 test("featuresOf: places a real fare, and refuses one it can't place", () => {
   const hub = new Map([["ATL", 100000]]);
   const x = featuresOf({ origin: "ATL", destination: "CDG", departDate: "2027-07-16", observedAt: "2026-10-10T10:00:00Z", price: 1000 }, hub, false)!;
-  assert.equal(x.length, INDICATORS.length - 1);
+  assert.equal(x.length, INDICATORS.length);
   assert.equal(x[1], 1);       // Europe
   assert.equal(x[4], 1);       // July-September
   assert.equal(x[6], 1);       // 2027-07-16 is a Friday
   assert.equal(featuresOf({ origin: "ZZZ", destination: "CDG", departDate: "2027-07-16", observedAt: "2026-10-10", price: 1 }, hub, false), null);
   assert.equal(featuresOf({ origin: "ATL", destination: "CDG", departDate: "2027-07-16", observedAt: "2026-10-10", price: 1 }, hub, true), null);
+});
+
+test("model 2 reads Google's price level, its option count and the free feed's fare", () => {
+  const hub = new Map([["ATL", 100000]]);
+  const row = { origin: "ATL", destination: "CDG", departDate: "2027-07-16", observedAt: "2026-10-10T10:00:00Z", price: 1000,
+    googleTypicalMid: 900, priceLevel: "high", itineraries: 20, feedMid: 450 };
+  const x = featuresOf(row, hub, true)!;
+  assert.equal(x.length, MODEL2_INDICATORS.length);
+  const at = (k: string) => x[MODEL2_INDICATORS.findIndex((i) => i.key === k)]!;
+  assert.equal(at("priceLevel"), 1);
+  assert.ok(Math.abs(at("options") - Math.log(20)) < 1e-12);
+  assert.ok(Math.abs(at("feed") - Math.log(0.5)) < 1e-12, "half of Google's typical");
+  // Nothing from Google or the feed: neutral values, never a dropped fare.
+  const bare = featuresOf({ ...row, priceLevel: null, itineraries: null, feedMid: null }, hub, true)!;
+  assert.equal(bare[MODEL2_INDICATORS.findIndex((i) => i.key === "priceLevel")], 0);
+  assert.equal(bare[MODEL2_INDICATORS.findIndex((i) => i.key === "feed")], 0);
 });

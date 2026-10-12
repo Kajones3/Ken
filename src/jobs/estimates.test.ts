@@ -80,6 +80,21 @@ test("trimmedMultiplier refuses to guess from fewer than 3 routes", () => {
   assert.equal(trimmedMultiplier([1.4, 1.5]), null);
 });
 
+test("one paid date a month rotates by route inside the 8th-22nd, so months get many weekdays", () => {
+  const routes = ["ATL-MCO", "BOS-MCO", "CLT-NRT", "RDU-CDG", "DEN-HKG", "ORD-SNA", "IAD-PVG", "JFK-HND", "MIA-LAX", "SEA-TPA"];
+  const weekdays = new Set<number>();
+  for (const r of routes) {
+    const [d] = sampleDates("2027-03", 1, r);
+    assert.ok(d, r);
+    const day = Number(d!.slice(8, 10));
+    assert.ok(day >= 8 && day <= 22, `${r}: ${d} left the middle of the month`);
+    assert.deepEqual(sampleDates("2027-03", 1, r), [d], "the same route and month always pick the same day");
+    weekdays.add(new Date(d + "T00:00:00Z").getUTCDay());
+  }
+  assert.ok(weekdays.size >= 4, `March 2027 got only ${weekdays.size} weekday(s) across ten routes`);
+  assert.equal(sampleDates("2027-02", 1, "ATL-MCO").length, 1);
+});
+
 test("sampleDates stays inside the month and never repeats a day", () => {
   for (const month of ["2027-02", "2027-03", "2027-04"]) {
     const dates = sampleDates(month, 3);

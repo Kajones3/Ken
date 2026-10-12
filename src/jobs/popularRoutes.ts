@@ -33,16 +33,40 @@ import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 import { flushRaw } from "../rawResponses.js";
 import { forecastFare, recordForecast, type Forecast } from "../fareForecasts.js";
 
+/** The middle of the month the paid job buys in: away from both edges, where
+ *  a "month" search is least typical (owner, 2026-10-12). Thanksgiving and
+ *  Christmas weeks never fall inside it. */
+export const MID_MONTH_FIRST_DAY = 8;
+export const MID_MONTH_LAST_DAY = 22;
+
+/** A small stable hash, so a route+month always picks the same day. */
+function dayHash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619) >>> 0;
+  return h;
+}
+
 /**
  * Which departure dates to actually buy for one route/month. Sampling, not
  * every day: fares within a month move far less than fares across seasons,
  * and a handful of real anchor points per month is what the trend needs.
- * Days 7/14/21 avoid both month edges, where a "month" search is least
- * likely to land.
+ *
+ * With one date a month and a `key` (the route), the day ROTATES inside the
+ * 8th-22nd by route (owner, 2026-10-12). Until then every paid fare left on
+ * the 15th, and within one year each month's 15th is a single weekday, so
+ * "Monday" and "March" could not be told apart. Spread across routes, every
+ * month now gets several weekdays, at the same 18 searches a night, still
+ * clear of the month edges. Without a key, days are evenly spaced as before.
  */
-export function sampleDates(month: string, perMonth: number): string[] {
+export function sampleDates(month: string, perMonth: number, key?: string): string[] {
   const [first, last] = monthBounds(month);
   const lastDay = Number(last.slice(8, 10));
+  if (perMonth === 1 && key) {
+    const span = MID_MONTH_LAST_DAY - MID_MONTH_FIRST_DAY + 1;
+    const day = MID_MONTH_FIRST_DAY + (dayHash(`${key}|${month}`) % span);
+    const iso = `${month}-${String(Math.min(day, lastDay)).padStart(2, "0")}`;
+    return iso >= first ? [iso] : [];
+  }
   const out: string[] = [];
   const step = Math.max(1, Math.floor(lastDay / (perMonth + 1)));
   for (let i = 1; i <= perMonth; i++) {
@@ -215,7 +239,7 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     const provider = opts.provider ?? new SerpApiFlightProvider();
     outer: for (const route of routes) {
       for (const bucket of buckets) {
-        for (const date of sampleDates(route.departMonth, datesPerMonth)) {
+        for (const date of sampleDates(route.departMonth, datesPerMonth, `${route.origin}-${route.destination}`)) {
           if (provider.budgetRemaining <= 0) {
             console.warn("popular-routes: provider budget exhausted, stopping early");
             break outer;

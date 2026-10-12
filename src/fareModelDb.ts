@@ -72,8 +72,21 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
     return med > 0 ? [{ origin: r.origin.trim(), destination: r.destination.trim(), month: Number(r.month), med,
       p25: Number(r.p25_fare_usd), p75: Number(r.p75_fare_usd) }] : [];
   });
+  // The free feed (stored as "travelpayouts+serpapi" by the refresh): the
+  // latest fare per route, date and trip length, for day of week only.
+  const fd = await db.query<{ origin: string; destination: string; depart_date: unknown; trip_length: number; price_usd: string }>(
+    `select distinct on (origin, destination, depart_date, trip_length)
+            origin, destination, depart_date, trip_length, price_usd
+       from flight_observations
+      where source like 'travelpayouts%' and observed_at > now() - ($1 || ' days')::interval
+      order by origin, destination, depart_date, trip_length, observed_at desc`,
+    [String(days)],
+  ).catch(() => ({ rows: [] as never[] }));
+  const feed = fd.rows.map((r) => ({ origin: r.origin.trim(), destination: r.destination.trim(),
+    departDate: dateStr(r.depart_date), tripLength: Number(r.trip_length), price: Number(r.price_usd) }))
+    .filter((x) => x.price > 0);
   const settings = await settingsMap(db);
-  return { fares, baselines, monthly, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
+  return { fares, baselines, monthly, feed, premiumPct: (k, d) => settings.get(k) ?? d, now: new Date() };
 }
 
 // Fitting reads a few thousand rows, so the live site keeps one fitted

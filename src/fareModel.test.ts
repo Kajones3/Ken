@@ -164,3 +164,31 @@ test("a learned season replaces a wrong guessed one, and the monthly survey is p
   assert.equal(p.parts.priorKind, "bts_monthly");
   assert.equal(p.parts.prior, 280);
 });
+
+test("day of week comes from the free feed; paid fares' 'weekday' goes to the month it really was", () => {
+  // Paid fares: every March fare on a Monday (Mar 15 2027), every April fare
+  // on a Thursday (Apr 15). March really is 20% dearer than April.
+  const paid = US.flatMap((o) => [
+    fare(o, "MCO", 360, { departDate: "2027-03-15" }),
+    fare(o, "MCO", 300, { departDate: "2027-04-15" }),
+  ]);
+  const base = US.flatMap((o) => [bts(o, "MCO", 300), { ...bts(o, "MCO", 300), quarter: 2 }]);
+  // The free feed: the same route and month on every weekday, all priced
+  // the same, so day of week doesn't move fares.
+  const feed = US.flatMap((o) => ["03", "04"].flatMap((mm) =>
+    Array.from({ length: 28 }, (_, i) => ({ origin: o, destination: "MCO",
+      departDate: `2027-${mm}-${String(i + 1).padStart(2, "0")}`, tripLength: 7, price: 200 }))));
+  const m = fitFareModel({ ...inputs(paid, base), feed });
+  assert.equal(m.levers.dayOfWeekFrom, "free feed");
+  for (const v of Object.values(m.levers.dayOfWeek)) assert.equal(v.factor, 1);
+  const mar = m.predict("ATL", "MCO", "2027-03-15")!, apr = m.predict("ATL", "MCO", "2027-04-15")!;
+  assert.ok(mar.parts.month > apr.parts.month, `month: Mar ${mar.parts.month} vs Apr ${apr.parts.month}`);
+  // Another March date on a Thursday is priced like March, not like "Thursday".
+  const marThu = m.predict("ATL", "MCO", "2027-03-18")!;
+  assert.equal(marThu.parts.month, mar.parts.month);
+  assert.equal(marThu.parts.dayOfWeek, 1);
+
+  // Without the feed, the paid fares still set day of week, as before.
+  const noFeed = fitFareModel(inputs(paid, base));
+  assert.equal(noFeed.levers.dayOfWeekFrom, "paid fares");
+});
