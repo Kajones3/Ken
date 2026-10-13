@@ -183,6 +183,27 @@ Run `npm test` and `npm run typecheck` before you believe anything. There are
    further down for what to show). The owner flips `flight.useCandidate`.
 6. **Hotels** are the owner's next focus after that.
 
+### 2026-10-13 — governing rule #4 check of the rotating buy day; paid searches capped at 320 days
+
+Coverage run 38405665061 on popular-routes run 38392176561 (first night of
+the rotating buy day + main airports only):
+- **Kept = written: 12 / 12**, 12 of 12 with Google's typical range, **18
+  forecasts kept**. Buy days now spread (RDU->MCO 2027-03-09, RDU->LAX
+  03-22, DTW->LAX 09-15, JFK->LAX 09-09). Day of week still "from free feed".
+  Alternates moved to main airports (MIA->SNA, MSP->SNA, RDU->SNA -> LAX;
+  RDU->NRT -> HND); no SNA/TPA/NRT bought.
+- **But 6 of 18 searches came back EMPTY** (0 itineraries, still billed):
+  the 6 rotation slots, all September 2027, 331-344 days out. Airlines sell
+  ~330 days ahead. Rotation month = today + 60 + quarterStep x 90 reached
+  that on 1 night in 4 (the same cause as 13/18 on 10-09 and 12/18 on
+  10-10). Fix: `FLIGHT_SEARCH_MAX_DAYS` 320 + `withinSaleWindow()` in
+  popularRoutes.ts; dates past it are never searched (counted as "too far
+  ahead" in the run note), rotation steps are 75 days (60/135/210/285),
+  furthest-off picks only months on sale, intl-sweep skips them too. Next
+  check: the next run should be 18 written / 18 kept (or note "too far").
+- Health check now reports the deployed commit (`/health` `version`,
+  PR #171); Render was confirmed on caa179b 2026-10-13.
+
 ### 2026-10-12, after Duffel — the government's airfare indexes (BLS): kept, learned, on the board
 
 Owner: "We should be using BLS for international AND their CPI index. We
