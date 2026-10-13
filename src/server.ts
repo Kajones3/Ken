@@ -680,7 +680,9 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/" || url.pathname === "/prototype.html") {
       const file = await readFile(new URL("prototype.html", PUBLIC_DIR));
-      res.writeHead(200, { "content-type": MIME[".html"] });
+      // no-cache: the browser must check back each visit, so a redeploy is
+      // seen on the next load rather than whenever a held copy expires.
+      res.writeHead(200, { "content-type": MIME[".html"], "cache-control": "no-cache" });
       return res.end(file);
     }
     if (url.pathname.startsWith("/public/")) {
@@ -700,7 +702,10 @@ const server = createServer(async (req, res) => {
                 (select count(*) from flight_prices) as flights,
                 (select count(*) from hotel_rates) as hotels
            from fetch_runs where job = 'refresh' and errors = 0`);
-      return send(200, { ok: true, db: db.kind, ...rows[0] }, { cache: "no-store" });
+      // `version` is the commit Render built (RENDER_GIT_COMMIT), so anyone can
+      // tell from outside the site password which code is live.
+      const version = (process.env.RENDER_GIT_COMMIT ?? "").slice(0, 7) || "local";
+      return send(200, { ok: true, db: db.kind, version, ...rows[0] }, { cache: "no-store" });
     }
     // Each origin carries the "Getting there" preset to offer someone
     // departing from it, resolved HERE rather than in the browser. The rule
