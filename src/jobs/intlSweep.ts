@@ -25,7 +25,7 @@ import { getDb, type Db } from "../db.js";
 import { SerpApiFlightProvider } from "../providers/serpapiFlights.js";
 import { TRIP_BUCKETS } from "../config.js";
 import { internationalDestinations, runIntlBaseline } from "./intlBaseline.js";
-import { sampleDates } from "./popularRoutes.js";
+import { sampleDates, withinSaleWindow } from "./popularRoutes.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 import { flushRaw } from "../rawResponses.js";
 
@@ -82,6 +82,7 @@ export async function runIntlSweep(db: Db, opts: IntlSweepOptions = {}) {
       for (const month of travelMonths) {
         for (const date of sampleDates(month, datesPerMonth)) {
           if (date < today) continue;               // nobody can book the past
+          if (!withinSaleWindow(date, today)) continue; // not on sale yet: billed, empty
           if (provider.budgetRemaining <= 0) {
             console.warn("intl-sweep: provider budget exhausted, stopping early");
             break outer;

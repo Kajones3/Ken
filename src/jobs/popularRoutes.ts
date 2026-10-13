@@ -37,6 +37,20 @@ import { forecastFare, recordForecast, type Forecast } from "../fareForecasts.js
  *  a "month" search is least typical (owner, 2026-10-12). Thanksgiving and
  *  Christmas weeks never fall inside it. */
 export const MID_MONTH_FIRST_DAY = 8;
+/**
+ * The furthest ahead a paid flight search may depart (2026-10-13). Airlines
+ * put flights on sale about 330 days ahead, and Google returns NOTHING past
+ * that, while the search is still billed: on 2026-10-13 all 6 rotation
+ * searches (September 2027, 331-344 days out; 2027-09-09 is day 331) came back empty, as on the
+ * other rotation nights that reached that far (13 and 12 of 18 kept). 320
+ * leaves room for the return flight a week later. A guess from that
+ * evidence; raise it if Google starts answering further out.
+ */
+export const FLIGHT_SEARCH_MAX_DAYS = 320;
+/** True when a departure date is close enough that airlines sell it. */
+export function withinSaleWindow(date: string, today: string): boolean {
+  return date <= addDaysISO(today, FLIGHT_SEARCH_MAX_DAYS);
+}
 export const MID_MONTH_LAST_DAY = 22;
 
 /** A small stable hash, so a route+month always picks the same day. */
@@ -166,7 +180,9 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
       const board = await loadScoreboard(db, 30);
       worst = pickWorstRoutes(board.routes, {
         useCandidate: board.useCandidate, zonePct: board.zonePct, fresh,
-        plannable: plannableMonths(todayISO()), n: worstSlots,
+        // Only months whose first possible buy day airlines already sell.
+        plannable: plannableMonths(todayISO()).filter((m) => withinSaleWindow(`${m}-${String(MID_MONTH_FIRST_DAY).padStart(2, "0")}`, todayISO())),
+        n: worstSlots,
       });
       if (worst.length) console.log(`popular-routes: ${worst.length} furthest-off route(s): ` +
         worst.map((r) => `${r.origin}->${r.destination} ${r.departMonth}`).join(", "));
@@ -196,7 +212,10 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     const quarterStep = Math.floor(Date.now() / 86_400_000) % 4;
     // Never earlier than the first month the form offers: 60 days out from
     // the 1st of a month is still next month, which nobody can pick.
-    const sampled = monthKey(addDaysISO(todayISO(), 60 + quarterStep * 90));
+    // Steps of 75 days (60, 135, 210, 285) so the furthest month's 22nd
+    // stays inside FLIGHT_SEARCH_MAX_DAYS; 90-day steps reached ~340 days,
+    // where airlines sell nothing yet.
+    const sampled = monthKey(addDaysISO(todayISO(), 60 + quarterStep * 75));
     const earliest = firstPlannableMonth(todayISO());
     const rotationMonth = sampled < earliest ? earliest : sampled;
     const taken = new Set(routes.map((r) => `${r.origin}|${r.destination}`));
@@ -252,13 +271,16 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     routes = routes.filter((r) => !isLocalRoute(r.origin, r.destination));
   }
 
-  let calls = 0, rows = 0, errors = 0, misses = 0, forecasts = 0;
+  let calls = 0, rows = 0, errors = 0, misses = 0, forecasts = 0, tooFar = 0;
+  const today = todayISO();
 
   if (routes.length) {
     const provider = opts.provider ?? new SerpApiFlightProvider();
     outer: for (const route of routes) {
       for (const bucket of buckets) {
         for (const date of sampleDates(route.departMonth, datesPerMonth, `${route.origin}-${route.destination}`)) {
+          // Not on sale yet: a search would be billed and return nothing.
+          if (!withinSaleWindow(date, today)) { tooFar++; continue; }
           if (provider.budgetRemaining <= 0) {
             console.warn("popular-routes: provider budget exhausted, stopping early");
             break outer;
@@ -315,9 +337,11 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
        note = note || ' · ' || $5 where id = $1`,
-    [runId, calls, rows, errors, `${routes.length} routes, ${misses} with no fare, ${forecasts} forecasts kept`],
+    [runId, calls, rows, errors, `${routes.length} routes, ${misses} with no fare, ${forecasts} forecasts kept`
+      + (tooFar ? `, ${tooFar} date(s) too far ahead to search` : "")],
   );
-  return { runId, routes: routes.length, calls, rows, errors, misses, forecasts };
+  if (tooFar) console.log(`popular-routes: ${tooFar} date(s) past ${FLIGHT_SEARCH_MAX_DAYS} days out not searched (airlines don't sell them yet)`);
+  return { runId, routes: routes.length, calls, rows, errors, misses, forecasts, tooFar };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

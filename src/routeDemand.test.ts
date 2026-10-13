@@ -317,3 +317,26 @@ test("paid buying uses each resort's main airport only: SNA demand is bought at 
   assert.equal(bought.filter((b) => b === "ATL-LAX").length, 1, "SNA demand merged into one LAX purchase");
   await db.close();
 });
+
+test("paid searches never go further ahead than airlines sell (2026-10-13: 6 empty, billed searches)", async () => {
+  const { FLIGHT_SEARCH_MAX_DAYS, withinSaleWindow } = await import("./jobs/popularRoutes.js");
+  const { addDaysISO, todayISO, monthKey } = await import("./dates.js");
+  assert.equal(withinSaleWindow("2027-08-29", "2026-10-13"), true);
+  assert.equal(withinSaleWindow("2027-08-30", "2026-10-13"), false);
+  const db = await memoryDb();
+  const asked: string[] = [];
+  const stub = {
+    budgetRemaining: 99,
+    async quote(origin: string, destination: string, departDate: string) { asked.push(departDate); return null; },
+  };
+  const near = monthKey(addDaysISO(todayISO(), 120));
+  const far = monthKey(addDaysISO(todayISO(), FLIGHT_SEARCH_MAX_DAYS + 40));
+  const r = await runPopularRoutes(db, { routes: [
+    { origin: "ATL", destination: "MCO", departMonth: near, searches: 1 },
+    { origin: "ATL", destination: "LAX", departMonth: far, searches: 1 },
+  ] as never, datesPerMonth: 1, provider: stub as never });
+  assert.equal(asked.length, 1, `asked ${asked.join(", ")}`);
+  assert.ok(asked[0]!.startsWith(near));
+  assert.equal(r.tooFar, 1);
+  await db.close();
+});
