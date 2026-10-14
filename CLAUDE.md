@@ -110,78 +110,100 @@ What that means in code. **Every session keeps all of these true:**
    owner's call.** Improve the candidate freely (it only affects grading
    until `flight.useCandidate` is on); the owner flips the switch.
 
-## START HERE — state as of 2026-10-12 (end of session)
+## START HERE — state as of 2026-10-13 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
-in Render; delete it to launch). **The owner redeployed Render on
-2026-10-12, after #161** (one redeploy ships everything merged so far).
-The PR that followed (free feed in the candidate, rotating buy day, Model 2
-signals) changes /admin text and needs the NEXT redeploy to show there; its
-data and formula changes work without one (Actions jobs). Older note: They carry: the
-nearby-airport line, the new /admin Flights layout ("Are we getting
-better?"), the morning email's accuracy section, and the screenshot
-reader's £/ticket-page fix.
+in Render; delete it to launch). **Render was confirmed live on caa179b
+(PR #171) on 2026-10-13.** `/health` now reports `version` (the deployed
+commit), so "is the redeploy live?" is one check: compare it with master.
+Anything merged after #171 (only #172, an Actions job change, plus this
+notes PR) needs no redeploy to work.
 
 The owner redeploys by hand; Render's build runs `npm run migrate`. The
 nightly data jobs run in GitHub Actions and migrate themselves, so the DATA
-side works with or without a redeploy.
+side works with or without a redeploy. When the owner says "I don't see X
+after deploying", check `/health` version first, then whether X only shows
+in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**777 tests** (all pass, 2026-10-11), and typecheck is clean. `npm run smoke` runs the pipeline.
+**799 tests** (all pass, 2026-10-13), and typecheck is clean. `npm run smoke` runs the pipeline.
 
-### Pick up here FIRST — session starting 2026-10-12 (supersedes older lists)
+**This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
+government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
+candidate levers, a board line; #170 the board line shortened to "Airfares
+are up 23% from a year ago. (Source: Bureau of Labor Statistics)" (owner:
+"the user doesn't need to know everything we do"); #171 `/health` version
++ prototype served `no-cache`; #172 paid flight searches never past 320
+days out (6 of 18 had come back empty, still billed). Details in the dated
+sections below.
 
-1. **Ask about the Render redeploy** for #147-#159 (above).
-2. **The owner is bringing Paris ticket screenshots. Build Paris's real
-   multi-day table** (Paris is the last resort still on the ticket curve,
-   and it reads ~43% LOW: real April 2027 3-day adult £285 = $377 vs our
-   $215). What to ask for if the screenshots don't already show it: on ONE
-   arrival date (ideally 2027-04-15, a typical April day), the **1, 2, 3, 4
-   and 5-day ticket prices, adult (12+) AND child (3-11)**, from
-   tickets.disneylandparis.com (UK site, pounds). Paris multi-day tickets
-   all include both parks, so there is no separate hopper to price for
-   2+ days. A second date in a quieter month (e.g. January) would show how
-   much the 1-day price moves by season. How it's wired, so nothing is
-   re-derived:
-   - Convert at the committed GBP rate, **0.7564 GBP per USD** (ECB
-     2026-10-09, `src/exchangeData.ts`), and say the date in the comment.
-   - Store adult totals as `ticket.multiDayAdultUsd` on `dlp` in
-     `src/config.ts`, exactly like WDW (config.ts ~238) and Disneyland
-     (~329); the type is at ~157. `ticketMultiDay()` (pricing.ts ~1365)
-     uses the table only for the multi-day SHAPE (total / (1-day x days)).
-   - **The absolute level comes from somewhere else**: `seedTickets()` in
-     `src/jobs/refresh.ts` (~190) writes `ticket_prices` per date as
-     `ticket.base` (78 for Paris now) x the season curve, child =
-     `base x ticket.child` (0.84). So `base` must become the real 1-day
-     adult price on a typical day, and `child` the real child/adult ratio
-     (£268/£285 = 0.94 on the 3-day; check the 1-day). The ticket
-     base is code only (not an /admin setting); the hopper IS one
-     (`hopper.dlp.adult/child`, an owner value beats config). Look at the
-     WDW/DLR ticket tests, then add one pinning the 3-day April adult near
-     $377.
-   - Re-price the owner's sample trip after and say how much Paris moved
-     (it will rise; it changes which resort the sample PDF leads with too).
-   - `hopperAdultUsd: 45` / `hopperChildUsd: 38` are guesses; for Paris a
-     2+-day ticket already covers both parks, so they should only apply to
-     a 1-day ticket. Check `hopperPerTicket()` before changing.
-   - Update `docs/numbers-to-verify.md` in the same commit.
-3. **The wrong Paris price-check row is still stored** (item
-   "tickets.disneylandparis.com", 297 EUR, "total", compared with a 1-day
-   price). After the redeploy, the owner deletes it in /admin and re-saves
-   the screenshot; the reader now reads £, Adult/Child and N-day. Until
-   then it pulls Paris tickets slightly the wrong way.
-4. **Governing rule #4 + #2:** read the morning email ("Did the data
-   stick?", "Are our guesses getting better?") or run "Pricing the Magic
-   debug coverage". Check: paid fares bought = kept (18/night), and since
-   2026-10-12 their dates spread across the 8th-22nd (not all the 15th);
-   ~18 `fare_forecasts` a night; the "Fares bought, by home airport" table
-   gaining ~6 new airports a night (rotation slots, PR #152); the new
-   candidate levers' before-buying grades vs the baseline below (US 30% /
-   19.5% off, Intl 24% / 17.5%). A WORSE or flat week = find out why and
-   propose the fix, unprompted.
-5. **~2026-10-21 to 10-28: the accuracy review** (see the older list
-   further down for what to show). The owner flips `flight.useCandidate`.
-6. **Hotels** are the owner's next focus after that.
+### Pick up here FIRST — session starting 2026-10-14 (supersedes older lists)
+
+1. **Governing rule #4 on #172** (a check-in is scheduled for 2026-10-14
+   13:30 UTC, trigger trig_019FFM6aKw3utrbjFmpTw4V4): read the popular-routes
+   run after #172 merged, or run "Pricing the Magic debug coverage". Expect
+   **18 written / 18 kept** (or the run note says "N too far ahead" and the
+   rest kept), **no empty searches**, buy days spread across the 8th-22nd,
+   only main airports (LAX, MCO, HND for Tokyo), ~18 forecasts kept. Show the
+   owner the numbers before calling it fixed.
+2. **BLS first grade (governing rule 2):** the coverage report prints the
+   candidate's leave-one-out US/international WITH vs WITHOUT the index
+   levers. Survey-age weight learned ~1.17-1.18 on 2026-10-13; tell the owner
+   whether it helped. The fare-age lever learns nothing until ~mid-December
+   2026 (needs our 90-day window to span months BLS has published). The BLS
+   workflow runs Tuesdays.
+3. **Paris tickets, when the owner brings screenshots** (still ~43% LOW:
+   real April 2027 3-day adult £285 = $377 vs our $215). Ask, if not shown:
+   on ONE arrival date (ideally 2027-04-15), the 1-5 day prices, adult (12+)
+   AND child (3-11), from tickets.disneylandparis.com (UK site, pounds); a
+   January date too if possible. Wiring, so nothing is re-derived:
+   - Convert at **0.7564 GBP per USD** (ECB 2026-10-09, `src/exchangeData.ts`),
+     dated in the comment.
+   - Adult totals -> `ticket.multiDayAdultUsd` on `dlp` in `src/config.ts`,
+     like WDW and Disneyland. `ticketMultiDay()` (pricing.ts) uses it only
+     for the multi-day SHAPE.
+   - The LEVEL comes from `seedTickets()` (`src/jobs/refresh.ts`):
+     `ticket.base` (78 now) x season curve, child = base x `ticket.child`
+     (0.84). Set base = real 1-day adult on a typical day, child = real
+     child/adult ratio (£268/£285 = 0.94 on the 3-day). Add a test pinning
+     the 3-day April adult near $377.
+   - Paris 2+-day tickets already cover both parks: the hopper guesses
+     (45/38) should apply to a 1-day ticket only; check `hopperPerTicket()`.
+   - Re-price the sample trip and say how much Paris moved; update
+     `docs/numbers-to-verify.md` in the same commit.
+4. **The wrong Paris price-check row is still stored** (item
+   "tickets.disneylandparis.com", 297 EUR, "total"). The reader fix is live
+   now (caa179b), so the owner can delete it in /admin and re-save the
+   screenshot. Remind them.
+5. **Every day: "Are our guesses getting better?"** (morning email, /admin
+   Flights). Fair test as of 2026-10-13 (`fare_forecasts`, written before
+   buying): **US: what travelers see 21% within ±10%, leaning +15.5% high;
+   candidate 30%, +2.1%. International: shown 36%, candidate 23%.** A WORSE
+   or flat week = find out why and propose the fix, unprompted.
+6. **~2026-10-21 to 10-28: the accuracy review.** Show (a) the fair test
+   above, US/intl, shown vs candidate; (b) the noise floor (~60-70% within
+   ±10% is realistic, 90% is not); (c) what the new levers (month, feed day
+   of week, budget share, BLS) did. The owner flips `flight.useCandidate`;
+   Claude doesn't. Candidate is better on US, worse on international:
+   say so plainly.
+7. **Hotels next.** Ready plan (not built): a learned resort x calendar-month
+   lever for Disney's own hotels, graded leave-one-out before it applies.
+   Why: Disney hotels are 40% within ±10% (typically off 14.8%) vs
+   off-property 66%; misses vary by MONTH (Hong Kong +22% high, Tokyo
+   Disneyland Hotel -31% to -54%, Pop Century March +53%), which one
+   per-hotel factor can't fix. Pieces: `CountedCheck.night`
+   (checkFactors.ts), set in `asEvidence()` (disneyEvidence.ts); month
+   factors `hotelSeason|<resort>|<MM>` in `computeFactors()` (shrink K=6,
+   clamp 0.5-2); applied beside the hotel factor in book.ts; graded by a new
+   `gradeDisneySeason()` in hotelLearning.ts; ships only if leave-one-out
+   "typically off" improves (setting `sources.hotel.monthLever`). Google's
+   "usual price" weight learned 0 (deal prices held) and booking-site prices
+   came on 0 of 1,169 rates: both used, nothing to move.
+8. **Nearby-airport line, if the owner asks again where it is:** it shows
+   only for US resorts when a nearby airport's survey median saves >= $40
+   and >= 5% a seat. Test search: from Charlotte (CLT), March 2027, open
+   Walt Disney World's Details.
+9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
 ### 2026-10-13 — governing rule #4 check of the rotating buy day; paid searches capped at 320 days
 
