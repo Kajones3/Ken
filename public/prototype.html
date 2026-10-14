@@ -320,9 +320,21 @@ a{color:var(--ink)}
 .spreadnote{margin:6px 0 0; font-size:12.5px; line-height:1.5; color:var(--muted); max-width:70ch}
 .spreadnote b{color:var(--text)}
 .spreadlow{display:inline-block; margin-top:2px; font-weight:600; color:var(--text)}
-.crowdnote{background:var(--surface-2); border:1px solid var(--line);
-  border-radius:10px; padding:10px 13px; margin:0 0 14px; font-size:13px; line-height:1.45}
-.crowdnote b{font-weight:680}
+/* The board's notes: a short labeled list, one fact per line, the label in
+   a fixed column so the eye can scan down it. Secondary words are muted. */
+.brief{margin:0 0 14px; border-top:1px solid var(--rule); max-width:860px}
+.brief:not(:has(.brief-row:not([hidden]))){display:none}
+.brief-row{display:grid; grid-template-columns:88px minmax(0,1fr); gap:12px;
+  padding:8px 0; border-bottom:1px solid var(--rule); font-size:13px; line-height:1.5}
+.brief dt{font-size:11px; font-weight:650; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--muted); padding-top:2px}
+.brief dd{margin:0; color:var(--ink)}
+.brief dd b{font-weight:650}
+.brief .sub{color:var(--muted)}
+.brief .sep{color:var(--muted); margin:0 7px}
+@media (max-width:560px){
+  .brief-row{grid-template-columns:1fr; gap:2px}
+}
 .crowdc{display:inline-block; font-size:11px; font-weight:650; padding:2px 8px;
   border-radius:999px; background:var(--surface-2); color:var(--muted)}
 .crowdc-peak{background:color-mix(in srgb, var(--s6) 18%, transparent); color:var(--s6)}
@@ -1199,14 +1211,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
 
-  <div class="crowdnote" id="crowdNote" hidden></div>
-
   <div class="res-head">
     <div>
       <h2 id="resTitle">Six resorts, cheapest first</h2>
       <p class="res-sub" id="resSub"></p>
-      <p class="hint" id="parkDaysNote" hidden></p>
-      <p class="hint" id="airfareIndexNote" hidden></p>
     </div>
     <div class="legend">
       <span class="lg"><i class="sw" style="background:var(--s1)"></i>Flights</span>
@@ -1229,6 +1237,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
       <button class="btn btn-sm" id="budgetBtn" hidden>Plan how to pay</button>
     </div>
   </div>
+
+  <!-- What to know about this board, one labeled line each: the label says
+       what the line is about, so the sentence can be short. -->
+  <dl class="brief" id="resBrief">
+    <div class="brief-row" id="crowdNote" hidden><dt>Crowds</dt><dd></dd></div>
+    <div class="brief-row" id="parkDaysNote" hidden><dt>Park days</dt><dd></dd></div>
+    <div class="brief-row" id="airfareIndexNote" hidden><dt>Airfares</dt><dd></dd></div>
+  </dl>
 
   <details class="why" id="volatilityNote">
     <summary>Why might the real price be different from this?</summary>
@@ -2332,11 +2348,10 @@ function renderCrowdNote(){
   const quietest = rank.filter(c=>c.rank === quiet.rank).map(c=>nameOf(c.resortId));
   const busiest  = rank.filter(c=>c.rank === busy.rank).map(c=>nameOf(c.resortId));
   const month = MONTHSFULL[(rank[0].month || 1) - 1];
-  el.innerHTML = `<b>${esc(month)} is not equally busy everywhere.</b> `
-    + `${esc(busiest.join(", "))} ${busiest.length>1?"are":"is"} typically at `
-    + `${esc(busy.label.toLowerCase())} crowds, while ${esc(quietest.join(", "))} `
-    + `${quietest.length>1?"are":"is"} usually ${esc(quiet.label.toLowerCase())}. `
-    + `The board below is still ordered by price.`;
+  el.querySelector("dd").innerHTML =
+    `Busiest in ${esc(month)}: <b>${esc(busiest.join(", "))}</b> (${esc(busy.label.toLowerCase())})`
+    + `<span class="sep">·</span>Quietest: <b>${esc(quietest.join(", "))}</b> (${esc(quiet.label.toLowerCase())})`
+    + `<br><span class="sub">The board stays in price order.</span>`;
   el.hidden = false;
 }
 
@@ -3374,7 +3389,7 @@ function renderParkDaysNote(){
   const el = $("#parkDaysNote");
   if(!el) return;
   const ok = results.filter(it => it.ok && it.price && it.price.parkDays);
-  if(params.parkDays || !ok.length){ el.hidden = true; el.innerHTML = ""; return; }
+  if(params.parkDays || !ok.length){ el.hidden = true; return; }
   // Grouped by day count, so "3 at Tokyo, Disneyland Paris and Disneyland"
   // reads as one clause rather than three near-identical ones.
   const groups = new Map();
@@ -3385,12 +3400,13 @@ function renderParkDaysNote(){
     groups.get(key).names.push(SHORT_NAME[it.resortId] || it.resort.name);
   }
   const andList = a => a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length-1];
-  const parts = [...groups.values()].sort((a, b) => b.days - a.days).map((g, i) => {
-    const why = g.yours ? "your number" : (g.names.length === 1 ? (g.short || "").replace(/ each$/, "") : g.short);
-    return `<b>${g.days}${i === 0 ? ` day${g.days===1?"":"s"}` : ""} at ${esc(andList(g.names))}</b>${why ? ` (${esc(why)})` : ""}`;
-  });
-  el.innerHTML = `Park tickets are priced for what each resort needs: ${parts.join("; ")}. `
-    + `Change any resort's days on its card, or pick one number for all of them under "Park days".`;
+  // "5 days Walt Disney World · 3 days Tokyo, Paris and Disneyland": the
+  // count leads, so the line scans like a list; the reasons live in the
+  // form's "?" note and each resort's card.
+  const parts = [...groups.values()].sort((a, b) => b.days - a.days).map(g =>
+    `<b>${g.days} day${g.days===1?"":"s"}</b> ${esc(andList(g.names))}${g.yours ? ` <span class="sub">(your number)</span>` : ""}`);
+  el.querySelector("dd").innerHTML = parts.join(`<span class="sep">·</span>`)
+    + `<br><span class="sub">Sized to each resort's parks. Change one on its card, or set one number for all under "Park days".</span>`;
   el.hidden = false;
 }
 
@@ -5510,7 +5526,7 @@ async function boot(){
   const ai = meta.airfareIndex;
   if(ai && ai.headline && $("#airfareIndexNote")){
     const el = $("#airfareIndexNote");
-    el.innerHTML = `<b>${esc(ai.headline)}</b> ${esc(ai.detail)}`;
+    el.querySelector("dd").innerHTML = `<b>${esc(ai.headline)}</b> <span class="sub">${esc(ai.detail)}</span>`;
     el.hidden = false;
   }
   PLUS_PASS_DEFAULT = meta.plusPassDefault || PLUS_PASS_DEFAULT;
