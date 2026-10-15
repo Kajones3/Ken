@@ -77,7 +77,6 @@ test("a badged resort is still fully priced — badging is not hiding", () => {
     const r = RESORT_BY_ID.get(id)!;
     assert.ok(r.ticket.base > 0, `${id} must still have real ticket pricing`);
     assert.ok(r.hotels.length > 0, `${id} must still have hotels to price`);
-    assert.ok(r.food.qs > 0, `${id} must still have food rates`);
   }
 });
 

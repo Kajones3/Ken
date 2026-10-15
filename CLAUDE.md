@@ -205,6 +205,46 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-15, last — food is priced MEAL BY MEAL, owner-editable
+
+Owner: "I should be able to enter [character dining 50-75] as a price ...
+search the internet to get some seed data", then: day of meals per style OK;
+all-in with tax, and a tip for US resorts ("just note that tip is added in");
+"use maybe a middle number"; kids at ~60-65% of adult.
+- `src/meals.ts` (pure): per resort a low-high range per adult for
+  quick-service meal, table-service meal, character meal, snack (local
+  currency, converted at today's rate) and a day of groceries (USDA moderate
+  plan $11-13/day x the place's grocery level from priceLevels.ts). The
+  MIDDLE is priced, for every basis. Plus tax (WDW 6.5% Orange County, DLR
+  7.75% Anaheim; overseas menus include it) and a tip/service charge on
+  table-service + character (US 18%; Shanghai character 15%). Groceries
+  untaxed. Each range, tax and tip is a setting (`food.<resort>.<meal>.low/
+  high`, `food.<resort>.taxPct/tipPct`, `food.childSharePct` 63) under
+  /admin → Rates & settings → "Food — <resort>". WDW character = the owner's
+  $50-75.
+- `DAY_OF_MEALS`: grocery = groceries + snack; someQs = a grocery breakfast
+  (a third of a day) + 1 QS + snack; qs = 3 QS + snack; mix = 2 QS + 1 TS +
+  snack; ts = 1 QS + 2 TS + snack; someCharacter = 1 QS + 1 TS + 1
+  character + snack (owner's correction); character = 1 QS + 2 character
+  + snack. All seven run cheapest to dearest (test pins it).
+- **"The cheapest trip" (`priceBasis` cheapest) prices food as GROCERY**
+  whatever style the search names, dining plan included (owner: "The
+  cheapest trip will almost always be grocery prices"). A whole-party daily
+  total the traveler typed still wins. `TripPrice.foodStyle` says which
+  style was priced; the food card adds "the cheapest trip eats from the
+  grocery store" and the PDF says so.
+- Children (the resort's child ticket band) 63% of an adult (WDW character
+  menus: 62-69%); juniors (Tokyo 12-17) eat as adults (were 0.9); under-3s
+  free. `config.food` is GONE; `foodRate()` reads meals.ts.
+  `TripPrice.foodDay` carries the day meal by meal; the food card and PDF
+  say it ("Includes 6.5% sales tax and an 18% tip on ...").
+- Seeds and their sources: meals.ts; weak ones in docs/numbers-to-verify.md
+  (Hong Kong table service has NO source).
+- Before/after per adult per day (old -> new), WDW: grocery 38->19, someQs
+  50->33, qs 62->71, mix 96->106, ts 158->141, someCharacter 198->163,
+  character 237->184. Full table in the conversation of 2026-10-15.
+- Needs a Render redeploy. No data job changed (governing rule #4 n/a).
+
 ### 2026-10-15, later — "the cheapest trip" = the cheapest FLIGHT on the cheapest day
 
 Owner: "someone searching a typical fare [should] be able to switch to the

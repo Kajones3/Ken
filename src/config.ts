@@ -9,12 +9,8 @@ export type Band = "infant" | "child" | "junior" | "adult";
 /**
  * Seven real, discrete dining styles, cheapest to priciest, plus "plan" (a
  * Disney dining plan, WDW/Paris only — a purchased product, not a style to
- * estimate). Replaced a coarser four-style set 2026-09-25 (owner's ask):
- * "someQs" and "someCharacter" are BLENDS of their neighbors (see
- * `foodRate()` in pricing.ts) rather than their own researched numbers —
- * "some quick service" sits between bringing your own food and eating
- * quick-service every meal, and "some character meals" sits between an
- * ordinary table-service trip and one that's entirely character dining.
+ * estimate). Each style is a day of meals priced per resort since
+ * 2026-10-15: see DAY_OF_MEALS in meals.ts.
  */
 export type FoodStyle =
   | "grocery" | "someQs" | "qs" | "mix" | "ts" | "someCharacter" | "character" | "plan";
@@ -167,7 +163,6 @@ export interface Resort {
      *  Shanghai, which each have one park and no hopper product to sell. */
     hopperAdultUsd?: number; hopperChildUsd?: number;
   };
-  food: { grocery: number; qs: number; mix: number; ts: number; character: number };
   /**
    * A few named restaurants per dining style, so "table service" is not just
    * a number — the owner's ask (2026-09-25): "if I want to do table service,
@@ -239,11 +234,6 @@ export const RESORTS: Resort[] = [
       hopperByDaysUsd: [70, 80, 80, 85, 90, 95, 95],
       hopperAdultUsd: 85, hopperChildUsd: 85,
     },
-    // character: Claude's own estimate, not researched — 1.5x the table-service
-    // rate, roughly matching how much more a real character meal (Cinderella's
-    // Royal Table, 'Ohana breakfast) runs over an ordinary table-service one.
-    // Same standing as the food rates above it: a guess from budget guides.
-    food: { grocery: 38, qs: 62, mix: 96, ts: 158, character: 237 },
     foodExamples: {
       qs: [{ name: "Satu'li Canteen", tier: "$$" }, { name: "Docking Bay 7", tier: "$$" }],
       ts: [{ name: "'Ohana", tier: "$$$" }, { name: "Topolino's Terrace", tier: "$$$$" }, { name: "Sanaa", tier: "$$$" }],
@@ -330,7 +320,6 @@ export const RESORTS: Resort[] = [
       hopperByDaysUsd: [70, 100, 110, 120, 135],
       hopperAdultUsd: 110, hopperChildUsd: 110,
     },
-    food: { grocery: 40, qs: 66, mix: 100, ts: 162, character: 243 },
     foodExamples: {
       qs: [{ name: "Galactic Grill", tier: "$" }, { name: "Alien Pizza Planet", tier: "$" }],
       ts: [{ name: "Blue Bayou", tier: "$$$" }, { name: "Carthay Circle", tier: "$$$$" }],
@@ -383,7 +372,6 @@ export const RESORTS: Resort[] = [
     // base) — weaker confidence than WDW/Disneyland's, which came from an
     // actual 2026 price check. Refine before relying on this one.
     ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
-    food: { grocery: 30, qs: 49, mix: 80, ts: 128, character: 192 },
     foodExamples: {
       qs: [{ name: "Cowboy Cookout Barbecue", tier: "$" }, { name: "Colonel Hathi's Pizza Outpost", tier: "$" }],
       ts: [{ name: "Auberge de Cendrillon", tier: "$$$$" }, { name: "Walt's — an American Restaurant", tier: "$$$" }],
@@ -457,7 +445,6 @@ export const RESORTS: Resort[] = [
        no change: the 1-Day Passport runs JPY 8,900-10,900, and the junior and
        child ratios come out at 0.83 and 0.55 against 0.83 and 0.55 here. */
     ticket: { base: 63, child: 0.55, junior: 0.83, slope: 0.028, floor: 0.82 },
-    food: { grocery: 22, qs: 35, mix: 56, ts: 94, character: 141 },
     foodExamples: {
       qs: [{ name: "Pan Galactic Pizza Port", tier: "$" }, { name: "Sunshine Terrace", tier: "$" }],
       ts: [{ name: "Queen of Hearts Banquet Hall", tier: "$$$" }, { name: "Magellan's", tier: "$$$$" }],
@@ -542,7 +529,6 @@ export const RESORTS: Resort[] = [
        observed rather than assumed: on a CNY 719 date, Child (3-11) is CNY
        539, which is 0.75. */
     ticket: { base: 86, child: 0.75, slope: 0.04, floor: 0.7 },
-    food: { grocery: 18, qs: 31, mix: 49, ts: 82, character: 123 },
     foodExamples: {
       qs: [{ name: "Wandering Moon Teahouse", tier: "$" }, { name: "L'Chef Pastry", tier: "$" }],
       ts: [{ name: "Royal Banquet Hall", tier: "$$$" }, { name: "Barbossa's Bounty", tier: "$$" }],
@@ -604,7 +590,6 @@ export const RESORTS: Resort[] = [
        Child ratio OWNER DATA, 2026-09-25: HK$611 Child/Senior against HK$790
        General Admission on the same date, 0.77. */
     ticket: { base: 92, child: 0.77, slope: 0.045, floor: 0.68 },
-    food: { grocery: 20, qs: 34, mix: 53, ts: 87, character: 131 },
     foodExamples: {
       qs: [{ name: "Tomorrowland Terrace", tier: "$" }, { name: "Market Place Kitchen", tier: "$" }],
       ts: [{ name: "Explorer's Club Restaurant", tier: "$$$" }, { name: "Plaza Inn", tier: "$$$" }],

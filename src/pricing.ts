@@ -18,6 +18,7 @@ import {
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
 import { holidayFlightPremium } from "./holidayWindows.js";
+import { foodDay, DEFAULT_CHILD_MEAL_SHARE_PCT, type FoodDay } from "./meals.js";
 import {
   findTier, passPriceKey, dvcCredit, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY,
   type PassHolding, type DvcRental,
@@ -466,6 +467,12 @@ export interface TripPrice {
     | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
   foodPlan: { label: string; adult: number; child: number } | null;
+  /** How the food line was built when it was estimated from meals (no plan,
+   *  no typed daily total): one adult's day, meal by meal, all in. */
+  foodDay?: FoodDay;
+  /** The dining style the food line was priced at: the search's own, or
+   *  "grocery" on the cheapest trip. */
+  foodStyle: FoodStyle;
   partySize: number;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
@@ -571,11 +578,14 @@ export function ticketMultiplier(resort: Resort, band: Band): number {
 }
 
 /** Under-3s eat from an adult's plate at every resort, on a plan or off it. */
-export function foodMultiplier(band: Band): number {
+export function foodMultiplier(band: Band, childSharePct = DEFAULT_CHILD_MEAL_SHARE_PCT): number {
   switch (band) {
     case "infant": return 0;
-    case "child": return 0.55;
-    case "junior": return 0.9;
+    // A child's meal is about 62-69% of an adult's on real WDW character
+    // menus (2026-10-15); owner-editable as food.childSharePct.
+    case "child": return childSharePct / 100;
+    // Tokyo's 12-17s order off the adult menu.
+    case "junior": return 1;
     case "adult": return 1;
   }
 }
@@ -712,30 +722,12 @@ export function planFor(resort: Resort, p: TripParams, stay: Stay) {
 }
 
 /**
- * A per-person-per-day rate for any of the seven real dining styles.
- *
- * "someQs" and "someCharacter" are not their own researched numbers —
- * they're the midpoint between the two styles they sit between (see
- * FoodStyle's doc comment in config.ts). Averaging is the honest amount of
- * precision to claim for "some of each": there is no real data on what
- * fraction of meals a traveler who picks this actually eats at each style,
- * so a straight midpoint is a starting point, not a measurement.
- *
- * "plan" falls back to "qs" — reached only when a dining plan was requested
- * but priceTrip couldn't apply one (see planFor), same fallback the model
- * has always used.
+ * One adult's day of food in a dining style, all in (meals.ts, 2026-10-15):
+ * the middle of each meal's price range, plus tax and the US tip, times the
+ * meals that make up the day. Owner values come through `setting`.
  */
-export function foodRate(resort: Resort, style: FoodStyle): number {
-  const f = resort.food;
-  switch (style) {
-    case "grocery": return f.grocery;
-    case "someQs": return (f.grocery + f.qs) / 2;
-    case "qs": case "plan": return f.qs;
-    case "mix": return f.mix;
-    case "ts": return f.ts;
-    case "someCharacter": return (f.ts + f.character) / 2;
-    case "character": return f.character;
-  }
+export function foodRate(resort: Resort, style: FoodStyle, setting?: (key: string) => number | undefined): number {
+  return foodDay(setting, resort.id, style).perAdult;
 }
 
 // ---------------------------------------------------------------- the model
@@ -1040,12 +1032,18 @@ export function priceTrip(
   // hotel wanted" case (no dining plan, no on-site transport line) without
   // being a new branch: it reuses the stay==="none" handling below.
   const stayForResort: Stay = ov.excludeHotel ? "none" : params.stay;
-  const foodPlan = planFor(resort, params, stayForResort);
+  // "The cheapest trip" eats from the grocery store (owner, 2026-10-15:
+  // "The cheapest trip will almost always be grocery prices"), whatever
+  // dining style the search names. A whole-party daily total the traveler
+  // typed is their own number and still wins.
+  const foodStyle: FoodStyle = params.priceBasis === "cheapest" ? "grocery" : params.food;
+  const foodPlan = planFor(resort, { ...params, food: foodStyle }, stayForResort);
   let food = 0;
   // The children's share of a dining plan, which is all a "free dining for
   // kids" deal takes off (2026-10-04: a kids-only deal was zeroing the whole
   // party's plan, two adults included).
   let kidsPlanFood = 0;
+  let foodDayUsed: FoodDay | undefined;
   if (foodPlan) {
     for (const age of ages) {
       const band = bandOf(resort, age);
@@ -1058,9 +1056,9 @@ export function priceTrip(
     // A party total, so no per-age scaling — see ResortOverride.foodPerDayUsd.
     food = Math.max(0, ov.foodPerDayUsd) * (params.nights + FOOD_DAY_ALLOWANCE);
   } else {
-    const rate = foodRate(resort, params.food);
+    foodDayUsed = foodDay((k) => book.setting?.(k), resort.id, foodStyle);
     const days = params.nights + FOOD_DAY_ALLOWANCE;
-    for (const age of ages) food += rate * foodMultiplier(bandOf(resort, age)) * days;
+    for (const age of ages) food += foodDayUsed.perAdult * foodMultiplier(bandOf(resort, age), foodDayUsed.childSharePct) * days;
   }
 
   // --- hotel -------------------------------------------------------------
@@ -1259,7 +1257,7 @@ export function priceTrip(
     price: {
       start, destination, total, flights, tickets, hotel, rooms, roomCount: stay === "none" ? 0 : roomCountOf(params), transport, food,
       perSeatFare, flightPick, fareBelowFloor,
-      hotelPick, hotelTier, foodPlan, partySize: ages.length,
+      hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd, ticketLines, checkAdjust,
       membership, parkDays: days,
