@@ -233,7 +233,10 @@ export interface FlightRow {
  * react to a number and not something the code can know.
  */
 export const ESTIMATE_LEAN_KEY = "flight.estimateLean";
-export const DEFAULT_ESTIMATE_LEAN = 100;
+// 50 since 2026-10-15 (owner): the middle of the range. It was 100 (the
+// high end) when domestic estimates were half a round trip (fixed
+// 2026-09-29); the fair test since then read US estimates ~16% high.
+export const DEFAULT_ESTIMATE_LEAN = 50;
 /**
  * International routes get their own lean (owner, 2026-10-06: "we are
  * inconsistent in what each version needs"). The scoreboard showed US fares

@@ -205,6 +205,19 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-15 — the flight lean ships at 50 (the middle), not 100
+
+Owner: "Change the default lean in the code from 100 to 50."
+`DEFAULT_ESTIMATE_LEAN` (pricing.ts) is 50; the /admin help text no longer
+calls high "the safer mistake" (owner: a miss is a miss either way). **A
+value saved in /admin still wins over the code default** (US and
+international leans), so travelers only move if no lean is saved there.
+Tests that check the high-end lean mechanics now set lean 100 explicitly.
+Also answered (no code changed): the fair test grades against ONE number,
+the middle itinerary of Google's ~10-15 for one adult, one date
+(`serpapiFlights.ts` ~179-183). Proposed: grade against the middle half of
+Google's list too, and report the gap to the cheapest listed fare.
+
 ### 2026-10-13 — governing rule #4 check of the rotating buy day; paid searches capped at 320 days
 
 Coverage run 38405665061 on popular-routes run 38392176561 (first night of
