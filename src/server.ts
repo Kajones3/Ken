@@ -153,6 +153,10 @@ function paramsFrom(q: URLSearchParams): TripParams {
     cars: clamp(Number(q.get("cars") ?? 1), 0, 4),
     freeParking: q.get("freeParking") === "1",
     transportMode: "fly",
+    // "The cheapest flight on the cheapest day" also changes the flight line
+    // itself (owner, 2026-10-15), so pricing has to know it, not just the
+    // day picker.
+    priceBasis: q.get("basis") === "cheapest" ? "cheapest" : "typical",
     // Plus since 2026-10-08 (owner: "move all the budget stuff to plus");
     // budgetFor() below drops these for anyone without Plus. `passes` is sent as
     // resort:tier:count triples so one query param carries a whole party's

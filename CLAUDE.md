@@ -205,6 +205,33 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-15, later — "the cheapest trip" = the cheapest FLIGHT on the cheapest day
+
+Owner: "someone searching a typical fare [should] be able to switch to the
+cheapest flight on the cheapest day in the month they are searching. Or, to
+switch to a typical day." Before this, "cheapest" picked the cheapest DAY but
+still priced Google's MIDDLE itinerary that day.
+- `src/cheapestFlights.ts` (pure + one 10-minute cached loader): reads every
+  kept Google Flights answer (`provider_responses`, last 120 days). For a date
+  we BOUGHT, the cheapest itinerary Google listed is used exactly; everywhere
+  else the middle fare x a LEARNED cheapest/middle ratio per group (US /
+  Europe / Asia, median, a group under 5 answers borrows the pooled ratio,
+  held 0.4-1). Measured 2026-10-12 at ~0.81 / 0.84 / 0.86. No ratio = the
+  middle fare stands and the card says so (`cheapest.how = "none"`).
+- `TripParams.priceBasis` now matters to `priceTrip` (flight line only):
+  `paramsFrom()` reads `basis`, so compare, calendar and best-months all
+  follow it; `FlightRow.cheapest` = {how: listed|ratio|none, middle, ratio}.
+  `decideFlightFare()` is untouched, so the fair-test forecasts still record
+  the TYPICAL number.
+- Board: form "Which trip should we price?" = "A typical day, typical flight"
+  / "The cheapest flight on the cheapest day"; a "Priced as" line under the
+  results title with a one-click switch; the flight card and PDF say which
+  flight the number is (`flightBasisLine()`).
+- Needs a Render redeploy. No data job changed (governing rule #4 n/a).
+- Grading the cheapest trip (within ±10% of the cheapest listed) and the
+  typical trip (inside the middle half of Google's list) is part of the
+  /admin rework the owner is shaping (see the conversation of 2026-10-15).
+
 ### 2026-10-15 — the flight lean ships at 50 (the middle), not 100
 
 Owner: "Change the default lean in the code from 100 to 50."

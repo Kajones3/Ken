@@ -91,10 +91,11 @@ export interface TripParams {
    *  take home per point. A credit against the trip, not a discount on any
    *  one line — the money has nothing to do with what a room here costs. */
   dvcRental?: DvcRental | null;
-  /** Which day of the month the board quoted: a typical one (the default) or
-   *  the cheapest. It changes nothing about how a single date is priced —
-   *  priceTrip never reads it — but it is saved with a trip so the alert job
-   *  re-prices on the same basis the traveler was shown. */
+  /** Which trip the board quotes: a typical day at the middle fare Google
+   *  lists (the default), or the cheapest day at the CHEAPEST flight Google
+   *  lists (owner, 2026-10-15). priceTrip reads it only for the flight line
+   *  (see cheapestFlights.ts); which DAY is quoted is the caller's pick. Saved
+   *  with a trip so it re-prices on the same basis the traveler was shown. */
   priceBasis?: "typical" | "cheapest";
   /** How many hotel rooms the party books — more than one when several
    *  families or couples travel together. Every room is priced at the same
@@ -181,6 +182,12 @@ export interface FlightRow {
    *  we quote, so it is offered as an option rather than used as the
    *  headline (owner, 2026-09-27). Only ever set alongside `estimate`. */
   cheaperFound?: { price: number; carrier?: string; stops?: number; deepLink?: string };
+  /** Set when the traveler asked for the cheapest trip and this is the
+   *  cheapest flight rather than the middle one: "listed" = the cheapest
+   *  itinerary Google showed us for this date; "ratio" = our middle fare x
+   *  the learned cheapest/middle ratio; "none" = no ratio learned yet, so the
+   *  middle fare stands. `middle` is the fare it was moved from. */
+  cheapest?: { how: "listed" | "ratio" | "none"; middle: number; ratio?: number };
   estimate?: {
     low: number; med: number; high: number; basisQuarter: string;
     seasonMatched?: boolean; trendPct?: number;
@@ -396,6 +403,11 @@ export interface PriceBook {
    *  yet. Optional on the interface so bookFrom() (tests) needs no changes. */
   /** `date` lets the candidate formula use the day of the week; the live one ignores it. */
   flightEstimate?(origin: string, dest: string, date?: ISODate): FlightRow["estimate"] | undefined;
+  /** "Cheapest trip" only (cheapestFlights.ts): the cheapest itinerary Google
+   *  listed for a date we bought, and the learned cheapest / middle ratio for
+   *  everything else. Optional: a book without them prices the middle fare. */
+  cheapestListed?(origin: string, dest: string, date: ISODate, tripLength: number): number | undefined;
+  cheapestRatio?(dest: string): number | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
@@ -848,8 +860,26 @@ export function priceTrip(
     if (!row && !est && ov.farePerSeat === undefined) {
       return { ok: false, reason: `no cached fare for ${params.origin}-${destination} on ${start}` };
     }
-    const { useRow, estAdjusted, estShown, floor, modelFare } =
-      decideFlightFare(book, row, est, start, resort.region !== "dom");
+    const decided = decideFlightFare(book, row, est, start, resort.region !== "dom");
+    const { useRow, estAdjusted, estShown } = decided;
+    let floor = decided.floor;
+    // "The cheapest flight on the cheapest day" (owner, 2026-10-15): the
+    // cheapest itinerary Google listed for this date when we bought it, else
+    // the middle fare moved by the learned cheapest/middle ratio.
+    let modelFare = decided.modelFare;
+    let cheapest: FlightRow["cheapest"];
+    if (params.priceBasis === "cheapest") {
+      const listed = book.cheapestListed?.(params.origin, destination, start, params.nights);
+      const ratio = book.cheapestRatio?.(destination);
+      const middle = modelFare;
+      if (listed !== undefined && listed > 0) { modelFare = listed; cheapest = { how: "listed", middle }; }
+      else if (ratio !== undefined) {
+        modelFare = Math.round(middle * ratio * 100) / 100;
+        cheapest = { how: "ratio", middle, ratio };
+      } else cheapest = { how: "none", middle };
+      // The cheapest fare we know of is now this one, not the middle.
+      if (floor > 0) floor = Math.min(floor, modelFare);
+    }
     if (transportMode === "miles") {
       const base = ov.farePerSeat !== undefined ? ov.farePerSeat : modelFare;
       const milesPct = Math.min(100, Math.max(0, params.milesPct ?? 0));
@@ -877,6 +907,14 @@ export function priceTrip(
       ? { price: estShown ?? estAdjusted.med, estimate: estAdjusted,
           ...(row ? { cheaperFound: { price: row.price, carrier: row.carrier, stops: row.stops, deepLink: row.deepLink } } : {}) }
       : null;
+    if (flightPick && cheapest) {
+      // The card prints what the total was built from: the cheapest fare. The
+      // carrier and stops belong to the middle itinerary, so they go.
+      flightPick = { price: modelFare, cheapest,
+        ...(flightPick.estimate ? { estimate: flightPick.estimate } : {}),
+        ...(flightPick.deepLink ? { deepLink: flightPick.deepLink } : {}),
+        ...(flightPick.cheaperFound && flightPick.cheaperFound.price < modelFare ? { cheaperFound: flightPick.cheaperFound } : {}) };
+    }
   }
 
   // --- tickets -----------------------------------------------------------
