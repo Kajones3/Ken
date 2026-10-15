@@ -470,6 +470,9 @@ export interface TripPrice {
   /** How the food line was built when it was estimated from meals (no plan,
    *  no typed daily total): one adult's day, meal by meal, all in. */
   foodDay?: FoodDay;
+  /** The dining style the food line was priced at: the search's own, or
+   *  "grocery" on the cheapest trip. */
+  foodStyle: FoodStyle;
   partySize: number;
   /** Curated and personal discounts actually applied — empty when none. rooms/tickets/total already reflect these. */
   appliedPromos: AppliedPromo[];
@@ -1029,7 +1032,12 @@ export function priceTrip(
   // hotel wanted" case (no dining plan, no on-site transport line) without
   // being a new branch: it reuses the stay==="none" handling below.
   const stayForResort: Stay = ov.excludeHotel ? "none" : params.stay;
-  const foodPlan = planFor(resort, params, stayForResort);
+  // "The cheapest trip" eats from the grocery store (owner, 2026-10-15:
+  // "The cheapest trip will almost always be grocery prices"), whatever
+  // dining style the search names. A whole-party daily total the traveler
+  // typed is their own number and still wins.
+  const foodStyle: FoodStyle = params.priceBasis === "cheapest" ? "grocery" : params.food;
+  const foodPlan = planFor(resort, { ...params, food: foodStyle }, stayForResort);
   let food = 0;
   // The children's share of a dining plan, which is all a "free dining for
   // kids" deal takes off (2026-10-04: a kids-only deal was zeroing the whole
@@ -1048,7 +1056,7 @@ export function priceTrip(
     // A party total, so no per-age scaling — see ResortOverride.foodPerDayUsd.
     food = Math.max(0, ov.foodPerDayUsd) * (params.nights + FOOD_DAY_ALLOWANCE);
   } else {
-    foodDayUsed = foodDay((k) => book.setting?.(k), resort.id, params.food);
+    foodDayUsed = foodDay((k) => book.setting?.(k), resort.id, foodStyle);
     const days = params.nights + FOOD_DAY_ALLOWANCE;
     for (const age of ages) food += foodDayUsed.perAdult * foodMultiplier(bandOf(resort, age), foodDayUsed.childSharePct) * days;
   }
@@ -1249,7 +1257,7 @@ export function priceTrip(
     price: {
       start, destination, total, flights, tickets, hotel, rooms, roomCount: stay === "none" ? 0 : roomCountOf(params), transport, food,
       perSeatFare, flightPick, fareBelowFloor,
-      hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, partySize: ages.length,
+      hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd, ticketLines, checkAdjust,
       membership, parkDays: days,

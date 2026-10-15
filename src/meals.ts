@@ -52,7 +52,7 @@ export const DAY_OF_MEALS: Record<Exclude<FoodStyle, "plan">, Partial<Record<Mea
   qs: { qs: 3, snack: 1 },
   mix: { qs: 2, ts: 1, snack: 1 },
   ts: { qs: 1, ts: 2, snack: 1 },
-  someCharacter: { qs: 2, character: 1, snack: 1 },
+  someCharacter: { qs: 1, ts: 1, character: 1, snack: 1 },
   character: { qs: 1, character: 2, snack: 1 },
 };
 

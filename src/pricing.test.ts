@@ -142,19 +142,15 @@ test("a food override is a whole-party daily total, so party size stops moving i
   assert.equal(Math.round(two.price.food), Math.round(250 * (base.nights + 0.4)));
 });
 
-test("foodRate: dining styles run cheapest to priciest, character meals above an ordinary mix", () => {
+test("foodRate: the seven dining styles run cheapest to priciest in order", () => {
   // Since 2026-10-15 each style is a day of meals (meals.ts DAY_OF_MEALS).
-  // "Some character" (one character meal + two quick service) lands between
-  // a mix and all character, but can cost less than two table-service meals.
   const wdw = resortById("wdw");
-  const order: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "character"];
+  const order: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
   const rates = order.map((s) => foodRate(wdw, s));
   for (let i = 1; i < rates.length; i++) {
     assert.ok(rates[i]! > rates[i - 1]!,
       `${order[i]} (${rates[i]}) should cost more than ${order[i - 1]} (${rates[i - 1]})`);
   }
-  const some = foodRate(wdw, "someCharacter");
-  assert.ok(some > foodRate(wdw, "mix") && some < foodRate(wdw, "character"));
 });
 
 test("foodRate: 'plan' falls back to counter service, same as the model always used", () => {
@@ -165,7 +161,7 @@ test("foodRate: 'plan' falls back to counter service, same as the model always u
 test("a trip actually prices differently across all seven dining styles", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
-  const styles: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "character"];
+  const styles: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
   const totals = styles.map((food) => {
     const r = priceTrip(book, wdw, { ...base, food }, {}, START);
     assert.ok(r.ok, `${food} should price`);
@@ -1298,4 +1294,24 @@ test("a resort's own park days change only that resort's ticket line", () => {
   assert.equal(two.price.parkDays.days, 2);
   assert.ok(two.price.tickets < auto.price.tickets);
   assert.equal(two.price.flights, auto.price.flights);
+});
+
+test("the cheapest trip eats from the grocery store, whatever style was picked", () => {
+  // Owner, 2026-10-15: "The cheapest trip will almost always be grocery prices."
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const groc = priceTrip(book, wdw, { ...base, food: "grocery" }, {}, START);
+  const cheap = priceTrip(book, wdw, { ...base, food: "character", priceBasis: "cheapest" }, {}, START);
+  const typical = priceTrip(book, wdw, { ...base, food: "character" }, {}, START);
+  assert.ok(groc.ok && cheap.ok && typical.ok);
+  if (!groc.ok || !cheap.ok || !typical.ok) return;
+  assert.equal(cheap.price.foodStyle, "grocery");
+  assert.equal(cheap.price.food, groc.price.food);
+  assert.equal(typical.price.foodStyle, "character");
+  // A dining plan is not priced on the cheapest trip either.
+  const plan = priceTrip(book, wdw, { ...base, food: "plan", stay: "on", priceBasis: "cheapest" }, {}, START);
+  assert.ok(plan.ok && !plan.price.foodPlan && plan.price.food === groc.price.food);
+  // A daily total the traveler typed is their own number and still wins.
+  const typed = priceTrip(book, wdw, { ...base, priceBasis: "cheapest" }, { wdw: { foodPerDayUsd: 250 } }, START);
+  assert.ok(typed.ok && Math.round(typed.price.food) === Math.round(250 * (base.nights + 0.4)));
 });

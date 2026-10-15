@@ -50,6 +50,9 @@ test("a day of meals adds up, and 'plan' prices as quick service", () => {
   assert.ok(Math.abs(d.perAdult - sum) < 0.01);
   assert.deepEqual(d.meals.map((m) => [m.kind, m.count]), [["qs", 2], ["ts", 1], ["snack", 1]]);
   assert.equal(foodDay(none, "wdw", "plan").perAdult, foodDay(none, "wdw", "qs").perAdult);
+  // Owner, 2026-10-15: "some character" = 1 quick service, 1 table service, 1 character.
+  assert.deepEqual(foodDay(none, "wdw", "someCharacter").meals.map((m) => [m.kind, m.count]),
+    [["qs", 1], ["ts", 1], ["character", 1], ["snack", 1]]);
 });
 
 test("children eat the owner-set share; teenagers eat as adults; under-3s free", () => {

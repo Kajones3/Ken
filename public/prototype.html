@@ -3272,7 +3272,7 @@ async function renderDetail(){
         </div>
         <div class="card">
           <h5><i style="background:var(--s4)"></i>Food</h5>
-          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"We'll bring our own food",someQs:"Some Quick Service",qs:"All Quick Service",mix:"Some Quick Service, some Table Service",ts:"All Table Service",someCharacter:"Some Character Meals",character:"All Character Meals"})[p.food==="plan"?"qs":p.food]}</p>
+          <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"We'll bring our own food",someQs:"Some Quick Service",qs:"All Quick Service",mix:"Some Quick Service, some Table Service",ts:"All Table Service",someCharacter:"Some Character Meals",character:"All Character Meals"})[(x.foodStyle||p.food)==="plan"?"qs":(x.foodStyle||p.food)]}${x.foodStyle==="grocery"&&p.food!=="grocery"&&!ovR.foodPerDayUsd?" · the cheapest trip eats from the grocery store":""}</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Per day</div>
               <div class="v">${usd(x.food / (p.nights + 0.4))}</div><div class="s">${ovR.foodPerDayUsd ? "your number" : "estimate"}</div></div>
@@ -3284,7 +3284,7 @@ async function renderDetail(){
           ${foodCtl}
           ${foodRows}
           ${!fi && x.foodDay ? `<p class="sub" style="margin:8px 0 0">${foodDayLine(x.foodDay)}</p>` : ""}
-          ${foodExamplesLine(r, fi ? "ts" : (p.food==="plan"?"qs":p.food))}
+          ${foodExamplesLine(r, fi ? "ts" : ((x.foodStyle||p.food)==="plan"?"qs":(x.foodStyle||p.food)))}
           <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
         </div>
         ${(()=>{
@@ -4777,7 +4777,7 @@ const FOOD_STYLE_WORDS = {
   qs: "counter service",
   mix: "a mix of table and counter service",
   ts: "table service",
-  someCharacter: "mostly table service, some character meals",
+  someCharacter: "a quick-service, a table-service and a character meal each day",
   character: "character meals",
 };
 
@@ -4788,9 +4788,14 @@ function foodHtml(item){
     out.push(`<p>You're on the <b>${esc(pr.foodPlan.label)}</b> dining plan, which comes to
       <b>${usd(pr.food)}</b>. There is nothing to estimate about food you have already bought.</p>`);
   } else {
-    const style = FOOD_STYLE_WORDS[params.food] || "the style you picked";
-    out.push(`<p>You said you'd be doing <b>${esc(style)}</b> during your trip. We estimated
-      <b>${usd(pr.food)}</b> for that.</p>`);
+    if(pr.foodStyle === "grocery" && params.food !== "grocery" && pr.foodDay){
+      out.push(`<p>This is priced as the cheapest trip, so food comes from the grocery store:
+        <b>${usd(pr.food)}</b>.</p>`);
+    } else {
+      const style = FOOD_STYLE_WORDS[pr.foodStyle || params.food] || "the style you picked";
+      out.push(`<p>You said you'd be doing <b>${esc(style)}</b> during your trip. We estimated
+        <b>${usd(pr.food)}</b> for that.</p>`);
+    }
   }
 
   // A real comparison from our OWN per-resort food model, which is the only

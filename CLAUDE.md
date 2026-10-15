@@ -224,9 +224,15 @@ all-in with tax, and a tip for US resorts ("just note that tip is added in");
   $50-75.
 - `DAY_OF_MEALS`: grocery = groceries + snack; someQs = a grocery breakfast
   (a third of a day) + 1 QS + snack; qs = 3 QS + snack; mix = 2 QS + 1 TS +
-  snack; ts = 1 QS + 2 TS + snack; someCharacter = 2 QS + 1 character +
-  snack; character = 1 QS + 2 character + snack. Consequence: "some
-  character" now costs LESS than "all table service" (WDW $128 vs $141).
+  snack; ts = 1 QS + 2 TS + snack; someCharacter = 1 QS + 1 TS + 1
+  character + snack (owner's correction); character = 1 QS + 2 character
+  + snack. All seven run cheapest to dearest (test pins it).
+- **"The cheapest trip" (`priceBasis` cheapest) prices food as GROCERY**
+  whatever style the search names, dining plan included (owner: "The
+  cheapest trip will almost always be grocery prices"). A whole-party daily
+  total the traveler typed still wins. `TripPrice.foodStyle` says which
+  style was priced; the food card adds "the cheapest trip eats from the
+  grocery store" and the PDF says so.
 - Children (the resort's child ticket band) 63% of an adult (WDW character
   menus: 62-69%); juniors (Tokyo 12-17) eat as adults (were 0.9); under-3s
   free. `config.food` is GONE; `foodRate()` reads meals.ts.
@@ -235,7 +241,7 @@ all-in with tax, and a tip for US resorts ("just note that tip is added in");
 - Seeds and their sources: meals.ts; weak ones in docs/numbers-to-verify.md
   (Hong Kong table service has NO source).
 - Before/after per adult per day (old -> new), WDW: grocery 38->19, someQs
-  50->33, qs 62->71, mix 96->106, ts 158->141, someCharacter 198->128,
+  50->33, qs 62->71, mix 96->106, ts 158->141, someCharacter 198->163,
   character 237->184. Full table in the conversation of 2026-10-15.
 - Needs a Render redeploy. No data job changed (governing rule #4 n/a).
 
