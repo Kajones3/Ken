@@ -18,6 +18,7 @@ import {
 import { blendFares, flightSourceWeight, type SourcedFare } from "./observations.js";
 import { asEvidence, cachedGoogleDisneyRates } from "./disneyEvidence.js";
 import { loadFareModel } from "./fareModelDb.js";
+import { loadCheapestListed, type CheapestListed } from "./cheapestFlights.js";
 import { USE_CANDIDATE_KEY, type FareModel } from "./fareModel.js";
 
 /** Every on-property hotel's shipped base, for rescaling hotel checks. */
@@ -622,9 +623,18 @@ export async function loadBook(
     };
   };
 
+  // "Cheapest trip" (cheapestFlights.ts). A failure only means the cheapest
+  // basis prices the middle fare, which the card then says.
+  let cheapestListed: CheapestListed | undefined;
+  try { cheapestListed = await loadCheapestListed(db); } catch (e) {
+    console.warn(`cheapest-flight data unavailable: ${(e as Error).message}`);
+  }
+
   return {
     setting: (key) => settings.get(key),
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
+    cheapestListed: (origin, dest, date, nights) => cheapestListed?.exact(origin, dest, date, nights),
+    cheapestRatio: (dest) => cheapestListed?.ratio(dest)?.ratio,
     flightEstimate: (origin, dest, date) => {
       const cand = model ? candidateEstimate(origin, dest, date ?? req.from) : undefined;
       if (cand) return cand;

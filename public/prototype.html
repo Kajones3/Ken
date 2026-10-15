@@ -1110,10 +1110,10 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
         <select id="nights"></select>
       </div>
       <div class="f">
-        <label for="priceBasis">Which day should we price?</label>
+        <label for="priceBasis">Which trip should we price?</label>
         <select id="priceBasis">
-          <option value="typical" selected>A typical day that month</option>
-          <option value="cheapest">The cheapest day we can find</option>
+          <option value="typical" selected>A typical day, typical flight</option>
+          <option value="cheapest">The cheapest flight on the cheapest day</option>
         </select>
       </div>
     </div>
@@ -1242,6 +1242,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
        what the line is about, so the sentence can be short. -->
   <dl class="brief" id="resBrief">
     <div class="brief-row" id="crowdNote" hidden><dt>Crowds</dt><dd></dd></div>
+    <div class="brief-row" id="basisNote" hidden><dt>Priced as</dt><dd></dd></div>
     <div class="brief-row" id="parkDaysNote" hidden><dt>Park days</dt><dd></dd></div>
     <div class="brief-row" id="airfareIndexNote" hidden><dt>Airfares</dt><dd></dd></div>
   </dl>
@@ -1536,6 +1537,14 @@ function foodRateFor(r, style){
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
+/* What the flight number is, in one sentence (owner, 2026-10-15). */
+function flightBasisLine(pick){
+  const c = pick && pick.cheapest;
+  if(!c) return "Our fares are the typical fare on Google Flights.";
+  if(c.how === "listed") return "This is the cheapest flight Google Flights listed for this date when we checked.";
+  if(c.how === "ratio") return `This is our estimate of the cheapest flight Google Flights lists for this date: about ${Math.round((1 - c.ratio) * 100)}% below the typical fare (${usd(c.middle)}), from the flights we have checked.`;
+  return "We can't estimate the cheapest flight for this route yet, so this is the typical fare on Google Flights.";
+}
 /* How the owner says each resort in a sentence. */
 /* Shortest names, for sentences that list several resorts at once. */
 const SHORT_HELP_NAME = { wdw:"Walt Disney World", dlr:"Disneyland", dlp:"Paris", tdr:"Tokyo", shdr:"Shanghai", hkdl:"Hong Kong" };
@@ -3130,13 +3139,13 @@ async function renderDetail(){
            ${bandPhrase ? esc(bandPhrase) + " · " : ""}${esc(currencyPhrase)} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
           <b>${item.priceBasis === "cheapest"
-            ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, not a typical one.`
+            ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, with the cheapest flight that day, not a typical one.`
             : `This is a typical ${MONTHSFULL[sd.getUTCMonth()]} trip, not the cheapest one.`}</b>
           Across the ${item.spread.priced} days we can price this month, the whole trip runs
           ${usd(item.spread.low)} to ${usd(item.spread.high)}, averaging <b>${usd(item.spread.trimmedMean)}</b>${
             item.spread.trimmedPerTail ? ` once the ${item.spread.trimmedPerTail} cheapest and ${item.spread.trimmedPerTail} most expensive days are left out` : ""}.
           ${item.priceBasis === "cheapest"
-            ? "You asked for the cheapest day, so that is what is quoted above — on a day many travelers would not pick."
+            ? "You asked for the cheapest trip, so that is what is quoted above — on a day, and a flight, many travelers would not pick."
             : "We quote the real day closest to that average."}
           <span class="spreadlow">Cheapest: ${usd(item.spread.low)} arriving ${fmtDate(item.spread.lowDate)}.</span>
         </p>` : ""}
@@ -3197,7 +3206,8 @@ async function renderDetail(){
             <div class="kpitile"><div class="k">Per person</div>
               <div class="v">${usd(x.perSeatFare)}</div>
               <div class="s">${ovR.farePerSeat ? "your number"
-                : item.priceBasis === "cheapest" ? "estimate · cheapest day" : "estimate"}</div></div>
+                : x.flightPick && x.flightPick.cheapest && x.flightPick.cheapest.how === "listed" ? "cheapest listed"
+                : item.priceBasis === "cheapest" ? "estimate · cheapest flight" : "estimate"}</div></div>
             <div class="kpitile"><div class="k">Seats</div>
               <div class="v">${pax}</div><div class="s">round trip</div></div>
             <div class="kpitile total"><div class="k">Flights</div>
@@ -3207,7 +3217,7 @@ async function renderDetail(){
           ${x.transportMode==="miles" ? `<div class="li"><div class="l"><b>Miles discount</b><small>${p.milesPct||0}% off the cash fare — no floor</small></div>
             <div class="p" style="color:var(--accent)">−${p.milesPct||0}%</div></div>` : ""}
           ${flightRows}
-          ${!excludeFlights ? `<p class="hint" style="margin:10px 0 0">Our fares are the typical fare on Google Flights. Booking sites like Kayak often list the same trip for less, so check there before you buy.</p>` : ""}
+          ${!excludeFlights ? `<p class="hint" style="margin:10px 0 0">${flightBasisLine(x.flightPick)} Booking sites like Kayak often list the same trip for less, so check there before you buy.</p>` : ""}
           <div class="foot">
             ${!excludeFlights ? `<a class="book" href="${kayakLink}" target="_blank" rel="noopener" data-track="flights">See live fares on Kayak →</a>` : ""}
           </div>
@@ -3385,6 +3395,24 @@ async function renderDetail(){
 /* One line under the results title saying what "our suggestion" priced at
  * each resort and why. Shown only when the search left park days on the
  * suggestion, since otherwise every resort carries the number you picked. */
+/* Which trip the board priced, and the one-click switch to the other
+ * (owner, 2026-10-15): a typical day at the middle fare Google lists, or the
+ * cheapest flight on the cheapest day. Same question as the form's
+ * "Which trip should we price?", answered where the totals are. */
+function renderBasisNote(){
+  const el = $("#basisNote");
+  if(!el || !params) return;
+  const cheap = params.priceBasis === "cheapest";
+  el.querySelector("dd").innerHTML = (cheap
+    ? `<b>The cheapest flight on the cheapest day</b> we can find each month. `
+    : `<b>A typical day and a typical flight.</b> `)
+    + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest flight on the cheapest day"}</button>`;
+  el.hidden = false;
+  $("#basisSwitch").onclick = () => {
+    $("#priceBasis").value = cheap ? "typical" : "cheapest";
+    runSearch();
+  };
+}
 function renderParkDaysNote(){
   const el = $("#parkDaysNote");
   if(!el) return;
@@ -3421,6 +3449,7 @@ function render(){
   $("#resSub").textContent =
     `${partyParts({ ...p, ages: [] }).join(", ")}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays ? `${p.parkDays} park days` : "park days suggested per resort"} · ${whenStr}`;
   renderParkDaysNote();
+  renderBasisNote();
   $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
   $("#planChip").className = "chip" + (session.plus?" plus":"");
   syncWindowUi();
@@ -4594,7 +4623,7 @@ function gettingThereHtml(item){
       out.push(`<p>For ${esc(partyPhrase(params))} that is <b>${usd(pr.flights)}</b> in all.</p>`);
     }
     if(pr.flights && links.kayakLink){
-      out.push(`<p>Our fares are the typical fare on Google Flights. Booking sites like Kayak often list the same
+      out.push(`<p>${flightBasisLine(pr.flightPick)} Booking sites like Kayak often list the same
         trip for less: <a href="${esc(links.kayakLink)}">see live fares on Kayak</a> &mdash; opens with your airports,
         dates and party filled in.</p>`);
     }
