@@ -37,6 +37,7 @@ import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY
 import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
 import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
 import { USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
+import { MEALS, MEAL_KINDS, MEAL_LABEL, shippedMealRange, mealKey, taxKey, tipKey, CHILD_MEAL_SHARE_KEY, DEFAULT_CHILD_MEAL_SHARE_PCT } from "./meals.js";
 import { ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import {
   THANKSGIVING_PREMIUM_KEY, DEFAULT_THANKSGIVING_PREMIUM_PCT,
@@ -93,6 +94,31 @@ export const SETTINGS: SettingDef[] = [
         + "hopper as an adult; leaving this alone keeps the published figures."),
     ]),
   ]),
+  // Food, meal by meal (2026-10-15). A range per meal; pricing uses its
+  // middle, then adds tax and (US) the tip.
+  ...RESORTS.filter((r) => MEALS[r.id]).flatMap((r): SettingDef[] => {
+    const m = MEALS[r.id]!;
+    return [
+      ...MEAL_KINDS.flatMap((k) => {
+        const seed = shippedMealRange(r.id, k)!;
+        const what = k === "groceries" ? "A day of groceries for one adult" : `One adult's ${MEAL_LABEL[k].one}, as the menu prices it (before tax${m.tipOn.includes(k) ? ` and ${m.tipWord}` : ""})`;
+        return (["low", "high"] as const).map((end) =>
+          money(mealKey(r.id, k, end), `${r.name} — ${MEAL_LABEL[k].one}, ${end === "low" ? "low end" : "high end"}`,
+            `Food — ${r.name}`, seed[end], 0, k === "groceries" ? 100 : 300,
+            `${what}. We price the middle of the low and high ends. Started from: ${seed.source}.`));
+      }),
+      { key: taxKey(r.id), label: `${r.name} — sales tax on food`, group: `Food — ${r.name}`, kind: "percent",
+        default: m.taxPct, min: 0, max: 25, help: `Added to every meal and snack, not groceries. ${m.taxNote}.` },
+      ...(m.tipOn.length ? [{ key: tipKey(r.id), label: `${r.name} — ${m.tipWord} on ${m.tipOn.map((k) => MEAL_LABEL[k].many).join(" and ")}`,
+        group: `Food — ${r.name}`, kind: "percent" as const, default: m.tipPct, min: 0, max: 30,
+        help: `Added to ${m.tipOn.map((k) => MEAL_LABEL[k].many).join(" and ")} only, and the food card says it is included.` }] : []),
+    ];
+  }),
+  {
+    key: CHILD_MEAL_SHARE_KEY, label: "A child's meal, as a share of an adult's", group: "Food — everyone",
+    kind: "percent", default: DEFAULT_CHILD_MEAL_SHARE_PCT, min: 0, max: 100,
+    help: "Children (the resort's child ticket ages) eat this share of an adult's food cost. Real Walt Disney World character menus price a child at 62-69% of an adult (2026). Under-3s eat free; teenagers eat as adults.",
+  },
   // How many park days a search prices at each resort when the traveler
   // hasn't picked a number. A judgement about what a first visit needs, so
   // it belongs to the owner, not the code.

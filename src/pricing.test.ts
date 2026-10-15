@@ -142,23 +142,19 @@ test("a food override is a whole-party daily total, so party size stops moving i
   assert.equal(Math.round(two.price.food), Math.round(250 * (base.nights + 0.4)));
 });
 
-test("foodRate: the seven dining styles run cheapest to priciest in order", () => {
-  // 2026-09-25 (owner's ask): seven real, discrete styles instead of four.
-  // "someQs" and "someCharacter" are blends and must sit strictly between
-  // their neighbors, not merely somewhere in the overall range.
+test("foodRate: dining styles run cheapest to priciest, character meals above an ordinary mix", () => {
+  // Since 2026-10-15 each style is a day of meals (meals.ts DAY_OF_MEALS).
+  // "Some character" (one character meal + two quick service) lands between
+  // a mix and all character, but can cost less than two table-service meals.
   const wdw = resortById("wdw");
-  const order: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
+  const order: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "character"];
   const rates = order.map((s) => foodRate(wdw, s));
   for (let i = 1; i < rates.length; i++) {
     assert.ok(rates[i]! > rates[i - 1]!,
       `${order[i]} (${rates[i]}) should cost more than ${order[i - 1]} (${rates[i - 1]})`);
   }
-});
-
-test("foodRate: someQs and someCharacter are the midpoint of their neighbors", () => {
-  const wdw = resortById("wdw");
-  assert.equal(foodRate(wdw, "someQs"), (wdw.food.grocery + wdw.food.qs) / 2);
-  assert.equal(foodRate(wdw, "someCharacter"), (wdw.food.ts + wdw.food.character) / 2);
+  const some = foodRate(wdw, "someCharacter");
+  assert.ok(some > foodRate(wdw, "mix") && some < foodRate(wdw, "character"));
 });
 
 test("foodRate: 'plan' falls back to counter service, same as the model always used", () => {
@@ -169,7 +165,7 @@ test("foodRate: 'plan' falls back to counter service, same as the model always u
 test("a trip actually prices differently across all seven dining styles", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO");
-  const styles: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "someCharacter", "character"];
+  const styles: FoodStyle[] = ["grocery", "someQs", "qs", "mix", "ts", "character"];
   const totals = styles.map((food) => {
     const r = priceTrip(book, wdw, { ...base, food }, {}, START);
     assert.ok(r.ok, `${food} should price`);
@@ -275,7 +271,7 @@ test("several hotel rooms multiply the room line, and only the room line", () =>
   assert.equal(three.price.rooms, one.price.rooms * 3);
   assert.equal(three.price.transport, one.price.transport, "parking is per day, not per room");
   assert.equal(three.price.flights, one.price.flights);
-  assert.equal(three.price.total - one.price.total, one.price.rooms * 2);
+  assert.ok(Math.abs((three.price.total - one.price.total) - one.price.rooms * 2) < 1e-6);
   // Your own nightly rate is per ROOM, so it multiplies too.
   const mine = priceTrip(book, wdw, { ...base, hotelRooms: 2 }, { wdw: { nightly: 150 } }, START);
   assert.ok(mine.ok);

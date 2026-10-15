@@ -1515,21 +1515,25 @@ const OFF_TIERS = ["budget","mid","upscale"];
 const TIER_LABEL = { value:"Value", moderate:"Moderate", deluxe:"Deluxe",
                      budget:"Budget", mid:"Mid-range", upscale:"Upscale" };
 
-/** Mirrors foodRate() in src/pricing.ts exactly — "someQs" and
- *  "someCharacter" are blends, not their own stored numbers, so a resort's
- *  own `food` object doesn't have them directly. */
-function foodRateFor(r, style){
-  const f = r.food;
-  switch(style){
-    case "grocery": return f.grocery;
-    case "someQs": return (f.grocery + f.qs) / 2;
-    case "qs": case "plan": return f.qs;
-    case "mix": return f.mix;
-    case "ts": return f.ts;
-    case "someCharacter": return (f.ts + f.character) / 2;
-    case "character": return f.character;
-    default: return f.mix;
-  }
+/** One adult's day of food, as the server built it meal by meal (meals.ts).
+ *  Absent on a dining plan or a typed daily total. */
+const MEAL_WORDS = { qs:["quick-service meal","quick-service meals"], ts:["table-service meal","table-service meals"],
+  character:["character meal","character meals"], snack:["snack","snacks"], groceries:["day of groceries","days of groceries"] };
+function foodDayLine(fd){
+  if(!fd) return "";
+  const parts = fd.meals.map(m => {
+    if(m.kind === "groceries"){
+      return m.count >= 1 ? `groceries (${usd(m.each)})` : `a breakfast from groceries (${usd(m.each*m.count)})`;
+    }
+    const w = MEAL_WORDS[m.kind][m.count === 1 ? 0 : 1];
+    return `${m.count} ${w} (${usd(m.each)}${m.count > 1 ? " each" : ""})`;
+  });
+  const extras = [];
+  if(fd.taxPct > 0) extras.push(`${fd.taxPct}% sales tax`);
+  if(fd.tipPct > 0 && fd.meals.some(m => fd.tipOn.includes(m.kind))) extras.push(`a ${fd.tipPct}% ${fd.tipWord} on ${fd.tipOn.map(k=>MEAL_WORDS[k][1]).join(" and ")}`);
+  return `One adult's day: ${parts.join(", ")} = ${usd(fd.perAdult)}. `
+    + (extras.length ? `Includes ${extras.join(" and ")}. ` : "Menu prices here already include tax. ")
+    + `Each price is the middle of the usual range. A child eats about ${fd.childSharePct}% of an adult; under-3s free.`;
 }
 
 /* ============================ helpers ============================ */
@@ -3002,8 +3006,10 @@ async function renderDetail(){
           <small>Eats from an adult's plate — no plan needed</small></div><div class="p">Free</div></div>` : "")
       // No summary row: the per-person rows above add up to the total tile.
     : (()=>{
-        const rate = foodRateFor(r, p.food);
-        const foodMult = b => b==="infant"?0:b==="child"?0.55:b==="junior"?0.9:1;
+        const fd = x.foodDay;
+        if(!fd) return "";
+        const rate = fd.perAdult;
+        const foodMult = b => b==="infant"?0:b==="child"?fd.childSharePct/100:1;
         const days = p.nights + 0.4;
         return ORDER.filter(b=>groups[b]).map(b=>{
           const n = groups[b].length, m = foodMult(b);
@@ -3277,6 +3283,7 @@ async function renderDetail(){
           </div>
           ${foodCtl}
           ${foodRows}
+          ${!fi && x.foodDay ? `<p class="sub" style="margin:8px 0 0">${foodDayLine(x.foodDay)}</p>` : ""}
           ${foodExamplesLine(r, fi ? "ts" : (p.food==="plan"?"qs":p.food))}
           <div class="foot">${planNote?`<p class="sub" style="margin:0">${planNote}</p>`:""}</div>
         </div>
@@ -4789,19 +4796,18 @@ function foodHtml(item){
   // A real comparison from our OWN per-resort food model, which is the only
   // place this app holds anything about local prices. NOT from the exchange
   // rate, which says nothing whatsoever about whether a country is cheap.
-  const wdw = RESORT_BY_ID.get("wdw");
-  const style = params.food || "mix";
-  const rHere = foodRateFor(r, style), rWdw = wdw ? foodRateFor(wdw, style) : 0;
-  if(wdw && r.id !== "wdw" && rWdw && rHere){
-    const pct = Math.round((1 - rHere / rWdw) * 100);
+  const wdwDay = (results.find(y => y.resortId === "wdw" && y.ok) || {}).price?.foodDay;
+  const here = pr.foodDay;
+  if(here) out.push(`<p>${foodDayLine(here)}</p>`);
+  if(here && wdwDay && r.id !== "wdw"){
+    const pct = Math.round((1 - here.perAdult / wdwDay.perAdult) * 100);
     if(Math.abs(pct) >= 5){
       out.push(`<p>Eating the same way costs about <b>${Math.abs(pct)}% ${pct > 0 ? "less" : "more"}</b> here than
-        at Walt Disney World &mdash; our own per-resort daily figures are $${rHere} a day against
-        $${rWdw}. That is a comparison of food prices, not of the exchange rate.</p>`);
+        at Walt Disney World: ${usd(here.perAdult)} a day for one adult against ${usd(wdwDay.perAdult)}.</p>`);
     }
   }
-  out.push(`<p class="pnote">Food figures come from budget guides and are per person per day, scaled for
-    children.</p>`);
+  out.push(`<p class="pnote">Food is priced meal by meal from each resort's menu prices, per person per day,
+    with children at a share of an adult.</p>`);
   return out.join("");
 }
 
