@@ -126,8 +126,7 @@ export const SETTINGS: SettingDef[] = [
     min: 0,
     max: 100,
     help: "0 shows the cheap end of what people actually paid on that route, 50 the middle, "
-      + "100 the expensive end. Higher is the safer mistake: an estimate that comes in low is the one "
-      + "that costs somebody at the checkout. It can only ever pick a number people really paid — "
+      + "100 the expensive end. Ships at 50: a miss is a miss in either direction. It can only ever pick a number people really paid — "
       + "it cannot push a fare above or below the observed range.",
   },
   {

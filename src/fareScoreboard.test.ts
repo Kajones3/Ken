@@ -71,9 +71,9 @@ test("the scoreboard reads only bought SerpApi fares from the database", async (
                  values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights'), ('ATL','MCO','2027-03-11',7,99,'travelpayouts')`);
   const b = await loadScoreboard(d, 30);
   assert.equal(b.tested, 1);
-  // Shipped lean is 100: 250 x 1.5 = 375 against 300 = +25%.
-  assert.equal(b.lean, 100);
-  assert.equal(b.all.medianPct, 25);
+  // Shipped lean is 50: 200 x 1.5 = 300 against 300 = 0%.
+  assert.equal(b.lean, 50);
+  assert.equal(b.all.medianPct, 0);
   await d.close();
 });
 
@@ -139,12 +139,12 @@ test("'shown now' includes what bought fares taught the route", async () => {
   await d.query(`insert into flight_observations (origin, destination, depart_date, trip_length, price_usd, source)
                  values ('ATL','MCO','2027-03-10',7,300,'serpapi_flights')`);
   const b = await loadScoreboard(d, 30);
-  // Blind at lean 100: 250 against 300 = -16.7%.
-  assert.equal(b.all.medianPct, -16.7);
+  // Blind at lean 50: 200 against 300 = -33.3%.
+  assert.equal(b.all.medianPct, -33.3);
   // One bought fare moves the route a third of the way to 300/200: x1.1667,
-  // so travelers now see 250 x 1.1667 = 291.67, -2.8%.
+  // so travelers now see 200 x 1.1667 = 233.33, -22.2%.
   assert.equal(b.shown.all.n, 1);
-  assert.equal(b.shown.all.medianPct, -2.8);
+  assert.equal(b.shown.all.medianPct, -22.2);
   await d.close();
 });
 

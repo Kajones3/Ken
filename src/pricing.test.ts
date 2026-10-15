@@ -531,11 +531,11 @@ test("flight estimate: no exact cache hit falls back to a labeled BTS-baseline e
   const r = priceTrip(withEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  // The shipped lean is 100, so the shown figure is this route's p75 — the
-  // expensive end of what people actually paid on it. The full low/med/high is
-  // still attached, so the card can show the range it came from.
-  assert.equal(r.price.perSeatFare, estimate.high);
-  assert.deepEqual(r.price.flightPick, { price: estimate.high, estimate });
+  // The shipped lean is 50 (since 2026-10-15), so the shown figure is this
+  // route's median. The full low/med/high is still attached, so the card can
+  // show the range it came from.
+  assert.equal(r.price.perSeatFare, estimate.med);
+  assert.deepEqual(r.price.flightPick, { price: estimate.med, estimate });
 });
 
 test("flight estimate: the lean is an owner setting, and dialling it back shows the median", () => {
@@ -554,7 +554,7 @@ test("flight estimate: the lean is an owner setting, and dialling it back shows 
   assert.equal(r.price.perSeatFare, estimate.med, "a lean of 50 is the median");
 });
 
-test("flight estimate: with the lean hook absent, pricing still works and leans high", () => {
+test("flight estimate: with the lean hook absent, pricing still works at the shipped lean", () => {
   // The safety property the whole settings registry rests on: an empty
   // table, or a book with no setting hook at all, must price exactly as the
   // app ships. Here that means the default lean, not a fare of zero.
@@ -566,7 +566,7 @@ test("flight estimate: with the lean hook absent, pricing still works and leans 
   const r = priceTrip(noSettingHook, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
-  assert.equal(r.price.perSeatFare, estimate.high);
+  assert.equal(r.price.perSeatFare, estimate.med);
 });
 
 test("flight estimate: a Thanksgiving-week date gets the holiday premium, an ordinary date doesn't", () => {
@@ -579,9 +579,9 @@ test("flight estimate: a Thanksgiving-week date gets the holiday premium, an ord
   const r = priceTrip(withEstimate, wdw, base, {}, "2027-11-25");
   assert.ok(r.ok);
   if (!r.ok) return;
-  // Default lean is 100 (the expensive end), so the shown figure is the HIGH band
-  // -- but moved by the +55% default Thanksgiving premium first: 800 * 1.55.
-  assert.equal(r.price.perSeatFare, 1240);
+  // Default lean is 50 (the middle), so the shown figure is the median
+  // -- but moved by the +55% default Thanksgiving premium first: 650 * 1.55.
+  assert.equal(r.price.perSeatFare, 1007.5);
   assert.equal(r.price.flightPick?.estimate?.holidayPremiumPct, 55);
   assert.equal(r.price.flightPick?.estimate?.holidayLabel, "Thanksgiving travel week");
 
@@ -591,7 +591,7 @@ test("flight estimate: a Thanksgiving-week date gets the holiday premium, an ord
   const r2 = priceTrip(withOrdinary, wdw, base, {}, "2027-11-22");
   assert.ok(r2.ok);
   if (!r2.ok) return;
-  assert.equal(r2.price.perSeatFare, 800);
+  assert.equal(r2.price.perSeatFare, 650);
   assert.equal(r2.price.flightPick?.estimate?.holidayPremiumPct, undefined);
 });
 
@@ -620,7 +620,7 @@ test("flight estimate: the holiday premium is an owner setting", () => {
   const r = priceTrip(withSetting, wdw, base, {}, "2026-12-26");
   assert.ok(r.ok);
   if (!r.ok) return;
-  assert.equal(r.price.perSeatFare, 880, "800 x 1.10, the owner's own figure, not the shipped 58%");
+  assert.equal(r.price.perSeatFare, 715, "650 x 1.10, the owner's own figure, not the shipped 58%");
   assert.equal(r.price.flightPick?.estimate?.holidayPremiumPct, 10);
 });
 
@@ -651,7 +651,9 @@ test("flight estimate: the median wins and is shown as an estimate when it's HIG
   // upward rather than quietly keeping a fare that undersells reality.
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 90, days: 6 }); // a suspiciously cheap "real" fare
-  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }) };
+  // At the high-end lean (100), so the leaned figure differs from the median.
+  const highEstimate = { ...book, flightEstimate: () => ({ low: 300, med: 450, high: 600, basisQuarter: "2027Q1" }),
+    setting: (key: string) => (key === ESTIMATE_LEAN_KEY ? 100 : undefined) };
   const r = priceTrip(highEstimate, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
@@ -673,7 +675,9 @@ test("flight estimate: a real fare between the median and our quoted figure is a
   // the $129 is kept beside it.
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 129, days: 6 });
-  const est = { ...book, flightEstimate: () => ({ low: 100, med: 120, high: 186, basisQuarter: "2027Q1" }) };
+  // At the high-end lean (100), the owner's setting on that date.
+  const est = { ...book, flightEstimate: () => ({ low: 100, med: 120, high: 186, basisQuarter: "2027Q1" }),
+    setting: (key: string) => (key === ESTIMATE_LEAN_KEY ? 100 : undefined) };
   const r = priceTrip(est, wdw, base, {}, START);
   assert.ok(r.ok);
   if (!r.ok) return;
@@ -1146,12 +1150,12 @@ test("a garbled lean falls back to the default rather than to zero", () => {
   assert.equal(leanedFare(est, NaN), leanedFare(est, DEFAULT_ESTIMATE_LEAN));
 });
 
-test("the shipped default leans HIGH — the owner's call", () => {
-  // Recorded as a test because it is a decision, not a default: showing $100
-  // and landing on $200 is the failure this app exists to prevent, and the
-  // reverse costs nobody a booking.
-  assert.equal(DEFAULT_ESTIMATE_LEAN, 100);
-  assert.equal(leanedFare({ low: 200, med: 280, high: 360 }, DEFAULT_ESTIMATE_LEAN), 360);
+test("the shipped default is the middle of the range — the owner's call", () => {
+  // Recorded as a test because it is a decision, not a default. Was 100 (the
+  // high end); the owner moved it to 50 on 2026-10-15 after the fair test
+  // read US estimates ~16% high. /admin still overrides it.
+  assert.equal(DEFAULT_ESTIMATE_LEAN, 50);
+  assert.equal(leanedFare({ low: 200, med: 280, high: 360 }, DEFAULT_ESTIMATE_LEAN), 280);
 });
 
 test("the fare on the card and the fare in the total are the same number", () => {
