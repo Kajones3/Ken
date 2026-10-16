@@ -100,6 +100,41 @@ export async function rawPeek(db: Db): Promise<string[]> {
   out.push(`    Google's price-history newest point / cheapest listed now: median ${hs.length ? hs[Math.floor(hs.length / 2)]!.toFixed(2) : "-"} (1.00 = same units, ~0.50 = one-way)`);
   out.push(...examples);
 
+  // 1c. Owner, 2026-10-16: "what was our prediction for these flights? Were
+  // we even close?" Every forecast written BEFORE buying, beside Google's list.
+  const fc = await db.query<{ origin: string; destination: string; depart_date: unknown; trip_length: number; forecast_at: unknown;
+    shown_usd: string | null; candidate_usd: string | null; price_usd: string | null; shown_kind: string | null }>(
+    `select origin, destination, depart_date, trip_length, forecast_at, shown_usd, candidate_usd, price_usd, null::text shown_kind
+       from fare_forecasts order by forecast_at`).catch(() => ({ rows: [] as never[] }));
+  const lists = new Map<string, { pool: number[]; ins?: Ins }>();
+  for (const r of rows) {
+    if (r.kind !== "google_flights" || r.status !== 200) continue;
+    const q = req(r);
+    try {
+      const j = JSON.parse(unzipBody(r.body_gz)) as { price_insights?: Ins; best_flights?: { price?: number; type?: string }[]; other_flights?: { price?: number; type?: string }[] };
+      const pool = [...(j.best_flights ?? []), ...(j.other_flights ?? [])].map((x) => x.price).filter((x): x is number => typeof x === "number" && x > 0).sort((a, b) => a - b);
+      lists.set(`${q.departure_id}|${q.arrival_id}|${q.outbound_date}|${q.return_date}`, { pool, ins: j.price_insights });
+    } catch { /* unreadable */ }
+  }
+  const qt = (a: number[], f: number) => a[Math.min(a.length - 1, Math.max(0, Math.round((a.length - 1) * f)))]!;
+  const ds = (v: unknown) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+  const addDays = (d: string, n: number) => new Date(Date.parse(d + "T00:00:00Z") + n * 86_400_000).toISOString().slice(0, 10);
+  out.push("");
+  out.push("  OUR NUMBER vs GOOGLE'S LIST, every forecast written before buying (oldest first)");
+  out.push("    route  dates | WE SHOWED · candidate | Google: cheapest · p25 · MIDDLE (what we bought) · p75 · dearest (n) | Google's usual cheapest range, label | shown vs middle");
+  let total = 0;
+  for (const f of fc.rows) {
+    const dep = ds(f.depart_date), ret = addDays(dep, Number(f.trip_length));
+    const l = lists.get(`${f.origin.trim()}|${f.destination.trim()}|${dep}|${ret}`);
+    const shown = Number(f.shown_usd), cand = f.candidate_usd === null ? null : Number(f.candidate_usd), bought = Number(f.price_usd);
+    const g = l?.pool.length ? `${money(l.pool[0])} · ${money(qt(l.pool, 0.25))} · ${money(bought)} · ${money(qt(l.pool, 0.75))} · ${money(l.pool[l.pool.length - 1])} (${l.pool.length})` : `bought ${money(bought)}, no list kept`;
+    const r = l?.ins?.typical_price_range;
+    const off = bought > 0 && shown > 0 ? `${shown >= bought ? "+" : ""}${Math.round((shown / bought - 1) * 100)}%` : "-";
+    out.push(`    ${f.origin.trim()}->${f.destination.trim()} ${dep.slice(5)}..${ret.slice(5)} | ${money(Math.round(shown))} · ${cand === null ? "-" : money(Math.round(cand))} | ${g} | ${r ? `${money(r[0])}-${money(r[1])} ${l?.ins?.price_level ?? ""}` : "-"} | ${off}`);
+    total++;
+  }
+  out.push(`    ${total} forecasts`);
+
   // 2. The newest flight answer, whole, in readable form.
   const lastF = [...rows].reverse().find((r) => r.kind === "google_flights" && r.status === 200);
   if (lastF) {
