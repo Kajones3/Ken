@@ -690,6 +690,34 @@ test("flight estimate: a real fare at or above our quoted figure is still the he
   assert.equal(r.price.flightPick?.cheaperFound, undefined);
 });
 
+test("a fare we BOUGHT from Google always wins on the board, even below our estimate (2026-10-16)", () => {
+  // Owner: "the real Google fare wins on the board". The option-line rule
+  // above is for the free feed's stray fares; a bought Google fare is the
+  // very number our guesses are graded against.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO", { fare: 129, days: 6 });
+  const paid = { ...book,
+    flight: (o: string, d: string, date: string, n: number) => {
+      const r = book.flight(o, d, date, n);
+      return r ? { ...r, sources: ["serpapi_flights"] } : r;
+    },
+    flightEstimate: () => ({ low: 100, med: 120, high: 186, basisQuarter: "2027Q1" }),
+    setting: (key: string) => (key === ESTIMATE_LEAN_KEY ? 100 : undefined) };
+  const r = priceTrip(paid, wdw, base, {}, START);
+  assert.ok(r.ok);
+  if (!r.ok) return;
+  assert.equal(r.price.perSeatFare, 129, "the bought fare is the headline");
+  assert.equal(r.price.flightPick?.estimate, undefined, "and it is not dressed up as an estimate");
+  assert.equal(r.price.flightPick?.cheaperFound, undefined);
+  // The free feed's fare at the same price still gives way to the estimate.
+  const feed = { ...paid, flight: (o: string, d: string, date: string, n: number) => {
+    const r2 = book.flight(o, d, date, n);
+    return r2 ? { ...r2, sources: ["travelpayouts+serpapi"] } : r2;
+  } };
+  const f = priceTrip(feed, wdw, base, {}, START);
+  assert.ok(f.ok && f.price.perSeatFare === 186);
+});
+
 test("flight estimate: a farePerSeat override still floors against the real row's price, not the corrected median", () => {
   const wdw = resortById("wdw");
   const book = fullBook("wdw", "MCO", { fare: 90, days: 6 });

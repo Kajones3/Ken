@@ -50,9 +50,12 @@ import { leanWords } from "./fareForecasts.js";
 
 /** Below this many prices there is no honest "middle half". */
 export const MIDDLE_HALF_MIN = 4;
-/** A week needs this many graded numbers before it is compared with the last. */
+/** Each grade covers this many days (owner, 2026-10-16: a 2-week window
+ *  with the luck margin shown; one week of ~60 fares is ±6 points of luck). */
+export const GRADE_WINDOW_DAYS = 14;
+/** A window needs this many graded numbers before it is compared with the one before. */
 export const GRADE_MIN = 8;
-/** Points either way that count as "about the same". */
+/** The smallest change ever called better or worse, whatever the luck says. */
 export const GRADE_NOISE_POINTS = 3;
 const DAY = 86_400_000;
 
@@ -74,27 +77,42 @@ export function inTypical(shown: number, prices: number[], zone: number): boolea
 export const withinZone = (shown: number, real: number, zone: number) =>
   shown > 0 && real > 0 && Math.abs(shown / real - 1) <= zone + 1e-9;
 
-export interface Grade { n: number; right: number; pct: number | null }
+/** `luck`: how many points `pct` can move by chance alone (one standard
+ *  error of a share, ±). With 60 numbers at 50% that is about 6. */
+export interface Grade { n: number; right: number; pct: number | null; luck: number | null }
 export type Trend = "better" | "worse" | "about the same" | "too few";
-export interface Weekly { thisWeek: Grade; lastWeek: Grade; month: Grade; trend: Trend }
+/** `recent`: the last GRADE_WINDOW_DAYS; `before`: the window before that;
+ *  `month`: the last 30 days. (Called "weekly" from when windows were 7 days.) */
+export interface Weekly { recent: Grade; before: Grade; month: Grade; trend: Trend }
 
-const grade = (xs: boolean[]): Grade => ({
-  n: xs.length, right: xs.filter(Boolean).length,
-  pct: xs.length ? Math.round((xs.filter(Boolean).length / xs.length) * 100) : null,
-});
+/** ± points of luck on a share: one standard error, with one right and one
+ *  wrong added so 0 of 8 or 8 of 8 still shows a margin. */
+export const luckPoints = (right: number, n: number): number | null => {
+  if (!n) return null;
+  const p = (right + 1) / (n + 2);
+  return Math.max(1, Math.round(100 * Math.sqrt((p * (1 - p)) / n)));
+};
+export const grade = (xs: boolean[]): Grade => {
+  const right = xs.filter(Boolean).length;
+  return { n: xs.length, right, pct: xs.length ? Math.round((right / xs.length) * 100) : null, luck: luckPoints(right, xs.length) };
+};
 export interface Graded { at: Date; ok: boolean }
-/** This week (last 7 days), last week (8-14 days ago) and the last 30 days. */
+/** The last two weeks, the two weeks before, and the last 30 days. A change
+ *  counts as better or worse only when it is bigger than the two windows'
+ *  luck added together (and at least GRADE_NOISE_POINTS). */
 export function weekly(items: Graded[], now: Date): Weekly {
   const age = (g: Graded) => (now.getTime() - g.at.getTime()) / DAY;
-  const thisWeek = grade(items.filter((g) => age(g) <= 7).map((g) => g.ok));
-  const lastWeek = grade(items.filter((g) => age(g) > 7 && age(g) <= 14).map((g) => g.ok));
+  const W = GRADE_WINDOW_DAYS;
+  const recent = grade(items.filter((g) => age(g) <= W).map((g) => g.ok));
+  const before = grade(items.filter((g) => age(g) > W && age(g) <= 2 * W).map((g) => g.ok));
   const month = grade(items.filter((g) => age(g) <= 30).map((g) => g.ok));
   let trend: Trend = "too few";
-  if (thisWeek.n >= GRADE_MIN && lastWeek.n >= GRADE_MIN) {
-    const d = thisWeek.pct! - lastWeek.pct!;
-    trend = Math.abs(d) <= GRADE_NOISE_POINTS ? "about the same" : d > 0 ? "better" : "worse";
+  if (recent.n >= GRADE_MIN && before.n >= GRADE_MIN) {
+    const d = recent.pct! - before.pct!;
+    const margin = Math.max(GRADE_NOISE_POINTS, (recent.luck ?? 0) + (before.luck ?? 0));
+    trend = Math.abs(d) <= margin ? "about the same" : d > 0 ? "better" : "worse";
   }
-  return { thisWeek, lastWeek, month, trend };
+  return { recent, before, month, trend };
 }
 
 /* --------------------------------- flights --------------------------------- */
@@ -272,13 +290,14 @@ export function gradeOffProperty(
 
 /* ---------------------------- the plain summary ---------------------------- */
 
-const pctWords = (g: Grade) => (g.pct === null ? "no numbers yet" : `${g.pct}% (${g.right} of ${g.n})`);
+const pctWords = (g: Grade) => (g.pct === null ? "no numbers yet"
+  : `${g.pct}% (${g.right} of ${g.n}; ±${g.luck} by luck)`);
 const trendWords = (w: Weekly) => w.trend === "too few" ? ""
-  : w.trend === "about the same" ? `, about the same as last week (${w.lastWeek.pct}%)`
-  : `, ${w.trend === "better" ? "up" : "down"} from ${w.lastWeek.pct}% last week`;
-/** Grades from the week, else from the last 30 days, said so. */
-const headline = (w: Weekly) => w.thisWeek.n >= GRADE_MIN
-  ? `${pctWords(w.thisWeek)} this week${trendWords(w)}`
+  : w.trend === "about the same" ? `, about the same as the two weeks before (${w.before.pct}%, inside the luck)`
+  : `, ${w.trend === "better" ? "up" : "down"} from ${w.before.pct}% the two weeks before`;
+/** Grades from the last two weeks, else from the last 30 days, said so. */
+const headline = (w: Weekly) => w.recent.n >= GRADE_MIN
+  ? `${pctWords(w.recent)} over the last two weeks${trendWords(w)}`
   : `${pctWords(w.month)} over the last 30 days`;
 
 /** A few sentences, each one backed by a number on the page. Nothing else. */

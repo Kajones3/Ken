@@ -49,20 +49,36 @@ const SAMPLE_NIGHTS = 4;
  * Six of eight nightly lookups were being thrown away roughly half of every
  * month.
  *
- * So: mid-month when mid-month is still ahead of us, otherwise the soonest
- * night we can actually book, and null once even tomorrow has left the month
- * behind. Exported because the rotation must apply the same rule when it
+ * So: the wanted night (mid-month on the first pass, a different day each
+ * pass after, see checkInDayFor) when it is still ahead of us, otherwise the
+ * soonest night we can actually book, and null once even tomorrow has left
+ * the month behind. Exported because the rotation must apply the same rule when it
  * decides what is worth a slot — a slot handed to an unpriceable month is a
  * slot wasted, which is the bug over again one level up.
  */
-export function sampleCheckIn(month: string, today: ISODate = todayISO()): ISODate | null {
+export function sampleCheckIn(month: string, today: ISODate = todayISO(), pass = 0): ISODate | null {
   const [first, last] = monthBounds(month);
-  const midMonth = addDaysISO(first, 13);
+  const wanted = addDaysISO(first, checkInDayFor(pass) - 1);
   const soonest = addDaysISO(today, 1);
   const latest = addDaysISO(today, HOTEL_SEARCH_MAX_DAYS);
-  let pick = midMonth > soonest ? midMonth : soonest;
+  let pick = wanted > soonest ? wanted : soonest;
   if (pick > latest) pick = latest;
   return pick > last || pick < first ? null : pick;
+}
+
+/**
+ * The check-in day of the month for the Nth paid search of a resort+month
+ * (owner, 2026-10-16: "a different night each pass"). The 14th used to be
+ * asked every time, so ~5 searches of the same month bought the same 4
+ * nights over again. The seven days are spread across the month and each
+ * falls on a different weekday (their remainders by 7 are all different), so
+ * seven passes start a stay on every day of the week and the record learns
+ * how the month moves, weekends included. Pass 0 is still the 14th.
+ */
+export const CHECK_IN_DAYS = [14, 8, 23, 10, 18, 5, 20] as const;
+export function checkInDayFor(pass: number): number {
+  const n = CHECK_IN_DAYS.length;
+  return CHECK_IN_DAYS[((Math.floor(pass) % n) + n) % n]!;
 }
 
 /**
@@ -213,6 +229,9 @@ export class SerpApiHotelProvider {
      *  up to the budget, which is the old behavior. */
     private readonly paidSlots: ReadonlySet<string> | null = null,
     private readonly today: ISODate = todayISO(),
+    /** How many times each `resortId|month` was searched before tonight
+     *  (hotelRotation.ts), so each pass asks a different night. Missing = 0. */
+    private readonly passes: ReadonlyMap<string, number> = new Map(),
   ) {
     if (!this.apiKey) throw new Error("SERPAPI_KEY is not set");
     this.limiter = new HourlyLimiter(perHour);
@@ -262,7 +281,8 @@ export class SerpApiHotelProvider {
   }
 
   /**
-   * One real query for the month: a 4-night stay starting mid-month. Returns
+   * One real query for the month: a 4-night stay (mid-month on the first
+   * pass, a different night each pass after: checkInDayFor). Returns
    * up to 10 off-property properties, each anchored to that one real price
    * and then projected across every day of the month via the season curve.
    */
@@ -287,7 +307,7 @@ export class SerpApiHotelProvider {
       }
       return [];
     }
-    const checkIn = sampleCheckIn(month, this.today);
+    const checkIn = sampleCheckIn(month, this.today, this.passes.get(`${resortId}|${month}`) ?? 0);
     // Nothing left to price in this month (we are past its last night), so
     // there is no question worth paying to ask.
     if (!checkIn) return [];

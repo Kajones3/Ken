@@ -1,7 +1,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import { memoryDb, type Db } from "../db.js";
-import { rotateHotelSlots, slotKeys, PAID_HOTEL_SOURCE } from "./hotelRotation.js";
+import { rotateHotelSlots, slotKeys, slotPasses, PAID_HOTEL_SOURCE, HOTEL_REBUY_DAYS } from "./hotelRotation.js";
+import { CHECK_IN_DAYS } from "../providers/serpapi.js";
 
 const TODAY = "2027-01-10";
 const MONTHS = ["2027-02", "2027-03", "2027-04"];
@@ -45,9 +46,9 @@ test("a resort/month nobody has ever bought goes first", async () => {
 
 test("once everything has been bought once, the stalest goes next", async () => {
   const db = await memoryDb();
-  await recordPull(db, "wdw", "2027-02", "2027-01-01T00:00:00Z");   // oldest
-  await recordPull(db, "dlr", "2027-02", "2027-01-05T00:00:00Z");
-  await recordPull(db, "shdr", "2027-02", "2027-01-09T00:00:00Z");  // freshest
+  await recordPull(db, "wdw", "2027-02", "2026-12-01T00:00:00Z");   // oldest
+  await recordPull(db, "dlr", "2027-02", "2026-12-05T00:00:00Z");
+  await recordPull(db, "shdr", "2027-02", "2026-12-09T00:00:00Z");  // freshest
 
   const slots = await rotateHotelSlots(db, {
     months: ["2027-02"], resortIds: ["wdw", "dlr", "shdr"], limit: 2, today: TODAY,
@@ -168,5 +169,37 @@ test("months further ahead than Google prices never get a paid slot", async () =
   const db = await memoryDb();
   const slots = await rotateHotelSlots(db, { months: ["2027-12", "2028-02"], resortIds: ["wdw"], limit: 5, today: "2027-01-10" });
   assert.deepEqual(slots.map((s) => s.month), ["2027-12"], "Feb 2028 is past the horizon");
+  await db.close();
+});
+
+test("a resort/month bought in the last 10 days waits, even with budget to spare (2026-10-16)", async () => {
+  // The raw peek found 40 searches re-buying the same resort + the same 4
+  // nights 5-6 days later. Spare budget now stays unspent (it went to flights).
+  const db = await memoryDb();
+  assert.equal(HOTEL_REBUY_DAYS, 10);
+  await recordPull(db, "wdw", "2027-02", "2027-01-05T10:05:00Z");  // 5 days ago
+  await recordPull(db, "dlr", "2027-02", "2026-12-31T10:05:00Z");  // exactly 10 days ago
+  const slots = await rotateHotelSlots(db, { months: ["2027-02"], resortIds: ["wdw", "dlr"], limit: 9, today: TODAY });
+  assert.deepEqual(slots.map((s) => s.resortId), ["dlr"], "10 days on, by the calendar, it may be bought again");
+  // The Data holes page asks for the whole queue with no wait.
+  const all = await rotateHotelSlots(db, { months: ["2027-02"], resortIds: ["wdw", "dlr"], limit: 9, today: TODAY, rebuyDays: 0 });
+  assert.equal(all.length, 2);
+  await db.close();
+});
+
+test("each pass of a resort/month asks a different night (2026-10-16)", async () => {
+  const db = await memoryDb();
+  // wdw/2027-03 searched twice before (long ago); dlr/2027-03 never.
+  for (let i = 0; i < 2; i++) {
+    await db.query(`insert into hotel_searches (resort_id, month, check_in, priced, status, searched_at)
+                    values ('wdw','2027-03','2027-03-14',10,'ok','2026-11-0${i + 1}T10:00:00Z')`);
+  }
+  const slots = await rotateHotelSlots(db, { months: ["2027-03"], resortIds: ["wdw", "dlr"], limit: 2, today: TODAY });
+  const by = new Map(slots.map((s) => [s.resortId, s]));
+  assert.equal(by.get("dlr")!.pass, 0);
+  assert.equal(by.get("dlr")!.checkIn, "2027-03-14", "a first pass is still mid-month");
+  assert.equal(by.get("wdw")!.pass, 2);
+  assert.equal(by.get("wdw")!.checkIn, `2027-03-${String(CHECK_IN_DAYS[2]).padStart(2, "0")}`);
+  assert.equal(slotPasses(slots).get("wdw|2027-03"), 2);
   await db.close();
 });

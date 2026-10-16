@@ -325,6 +325,10 @@ export function cheapestBasisFare(
   return { fare: middle, cheapest: { how: "none", middle } };
 }
 
+/** The source tag of a fare we bought from Google Flights (popular-routes,
+ *  intl-sweep, exact-fare). */
+export const PAID_FLIGHT_SOURCE = "serpapi_flights";
+
 export function decideFlightFare(
   book: Pick<PriceBook, "setting">,
   row: FlightRow | undefined,
@@ -349,8 +353,15 @@ export function decideFlightFare(
   // estimate itself through the route correction in book.ts.
   // Compared against the estimate WITHOUT the holiday premium, so the
   // premium can never itself tip a real row into looking "too cheap".
+  //
+  // Except a fare we BOUGHT from Google for this exact date (owner, 2026-10-16,
+  // "the real Google fare wins on the board"): that is the very number our
+  // guesses are graded against, so an estimate above it is simply wrong. The
+  // rule above was made for the FREE feed's stray cheap fares and still
+  // applies to them.
   const estYardstick = est ? leanedFare(est, leanPct) : undefined;
-  const useRow = !!row && !(estYardstick !== undefined && estYardstick > row.price);
+  const bought = !!row?.sources?.includes(PAID_FLIGHT_SOURCE);
+  const useRow = !!row && (bought || !(estYardstick !== undefined && estYardstick > row.price));
   // A holiday week's premium only ever adjusts an ESTIMATE, never a real
   // cached fare — a real fare for that exact date already reflects
   // whatever the market actually charges, so layering a national-average

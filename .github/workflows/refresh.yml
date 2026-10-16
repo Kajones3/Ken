@@ -41,16 +41,17 @@ jobs:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
           MAX_REQUESTS_PER_MINUTE: "240"
           # Hard ceiling on paid off-property hotel lookups for this run.
-          # Sized for SerpApi Starter (1,000 searches/month): 12 a night is
-          # ~360/month beside the nightly flight rotation (18 a night, ~540),
-          # 900 in all, leaving ~100 for manual and debug runs. Raised from 8
-          # on 2026-09-26: the in-app live-fare button that used to spend
-          # ~180/month is gone, and the owner wants the allowance used. At 12
-          # every resort/month slot is re-bought about once a week. An
+          # Sized for SerpApi Starter (1,000 searches/month): 6 a night is
+          # ~180/month beside the nightly flight rotation (24 a night, ~720),
+          # 900 in all, leaving ~100 for manual and debug runs. 12 until
+          # 2026-10-16: at 12 the ~66 resort-months were re-bought every ~5.5
+          # days, the same 4 nights each time. Now each comes around every
+          # ~11 nights, never within 10 days (HOTEL_REBUY_DAYS), on a
+          # different night each pass, and the spare went to flights. An
           # exhausted budget degrades off-property to cached rates;
           # on-property is local and unaffected.
           # Raise this temporarily for a REFRESH_BACKFILL run, which wants
           # ~150 in one go.
-          SERPAPI_HOTELS_BUDGET: ${{ vars.SERPAPI_HOTELS_BUDGET || '12' }}
+          SERPAPI_HOTELS_BUDGET: ${{ vars.SERPAPI_HOTELS_BUDGET || '6' }}
           REFRESH_BACKFILL: ${{ inputs.backfill }}
           FARE_TREND_SOURCES: ${{ vars.FARE_TREND_SOURCES || 'serpapi_flights' }}

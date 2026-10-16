@@ -19,7 +19,7 @@
 import type { Db } from "./db.js";
 import { settingsMap } from "./settings.js";
 import { loadScoreboard, type GroupScore } from "./fareScoreboard.js";
-import { loadUserGrades, loadDisneyInputs, gradeDisney, type Grade, type HotelSide } from "./userGrades.js";
+import { loadUserGrades, loadDisneyInputs, gradeDisney, luckPoints, type Grade, type HotelSide } from "./userGrades.js";
 import { ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import { USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
@@ -103,7 +103,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const both = (s: { us: HotelSide; intl: HotelSide }): Grade => {
   const a = s.us.typical.month, b = s.intl.typical.month;
   const n = a.n + b.n, right = a.right + b.right;
-  return { n, right, pct: n ? Math.round((right / n) * 100) : null };
+  return { n, right, pct: n ? Math.round((right / n) * 100) : null, luck: luckPoints(right, n) };
 };
 const x2 = (n: number) => `×${n.toFixed(2)}`;
 
@@ -153,7 +153,30 @@ export async function loadRecommendations(db: Db, now: Date = new Date()): Promi
   const [model, cheapest, hotels] = await Promise.all([
     loadFareModel(db).catch(() => null), loadCheapestListed(db).catch(() => null), loadHotelLearning(db).catch(() => null),
   ]);
-  if (model) {
+  if (model?.plain && (model.plain.dom || model.plain.intl)) {
+    // The plain formula (the candidate since 2026-10-16): a typical fare per
+    // group, then one learned effect per piece.
+    const P = model.plain;
+    const usd = (n: number) => `$${Math.round(n).toLocaleString("en-US")}`;
+    learned.push({ name: "Candidate: typical fare before the pieces",
+      value: [P.dom ? `US ${usd(P.dom.typical)}` : "", P.intl ? `international ${usd(P.intl.typical)}` : ""].filter(Boolean).join(" · "),
+      note: `Learned from our own bought fares only: ${P.dom?.fares ?? 0} US, ${P.intl?.fares ?? 0} international.` });
+    const moves = (lv: Record<string, { factor: number; fares: number }> | undefined, min = 3) => Object.entries(lv ?? {})
+      .filter(([, v]) => v.fares >= min).sort((a, b) => Math.abs(Math.log(b[1].factor)) - Math.abs(Math.log(a[1].factor))).slice(0, 6)
+      .map(([k, v]) => `${k} ${x2(v.factor)}`).join(" · ");
+    const dest = [moves(P.dom?.dest), moves(P.intl?.dest)].filter(Boolean).join(" · ");
+    if (dest) learned.push({ name: "Candidate: by destination", value: dest, note: "How far each airport sits from its group's typical fare." });
+    const MONTHS = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthLine = (g: typeof P.dom) => Object.entries(g?.month ?? {}).sort()
+      .map(([k, v]) => `${MONTHS[Number(k)]} ${x2(v.factor)}`).join(" · ");
+    if (P.dom) learned.push({ name: "Candidate: travel month (US)", value: monthLine(P.dom), note: "Each month against the typical US fare." });
+    if (P.intl) learned.push({ name: "Candidate: travel month (international)", value: monthLine(P.intl), note: "Each month against the typical international fare." });
+    if (P.dom?.origin) learned.push({ name: "Candidate: home airport (US)", value: moves(P.dom.origin) || "nothing yet",
+      note: "US only: abroad, the home airport did not help (2026-10-16 test)." });
+    learned.push({ name: "Candidate: government airfare index (fare age)",
+      value: `US ${(P.dom?.fareAge.weight ?? 0).toFixed(2)} · international ${(P.intl?.fareAge.weight ?? 0).toFixed(2)}`,
+      note: "0 = it teaches nothing yet; it needs our fares to span months the government has published." });
+  } else if (model) {
     const L = model.levers;
     learned.push({ name: "Candidate: overall level", value: `US ${x2(L.calibration.dom)} · Europe ${x2(L.calibration.europe)} · Asia ${x2(L.calibration.asia)}`,
       note: `Fitted on ${model.fitted.domestic} US and ${model.fitted.international} international fares.` });

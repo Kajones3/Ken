@@ -110,8 +110,8 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
     : await loadIndexSeries(db).then((s) => Object.keys(s).length ? summarize(s).lines : null).catch(() => null);
   const progressTasks = (prog?.worse ?? []).map((l) => ({
     id: `flight-accuracy-${l.group === "US" ? "us" : "intl"}-${l.formula}`,
-    title: `Flight estimates got WORSE this week: ${l.group}, ${l.formula === "shown" ? "what travelers see" : "the candidate"} `
-      + `(typically off ${l.thisWeek.typicalOffPct}% vs ${l.lastWeek.typicalOffPct}%)`,
+    title: `Flight estimates got WORSE over the last two weeks: ${l.group}, ${l.formula === "shown" ? "what travelers see" : "the candidate"} `
+      + `(typically off ${l.recent.typicalOffPct}% vs ${l.before.typicalOffPct}%, more than luck explains)`,
     why: "Our guesses should improve every day as fares are added. Ask Claude to find why (the destinations listed under "
       + "\"Are our guesses getting better?\" are the first place to look) and how to fix it.",
     side: "free" as const, blocking: false, source: "checked" as const,
@@ -141,7 +141,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
     if (grades) parts.push("What the user sees (how often the board is right)\n\n" + grades.join("\n"));
     if (lean) parts.push("How our flight guesses lean (checked before buying, last 30 days)\n\n" + lean.join("\n"));
     if (airfareIndex) parts.push("Airfares, by the government's price indexes (Bureau of Labor Statistics)\n\n" + airfareIndex.join("\n"));
-    if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, this week vs last)\n\n" + prog.lines.join("\n"));
+    if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, the last two weeks vs the two before)\n\n" + prog.lines.join("\n"));
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")
         + "\n\n— Review and hand-add anything worth surfacing to a resort's goodToKnow in config.ts.");

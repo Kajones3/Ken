@@ -130,7 +130,7 @@ test("flightEstimate builds on the same-quarter median, moved by the trend", asy
   const march = await loadBook(db, {
     origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-03-01", to: "2027-03-08", tripLength: 7,
-  });
+  }, { formula: "live" });
   const e = march.flightEstimate!("ATL", "MCO")!;
   assert.equal(e.med, 224);            // 200 x 1.12, the median not the mean
   assert.equal(e.low, 201.6);          // p25 x 1.12
@@ -143,7 +143,7 @@ test("flightEstimate builds on the same-quarter median, moved by the trend", asy
   const august = await loadBook(db, {
     origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-08-01", to: "2027-08-08", tripLength: 7,
-  });
+  }, { formula: "live" });
   assert.equal(august.flightEstimate!("ATL", "MCO")!.med, 896);   // 800 x 1.12
   await db.close();
 });
@@ -163,7 +163,7 @@ test("flightEstimate flags an estimate built on the wrong season", async () => {
   const book = await loadBook(db, {
     origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-01-05", to: "2027-01-12", tripLength: 7,
-  });
+  }, { formula: "live" });
   assert.equal(book.flightEstimate!("ATL", "MCO")!.seasonMatched, false);
   await db.close();
 });
@@ -178,7 +178,7 @@ test("flightEstimate stays undefined with no trend, rather than showing a raw ol
   const book = await loadBook(db, {
     origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-03-01", to: "2027-03-08", tripLength: 7,
-  });
+  }, { formula: "live" });
   assert.equal(book.flightEstimate!("ATL", "MCO"), undefined);
   await db.close();
 });

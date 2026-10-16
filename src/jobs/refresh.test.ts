@@ -85,7 +85,7 @@ test("a resort/month that won a hotel slot is refreshed even when its month is n
   const p = recordingProvider();
   await runRefresh(db, {
     months: ["2027-03"], origins: ["ATL"], resorts: ["wdw"], provider: p,
-    hotelSlots: [{ resortId: "wdw", month: "2027-11", lastPulledAt: 0 }],
+    hotelSlots: [{ resortId: "wdw", month: "2027-11", lastPulledAt: 0, pass: 0, checkIn: "2027-11-14" }],
   });
 
   assert.ok(p.hotels.includes("wdw|2027-03"), "the due month still gets its free on-property pass");
@@ -100,7 +100,7 @@ test("a resort/month is never asked about twice in one run", async () => {
   const p = recordingProvider();
   await runRefresh(db, {
     months: ["2027-03"], origins: ["ATL"], resorts: ["wdw"], provider: p,
-    hotelSlots: [{ resortId: "wdw", month: "2027-03", lastPulledAt: 0 }],
+    hotelSlots: [{ resortId: "wdw", month: "2027-03", lastPulledAt: 0, pass: 0, checkIn: "2027-03-14" }],
   });
   assert.deepEqual(p.hotels, ["wdw|2027-03"]);
   await db.close();

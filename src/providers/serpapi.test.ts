@@ -1,6 +1,6 @@
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { SerpApiHotelProvider, sampleCheckIn } from "./serpapi.js";
+import { SerpApiHotelProvider, sampleCheckIn, checkInDayFor, CHECK_IN_DAYS } from "./serpapi.js";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });
@@ -208,4 +208,28 @@ test("readHotelExtra keeps Google's 'less than usual' note as a usual price, and
   assert.deepEqual(x, { lessThanUsualPct: 20, usualNightly: 200, deal: "20% less than usual · Great Deal",
     prices: [{ source: "Booking.com", nightly: 160 }], hotelClass: 3, rating: 4.4, reviews: 1200 });
   assert.equal(readHotelExtra({ name: "Plain" }, 100), undefined);
+});
+
+test("each pass asks a different check-in night, every weekday once in seven passes (2026-10-16)", () => {
+  assert.equal(checkInDayFor(0), 14, "the first pass is still mid-month");
+  const days = CHECK_IN_DAYS.map((_, i) => checkInDayFor(i));
+  assert.equal(new Set(days).size, 7);
+  assert.equal(new Set(days.map((d) => d % 7)).size, 7, "each starts on a different weekday");
+  assert.ok(days.every((d) => d + 4 <= 28), "a 4-night stay fits inside even February");
+  assert.equal(checkInDayFor(7), 14, "and then the cycle repeats");
+  assert.equal(sampleCheckIn("2027-03", "2027-01-01", 1), `2027-03-0${CHECK_IN_DAYS[1]}`);
+  // Still never in the past and never past Google's horizon.
+  assert.equal(sampleCheckIn("2026-10", "2026-10-15", 5), "2026-10-16");
+});
+
+test("the provider asks the night the rotation picked for this pass", async () => {
+  let asked = "";
+  globalThis.fetch = (async (u: URL | string) => {
+    asked = new URL(String(u)).searchParams.get("check_in_date") ?? "";
+    return new Response(JSON.stringify({ properties: [{ name: "Hampton Inn", rate_per_night: { extracted_lowest: 150 } }] }), { status: 200 });
+  }) as typeof fetch;
+  const p = new SerpApiHotelProvider("key", 999, 5, new Set([`${RESORT}|2027-03`]), "2027-01-01", new Map([[`${RESORT}|2027-03`, 3]]));
+  await p.hotelMonth(RESORT, "2027-03");
+  assert.equal(asked, `2027-03-${String(CHECK_IN_DAYS[3]).padStart(2, "0")}`);
+  assert.equal(p.searches[0]!.checkIn, asked, "and records that night");
 });

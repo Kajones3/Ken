@@ -23,7 +23,7 @@ import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
 import { seasonOf } from "../seasonality.js";
 import { pickGasProvider } from "../gas/pick.js";
 import { computeFareTrend } from "./fareTrend.js";
-import { rotateHotelSlots, slotKeys, type HotelSlot } from "./hotelRotation.js";
+import { rotateHotelSlots, slotKeys, slotPasses, type HotelSlot } from "./hotelRotation.js";
 import { primeSettingsCache } from "../settings.js";
 import { loadHotelLearning } from "../hotelLearning.js";
 
@@ -32,11 +32,12 @@ import { loadHotelLearning } from "../hotelLearning.js";
  * off-property hotel data (see providers/serpapi.ts) without needing a real
  * flight token too, and vice versa — the two vendors are unrelated.
  */
-export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null, usualWeight = 0): Provider {
+export function pickProvider(paidHotelSlots: ReadonlySet<string> | null = null, usualWeight = 0,
+  passes: ReadonlyMap<string, number> = new Map()): Provider {
   const flights = process.env.TRAVELPAYOUTS_TOKEN ? new TravelpayoutsProvider() : new MockProvider();
   if (!process.env.SERPAPI_KEY) return flights;
   const hotels = new SerpApiHotelProvider(
-    undefined, undefined, hotelBudget(), paidHotelSlots,
+    undefined, undefined, hotelBudget(), paidHotelSlots, undefined, passes,
   );
   hotels.usualWeight = usualWeight;
   return {
@@ -255,7 +256,12 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
       console.warn(`refresh: hotel learning skipped: ${(e as Error).message}`);
     }
   }
-  const provider = opts.provider ?? pickProvider(paidSlots ? slotKeys(paidSlots) : null, usualWeight);
+  const provider = opts.provider ?? pickProvider(paidSlots ? slotKeys(paidSlots) : null, usualWeight,
+    paidSlots ? slotPasses(paidSlots) : new Map());
+  if (paidSlots) {
+    console.log(`refresh: ${paidSlots.length} paid hotel search(es) tonight: ` +
+      paidSlots.map((s) => `${s.resortId} ${s.month} (check-in ${s.checkIn})`).join(", "));
+  }
 
   const runId = randomUUID();
   await db.query(`insert into fetch_runs (id, job, note) values ($1,'refresh',$2)`,

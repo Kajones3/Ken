@@ -124,7 +124,7 @@ export interface ForecastScores {
   /** Newest day first: what travelers saw that day, graded. */
   daily: { day: string; n: number; shown: ZoneScore; candidate: ZoneScore }[];
   since: string | null;
-  /** This week vs last week (needs days >= 14 to see last week). */
+  /** The last two weeks vs the two before (needs days >= 28 to see both). */
   progress?: Progress;
   /** What the guesses are built from (the candidate's fit). */
   informedBy?: InformedBy;
@@ -213,29 +213,60 @@ export function scoreForecasts(rows: ForecastRow[], zonePct: number, noFare = 0)
 
 /* ------------- "Every single day our guesses should be getting better" -------------
  * Owner, 2026-10-11. The before-buying grades (the honest ones) for the last
- * 7 days against the 7 before, per group and per formula, with the
- * destinations reading furthest off this week as the first place to look
- * for why. Pure.
+ * PROGRESS_WINDOW_DAYS against the same span before, per group and per
+ * formula, with the destinations reading furthest off in the recent window
+ * as the first place to look for why. Pure.
+ *
+ * Since 2026-10-16 the windows are two weeks, and each "typically off"
+ * carries its luck: how far it moves when the same fares are drawn again at
+ * random (bootstrap). A change counts as better or worse only when it is
+ * bigger than both windows' luck added together; one week of ~60 fares was
+ * about ±6 points of luck, so "better than last week" was mostly noise.
  */
 export type Trend = "better" | "worse" | "about the same" | "too few fares";
 export interface ProgressLine {
   group: "US" | "International"; formula: "shown" | "candidate";
-  thisWeek: ZoneScore; lastWeek: ZoneScore; trend: Trend;
+  recent: ZoneScore; before: ZoneScore; trend: Trend;
+  /** ± points of luck on each window's "typically off". */
+  luck: { recent: number | null; before: number | null };
 }
 export interface DestinationMiss { destination: string; n: number; shownReads: number | null; candidateReads: number | null }
 export interface Progress { lines: ProgressLine[]; destinations: DestinationMiss[] }
 
-/** Fewest fares per week in a group before a week is compared at all. */
+/** Fewest fares per window in a group before a window is compared at all. */
 export const PROGRESS_MIN_FARES = 8;
-/** A change in "typically off" smaller than this many points is noise. */
+/** The smallest change in "typically off" ever called better or worse. */
 export const PROGRESS_NOISE_POINTS = 1.5;
+/** Each window's length in days. */
+export const PROGRESS_WINDOW_DAYS = 14;
+
+/** ± points of luck on the median miss (|e|, as %): the spread of that
+ *  median over 300 random redraws of the same fares. Seeded, so the same
+ *  fares always give the same answer. */
+export function typicalOffLuck(errs: number[]): number | null {
+  if (errs.length < 2) return null;
+  let seed = errs.length * 2654435761 >>> 0;
+  const rnd = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const abs = errs.map(Math.abs);
+  const meds: number[] = [];
+  for (let b = 0; b < 300; b++) {
+    const draw = abs.map(() => abs[Math.floor(rnd() * abs.length)]!).sort((x, y) => x - y);
+    const m = Math.floor(draw.length / 2);
+    meds.push(draw.length % 2 ? draw[m]! : (draw[m - 1]! + draw[m]!) / 2);
+  }
+  const mean = meds.reduce((a, x) => a + x, 0) / meds.length;
+  const sd = Math.sqrt(meds.reduce((a, x) => a + (x - mean) ** 2, 0) / (meds.length - 1));
+  return Math.round(sd * 1000) / 10;
+}
 
 export function progressOf(rows: ForecastRow[], zonePct: number, now: Date = new Date()): Progress {
   const zone = zonePct / 100;
   const day = 86_400_000;
+  const W = PROGRESS_WINDOW_DAYS;
   const inWeek = (r: ForecastRow, back: number) => {
     const age = (now.getTime() - r.boughtAt.getTime()) / day;
-    return age >= back * 7 && age < (back + 1) * 7;
+    return age >= back * W && age < (back + 1) * W;
   };
   const errs = (rs: ForecastRow[], pick: (r: ForecastRow) => number | undefined) =>
     rs.flatMap((r) => { const v = pick(r); return v === undefined || !(v > 0) ? [] : [v / r.price - 1]; });
@@ -244,15 +275,18 @@ export function progressOf(rows: ForecastRow[], zonePct: number, now: Date = new
     const gr = rows.filter((r) => isInternational(r.destination) === (group === "International"));
     for (const formula of ["shown", "candidate"] as const) {
       const pick = (r: ForecastRow) => (formula === "shown" ? r.shown : r.candidate);
-      const thisWeek = scoreZone(errs(gr.filter((r) => inWeek(r, 0)), pick), zone);
-      const lastWeek = scoreZone(errs(gr.filter((r) => inWeek(r, 1)), pick), zone);
+      const eRecent = errs(gr.filter((r) => inWeek(r, 0)), pick), eBefore = errs(gr.filter((r) => inWeek(r, 1)), pick);
+      const recent = scoreZone(eRecent, zone);
+      const before = scoreZone(eBefore, zone);
+      const luck = { recent: typicalOffLuck(eRecent), before: typicalOffLuck(eBefore) };
       let trend: Trend = "too few fares";
-      if (thisWeek.n >= PROGRESS_MIN_FARES && lastWeek.n >= PROGRESS_MIN_FARES
-          && thisWeek.typicalOffPct !== null && lastWeek.typicalOffPct !== null) {
-        const d = thisWeek.typicalOffPct - lastWeek.typicalOffPct;
-        trend = d <= -PROGRESS_NOISE_POINTS ? "better" : d >= PROGRESS_NOISE_POINTS ? "worse" : "about the same";
+      if (recent.n >= PROGRESS_MIN_FARES && before.n >= PROGRESS_MIN_FARES
+          && recent.typicalOffPct !== null && before.typicalOffPct !== null) {
+        const d = recent.typicalOffPct - before.typicalOffPct;
+        const margin = Math.max(PROGRESS_NOISE_POINTS, (luck.recent ?? 0) + (luck.before ?? 0));
+        trend = d < -margin ? "better" : d > margin ? "worse" : "about the same";
       }
-      lines.push({ group, formula, thisWeek, lastWeek, trend });
+      lines.push({ group, formula, recent, before, trend, luck });
     }
   }
   const week = rows.filter((r) => inWeek(r, 0));
@@ -272,11 +306,13 @@ export function progressOf(rows: ForecastRow[], zonePct: number, now: Date = new
 export function progressReport(p: Progress): { lines: string[]; worse: ProgressLine[] } {
   const name = (l: ProgressLine) => `${l.group}, ${l.formula === "shown" ? "what travelers see" : "candidate"}`;
   const off = (z: ZoneScore) => (z.typicalOffPct === null ? "—" : `${z.typicalOffPct}%`);
-  const lines = p.lines.map((l) => `${name(l)}: typically off ${off(l.thisWeek)} this week (${l.thisWeek.n} fares, `
-    + `${l.thisWeek.inZonePct ?? "—"}% within the zone) vs ${off(l.lastWeek)} last week (${l.lastWeek.n}): ${l.trend.toUpperCase()}`);
+  const pm = (x: number | null) => (x === null ? "" : ` ±${x}`);
+  const lines = p.lines.map((l) => `${name(l)}: typically off ${off(l.recent)}${pm(l.luck.recent)} over the last two weeks (${l.recent.n} fares, `
+    + `${l.recent.inZonePct ?? "—"}% within the zone) vs ${off(l.before)}${pm(l.luck.before)} the two weeks before (${l.before.n}): ${l.trend.toUpperCase()}`);
+  lines.push("  (± is luck: how far the number moves by chance on this many fares. A change inside both margins added together is \"about the same\".)");
   const far = p.destinations.filter((d) => d.n >= 3 && d.shownReads !== null && Math.abs(d.shownReads) >= 10);
   if (far.length) {
-    lines.push("Furthest off this week, where to look first (which way each destination leans):");
+    lines.push("Furthest off over the last two weeks, where to look first (which way each destination leans):");
     for (const d of far.slice(0, 5)) {
       lines.push(`  ${d.destination}: shown fares lean ${leanWords(d.shownReads)}, candidate ${leanWords(d.candidateReads)} (${d.n} fares)`);
     }
