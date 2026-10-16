@@ -270,6 +270,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
     <a href="#sees">What the user sees</a>
+    <a href="#holes">Data holes</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -334,6 +335,34 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
           <p>Colors: green 60%+ (about the best the noise allows: the same flight is within 10% of itself on only ~67% of
             days), amber 40-59%, red under 40%.</p>
           <p id="ugNotes"></p>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div class="page" data-page="holes">
+    <section class="sheet">
+      <h2>Data holes</h2>
+      <p class="count" style="margin-bottom:10px">Where we know the least, and what will fill it.</p>
+      <div class="tiles" id="hoTiles"><p class="count">Loading…</p></div>
+      <h3>Flight routes</h3>
+      <p class="count">Routes people search that hold the fewest fares we bought come first.</p>
+      <div id="hoRoutes"></div>
+      <h3>Hotels</h3>
+      <p class="count">Resort and month, fewest of Google's rates in the last 45 days first.</p>
+      <div id="hoHotels"></div>
+      <details class="group" style="margin-top:12px">
+        <summary><span>How to read this</span></summary>
+        <div class="gbody count" style="margin:0; padding:0 15px 12px">
+          <p><b>Bought</b>: fares we paid Google for, last 90 days. <b>Free feed</b>: the free flight feed, last 90 days.
+            <b>Google lists</b>: Google's whole answers we kept. <b>Survey</b>: the government's (BTS) quarterly / monthly
+            surveys held for the route; it covers US flights only.</p>
+          <p><b>Nightly job, ~date</b>: one of the 19 airports the nightly job rotates through (about 6 routes a night), so
+            the date is a rough guess. <b>Not in rotation</b>: one of the other 22 airports. Buy it once by naming it in the
+            popular-routes workflow's <i>routes</i> box (for example <code>CLT-HND-2027-03</code>), or screenshot a fare
+            into Prices you've checked. <b>Waiting on the government</b>: we hold fares but no monthly survey yet.</p>
+          <p>Hotels: the nightly job searches about 12 resort-months a night, longest-waiting first. Google won't price a
+            month more than ~360 days out.</p>
         </div>
       </details>
     </section>
@@ -1943,6 +1972,36 @@ document.addEventListener("click", e => {
   if(el) el.scrollIntoView({ block: "center" });
 });
 
+/* ------------------------------- data holes ------------------------------ */
+const RESORT_SHORT = { wdw: "Walt Disney World", dlr: "Disneyland", dlp: "Paris", tdr: "Tokyo", shdr: "Shanghai", hkdl: "Hong Kong" };
+const niceDate = d => d ? new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "";
+const niceMonth = m => new Date(m + "-15T12:00:00Z").toLocaleDateString("en-US", { month: "short", year: "numeric" });
+async function loadHoles(){
+  const r = await fetch("/api/admin/holes", { headers: { accept: "application/json" } });
+  if(!r.ok){ $("#hoTiles").innerHTML = `<p class="count">Couldn't load the data holes.</p>`; return; }
+  const h = await r.json();
+  $("#hoTiles").innerHTML = tile("Routes with no fares bought", `${h.routes.noPaid} of ${h.routes.total}`, "last 90 days")
+    + tile("Hotel months with no Google rates", `${h.hotels.empty} of ${h.hotels.total}`, "last 45 days")
+    + tile("Newest government survey", h.newestSurvey || "none", "US routes only (BTS)")
+    + tile("Government airfare index", h.bls.latest || "none", "one national figure (BLS)");
+  const act = a => a.kind === "rotation" ? `Nightly job, ~${niceDate(a.byDate)}`
+    : a.kind === "government" ? `Waiting on the government${a.newestSurvey ? ` (newest: ${esc(a.newestSurvey)})` : ""}`
+    : `<b>Not in rotation</b>`;
+  $("#hoRoutes").innerHTML = `<div style="overflow-x:auto"><table class="ugt"><thead><tr><th>Route</th><th class="c">Searches</th>
+    <th class="c">Bought</th><th class="c">Free feed</th><th class="c">Google lists</th><th class="c">Survey</th><th>What fills it</th></tr></thead><tbody>
+    ${h.routes.holes.map(x => `<tr><td><b>${esc(x.origin)} → ${esc(x.destination)}</b><div class="n">${esc(RESORT_SHORT[x.resortId] || x.resortId)}</div></td>
+      <td class="c">${x.searches}</td><td class="c${x.paid90 ? "" : " g-bad"}">${x.paid90}</td><td class="c">${x.feed90}</td><td class="c">${x.answers90}</td>
+      <td class="c">${x.intl ? `<span class="n">none (abroad)</span>` : `${x.btsQuarters} / ${x.btsMonths}`}</td><td>${act(x.action)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  $("#hoHotels").innerHTML = `<div style="overflow-x:auto"><table class="ugt"><thead><tr><th>Resort · month</th><th class="c">Google rates</th>
+    <th>Last search</th><th>Next search</th></tr></thead><tbody>
+    ${h.hotels.holes.map(x => `<tr><td><b>${esc(RESORT_SHORT[x.resortId] || x.resortId)}</b> · ${niceMonth(x.month)}</td>
+      <td class="c${x.samples45 ? "" : " g-bad"}">${x.samples45}</td>
+      <td>${x.lastSearch ? `${niceDate(x.lastSearch)}, ${x.lastPriced} priced` : `<span class="n">never</span>`}</td>
+      <td>${x.tooFar ? `<span class="n">too far ahead for Google</span>` : x.nextSearch ? `~${niceDate(x.nextSearch)}` : ""}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+
 /* ------------------------------- visitors ------------------------------ */
 const BOOK_LABEL = { flights: "Kayak flights", tickets: "Official ticket page", hotel_disney: "Disney hotel page",
   hotel_kayak: "Kayak hotels", hotel_booking: "Booking.com hotels" };
@@ -2431,6 +2490,7 @@ route();
 load();
 loadGrades();
 renderAdvice();
+loadHoles();
 loadFares();
 loadAttractions();
 loadDeals();
