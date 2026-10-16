@@ -168,7 +168,7 @@ test("a day of only international searches still yields a usable trend", async (
   const book = await loadBook(db, {
     origin: "DEN", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-03-01", to: "2027-03-08", tripLength: 7,
-  });
+  }, { formula: "live" });
   const est = book.flightEstimate!("DEN", "MCO")!;
   assert.ok(Math.abs(est.med - 395 * 1.12) < 6, `expected ~442, got ${est.med}`);
   assert.ok(est.low < est.med && est.med < est.high, "low/med/high must be ordered");

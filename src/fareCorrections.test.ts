@@ -121,12 +121,12 @@ test("a correction moves the estimate toward it — and never becomes a quote", 
   const q3 = `${new Date().getUTCFullYear() + 1}-07-15`;
   await seedBaseline(db, 3);
 
-  const before = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: q3, to: q3, tripLength: 7 });
+  const before = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: q3, to: q3, tripLength: 7 }, { formula: "live" });
   const e0 = before.flightEstimate?.("RDU", "MCO");
   if (!e0) return; // no baseline in this schema shape; the unit tests above still cover the rules
 
   await addCorrection(db, { origin: "RDU", destination: "MCO", departDate: q3, priceUsd: 400 });
-  const after = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: q3, to: q3, tripLength: 7 });
+  const after = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: q3, to: q3, tripLength: 7 }, { formula: "live" });
   const e1 = after.flightEstimate!("RDU", "MCO")!;
 
   assert.ok(e1.med > e0.med, `the estimate moved toward the owner's figure (${e0.med} -> ${e1.med})`);
@@ -139,12 +139,12 @@ test("a 'cheap end' correction moves the low, not the middle", async () => {
   const db = await memoryDb();
   const when = `${new Date().getUTCFullYear() + 1}-07-15`;
   await seedBaseline(db, 3);
-  const base = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: when, to: when, tripLength: 7 });
+  const base = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: when, to: when, tripLength: 7 }, { formula: "live" });
   const e0 = base.flightEstimate?.("RDU", "MCO");
   if (!e0) return;
 
   await addCorrection(db, { origin: "RDU", destination: "MCO", departDate: when, priceUsd: 120, band: "low" });
-  const after = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: when, to: when, tripLength: 7 });
+  const after = await loadBook(db, { origin: "RDU", destinations: ["MCO"], resortIds: ["wdw"], from: when, to: when, tripLength: 7 }, { formula: "live" });
   const e1 = after.flightEstimate!("RDU", "MCO")!;
 
   assert.equal(e1.low, 120, "the cheap end is what they spoke for");

@@ -101,7 +101,7 @@ test("a historical BTS baseline IS still moved by the trend", async () => {
   const book = await loadBook(db, {
     origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"],
     from: "2027-03-01", to: "2027-03-08", tripLength: 7,
-  });
+  }, { formula: "live" });
   const est = book.flightEstimate!("ATL", "MCO")!;
   assert.equal(est.med, 376.2);                    // 342 x 1.10
   assert.equal(est.sampledLive, false);

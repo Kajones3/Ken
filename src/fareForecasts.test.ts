@@ -35,6 +35,9 @@ const BOOK = { origin: "ATL", destinations: ["MCO"], resortIds: ["wdw"], from: D
 
 test("the forecast is written down BEFORE the fare, so it never learns from the fare it is graded on", async () => {
   const db = await seeded();
+  // This test is about the live formula (the switch off); the candidate,
+  // on by default since 2026-10-16, has its own test below.
+  await db.query(`insert into owner_settings (key, value) values ('flight.useCandidate', '0'::jsonb)`);
   const before = quotedEstimate(await loadBook(db, BOOK, { formula: "live" }), "ATL", "MCO", DAY)!;
   assert.ok(before > 0);
 

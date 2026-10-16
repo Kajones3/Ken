@@ -160,12 +160,16 @@ export const SETTINGS: SettingDef[] = [
     label: "Flight estimates — use the candidate formula",
     group: "Flight estimates",
     kind: "number",
-    default: 0,
+    // On since 2026-10-16 (owner: "build A through E"): the candidate, now
+    // the plain formula learned from our own bought fares, beat the live one
+    // on the fares written down before buying, US and international.
+    default: 1,
     min: 0,
     max: 1,
-    help: "0: travelers see the live formula (leaned as set below). 1: travelers see the candidate formula, "
-      + "which is graded beside the live one every day on /admin → Flights & hotels. Switch only when the "
-      + "candidate has been beating the live formula there. Switching back to 0 undoes it at once; nothing is deleted.",
+    help: "1 (the default since 2026-10-16): travelers see the candidate formula, learned from the fares we bought "
+      + "(destination and month; in the US also the home airport and the route). 0: travelers see the old live formula "
+      + "(the government survey or a seeded guess, leaned as set below). Both are graded every day on /admin. "
+      + "Switching is undone at once; nothing is deleted.",
   },
   {
     key: ZONE_PCT_KEY,

@@ -91,8 +91,12 @@ test("readInsights keeps Google's range and history, and drops shapes it doesn't
     priceLevel: undefined, history: undefined, itineraries: 3 });
 });
 
-test("the switch: off = live formula, on = the candidate, never leaned", async () => {
+test("the switch: off = live formula, on = the candidate (the default since 2026-10-16), never leaned", async () => {
   const d = await memoryDb();
+  // On by default now: with nothing saved, travelers see the candidate.
+  const { settingsMap } = await import("./settings.js");
+  assert.equal((await settingsMap(d)).get("flight.useCandidate"), 1);
+  await d.query(`insert into owner_settings (key, value) values ('flight.useCandidate', '0'::jsonb)`);
   for (const o of [...US, "RDU"]) {
     await d.query(`insert into historical_fares (origin, destination, year, quarter, avg_fare_usd, median_fare_usd, p25_fare_usd, p75_fare_usd, fetched_at)
                    values ($1,'MCO',2025,1,300,300,240,375,'2026-01-01')`, [o]);
@@ -108,7 +112,7 @@ test("the switch: off = live formula, on = the candidate, never leaned", async (
   const live = await loadBook(d, req);
   // Live: BTS p75 (lean 100) x trend 1 = 375.
   assert.equal(quotedEstimate(live, "RDU", "MCO", "2027-03-10"), 375);
-  await d.query(`insert into owner_settings (key, value) values ('flight.useCandidate', '1'::jsonb)`);
+  await d.query(`update owner_settings set value = '1'::jsonb where key = 'flight.useCandidate'`);
   clearFareModelCache(d);
   const cand = await loadBook(d, req);
   // Candidate: 300 x 1.2 measured, NOT pushed to the dear end by the lean.

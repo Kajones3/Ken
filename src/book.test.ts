@@ -109,7 +109,7 @@ test("BTS's monthly survey replaces the quarterly row only when its own correcti
   const req = { origin: "BNA", destinations: ["MCO"], resortIds: ["wdw"], from: "2027-03-01", to: "2027-03-31", tripLength: 7 };
 
   // No monthly correction yet: the quarterly row and its correction stay in charge.
-  let est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  let est = (await loadBook(db, req, { formula: "live" })).flightEstimate?.("BNA", "MCO");
   assert.equal(est!.med, 480);
   assert.equal(est!.basisQuarter, "2025Q1");
 
@@ -117,13 +117,13 @@ test("BTS's monthly survey replaces the quarterly row only when its own correcti
   await db.query(
     `insert into fare_trend (id, multiplier, low_multiplier, high_multiplier, sample_routes, basis_quarter, kind)
      values ($1, 1.05, 1.0, 1.1, 4, '2026-03', 'domestic_monthly')`, [randomUUID()]);
-  est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  est = (await loadBook(db, req, { formula: "live" })).flightEstimate?.("BNA", "MCO");
   assert.equal(est!.med, 525);
   assert.equal(est!.basisQuarter, "March 2026");
 
   // A month with too few tickets is not trusted over the quarter.
   await db.query(`update historical_fares_monthly set itin_count = 5`);
-  est = (await loadBook(db, req)).flightEstimate?.("BNA", "MCO");
+  est = (await loadBook(db, req, { formula: "live" })).flightEstimate?.("BNA", "MCO");
   assert.equal(est!.basisQuarter, "2025Q1");
 
   // And the old quarterly row is still there, untouched.

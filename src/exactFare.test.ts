@@ -265,14 +265,14 @@ test("one bought fare nudges the estimate toward it, but does not fully override
     from: "2027-03-12", to: "2027-03-19", tripLength: 7,
   };
 
-  const before = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
+  const before = (await loadBook(db, otherDate, { formula: "live" })).flightEstimate!("ATL", "MCO")!;
   assert.equal(before.med, 382.01, "342 x the global trend of 1.117");
   assert.equal(before.routeSamples, undefined, "nothing route-specific known yet");
 
   await fetchExactFare(db, { ...req, departDate: "2027-03-04" },
     { provider: stubProvider({ price: 511 }), limits: LIMITS, today: TODAY });
 
-  const after = (await loadBook(db, otherDate)).flightEstimate!("ATL", "MCO")!;
+  const after = (await loadBook(db, otherDate, { formula: "live" })).flightEstimate!("ATL", "MCO")!;
   // 342 x [1.117 + (511/342 - 1.117) x (1/3)] — one sample out of the three
   // ROUTE_CORRECTION_MIN_SAMPLES needs, so it moves a THIRD of the way from
   // the trend (382.01) toward the raw ratio (511), not all the way to 511.
