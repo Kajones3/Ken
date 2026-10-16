@@ -332,19 +332,30 @@ async function offPropertyPulls(db: Db): Promise<HotelPull[]> {
   return [...m.values()];
 }
 
+/** Everything gradeDisney needs, with the owner's current settings. Shared
+ *  with the Rates & settings advice, which re-grades at other weights. */
+export async function loadDisneyInputs(db: Db, settings: Map<string, number>, zone: number, now: Date):
+  Promise<{ rates: GoogleDisneyRate[]; opts: HotelGradeOpts }> {
+  const checks = (settings.get(CHECKS_USE_KEY) ?? 1) >= 1 ? await countedChecks(db) : [];
+  const bases = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
+  return {
+    rates: await cachedGoogleDisneyRates(db).catch(() => []),
+    opts: {
+      zone, now, checks,
+      googleWeight: settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT,
+      priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+      hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? bases.get(id),
+    },
+  };
+}
+
 export async function loadUserGrades(db: Db, now: Date = new Date()): Promise<UserGrades> {
   const settings = await settingsMap(db);
   const zone = (settings.get(ZONE_PCT_KEY) ?? DEFAULT_ZONE_PCT) / 100;
   const { rows, unmatched } = await flightRows(db);
   const flights = gradeFlights(rows, zone, now);
-  const checks = (settings.get(CHECKS_USE_KEY) ?? 1) >= 1 ? await countedChecks(db) : [];
-  const bases = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
-  const disney = gradeDisney(await cachedGoogleDisneyRates(db).catch(() => []), {
-    zone, now, checks,
-    googleWeight: settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT,
-    priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
-    hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? bases.get(id),
-  });
+  const d = await loadDisneyInputs(db, settings, zone, now);
+  const disney = gradeDisney(d.rates, d.opts);
   const offProperty = gradeOffProperty(await offPropertyPulls(db), zone, now);
   const zonePct = Math.round(zone * 100);
   const g = { flights: { zonePct, ...flights, unmatched }, hotels: { zonePct, disney, offProperty } };

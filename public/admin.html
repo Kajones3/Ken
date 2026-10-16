@@ -116,6 +116,21 @@ details.group[open]>summary::after{transform:rotate(90deg)}
 /* Visitors page */
 .seg{display:flex; gap:6px; margin:4px 0 16px; flex-wrap:wrap}
 .seg button[aria-pressed="true"]{background:var(--accent-bg); border-color:var(--accent-line)}
+.ugt{width:100%; border-collapse:collapse; font-size:13px}
+.ugt th{text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; padding:6px 8px}
+.ugt td{padding:6px 8px; border-top:1px solid var(--rule); vertical-align:top}
+.ugt td.c{text-align:center}
+.ugt .p{font-size:20px; font-weight:800; font-variant-numeric:tabular-nums}
+.ugt .n{font-size:11px; color:var(--muted)}
+.ugt .up{color:var(--ok); font-weight:700; font-size:12px}.ugt .dn{color:var(--bad); font-weight:700; font-size:12px}
+.g-ok{background:var(--ok-bg)}.g-mid{background:var(--accent-bg)}.g-bad{background:var(--bad-bg)}
+.adv{display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:10px}
+.adv .card{border:1px solid var(--rule); border-radius:10px; background:var(--surface); padding:11px 12px}
+.adv .card.change{border-color:var(--accent-line); background:var(--accent-bg)}
+.adv .nm{font-weight:700; font-size:13.5px}
+.adv .val{font-size:20px; font-weight:800; margin:4px 0}
+.adv .ev{font-size:12.5px}
+.adv .does{font-size:11.5px; color:var(--muted); margin-top:6px}
 .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:6px}
 .tile{border:1px solid var(--rule); border-radius:10px; background:var(--surface); padding:11px 12px}
 .tile .k{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
@@ -302,23 +317,25 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="sees">
     <section class="sheet">
       <h2>What the user sees</h2>
-      <p>How often the numbers on the board are right, judged the way a traveler would judge them. Flights are
-        graded on the number we wrote down <b>before</b> buying each fare, against Google's whole list for that
-        same search. Hotels are graded against every rate Google showed us.</p>
-      <ul class="count" style="margin:6px 0 12px 18px">
-        <li><b>Typical trip</b>: our number lands inside the middle half of Google's list (the cheapest quarter and
-          the most expensive quarter dropped). With fewer than 4 prices to go on, within &plusmn;<span class="ugZone">10</span>%
-          of their middle counts instead.</li>
-        <li><b>Cheapest trip</b>: within &plusmn;<span class="ugZone">10</span>% of the cheapest one listed. For Disney
-          hotels, the cheapest in the category the traveler picked; off property, the cheapest in each price third
-          (budget, mid-range, upscale).</li>
-        <li><b>Overall</b>: both together.</li>
-      </ul>
-      <div id="ugSummary"><p class="count">Loading…</p></div>
-      <h3>Flights</h3>
-      <div id="ugFlights"></div>
-      <h3>Hotels</h3>
-      <div id="ugHotels"></div>
+      <p class="count" style="margin-bottom:10px">How often the board is right. Big number: share right <b>this week</b>
+        (or the last 30 days when the week has too few). Arrow: change from last week.</p>
+      <div id="ugBoard"><p class="count">Loading…</p></div>
+      <div id="ugTodo"></div>
+      <details class="group" style="margin-top:12px">
+        <summary><span>How these are graded</span></summary>
+        <div class="gbody count" style="margin:0; padding:0 15px 12px">
+          <p><b>Typical trip</b>: our number inside the middle half of Google's list (cheapest and dearest quarters
+            dropped). Fewer than 4 prices: within &plusmn;<span class="ugZone">10</span>% of their middle.</p>
+          <p><b>Cheapest trip</b>: within &plusmn;<span class="ugZone">10</span>% of the cheapest listed. Disney hotels:
+            the cheapest in the category the traveler picked. Off property: the cheapest in each price third.</p>
+          <p><b>Overall</b>: both together. <b>Lean</b>: our typical fare against the middle of Google's list (+ = high).</p>
+          <p>Flights use the number written down <b>before</b> each fare was bought. Disney hotels are graded with that
+            hotel and month's own Google rates left out of our correction. Off property, each search is graded by the one before.</p>
+          <p>Colors: green 60%+ (about the best the noise allows: the same flight is within 10% of itself on only ~67% of
+            days), amber 40-59%, red under 40%.</p>
+          <p id="ugNotes"></p>
+        </div>
+      </details>
     </section>
   </div>
 
@@ -648,6 +665,16 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p>The numbers every price is built from. Change one and it applies straight away; leave a box
       empty to go back to the figure the app shipped with.</p>
   </div>
+  <section class="sheet">
+    <h2>What the data says</h2>
+    <p class="count" style="margin-bottom:10px">The dials the data can judge, graded on what we've bought and seen.
+      Nothing changes until you change it below.</p>
+    <div id="advice"><p class="count">Loading…</p></div>
+    <details class="group" style="margin-top:12px">
+      <summary><span>What the formulas learned on their own</span></summary>
+      <div class="gbody" id="learned" style="padding:0 15px 12px"></div>
+    </details>
+  </section>
   <input type="search" id="q" placeholder="Search — hotel name, resort, “mileage”…" aria-label="Search settings">
   <p class="count" id="count">Loading…</p>
 
@@ -1854,33 +1881,67 @@ window.addEventListener("hashchange", route);
 
 
 /* --------------------------- what the user sees --------------------------- */
-const ugTrend = w => w.trend === "too few" ? "" : w.trend === "about the same" ? " · about the same as last week"
-  : ` · ${w.trend === "better" ? "▲ up" : "▼ down"} from ${w.lastWeek.pct}%`;
-const ugTile = (name, w) => {
-  const g = w.thisWeek.n >= 8 ? w.thisWeek : w.month;
-  const when = w.thisWeek.n >= 8 ? "this week" : "last 30 days";
-  return g.n ? tile(name, `${g.pct}%`, `${g.right} of ${g.n} right · ${when}${w.thisWeek.n >= 8 ? ugTrend(w) : ""}`)
-    : tile(name, "—", "nothing to grade yet");
+const ugPick = w => w.thisWeek.n >= 8 ? { g: w.thisWeek, week: true } : { g: w.month, week: false };
+const ugCell = w => {
+  const { g, week } = ugPick(w);
+  if(!g.n) return `<td class="c"><span class="n">—</span></td>`;
+  const cls = g.pct >= 60 ? "g-ok" : g.pct >= 40 ? "g-mid" : "g-bad";
+  const d = week && w.trend !== "too few" && w.trend !== "about the same" ? g.pct - w.lastWeek.pct : null;
+  const arrow = d === null ? "" : ` <span class="${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</span>`;
+  return `<td class="c ${cls}"><span class="p">${g.pct}%</span>${arrow}<div class="n">${g.right} of ${g.n}${week ? "" : " · 30 days"}</div></td>`;
 };
-const ugSide = (label, x, extra) => `<h4 style="margin:12px 0 6px">${esc(label)}</h4>
-  <div class="tiles">${ugTile("Typical trip", x.typical)}${ugTile("Cheapest trip", x.cheapest)}${ugTile("Overall", x.overall)}</div>${extra || ""}`;
+const ugLean = x => x.leanPct === null ? `<td class="c"><span class="n">—</span></td>`
+  : `<td class="c"><span class="p" style="font-size:15px">${x.leanPct > 0 ? "+" : ""}${Math.round(x.leanPct)}%</span></td>`;
+let ADVICE = null;
+async function loadAdvice(){
+  if(ADVICE) return ADVICE;
+  const r = await fetch("/api/admin/recommendations", { headers: { accept: "application/json" } });
+  ADVICE = r.ok ? await r.json() : { advice: [], learned: [], failed: true };
+  return ADVICE;
+}
 async function loadGrades(){
   const r = await fetch("/api/admin/grades", { headers: { accept: "application/json" } });
-  if(!r.ok){ $("#ugSummary").innerHTML = `<p class="count">Couldn't load the grades.</p>`; return; }
+  if(!r.ok){ $("#ugBoard").innerHTML = `<p class="count">Couldn't load the grades.</p>`; return; }
   const g = await r.json();
   document.querySelectorAll(".ugZone").forEach(el => el.textContent = g.flights.zonePct);
-  $("#ugSummary").innerHTML = g.summary.length
-    ? `<div class="tile" style="margin:8px 0 4px">${g.summary.map(l => /^\s/.test(l)
-        ? `<div class="count" style="margin-left:14px">${esc(l.trim())}</div>` : `<div style="margin-top:4px">${esc(l)}</div>`).join("")}</div>`
-    : `<p class="count">Nothing graded yet.</p>`;
-  const fx = x => `<p class="count">${x.leanPct === null ? "" : `Our typical fares lean ${x.leanPct === 0 ? "even" : (x.leanPct > 0 ? "high" : "low") + " by " + Math.abs(Math.round(x.leanPct)) + "%"} against the middle of Google's list. `}${x.candidateTypical.n ? `The candidate formula, same fares, typical trip: ${x.candidateTypical.pct}% (${x.candidateTypical.right} of ${x.candidateTypical.n}, last 30 days).` : ""}</p>`;
-  $("#ugFlights").innerHTML = ugSide("US", g.flights.us, fx(g.flights.us)) + ugSide("International", g.flights.intl, fx(g.flights.intl))
-    + (g.flights.unmatched ? `<p class="count">${g.flights.unmatched} fare(s) bought in the last 30 days had no Google list kept to grade against, so they are left out.</p>` : "")
-    + `<p class="count">Cheapest-trip fares have been written down before buying since 2026-10-16, so that column starts small and grows about 18 a night.</p>`;
-  $("#ugHotels").innerHTML = ugSide("Disney's own hotels, US", g.hotels.disney.us) + ugSide("Disney's own hotels, international", g.hotels.disney.intl)
-    + ugSide("Off property, US", g.hotels.offProperty.us) + ugSide("Off property, international", g.hotels.offProperty.intl)
-    + `<p class="count">Disney hotels are graded with that hotel and month's own Google rates left out of our correction, so Google never grades the price it set. Off property, each search is graded by what the search before it showed.</p>`;
+  const row = (name, x, flight) => `<tr><td><b>${esc(name)}</b></td>${ugCell(x.typical)}${ugCell(x.cheapest)}${ugCell(x.overall)}${flight ? ugLean(x) : `<td></td>`}</tr>`;
+  $("#ugBoard").innerHTML = `<div style="overflow-x:auto"><table class="ugt">
+    <thead><tr><th></th><th class="c">Typical</th><th class="c">Cheapest</th><th class="c">Overall</th><th class="c">Lean</th></tr></thead>
+    <tbody>
+      ${row("Flights · US", g.flights.us, true)}${row("Flights · International", g.flights.intl, true)}
+      ${row("Disney hotels · US", g.hotels.disney.us)}${row("Disney hotels · International", g.hotels.disney.intl)}
+      ${row("Off property · US", g.hotels.offProperty.us)}${row("Off property · International", g.hotels.offProperty.intl)}
+    </tbody></table></div>`;
+  $("#ugNotes").textContent = [
+    g.flights.unmatched ? `${g.flights.unmatched} fare(s) bought in the last 30 days had no Google list kept to grade against, so they are left out.` : "",
+    "Cheapest-trip flight fares are written down before buying since 2026-10-16, so that column starts small.",
+  ].filter(Boolean).join(" ");
+  const a = await loadAdvice();
+  const todo = a.advice.filter(x => x.verdict === "change");
+  $("#ugTodo").innerHTML = todo.length ? `<div class="chips" style="margin-top:10px">${todo.map(x =>
+    `<a class="chip" href="#numbers" style="text-decoration:none">${esc(x.name)}: ${esc(x.current)} → <b>${esc(x.suggest)}</b></a>`).join("")}</div>` : "";
 }
+async function renderAdvice(){
+  const a = await loadAdvice();
+  if(a.failed){ $("#advice").innerHTML = `<p class="count">Couldn't load what the data says.</p>`; return; }
+  const word = { change: "Change", keep: "Keep", "can't tell": "Can't tell yet" };
+  $("#advice").innerHTML = `<div class="adv">${a.advice.map(x => `<div class="card${x.verdict === "change" ? " change" : ""}">
+    <div class="nm">${esc(x.name)} <span class="pill">${word[x.verdict]}</span></div>
+    <div class="val">${esc(x.current)}${x.suggest ? ` → ${esc(x.suggest)}` : ""}</div>
+    <div class="ev">${esc(x.evidence)}</div>
+    <div class="does">${esc(x.does)} <a href="#numbers" data-findset="${esc(x.key)}">Find it below</a></div>
+  </div>`).join("")}</div>`;
+  $("#learned").innerHTML = a.learned.length ? `<table class="ugt"><tbody>${a.learned.map(l =>
+    `<tr><td><b>${esc(l.name)}</b><div class="n">${esc(l.note)}</div></td><td>${esc(l.value)}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="count">Nothing learned yet.</p>`;
+}
+document.addEventListener("click", e => {
+  const f = e.target.closest("[data-findset]"); if(!f) return;
+  e.preventDefault();
+  $("#q").value = f.dataset.findset; render();
+  const el = document.querySelector(`[data-key="${CSS.escape(f.dataset.findset)}"]`);
+  if(el) el.scrollIntoView({ block: "center" });
+});
 
 /* ------------------------------- visitors ------------------------------ */
 const BOOK_LABEL = { flights: "Kayak flights", tickets: "Official ticket page", hotel_disney: "Disney hotel page",
@@ -2369,6 +2430,7 @@ $("#stDays").addEventListener("click", e => {
 route();
 load();
 loadGrades();
+renderAdvice();
 loadFares();
 loadAttractions();
 loadDeals();
