@@ -54,6 +54,52 @@ export async function rawPeek(db: Db): Promise<string[]> {
   out.push(`  The SAME search bought more than once in 30 days: ${dup.length} searches, ${dup.reduce((s, [, v]) => s + v.length - 1, 0)} extra purchases`);
   for (const [k, v] of dup.slice(0, 15)) out.push(`    ${k}: ${v.join(", ")}`);
 
+  // 1b. Owner, 2026-10-16: "I think Google's range for typical flight is
+  // still based on ONE WAY." Test: Google labels each search low / typical /
+  // high. If the range is in the same units as our round-trip price, the
+  // label should match where that price sits in the range AS GIVEN; if the
+  // range is one-way, it should match the range DOUBLED.
+  type Ins = { lowest_price?: number; price_level?: string; typical_price_range?: [number, number]; price_history?: [number, number][] };
+  const tally = { asGiven: 0, doubled: 0, n: 0 };
+  const byLevel = new Map<string, { n: number; asGiven: Record<string, number>; doubled: Record<string, number> }>();
+  const histRatio: number[] = [];
+  const examples: string[] = [];
+  const where = (p: number, lo: number, hi: number) => (p < lo ? "below" : p > hi ? "above" : "inside");
+  const expect: Record<string, string> = { low: "below", typical: "inside", high: "above" };
+  for (const r of rows) {
+    if (r.kind !== "google_flights" || r.status !== 200) continue;
+    let j: { price_insights?: Ins; best_flights?: { price?: number }[]; other_flights?: { price?: number }[] };
+    try { j = JSON.parse(unzipBody(r.body_gz)); } catch { continue; }
+    const ins = j.price_insights;
+    const range = ins?.typical_price_range;
+    const prices = [...(j.best_flights ?? []), ...(j.other_flights ?? [])].map((x) => x.price).filter((x): x is number => typeof x === "number" && x > 0);
+    const lowest = ins?.lowest_price ?? (prices.length ? Math.min(...prices) : undefined);
+    if (!ins || !range || !lowest || !ins.price_level) continue;
+    const a = where(lowest, range[0], range[1]), d = where(lowest, 2 * range[0], 2 * range[1]);
+    tally.n++;
+    if (a === expect[ins.price_level]) tally.asGiven++;
+    if (d === expect[ins.price_level]) tally.doubled++;
+    const b = byLevel.get(ins.price_level) ?? { n: 0, asGiven: {}, doubled: {} };
+    b.n++; b.asGiven[a] = (b.asGiven[a] ?? 0) + 1; b.doubled[d] = (b.doubled[d] ?? 0) + 1;
+    byLevel.set(ins.price_level, b);
+    const h = ins.price_history ?? [];
+    if (h.length) histRatio.push(h[h.length - 1]![1] / lowest);
+    if (examples.length < 12) {
+      const q = req(r);
+      examples.push(`    ${q.departure_id}->${q.arrival_id} ${q.outbound_date}/${q.return_date}: cheapest listed ${money(lowest)}, Google typical ${money(range[0])}-${money(range[1])}, says "${ins.price_level}"; `
+        + `history's newest point ${h.length ? money(h[h.length - 1]![1]) : "-"}; cheapest ${prices.length ? money(Math.min(...prices)) : "-"} middle ${prices.length ? money([...prices].sort((x, y) => x - y)[Math.floor(prices.length / 2)]) : "-"}`);
+    }
+  }
+  out.push("");
+  out.push("  IS GOOGLE'S TYPICAL RANGE ONE-WAY OR ROUND TRIP? (every kept flight answer with Google's read)");
+  out.push(`    ${tally.n} answers. Google's own label (low/typical/high) matches our round-trip cheapest against:`);
+  out.push(`      the range as Google gives it: ${tally.asGiven} of ${tally.n}`);
+  out.push(`      the range doubled (one-way x2):  ${tally.doubled} of ${tally.n}`);
+  for (const [lvl, b] of byLevel) out.push(`      "${lvl}" (${b.n}): as given ${JSON.stringify(b.asGiven)} · doubled ${JSON.stringify(b.doubled)}`);
+  const hs = [...histRatio].sort((x, y) => x - y);
+  out.push(`    Google's price-history newest point / cheapest listed now: median ${hs.length ? hs[Math.floor(hs.length / 2)]!.toFixed(2) : "-"} (1.00 = same units, ~0.50 = one-way)`);
+  out.push(...examples);
+
   // 2. The newest flight answer, whole, in readable form.
   const lastF = [...rows].reverse().find((r) => r.kind === "google_flights" && r.status === 200);
   if (lastF) {
