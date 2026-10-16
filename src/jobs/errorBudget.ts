@@ -21,40 +21,15 @@ import type { Db } from "../db.js";
 import { unzipBody } from "../rawResponses.js";
 import { pricedPool } from "../cheapestFlights.js";
 import { loadModelInputs } from "../fareModelDb.js";
-import { fitFareModel, leaveOneOut, groupOf, isInternational, type ModelInputs } from "../fareModel.js";
+import { fitFareModel, fitLeverModel, leaveOneOut, groupOf, isInternational, fitAdditive, predictAdditive,
+  type ModelInputs, type Obs, type Additive } from "../fareModel.js";
 import { dateStr } from "../book.js";
 
 /* ---------------------------- pure arithmetic ---------------------------- */
 
-export interface Obs { y: number; keys: Record<string, string>; offset?: number }
-export interface Additive { mu: number; effects: Map<string, Map<string, number>>; factors: string[] }
-
-/** log(fare) = mu + sum of one effect per factor, each shrunk toward 0 by
- *  `k` pseudo-fares (an airport seen once moves 1/(1+k) of its own way).
- *  Fitted by backfitting (each factor refitted on what the others leave). */
-export function fitAdditive(rows: Obs[], factors: string[], k = 2, iters = 20): Additive {
-  const effects = new Map(factors.map((f) => [f, new Map<string, number>()]));
-  const off = (r: Obs) => r.offset ?? 0;
-  const eff = (r: Obs, skip?: string) => factors.reduce((s, f) => (f === skip ? s : s + (effects.get(f)!.get(r.keys[f]!) ?? 0)), 0);
-  let mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r), 0) / rows.length : 0;
-  for (let it = 0; it < iters; it++) {
-    for (const f of factors) {
-      const sum = new Map<string, number>(), n = new Map<string, number>();
-      for (const r of rows) {
-        const lv = r.keys[f]!;
-        sum.set(lv, (sum.get(lv) ?? 0) + (r.y - off(r) - mu - eff(r, f)));
-        n.set(lv, (n.get(lv) ?? 0) + 1);
-      }
-      const m = effects.get(f)!;
-      m.clear();
-      for (const [lv, s] of sum) m.set(lv, s / (n.get(lv)! + k));
-    }
-    mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r) - eff(r), 0) / rows.length : 0;
-  }
-  return { mu, effects, factors };
-}
-export const predictAdditive = (m: Additive, r: Obs) =>
-  (r.offset ?? 0) + m.mu + m.factors.reduce((s, f) => s + (m.effects.get(f)!.get(r.keys[f]!) ?? 0), 0);
+// The additive fitter now lives with the formula it became (fareModel.ts,
+// the plain candidate since 2026-10-16); re-exported for this report.
+export { fitAdditive, predictAdditive, type Obs, type Additive } from "../fareModel.js";
 
 /** Each row predicted by a fit WITHOUT it (and without other rows of the
  *  same route and date, which are the same search). */
@@ -263,9 +238,9 @@ export async function errorBudget(db: Db): Promise<string[]> {
     shown_usd: string | null; candidate_usd: string | null; price_usd: string }>(
     `select origin, destination, depart_date, forecast_at, shown_usd, candidate_usd, price_usd
        from fare_forecasts where price_usd > 0 order by forecast_at`).catch(() => ({ rows: [] as never[] }))).rows;
-  type P = { intl: boolean; y: number; shown: number; cand: number; a: number; b: number; c: number; r: number; now: number };
+  type P = { intl: boolean; y: number; shown: number; cand: number; a: number; b: number; c: number; r: number; now: number; lev: number };
   const preds: P[] = [];
-  const fitCache = new Map<number, { fits: Map<string, Additive>; cm: ReturnType<typeof fitFareModel> | null }>();
+  const fitCache = new Map<number, { fits: Map<string, Additive>; cm: ReturnType<typeof fitFareModel> | null; lm: ReturnType<typeof fitFareModel> | null }>();
   for (const f of fc) {
     const at = asDate(f.forecast_at).getTime();
     const hour = Math.floor(at / 3_600_000);
@@ -280,22 +255,25 @@ export async function errorBudget(db: Db): Promise<string[]> {
         const wp = tr.filter((r) => r.prior);
         fits.set(`${intl}|c`, fitAdditive(obs(wp, { prior: true }), ["all", "dest", "month", "origin"]));
       }
-      const cm = earlier.length >= 20 ? fitFareModel({ ...inputs, fares: earlier.map((r) => inputs.fares[r.i]!) } as ModelInputs) : null;
-      fitCache.set(hour, { fits, cm });
+      const tin = { ...inputs, fares: earlier.map((r) => inputs.fares[r.i]!) } as ModelInputs;
+      const cm = earlier.length >= 20 ? fitFareModel(tin) : null;
+      const lm = earlier.length >= 20 ? fitLeverModel(tin) : null;
+      fitCache.set(hour, { fits, cm, lm });
     }
-    const { fits, cm } = fitCache.get(hour)!;
+    const { fits, cm, lm } = fitCache.get(hour)!;
     const o = f.origin.trim(), d = f.destination.trim(), dep = dateStr(f.depart_date);
     const intl = isInternational(d), mm = Number(dep.slice(5, 7));
     const prior = intl ? undefined : mon.get(`${o}|${d}|${mm}`) ?? bts.get(`${o}|${d}|${Math.ceil(mm / 3)}`);
     const ob: Obs = { y: 0, keys: { all: "x", dest: d, month: `${intl ? "intl" : "us"}-${mm}`, origin: o, route: `${o}|${d}` } };
     const nowP = cm?.predict(o, d, dep as never)?.value;
+    const levP = lm?.predict(o, d, dep as never)?.value;
     preds.push({
       intl, y: Math.log(Number(f.price_usd)),
       shown: f.shown_usd ? Math.log(Number(f.shown_usd)) : NaN, cand: f.candidate_usd ? Math.log(Number(f.candidate_usd)) : NaN,
       a: predictAdditive(fits.get(`${intl}|a`)!, ob), b: predictAdditive(fits.get(`${intl}|b`)!, ob),
       r: predictAdditive(fits.get(`${intl}|r`)!, ob),
       c: prior ? predictAdditive(fits.get(`${intl}|c`)!, { ...ob, offset: Math.log(prior) }) : NaN,
-      now: nowP ? Math.log(nowP) : NaN,
+      now: nowP ? Math.log(nowP) : NaN, lev: levP ? Math.log(levP) : NaN,
     });
   }
   for (const intl of [false, true]) {
@@ -305,7 +283,8 @@ export async function errorBudget(db: Db): Promise<string[]> {
     const L = (name: string, k: keyof P) => out.push(`    ${(intl ? "Intl " : "US   ") + name.padEnd(52)} ${fmt(score(ps.map((p) => p[k] as number), y))}`);
     L("what travelers saw (the live formula)", "shown");
     L("the candidate as it was that night", "cand");
-    L("the candidate, today's code, earlier fares only", "now");
+    L("the old lever formula (candidate until 10-16), earlier fares", "lev");
+    L("the candidate, today's code (the plain one), earlier fares", "now");
     L("destination + month", "a");
     L("destination + month + home airport", "b");
     L("destination + month + home airport + the route itself", "r");

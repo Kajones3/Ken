@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fitFareModel, leaveOneOut, routeMiles, type ModelBaseline, type ModelFare, type ModelInputs } from "./fareModel.js";
+import { fitFareModel, fitLeverModel, leaveOneOut, routeMiles, PLAIN_MIN_FARES, type ModelBaseline, type ModelFare, type ModelInputs } from "./fareModel.js";
 import { memoryDb } from "./db.js";
 import { loadBook } from "./book.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "./observations.js";
@@ -21,7 +21,7 @@ const inputs = (fares: ModelFare[], baselines: ModelBaseline[]): ModelInputs =>
 const US = ["ATL", "BOS", "ORD", "DEN", "DFW", "SEA", "PHX", "MSP"];
 
 test("an unbought US route is its BTS median moved by what bought fares measured", () => {
-  const m = fitFareModel(inputs(US.map((o) => fare(o, "MCO", 360)), [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 250)]));
+  const m = fitLeverModel(inputs(US.map((o) => fare(o, "MCO", 360)), [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 250)]));
   // Bought fares run 1.2x their BTS medians, so RDU (never bought) reads 250 x 1.2.
   assert.equal(m.predict("RDU", "MCO", "2027-03-10")!.value, 300);
   assert.equal(m.predict("RDU", "MCO", "2027-03-10")!.parts.route, 1);
@@ -29,11 +29,11 @@ test("an unbought US route is its BTS median moved by what bought fares measured
 
 test("one odd fare moves its route only partway; more searches take it as far as the evidence says", () => {
   const base = US.map((o) => bts(o, "MCO", 300));
-  const one = fitFareModel(inputs([...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600)], [...base, bts("RDU", "MCO", 300)]));
+  const one = fitLeverModel(inputs([...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600)], [...base, bts("RDU", "MCO", 300)]));
   const r = one.predict("RDU", "MCO", "2027-03-10")!;
   // One search saying 2x, shrunk by 1/(1+2): about 1.26x, nowhere near 2x.
   assert.ok(r.parts.route > 1.2 && r.parts.route < 1.3, `route ${r.parts.route}`);
-  const many = fitFareModel(inputs(
+  const many = fitLeverModel(inputs(
     [...US.map((o) => fare(o, "MCO", 300)), ...[1, 2, 3, 4, 5, 6].map((i) => fare("RDU", "MCO", 900, { observedAt: daysAgo(i) }))],
     [...base, bts("RDU", "MCO", 300)]));
   // Six searches saying 3x: n/(n+2) = 3/4 of the way (in proportion), about 2.28x.
@@ -44,7 +44,7 @@ test("one odd fare moves its route only partway; more searches take it as far as
 
 test("route evidence older than 45 days no longer counts for that route", () => {
   const base = [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)];
-  const m = fitFareModel(inputs([...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600, { observedAt: daysAgo(60) })], base));
+  const m = fitLeverModel(inputs([...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600, { observedAt: daysAgo(60) })], base));
   assert.equal(m.predict("RDU", "MCO", "2027-03-10")!.parts.route, 1);
 });
 
@@ -53,7 +53,7 @@ test("international prices follow distance, not one flat number per region", () 
   const origins = ["SEA", "SFO", "LAX", "DEN", "ORD", "ATL", "BOS", "MIA"];
   // Real fares that grow with distance.
   const fares = origins.map((o) => fare(o, "NRT", Math.round(2 * routeMiles(o, "NRT")! ** 0.8)));
-  const m = fitFareModel(inputs(fares, [...origins, "PDX", "JFK"].map(seed)));
+  const m = fitLeverModel(inputs(fares, [...origins, "PDX", "JFK"].map(seed)));
   const pdx = m.predict("PDX", "NRT", "2027-03-10")!.value;
   const jfk = m.predict("JFK", "NRT", "2027-03-10")!.value;
   assert.ok(jfk > pdx * 1.15, `JFK ${jfk} should cost more than PDX ${pdx}`);
@@ -69,15 +69,15 @@ test("Google's typical price is a second opinion on the route, put on our scale"
   // Everywhere Google's midpoint sits at 0.9 of the fare we keep...
   const others = US.map((o) => fare(o, "MCO", 300, { insightMid: 333.33 }));
   // ...and on RDU our one fare looked high (450) while Google said typical.
-  const m = fitFareModel(inputs([...others, fare("RDU", "MCO", 450, { insightMid: 333.33 })], base));
-  const without = fitFareModel(inputs([...others, fare("RDU", "MCO", 450)], base));
+  const m = fitLeverModel(inputs([...others, fare("RDU", "MCO", 450, { insightMid: 333.33 })], base));
+  const without = fitLeverModel(inputs([...others, fare("RDU", "MCO", 450)], base));
   assert.ok(m.predict("RDU", "MCO", "2027-03-10")!.value < without.predict("RDU", "MCO", "2027-03-10")!.value);
 });
 
 test("grading leaves each fare (and any re-buy of the same date) out of its own estimate", () => {
   const base = [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)];
   const fares = [...US.map((o) => fare(o, "MCO", 300)), fare("RDU", "MCO", 600), fare("RDU", "MCO", 600, { observedAt: daysAgo(1) })];
-  const loo = leaveOneOut(inputs(fares, base), [fares.length - 1]);
+  const loo = leaveOneOut(inputs(fares, base), [fares.length - 1], fitLeverModel);
   // Without its own two buys RDU has no route evidence: 300.
   assert.equal(loo.get(fares.length - 1), 300);
 });
@@ -125,7 +125,7 @@ test("each destination learns its own lever: Orlando reading low no longer drags
   // shared US calibration would read Orlando low and LAX high.
   const fares = [...US.map((o) => fare(o, "MCO", 390)), ...US.map((o) => fare(o, "LAX", 400))];
   const base = [...US.map((o) => bts(o, "MCO", 300)), ...US.map((o) => bts(o, "LAX", 400)), bts("RDU", "MCO", 300), bts("RDU", "LAX", 400)];
-  const m = fitFareModel(inputs(fares, base));
+  const m = fitLeverModel(inputs(fares, base));
   const mco = m.predict("RDU", "MCO", "2027-03-10")!.value;
   const lax = m.predict("RDU", "LAX", "2027-03-10")!.value;
   // Shrunk by 8/(8+4): most of the way to each truth, far closer than a shared number.
@@ -142,7 +142,7 @@ test("Europe and Asia each get their own calibration", () => {
     ...origins.map((o) => fare(o, "CDG", Math.round(1.5 * routeMiles(o, "CDG")! ** 0.8))),
     ...origins.map((o) => fare(o, "NRT", Math.round(1.95 * routeMiles(o, "NRT")! ** 0.8))),
   ];
-  const m = fitFareModel(inputs(fares, origins.flatMap((o) => [seed(o, "CDG"), seed(o, "NRT")])));
+  const m = fitLeverModel(inputs(fares, origins.flatMap((o) => [seed(o, "CDG"), seed(o, "NRT")])));
   assert.ok(m.levers.calibration.asia > m.levers.calibration.europe * 1.15,
     `asia ${m.levers.calibration.asia} vs europe ${m.levers.calibration.europe}`);
   assert.equal(m.predict("ATL", "CDG", "2027-03-10")!.parts.group, "europe");
@@ -154,11 +154,11 @@ test("a learned season replaces a wrong guessed one, and the monthly survey is p
   const q3 = (o: string, price: number) => fare(o, "MCO", price, { departDate: "2027-07-14" });
   const btsQ3 = (o: string): ModelBaseline => ({ ...bts(o, "MCO", 300), quarter: 3 });
   const fares = [...US.map((o) => fare(o, "MCO", 300)), ...US.slice(0, 6).map((o) => q3(o, 240))];
-  const m = fitFareModel(inputs(fares, [...US.map((o) => bts(o, "MCO", 300)), ...US.map(btsQ3), btsQ3("RDU"), bts("RDU", "MCO", 300)]));
+  const m = fitLeverModel(inputs(fares, [...US.map((o) => bts(o, "MCO", 300)), ...US.map(btsQ3), btsQ3("RDU"), bts("RDU", "MCO", 300)]));
   const s = m.predict("RDU", "MCO", "2027-07-14")!.parts.season;
   assert.ok(s < 0.92 && s > 0.8, `season ${s}`);
 
-  const mm = fitFareModel({ ...inputs(US.map((o) => fare(o, "MCO", 300)), [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)]),
+  const mm = fitLeverModel({ ...inputs(US.map((o) => fare(o, "MCO", 300)), [...US.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)]),
     monthly: [{ origin: "RDU", destination: "MCO", month: 3, med: 280, p25: 200, p75: 400 }] });
   const p = mm.predict("RDU", "MCO", "2027-03-10")!;
   assert.equal(p.parts.priorKind, "bts_monthly");
@@ -178,7 +178,7 @@ test("day of week comes from the free feed; paid fares' 'weekday' goes to the mo
   const feed = US.flatMap((o) => ["03", "04"].flatMap((mm) =>
     Array.from({ length: 28 }, (_, i) => ({ origin: o, destination: "MCO",
       departDate: `2027-${mm}-${String(i + 1).padStart(2, "0")}`, tripLength: 7, price: 200 }))));
-  const m = fitFareModel({ ...inputs(paid, base), feed });
+  const m = fitLeverModel({ ...inputs(paid, base), feed });
   assert.equal(m.levers.dayOfWeekFrom, "free feed");
   for (const v of Object.values(m.levers.dayOfWeek)) assert.equal(v.factor, 1);
   const mar = m.predict("ATL", "MCO", "2027-03-15")!, apr = m.predict("ATL", "MCO", "2027-04-15")!;
@@ -189,7 +189,7 @@ test("day of week comes from the free feed; paid fares' 'weekday' goes to the mo
   assert.equal(marThu.parts.dayOfWeek, 1);
 
   // Without the feed, the paid fares still set day of week, as before.
-  const noFeed = fitFareModel(inputs(paid, base));
+  const noFeed = fitLeverModel(inputs(paid, base));
   assert.equal(noFeed.levers.dayOfWeekFrom, "paid fares");
 });
 
@@ -198,7 +198,7 @@ test("budget airlines: routes they crowd are learned to price lower, from US far
   const heavy = new Set(["ATL", "BOS", "ORD", "DEN"]);
   const fares = US.flatMap((o) => [1, 2, 3].map((i) => fare(o, "MCO", heavy.has(o) ? 280 : 400, { observedAt: daysAgo(60 + i) })));
   const monthly = US.map((o) => ({ origin: o, destination: "MCO", month: 3, med: 400, p25: 320, p75: 500, budgetShare: heavy.has(o) ? 0.4 : 0 }));
-  const m = fitFareModel({ ...inputs(fares, US.map((o) => bts(o, "MCO", 400))), monthly });
+  const m = fitLeverModel({ ...inputs(fares, US.map((o) => bts(o, "MCO", 400))), monthly });
   assert.ok(m.levers.budget.slope < 0, `slope ${m.levers.budget.slope}`);
   const atl = m.predict("ATL", "MCO", "2027-03-10")!, sea = m.predict("SEA", "MCO", "2027-03-10")!;
   assert.ok(atl.value < sea.value * 0.85, `ATL ${atl.value} vs SEA ${sea.value}`);
@@ -216,8 +216,8 @@ test("government airfare index: an old route survey is carried to today as far a
     { ...bts("RDU", "MCO", 300), year: 2024 }, { ...bts("SAN", "MCO", 300), year: 2026 }];
   // Routes surveyed in 2024 really cost 25% more than their survey says; 2026 ones don't.
   const fares = [...OLD.map((o) => fare(o, "MCO", 375)), ...NEW.map((o) => fare(o, "MCO", 300))];
-  const without = fitFareModel(inputs(fares, baselines));
-  const withIdx = fitFareModel({ ...inputs(fares, baselines), index: { cpiSa } });
+  const without = fitLeverModel(inputs(fares, baselines));
+  const withIdx = fitLeverModel({ ...inputs(fares, baselines), index: { cpiSa } });
   assert.equal(without.levers.index.surveyAge.weight, 0);
   // Learned, not assumed: the fares say "fully", shrunk by 16 / (16 + 20).
   const w = withIdx.levers.index.surveyAge.weight;
@@ -237,8 +237,77 @@ test("government airfare index: when the fares don't follow it, it teaches nothi
   const NEW = ["CLT", "LAS", "SFO", "IAH", "DTW", "PHL", "BWI", "MIA"];
   const baselines = [...US.map((o) => ({ ...bts(o, "MCO", 300), year: 2024 })), ...NEW.map((o) => ({ ...bts(o, "MCO", 300), year: 2026 }))];
   const fares = [...US, ...NEW].map((o) => fare(o, "MCO", 330));
-  const m = fitFareModel({ ...inputs(fares, baselines), index: { cpiSa } });
+  const m = fitLeverModel({ ...inputs(fares, baselines), index: { cpiSa } });
   assert.equal(m.levers.index.surveyAge.weight, 0);
   // And every bought fare is from the same month, so fare age learns nothing either.
   assert.equal(m.levers.index.fareAge.dom.weight, 0);
+});
+
+/* ---------------- the plain formula (the candidate since 2026-10-16) ---------------- */
+
+const DOM12 = ["ATL", "BOS", "ORD", "DEN", "DFW", "SEA", "PHX", "MSP", "CLT", "LAS", "SFO", "IAH"];
+const INTL12 = DOM12;
+const on = (mm: string) => `2027-${mm}-10` as const;
+
+test("plain: the candidate is learned from our own fares, destination and month, with no survey to start from", () => {
+  // Tokyo 1.4x Paris; June 1.25x March. No baselines at all.
+  const fares = INTL12.flatMap((o) => [
+    fare(o, "CDG", 1000, { departDate: on("03") }), fare(o, "CDG", 1250, { departDate: on("06") }),
+    fare(o, "HND", 1400, { departDate: on("03") }), fare(o, "HND", 1750, { departDate: on("06") }),
+  ]);
+  const m = fitFareModel(inputs(fares, []));
+  assert.equal(m.formula, "plain");
+  const p = m.predict("RDU", "HND", on("06"))!;
+  assert.equal(p.parts.priorKind, "plain");
+  // Within a few percent: each piece is shrunk a little (2 pseudo-fares on 24).
+  assert.ok(Math.abs(p.value / 1750 - 1) < 0.04, `HND June ${p.value}`);
+  assert.ok(Math.abs(m.predict("RDU", "CDG", on("03"))!.value / 1000 - 1) < 0.04);
+  // International: the home airport is not a piece (it did not help abroad).
+  assert.equal(m.plain!.intl!.origin, undefined);
+  assert.ok(p.lowRatio <= 1 && p.highRatio >= 1);
+});
+
+test("plain: US learns the home airport and the route, shrunk toward the typical fare", () => {
+  // Every route 300 except Philadelphia, which runs 1.3x on every route.
+  const fares = DOM12.flatMap((o) => ["MCO", "LAX"].map((d) => fare(o, d, 300)));
+  const phl = [fare("PHL", "MCO", 390), fare("PHL", "LAX", 390)];
+  const m = fitFareModel(inputs([...fares, ...phl], []));
+  const home = m.predict("PHL", "MCO", on("03"))!.parts.home!;
+  // Two fares, shrunk by 2 pseudo-fares: about halfway to 1.3x in log terms.
+  assert.ok(home > 1.08 && home < 1.2, `home ${home}`);
+  // A home airport we never bought sits at the typical fare for that destination.
+  assert.ok(Math.abs(m.predict("RDU", "MCO", on("03"))!.value / 300 - 1) < 0.03);
+});
+
+test("plain: a destination we never bought falls back to the lever formula's outside numbers", () => {
+  const fares = DOM12.map((o) => fare(o, "MCO", 360));
+  const base = [...DOM12.map((o) => bts(o, "MCO", 300)), bts("RDU", "LAX", 400)];
+  const m = fitFareModel(inputs([...fares, ...DOM12.map((o) => fare(o, "MCO", 360, { observedAt: daysAgo(3) }))], base));
+  assert.equal(m.predict("RDU", "MCO", on("03"))!.parts.priorKind, "plain");
+  const lax = m.predict("RDU", "LAX", on("03"))!;
+  assert.notEqual(lax.parts.priorKind, "plain", "no LAX fares of our own: the survey starts it");
+});
+
+test("plain: a group with too few of our fares is priced by the lever formula", () => {
+  const few = DOM12.slice(0, Math.min(DOM12.length, PLAIN_MIN_FARES - 1)).map((o) => fare(o, "MCO", 360));
+  const m = fitFareModel(inputs(few, [...DOM12.map((o) => bts(o, "MCO", 300)), bts("RDU", "MCO", 300)]));
+  assert.equal(m.plain!.dom, undefined);
+  assert.notEqual(m.predict("RDU", "MCO", on("03"))!.parts.priorKind, "plain");
+});
+
+test("plain: a holiday-week fare teaches the fare without the premium (pricing adds it once)", () => {
+  // Thanksgiving week fares carry the +55% premium; everything else 300.
+  const fares = [...DOM12.map((o) => fare(o, "MCO", 300, { departDate: "2027-11-10" })),
+    ...DOM12.map((o) => fare(o, "MCO", 465, { departDate: "2027-11-24" }))];
+  const m = fitFareModel(inputs(fares, []));
+  const p = m.predict("RDU", "MCO", "2027-11-24")!;
+  assert.ok(Math.abs(p.value / 300 - 1) < 0.02, `value without the premium ${p.value}`);
+});
+
+test("plain: grading leaves each fare and its re-buys out of its own fit", () => {
+  const fares = [...DOM12.flatMap((o) => [fare(o, "MCO", 300), fare(o, "LAX", 300)]),
+    fare("RDU", "MCO", 600), fare("RDU", "MCO", 600, { observedAt: daysAgo(1) })];
+  const loo = leaveOneOut(inputs(fares, []), [fares.length - 1]);
+  const v = loo.get(fares.length - 1)!;
+  assert.ok(Math.abs(v / 300 - 1) < 0.03, `without its own two buys RDU sits at the typical fare: ${v}`);
 });

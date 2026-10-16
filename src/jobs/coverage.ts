@@ -21,7 +21,7 @@ import { errorBudget } from "./errorBudget.js";
 import { flightRows, yardsticks, inTypical, withinZone, quantile } from "../userGrades.js";
 import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
-import { fitFareModel, isInternational, leaveOneOut } from "../fareModel.js";
+import { fitFareModel, fitLeverModel, isInternational, leaveOneOut, type PlainFit } from "../fareModel.js";
 import { weekdayPattern, WEEKDAYS } from "../dayOfWeek.js";
 import { loadIndicatorStudy } from "../indicatorStudy.js";
 import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
@@ -594,8 +594,32 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     out.push("  Candidate (leave-one-out), real fare / candidate, median by group (1.00 = right on):");
     for (const [k, v] of [...groups].sort()) out.push(`    ${k.padEnd(10)} ${med(v).toFixed(2)} (${v.length} fares)`);
     const m = fitFareModel(inputs);
-    const L = m.levers;
-    out.push(`  What the candidate has learned: calibration US ${L.calibration.dom.toFixed(2)} · Europe ${L.calibration.europe.toFixed(2)} · Asia ${L.calibration.asia.toFixed(2)}`);
+    // The plain formula (the candidate since 2026-10-16) vs the old lever
+    // formula, same fares, each fare left out of its own fit.
+    const looLever = leaveOneOut(inputs, idx, fitLeverModel);
+    const gradeLoo = (map: Map<number, number>, intl: boolean) => {
+      const offs = [...map].filter(([i]) => isInternational(inputs.fares[i]!.destination) === intl)
+        .map(([i, pred]) => inputs.fares[i]!.price / pred - 1);
+      if (!offs.length) return "no fares";
+      const within = Math.round(100 * offs.filter((x) => Math.abs(x) <= 0.1).length / offs.length);
+      return `${within}% within ±10%, typically off ${(100 * med(offs.map(Math.abs))).toFixed(1)}% (${offs.length})`;
+    };
+    out.push(`  Old lever formula -> the plain candidate, leave-one-out: US ${gradeLoo(looLever, false)} -> ${gradeLoo(loo, false)}; `
+      + `international ${gradeLoo(looLever, true)} -> ${gradeLoo(loo, true)}`);
+    const top = (lv: Record<string, { factor: number; fares: number }> | undefined, n = 8) => Object.entries(lv ?? {})
+      .sort((a, b) => Math.abs(Math.log(b[1].factor)) - Math.abs(Math.log(a[1].factor))).slice(0, n)
+      .map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ");
+    for (const [label, g] of [["US", m.plain?.dom], ["International", m.plain?.intl]] as [string, PlainFit | undefined][]) {
+      if (!g) { out.push(`  Plain candidate, ${label}: too few fares, the lever formula prices it`); continue; }
+      out.push(`  Plain candidate, ${label} (${g.fares} fares): typical $${Math.round(g.typical)}; range x${g.lowRatio.toFixed(2)}-x${g.highRatio.toFixed(2)}; `
+        + `fare-age index weight ${g.fareAge.weight.toFixed(2)} (${g.fareAge.fares})`);
+      out.push(`    destination: ${top(g.dest, 12)}`);
+      out.push(`    month: ${Object.entries(g.month).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
+      if (g.origin) out.push(`    home airport (furthest from 1): ${top(g.origin)}`);
+      if (g.route) out.push(`    route (furthest from 1): ${top(g.route)}`);
+    }
+    const L = fitLeverModel(inputs).levers;
+    out.push(`  The old lever formula (the fallback for never-bought destinations): calibration US ${L.calibration.dom.toFixed(2)} · Europe ${L.calibration.europe.toFixed(2)} · Asia ${L.calibration.asia.toFixed(2)}`);
     out.push(`    destination: ${Object.entries(L.destination).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    season: ${Object.entries(L.season).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
     out.push(`    month (on top of the quarter): ${Object.entries(L.month).sort().map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ")}`);
@@ -615,11 +639,16 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
         const within = Math.round(100 * offs.filter((x) => Math.abs(x) <= 0.1).length / offs.length);
         return `${within}% within ±10%, typically off ${(100 * med(offs.map(Math.abs))).toFixed(1)}% (${offs.length})`;
       };
-      out.push(`    with vs without the index, leave-one-out: US ${grade(without, false)} -> ${grade(loo, false)}; `
+      out.push(`    plain candidate with vs without the index, leave-one-out: US ${grade(without, false)} -> ${grade(loo, false)}; `
         + `international ${grade(without, true)} -> ${grade(loo, true)}`);
     }
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
+      if (p?.parts.priorKind === "plain") {
+        out.push(`    sample ${o}->${d} ${dt}: $${Math.round(p.value)} = typical $${p.parts.prior} x dest ${p.parts.destination.toFixed(2)} x month ${p.parts.month.toFixed(2)}`
+          + (p.parts.home !== undefined ? ` x home ${p.parts.home.toFixed(2)} x route ${(p.parts.route / p.parts.home).toFixed(2)} (${p.parts.routeSearches} fares)` : ""));
+        continue;
+      }
       out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x index ${p.parts.index.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
     }
   } catch (e) {

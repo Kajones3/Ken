@@ -1,5 +1,23 @@
 /**
- * The CANDIDATE flight-estimate formula (owner, 2026-10-06).
+ * The CANDIDATE flight-estimate formula: "our algorithm".
+ *
+ * SINCE 2026-10-16 (owner: "build A through E") `fitFareModel` is the PLAIN
+ * formula below (fitPlainModel): log(fare) = a typical fare + one learned,
+ * shrunk effect per piece, fitted only on the fares we bought.
+ *  - International: destination + travel month.
+ *  - US: destination + travel month + home airport + the route itself.
+ * Why: on the fares we wrote down BEFORE buying (the only honest test, error
+ * budget run 38839875441), each model trained only on earlier fares:
+ *   US   (60): lever formula 25% within ±10% / typically off 19.2%; plain 38% / 13.5%
+ *   Intl (78): lever formula 38% / 12.3%; plain 50% / 10.1%
+ * The lever formula (fitLeverModel, everything from here to the plain
+ * section) had too many levers fitted one after another from medians on
+ * ~230 fares, and started from the government survey, which alone scored
+ * worse than one national number. It is kept, still learning, as the
+ * FALLBACK for a destination we have never bought (outside numbers only
+ * where we have no fares of our own) and so reports can show both.
+ *
+ * The lever formula's own notes (owner, 2026-10-06):
  *
  * It runs beside the live formula in book.ts and is graded every day on the
  * Flights scoreboard against fares it did NOT learn from. Travelers only see
@@ -161,9 +179,15 @@ export interface Prediction {
            route: number; routeSearches: number; group: FareGroup;
            /** The survey-age index factor already inside `prior`. */
            index: number;
-           priorKind: "bts" | "bts_monthly" | "distance" };
+           priorKind: "bts" | "bts_monthly" | "distance" | "plain";
+           /** Plain formula only: the home airport's own effect (inside `route`). */
+           home?: number };
 }
 export interface FareModel {
+  /** "plain" (since 2026-10-16) or "levers" (the old formula, now the fallback). */
+  formula?: "plain" | "levers";
+  /** The plain formula's learned pieces, per group (US / international). */
+  plain?: { dom?: PlainFit; intl?: PlainFit };
   predict(origin: string, destination: string, date: ISODate): Prediction | undefined;
   /** For the scoreboard: how many fares each group was fitted on. */
   fitted: { domestic: number; international: number };
@@ -216,8 +240,13 @@ export function routeMiles(origin: string, destination: string): number | undefi
   return haversineMiles(o.lat, o.lon, r.lat, r.lon);
 }
 
-/** Fit the candidate formula on these fares. */
+/** The candidate formula: since 2026-10-16 the plain one (fitPlainModel). */
 export function fitFareModel(inp: ModelInputs): FareModel {
+  return fitPlainModel(inp);
+}
+
+/** The lever formula (the candidate until 2026-10-16); now the fallback. */
+export function fitLeverModel(inp: ModelInputs): FareModel {
   const hol = (d: ISODate) => {
     const h = holidayFlightPremium(d);
     return h ? 1 + inp.premiumPct(h.settingKey, h.defaultPct) / 100 : 1;
@@ -468,6 +497,7 @@ export function fitFareModel(inp: ModelInputs): FareModel {
   }
 
   return {
+    formula: "levers",
     fitted: { domestic: rows.filter((x) => !x.intl).length, international: rows.filter((x) => x.intl).length },
     levers: {
       calibration: cal,
@@ -524,14 +554,171 @@ export function holidayMultiplier(date: ISODate, premiumPct: ModelInputs["premiu
  * date is left out with it), so it never grades its own homework.
  * Returns the prediction (holiday premium included) per fare index.
  */
-export function leaveOneOut(inp: ModelInputs, testIdx: number[]): Map<number, number> {
+export function leaveOneOut(inp: ModelInputs, testIdx: number[], fit: (inp: ModelInputs) => FareModel = fitFareModel): Map<number, number> {
   const out = new Map<number, number>();
   for (const i of testIdx) {
     const f = inp.fares[i]!;
-    const model = fitFareModel({ ...inp, fares: inp.fares.filter((g) =>
+    const model = fit({ ...inp, fares: inp.fares.filter((g) =>
       !(g.origin === f.origin && g.destination === f.destination && g.departDate === f.departDate)) });
     const p = model.predict(f.origin, f.destination, f.departDate);
     if (p) out.set(i, p.value * holidayMultiplier(f.departDate, inp.premiumPct));
   }
   return out;
+}
+
+/* ========================================================================
+ * The PLAIN formula (2026-10-16): what the candidate is now.
+ *
+ * log(fare / holiday premium) = typical + destination + month [+ home
+ * airport + route, US only], each effect the average of what its fares
+ * leave over, shrunk toward 0 by PLAIN_SHRINK_K pseudo-fares (an airport
+ * bought once moves a third of its own way), fitted by backfitting (each
+ * piece refitted on what the others leave, until they settle). Learned
+ * only from the fares we bought, refitted as they arrive (10-minute cache).
+ *
+ * Plus one government-index lever (owner: "We should be using BLS"): a
+ * fare bought months ago is brought to today's level by the CPI (US) or the
+ * international producer price index, as far as the fares show (the same
+ * learned slope as the lever formula's "fare age", 0 = teaches nothing).
+ * The survey-age lever has no place here: there is no survey starting point.
+ *
+ * Falls back to the lever formula (its survey / seed / distance starting
+ * point) for a destination with none of our fares, or a group with fewer
+ * than PLAIN_MIN_FARES.
+ * ======================================================================== */
+
+export interface Obs { y: number; keys: Record<string, string>; offset?: number }
+export interface Additive { mu: number; effects: Map<string, Map<string, number>>; factors: string[] }
+
+/** log(fare) = mu + sum of one effect per factor, each shrunk toward 0 by
+ *  `k` pseudo-fares. Fitted by backfitting. */
+export function fitAdditive(rows: Obs[], factors: string[], k = 2, iters = 20): Additive {
+  const effects = new Map(factors.map((f) => [f, new Map<string, number>()]));
+  const off = (r: Obs) => r.offset ?? 0;
+  const eff = (r: Obs, skip?: string) => factors.reduce((s, f) => (f === skip ? s : s + (effects.get(f)!.get(r.keys[f]!) ?? 0)), 0);
+  let mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r), 0) / rows.length : 0;
+  for (let it = 0; it < iters; it++) {
+    for (const f of factors) {
+      const sum = new Map<string, number>(), n = new Map<string, number>();
+      for (const r of rows) {
+        const lv = r.keys[f]!;
+        sum.set(lv, (sum.get(lv) ?? 0) + (r.y - off(r) - mu - eff(r, f)));
+        n.set(lv, (n.get(lv) ?? 0) + 1);
+      }
+      const m = effects.get(f)!;
+      m.clear();
+      for (const [lv, sm] of sum) m.set(lv, sm / (n.get(lv)! + k));
+    }
+    mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r) - eff(r), 0) / rows.length : 0;
+  }
+  return { mu, effects, factors };
+}
+export const predictAdditive = (m: Additive, r: Obs) =>
+  (r.offset ?? 0) + m.mu + m.factors.reduce((s, f) => s + (m.effects.get(f)!.get(r.keys[f]!) ?? 0), 0);
+
+/** Pseudo-fares each effect is shrunk by (graded at 2 in the error budget). */
+export const PLAIN_SHRINK_K = 2;
+/** Below this many fares in a group, the lever formula prices it. */
+export const PLAIN_MIN_FARES = 20;
+/** The pieces, per group, exactly as graded before buying (2026-10-16). */
+export const PLAIN_FACTORS = { dom: ["dest", "month", "origin", "route"], intl: ["dest", "month"] } as const;
+
+/** One learned piece's levels: factor (exp of the effect) and fares behind it. */
+export type PlainLevels = Record<string, { factor: number; fares: number }>;
+export interface PlainFit {
+  fares: number;
+  /** The group's typical fare before any piece (exp of the intercept). */
+  typical: number;
+  dest: PlainLevels; month: PlainLevels; origin?: PlainLevels; route?: PlainLevels;
+  /** The fare-age index lever: learned weight (0-1.5) and fares behind it. */
+  fareAge: { weight: number; fares: number };
+  /** Middle half of what the fit leaves over, as ratios around the estimate. */
+  lowRatio: number; highRatio: number;
+}
+
+export function fitPlainModel(inp: ModelInputs): FareModel {
+  const hol = (d: ISODate) => holidayMultiplier(d, inp.premiumPct);
+  const monthKey = (d: ISODate) => d.slice(5, 7);
+  const keysOf = (o: string, d: string, date: ISODate): Record<string, string> =>
+    ({ dest: d, month: monthKey(date), origin: o, route: `${o}|${d}` });
+  // How far each fare's level moved to today by the government's index.
+  const carryOf = (f: ModelFare): number => {
+    const intl = isInternational(f.destination);
+    const sr = intl ? inp.index?.ppiIntl : inp.index?.cpiSa;
+    if (!sr) return 1;
+    return carryFrom(sr, [f.observedAt.toISOString().slice(0, 7)], intl ? SMOOTH_MONTHS.ppiIntl : SMOOTH_MONTHS.cpiSa);
+  };
+
+  const fitGroup = (intl: boolean): { m: Additive; fit: PlainFit; destFares: Map<string, number> } | undefined => {
+    const fs = inp.fares.filter((f) => isInternational(f.destination) === intl && f.price > 0);
+    if (fs.length < PLAIN_MIN_FARES) return undefined;
+    const factors = [...(intl ? PLAIN_FACTORS.intl : PLAIN_FACTORS.dom)];
+    const base: (Obs & { c: number })[] = fs.map((f) => ({
+      y: Math.log(f.price / hol(f.departDate)), keys: keysOf(f.origin, f.destination, f.departDate), c: Math.log(carryOf(f)) }));
+    let m = fitAdditive(base, factors, PLAIN_SHRINK_K);
+    // Fare age: the slope of what is left on log(index change), shrunk.
+    let w = 0;
+    const withIdx = base.filter((r) => Math.abs(r.c) > 1e-9);
+    if (withIdx.length >= 5) {
+      const pts = base.map((r) => ({ x: r.c, y: r.y - predictAdditive(m, r) }));
+      const mx = pts.reduce((a, p) => a + p.x, 0) / pts.length, my = pts.reduce((a, p) => a + p.y, 0) / pts.length;
+      const sxx = pts.reduce((a, p) => a + (p.x - mx) ** 2, 0), sxy = pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0);
+      if (sxx > 1e-4) w = clamp(sxy / sxx, 0, INDEX_W_MAX) * (pts.length / (pts.length + INDEX_SHRINK_K));
+      // Each fare brought to today's level, then the pieces refitted on that.
+      if (w > 0) m = fitAdditive(base.map((r) => ({ ...r, offset: -w * r.c })), factors, PLAIN_SHRINK_K);
+    }
+    const resid = base.map((r) => r.y + w * r.c - predictAdditive(m, r)).sort((a, b) => a - b);
+    const q = (p: number) => resid[Math.min(resid.length - 1, Math.max(0, Math.round(p * (resid.length - 1))))]!;
+    const counts = (f: string) => {
+      const n = new Map<string, number>();
+      for (const r of base) n.set(r.keys[f]!, (n.get(r.keys[f]!) ?? 0) + 1);
+      return n;
+    };
+    const levels = (f: string): PlainLevels => {
+      const n = counts(f);
+      return Object.fromEntries([...m.effects.get(f)!].map(([k, e]) => [k, { factor: Math.exp(e), fares: n.get(k) ?? 0 }]));
+    };
+    const fit: PlainFit = {
+      fares: fs.length, typical: Math.exp(m.mu),
+      dest: levels("dest"), month: levels("month"),
+      ...(intl ? {} : { origin: levels("origin"), route: levels("route") }),
+      fareAge: { weight: w, fares: inp.index && (intl ? inp.index.ppiIntl : inp.index.cpiSa) ? fs.length : 0 },
+      lowRatio: clamp(Math.exp(q(0.25)), 0.6, 1), highRatio: clamp(Math.exp(q(0.75)), 1, 1.6),
+    };
+    return { m, fit, destFares: counts("dest") };
+  };
+  const groups = { dom: fitGroup(false), intl: fitGroup(true) };
+
+  // The lever formula, fitted only if something needs it (a destination or
+  // group with too few of our fares, or a report reading its levers).
+  let lever: FareModel | undefined;
+  const leverModel = () => (lever ??= fitLeverModel(inp));
+
+  const doms = inp.fares.filter((f) => !isInternational(f.destination)).length;
+  return {
+    formula: "plain",
+    plain: { dom: groups.dom?.fit, intl: groups.intl?.fit },
+    fitted: { domestic: doms, international: inp.fares.length - doms },
+    get levers() { return leverModel().levers; },
+    predict(o, d, date) {
+      const intl = isInternational(d);
+      const g = intl ? groups.intl : groups.dom;
+      if (!g || !g.destFares.get(d)) return leverModel().predict(o, d, date);
+      const keys = keysOf(o, d, date);
+      const e = (f: string) => g.m.effects.get(f)?.get(keys[f]!) ?? 0;
+      const value = Math.exp(predictAdditive(g.m, { y: 0, keys }));
+      const home = intl ? 1 : Math.exp(e("origin"));
+      return {
+        value: Math.round(value * 100) / 100,
+        lowRatio: g.fit.lowRatio, highRatio: g.fit.highRatio,
+        parts: {
+          prior: Math.round(Math.exp(g.m.mu)), calibration: 1, destination: Math.exp(e("dest")), season: 1,
+          month: Math.exp(e("month")), dayOfWeek: 1, budget: 1,
+          route: intl ? 1 : home * Math.exp(e("route")), home: intl ? undefined : home,
+          routeSearches: intl ? 0 : (g.fit.route?.[keys.route!]?.fares ?? 0),
+          group: groupOf(d), index: 1, priorKind: "plain",
+        },
+      };
+    },
+  };
 }
