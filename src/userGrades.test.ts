@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inTypical, withinZone, weekly, gradeFlights, gradeDisney, gradeOffProperty, summaryLines, quantile, GRADE_MIN } from "./userGrades.js";
+import { inTypical, withinZone, weekly, gradeFlights, gradeDisney, gradeOffProperty, summaryLines, quantile, yardsticks, GRADE_MIN } from "./userGrades.js";
 import type { GoogleDisneyRate } from "./disneyEvidence.js";
 
 const NOW = new Date("2026-10-16T12:00:00Z");
@@ -132,4 +132,14 @@ test("loader: a forecast is matched to Google's list from the same search and gr
   assert.equal(g.flights.us.overall.month.n, 2);
   assert.ok(g.summary.some((l) => l.startsWith("US flights, typical trip")));
   await db.close();
+});
+
+test("yardsticks: a bunched Google list makes the middle half NARROWER than ±10%", () => {
+  // Ten itineraries bunched near $400: the middle half is ~$395-$405.
+  const pool = [380, 390, 395, 398, 400, 400, 402, 405, 410, 600];
+  const y = yardsticks([{ intl: false, at: NOW, shown: 430, bought: 400, pool }], 0.1);
+  assert.equal(y.us.oldRight, 1);  // $430 is within 10% of the $400 we bought
+  assert.equal(y.us.newRight, 0);  // ...but above the list's upper quartile
+  assert.equal(y.us.oldOnly, 1);
+  assert.equal(y.us.narrowHigh, 1);
 });

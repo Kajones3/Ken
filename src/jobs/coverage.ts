@@ -15,6 +15,7 @@
  */
 import { unzipBody } from "../rawResponses.js";
 import { loadForecastScores } from "../fareForecasts.js";
+import { flightRows, yardsticks, inTypical, withinZone, quantile } from "../userGrades.js";
 import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
 import { fitFareModel, isInternational, leaveOneOut } from "../fareModel.js";
@@ -614,6 +615,33 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const [o, d, dt] of [["ATL", "MCO", "2027-03-15"], ["RDU", "CDG", "2027-06-15"], ["ATL", "NRT", "2027-03-15"], ["CLT", "LAX", "2027-03-15"]] as const) {
       const p = m.predict(o, d, dt as never);
       out.push(`    sample ${o}->${d} ${dt}: ${p ? `$${Math.round(p.value)} = prior $${p.parts.prior} (${p.parts.priorKind}) x calib ${p.parts.calibration.toFixed(2)} x dest ${p.parts.destination.toFixed(2)} x season ${p.parts.season.toFixed(2)} x month ${p.parts.month.toFixed(2)} x day ${p.parts.dayOfWeek.toFixed(2)} x budget ${p.parts.budget.toFixed(2)} x index ${p.parts.index.toFixed(2)} x route ${p.parts.route.toFixed(2)} (${p.parts.routeSearches} searches)` : "none"}`);
+    }
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
+  // Owner, 2026-10-16: "our accuracy dropped when we expanded 'correct' to
+  // the IQR. How is that even possible?" Both yardsticks on the SAME fares.
+  out.push("## Old yardstick vs new, same fares (last 30 days, written down before buying)");
+  try {
+    const { rows, unmatched } = await flightRows(db);
+    const y = yardsticks(rows, 0.1);
+    out.push(`  ${rows.length} forecasts matched to Google's kept list, ${unmatched} with no list kept`);
+    for (const [label, g] of [["US", y.us], ["International", y.intl]] as const) {
+      const p = (k: number) => (g.n ? `${Math.round((100 * k) / g.n)}%` : "-");
+      out.push(`  ${label} (${g.n} fares)`);
+      out.push(`    old: within ±10% of the fare we bought   ${g.oldRight} right (${p(g.oldRight)})`);
+      out.push(`    new: inside the middle half of the list  ${g.newRight} right (${p(g.newRight)})`);
+      out.push(`    right on old only ${g.oldOnly}, new only ${g.newOnly}; lists under 4 prices ${g.short}`);
+      out.push(`    middle half runs ${g.lowEdgePct ?? "-"}% to +${g.highEdgePct ?? "-"}% around the list's middle (median list); `
+        + `${g.narrowHigh} lists have their top quarter starting less than 10% above the middle`);
+      out.push(`    our shown fare leans ${g.leanPct ?? "-"}% against the list's middle`);
+    }
+    const flips = rows.filter((r) => r.shown && r.bought && withinZone(r.shown, r.bought, 0.1) && !inTypical(r.shown, r.pool, 0.1)).slice(0, 12);
+    if (flips.length) out.push("  Examples right on the old test, wrong on the new (shown / bought / list p25 · middle · p75, n):");
+    for (const r of flips) {
+      out.push(`    ${r.intl ? "intl" : "US  "} $${Math.round(r.shown!)} / $${Math.round(r.bought!)} / $${Math.round(quantile(r.pool, 0.25))} · $${Math.round(quantile(r.pool, 0.5))} · $${Math.round(quantile(r.pool, 0.75))}, ${r.pool.length} itineraries`);
     }
   } catch (e) {
     out.push(`  could not compute: ${(e as Error).message}`);

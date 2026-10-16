@@ -102,6 +102,8 @@ export function weekly(items: Graded[], now: Date): Weekly {
 export interface FlightGradeRow {
   intl: boolean; at: Date;
   shown?: number; shownCheapest?: number; candidate?: number;
+  /** The fare we bought (Google's middle itinerary, as the paid job picked it). */
+  bought?: number;
   /** Every itinerary Google listed for the search, cheapest first. */
   pool: number[];
 }
@@ -124,6 +126,51 @@ export function gradeFlights(rows: FlightGradeRow[], zone: number, now: Date): {
       typical: weekly(typ, now), cheapest: weekly(chp, now), overall: weekly([...typ, ...chp], now),
       leanPct: leans.length ? Math.round(median(leans) * 1000) / 10 : null,
       candidateTypical: grade(recent.filter((r) => r.candidate).map((r) => inTypical(r.candidate!, r.pool, zone))),
+    };
+  };
+  return { us: side(false), intl: side(true) };
+}
+
+/**
+ * Old yardstick vs new, on the SAME fares (owner, 2026-10-16: "our accuracy
+ * dropped when we expanded 'correct' to the IQR. How is that even possible?").
+ * Old: within ±zone of the fare we bought. New: inside the middle half of
+ * Google's list. The middle half is NOT always wider than ±zone: when
+ * Google's list is bunched, its quartiles sit closer to the middle than 10%.
+ */
+export interface Yardsticks {
+  n: number;
+  /** Within ±zone of the fare we bought (the old fair test). */
+  oldRight: number;
+  /** Inside the middle half of Google's list (the new test). */
+  newRight: number;
+  /** Right on the old test only / the new test only. */
+  oldOnly: number; newOnly: number;
+  /** Median distance from the list's middle to its quartiles, in %. */
+  lowEdgePct: number | null; highEdgePct: number | null;
+  /** Lists whose upper quartile sits closer than +zone to the middle. */
+  narrowHigh: number;
+  /** Lists with fewer than MIDDLE_HALF_MIN prices (graded ±zone instead). */
+  short: number;
+  /** Our shown fare vs the list's middle, median signed %. */
+  leanPct: number | null;
+}
+export function yardsticks(rows: FlightGradeRow[], zone: number): { us: Yardsticks; intl: Yardsticks } {
+  const side = (intl: boolean): Yardsticks => {
+    const rs = rows.filter((r) => r.intl === intl && r.shown && r.bought && r.pool.length);
+    const oldOk = rs.map((r) => withinZone(r.shown!, r.bought!, zone));
+    const newOk = rs.map((r) => inTypical(r.shown!, r.pool, zone));
+    const full = rs.filter((r) => r.pool.length >= MIDDLE_HALF_MIN);
+    const edge = (q: number) => full.map((r) => quantile(r.pool, q) / quantile(r.pool, 0.5) - 1);
+    const pct = (xs: number[]) => (xs.length ? Math.round(median(xs) * 1000) / 10 : null);
+    return {
+      n: rs.length,
+      oldRight: oldOk.filter(Boolean).length, newRight: newOk.filter(Boolean).length,
+      oldOnly: oldOk.filter((o, i) => o && !newOk[i]).length, newOnly: newOk.filter((o, i) => o && !oldOk[i]).length,
+      lowEdgePct: pct(edge(0.25)), highEdgePct: pct(edge(0.75)),
+      narrowHigh: edge(0.75).filter((e) => e < zone).length,
+      short: rs.length - full.length,
+      leanPct: pct(rs.map((r) => r.shown! / quantile(r.pool, 0.5) - 1)),
     };
   };
   return { us: side(false), intl: side(true) };
@@ -274,12 +321,12 @@ export interface UserGrades {
 
 const asDate = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
 
-async function flightRows(db: Db): Promise<{ rows: FlightGradeRow[]; unmatched: number }> {
+export async function flightRows(db: Db): Promise<{ rows: FlightGradeRow[]; unmatched: number }> {
   let fc: { origin: string; destination: string; depart_date: unknown; trip_length: number; bought_at: unknown;
-    shown_usd: string | null; shown_cheapest_usd: string | null; candidate_usd: string | null }[];
+    shown_usd: string | null; shown_cheapest_usd: string | null; candidate_usd: string | null; price_usd: string | null }[];
   try {
     fc = (await db.query<typeof fc[number]>(
-      `select origin, destination, depart_date, trip_length, bought_at, shown_usd, shown_cheapest_usd, candidate_usd
+      `select origin, destination, depart_date, trip_length, bought_at, shown_usd, shown_cheapest_usd, candidate_usd, price_usd
          from fare_forecasts where bought_at > now() - interval '30 days' and price_usd > 0`,
     )).rows;
   } catch { return { rows: [], unmatched: 0 }; }
@@ -309,7 +356,7 @@ async function flightRows(db: Db): Promise<{ rows: FlightGradeRow[]; unmatched: 
       .filter((y) => y.gap <= 2 * DAY).sort((p, q) => p.gap - q.gap)[0]?.x;
     if (!best) { unmatched++; continue; }
     rows.push({ intl: isInternational(f.destination.trim()), at, pool: best.pool,
-      shown: n(f.shown_usd), shownCheapest: n(f.shown_cheapest_usd), candidate: n(f.candidate_usd) });
+      shown: n(f.shown_usd), shownCheapest: n(f.shown_cheapest_usd), candidate: n(f.candidate_usd), bought: n(f.price_usd) });
   }
   return { rows, unmatched };
 }
