@@ -110,6 +110,15 @@ What that means in code. **Every session keeps all of these true:**
    owner's call.** Improve the candidate freely (it only affects grading
    until `flight.useCandidate` is on); the owner flips the switch.
 
+**Added 2026-10-16 (nothing above removed):** the owner flipped it ("build
+A through E"): `flight.useCandidate` defaults to 1, so the candidate IS what
+travelers see now, and a change to it changes the board: grade it on the
+before-buying test (error budget section 7 in the coverage report) before it
+ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
++ month, plus home airport + route in the US, learned only from our bought
+fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
+fallback for a destination we have never bought.
+
 ## START HERE — state as of 2026-10-13 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
@@ -126,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**799 tests** (all pass, 2026-10-13), and typecheck is clean. `npm run smoke` runs the pipeline.
+**852 tests** (all pass, 2026-10-16), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -138,6 +147,9 @@ days out (6 of 18 had come back empty, still billed). Details in the dated
 sections below.
 
 ### Pick up here FIRST — session starting 2026-10-14 (supersedes older lists)
+
+**Newer (2026-10-16): read "2026-10-16, end — A-E BUILT" below first; its
+governing rule #4 check comes before this list.**
 
 1. **Governing rule #4 on #172** (a check-in is scheduled for 2026-10-14
    13:30 UTC, trigger trig_019FFM6aKw3utrbjFmpTw4V4): read the popular-routes
@@ -204,6 +216,54 @@ sections below.
    and >= 5% a seat. Test search: from Charlotte (CLT), March 2027, open
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
+
+### 2026-10-16, end — A-E BUILT: plain formula live, bought fares win, 2-week grades, hotels stop re-buying
+
+Owner: "This works. build A through E" (the proposals in the section below).
+Five commits, one PR:
+- **E, hotels (refresh):** `rotateHotelSlots` skips a resort/month searched
+  in the last `HOTEL_REBUY_DAYS` (10, by calendar day); each pass asks a
+  different check-in night (`checkInDayFor(pass)`: 14, 8, 23, 10, 18, 5, 20,
+  seven different weekdays; pass = earlier `hotel_searches` for that
+  resort+month), threaded to the provider as `passes`. **Hotels 12 -> 6 a
+  night, popular-routes 18 -> 24 a night** (rotation 8 = a third), same ~900
+  SerpApi searches a month. ~66 resort-months / 6 = each every ~11 nights.
+  Off-property grading already moves by the season curve between check-in
+  nights, so different nights now TEST the curve within a month. A repo
+  variable `SERPAPI_HOTELS_BUDGET`, if set, still overrides the 6.
+- **B, board:** `decideFlightFare()`: a row whose `sources` include
+  `serpapi_flights` (`PAID_FLIGHT_SOURCE`) always wins; the free feed keeps
+  the old "estimate above it wins + cheaperFound" rule.
+- **A, candidate = plain formula** (`fitPlainModel` in fareModel.ts, what
+  `fitFareModel` returns): log(fare / holiday premium) = typical +
+  destination + month (+ home airport + route, US), k = 2, backfitting
+  (`fitAdditive` moved here from errorBudget.ts), plus the fare-age BLS lever
+  (learned slope, 0 for now). Range = middle half of the residuals (0.6-1.6).
+  Falls back to `fitLeverModel` (the old candidate, unchanged) for a
+  destination with none of our fares or a group under `PLAIN_MIN_FARES` (20).
+  `FareModel.formula` / `.plain` (per group: typical, dest, month, origin,
+  route, fareAge); `levers` is a lazy getter on the fallback. Coverage prints
+  old vs new leave-one-out + what the plain formula learned; the error
+  budget's section 7 has both lines; Rates & settings lists the pieces.
+- **C:** `flight.useCandidate` default **1**. A value saved in /admin still
+  wins: if Rates & settings shows it at 0, the owner sets 1.
+- **D, grades:** windows are the last 14 days vs the 14 before
+  (`GRADE_WINDOW_DAYS`, `PROGRESS_WINDOW_DAYS`); `Grade.luck` = one standard
+  error in points (`luckPoints`, +1/+1 smoothed); progress lines get
+  `typicalOffLuck()` (seeded bootstrap). Better/worse only past both
+  windows' luck added (and >= 3 / 1.5 points). Fields renamed
+  `thisWeek/lastWeek` -> `recent/before`. /admin shows "±N" and arrows only
+  past the luck; email wording says "the last two weeks".
+- 852 tests, typecheck clean, smoke OK. Needs a **Render redeploy** for A-D
+  to reach travelers; E works from the next nightly runs.
+- **Governing rule #4 check (next session, before calling it fixed):**
+  popular-routes 24 written / 24 kept (or "N too far ahead"), 24 forecasts
+  kept with `shown_cheapest_usd` filled, 8 rotation slots; refresh "6 paid
+  hotel search(es) tonight: ..." with varied check-ins, 6 made / 6 kept, no
+  resort-month searched twice within 10 days. After the redeploy, the
+  forecasts' `formula` reads "candidate". Then the before-buying grade of
+  the plain formula over the next two weeks (the first honest test of what
+  travelers see now).
 
 ### 2026-10-16, very last — WHY WE AREN'T GETTING BETTER (the error budget). READ BEFORE TOUCHING FLIGHT PRICING.
 
