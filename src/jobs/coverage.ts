@@ -16,6 +16,7 @@
 import { unzipBody } from "../rawResponses.js";
 import { loadForecastScores } from "../fareForecasts.js";
 import { rawPeek } from "./rawPeek.js";
+import { deepDive } from "./deepDive.js";
 import { flightRows, yardsticks, inTypical, withinZone, quantile } from "../userGrades.js";
 import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
@@ -49,6 +50,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
 
   out.push(`# Cache coverage from ${origin} — generated ${today}`);
   out.push("");
+  try { out.push(...await deepDive(db)); } catch (e) { out.push(`deep dive failed: ${(e as Error).message}`); }
   try { out.push(...await rawPeek(db)); } catch (e) { out.push(`raw peek failed: ${(e as Error).message}`); }
 
   // --- 1. What the flight cache actually holds, by destination and month ---
