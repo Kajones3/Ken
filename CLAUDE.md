@@ -205,6 +205,62 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-16, very last — WHY WE AREN'T GETTING BETTER (the error budget). READ BEFORE TOUCHING FLIGHT PRICING.
+
+Owner: "think deeper. this is basic math. Why aren't we getting better."
+Read-only analysis in the coverage report (`src/jobs/errorBudget.ts`,
+`deepDive.ts`, `rawPeek.ts`); run 38839875441. NOTHING in pricing changed.
+**The decisive test (section 7):** the fares we wrote down BEFORE buying
+(`fare_forecasts`), every model trained only on fares bought earlier:
+
+| Same fares | US (60) within ±10% / typically off | Intl (78) |
+|---|---|---|
+| What travelers saw (live formula) | 18% / 20.3% (leans +15.5%) | 35% / 17.1% |
+| Candidate, as it was that night | 28% / 19.5% | 27% / 15.9% |
+| Candidate, today's code | 25% / 19.2% | 38% / 12.3% |
+| Plain: destination + month | 33% / 17.6% | **50% / 10.1%** |
+| + home airport | 33% / 15.7% | 46% / 10.4% |
+| + home airport + the route itself | **38% / 13.5%** | 49% / 10.7% |
+| US: survey figure + dest + month + home | 26% / 19.1% | n/a |
+
+Plain = log(fare) = shrunk average effects learned from OUR bought fares
+only (`fitAdditive`, backfitting, k=2). Findings:
+- **What travelers see can't learn by design:** outside numbers (BTS survey
+  US; one seed per continent abroad) x ONE learned trend; route evidence
+  needs 3 fares same route+quarter in 45 days, which 0 of 138 forecasts had.
+- **The BTS survey is a BAD starting point for Google's middle fare:**
+  alone x one scale it scored 17% / 27.3% vs 36% / 19.7% for one national
+  number (random LOO, 84 US fares); added to the plain model it made the
+  before-buying test WORSE (26% vs 33%). The live US formula is built on it.
+- **The candidate plateaus** at ~100-130 fares (learning curve, fixed test)
+  and loses to the two-piece plain model: too many levers (seed, distance
+  line, season + month, day of week, index, Google's cheapest-seat range in
+  the route lever) fitted one after another from medians on ~230 fares.
+- **What's left is mostly the day:** after dest + month + home airport, two
+  fares on the same route share 53% of the leftover in the US (route memory
+  helps) but only 7% abroad (pure day noise). Intl ~50% within ±10% is near
+  the ceiling for one number per destination-month (free feed: same
+  route-month, different days, 50% within 10% of the month middle).
+- Home airport does NOT help abroad (46% vs 50%); the earlier "Seattle 0.81 /
+  Philadelphia 1.22" lead was small-sample noise. The most popular fare is
+  no easier to hit than the middle. Google's typical range IS round trip
+  (154/154 labels agree as given; history's newest point = cheapest exactly).
+- **The grade itself is noisy:** ~60 fares a side a week = about ±6 points
+  of luck; "better than last week" is invisible under ~12 points.
+- **The board throws away bought Google fares:** `decideFlightFare()` shows
+  the estimate whenever it is above the real fare (a rule made for the free
+  feed's $129 JetBlue outlier). For paid Google middle fares (the target)
+  the real fare should win.
+- Waste found the same night (raw peek): 40 hotel searches re-bought the
+  same resort + 4 nights 5-6 days later (66 resort-months / 12 a night =
+  every ~5.5 days); owner wants hotel A (no re-buy within 10-14 days), B (a
+  different night each pass), C (spare searches to flights), NOT built yet.
+- **Proposed, NOT built (owner said "don't change anything yet"):** rebuild
+  the candidate as the plain model (intl dest + month; US dest + month + home
+  airport + route), outside numbers only as fallback for never-bought
+  destination-months; owner flips `flight.useCandidate`; real Google fare
+  wins on the board; grades on a 2-week window with a noise band.
+
 ### 2026-10-16, last — Data holes (part 3); why the "middle half" grade came out LOWER
 
 - **/admin "Data holes"** (`src/dataHoles.ts`, GET `/api/admin/holes`, nav
