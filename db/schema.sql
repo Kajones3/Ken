@@ -807,6 +807,9 @@ create table if not exists fare_forecasts (
   bought_at          timestamptz  not null default now()
 );
 create index if not exists fare_forecasts_when on fare_forecasts (bought_at);
+-- What "the cheapest trip" would have shown for the same date (2026-10-16),
+-- written down before buying like shown_usd; null on rows from before.
+alter table fare_forecasts add column if not exists shown_cheapest_usd numeric(9,2);
 
 -- Carry every labelled fare already in the working copy into the record,
 -- ONCE. A marker row makes it one-time: matching on timestamps would not do,

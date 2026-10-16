@@ -20,6 +20,7 @@ import { todayISO } from "../dates.js";
 import { ownerTasks, renderOwnerTasks, type OwnerTask } from "../ownerTasks.js";
 import { dataIntake, type IntakeReport } from "../dataIntake.js";
 import { loadForecastScores, progressReport, type Progress } from "../fareForecasts.js";
+import { loadUserGrades } from "../userGrades.js";
 import { loadIndexSeries, summarize } from "../airfareIndex.js";
 
 export interface NewsDigestOptions {
@@ -36,6 +37,8 @@ export interface NewsDigestOptions {
   intake?: IntakeReport;
   /** Injected by tests; normally graded from fare_forecasts. */
   progress?: Progress | null;
+  /** "What the user sees" summary lines (userGrades.ts); null leaves the section out. */
+  grades?: string[] | null;
   /** The flight lean summary; undefined = load it, null = none. */
   lean?: string[] | null;
   /** The government's airfare indexes, year over year; undefined = load, null = none. */
@@ -100,6 +103,9 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const progress = opts.progress !== undefined ? opts.progress : scores?.progress ?? null;
   const lean = opts.lean !== undefined ? opts.lean : scores?.lean?.length ? scores.lean : null;
   const prog = progress ? progressReport(progress) : null;
+  // The same sentences /admin "What the user sees" opens with.
+  const grades = opts.grades !== undefined ? opts.grades
+    : await loadUserGrades(db).then((g) => g.summary.length ? g.summary : null).catch(() => null);
   const airfareIndex = opts.airfareIndex !== undefined ? opts.airfareIndex
     : await loadIndexSeries(db).then((s) => Object.keys(s).length ? summarize(s).lines : null).catch(() => null);
   const progressTasks = (prog?.worse ?? []).map((l) => ({
@@ -132,6 +138,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   const shouldSend = Boolean(ownerEmail);
   if (shouldSend) {
     const parts: string[] = [taskNote, intakeNote];
+    if (grades) parts.push("What the user sees (how often the board is right)\n\n" + grades.join("\n"));
     if (lean) parts.push("How our flight guesses lean (checked before buying, last 30 days)\n\n" + lean.join("\n"));
     if (airfareIndex) parts.push("Airfares, by the government's price indexes (Bureau of Labor Statistics)\n\n" + airfareIndex.join("\n"));
     if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, this week vs last)\n\n" + prog.lines.join("\n"));

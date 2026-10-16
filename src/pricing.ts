@@ -310,6 +310,21 @@ type FlightEstimate = NonNullable<FlightRow["estimate"]>;
  * by priceTrip and the nightly forecasts (fareForecasts.ts), so "what a
  * traveler sees" can never mean two different things.
  */
+/** The cheapest-trip flight for one date (owner, 2026-10-15): the cheapest
+ *  itinerary Google listed when we bought this date, else the middle fare
+ *  moved by the learned cheapest/middle ratio, else the middle fare as is.
+ *  One home for it, so the board and the fair-test forecast agree. */
+export function cheapestBasisFare(
+  book: Pick<PriceBook, "cheapestListed" | "cheapestRatio">,
+  origin: string, destination: string, date: ISODate, nights: number, middle: number,
+): { fare: number; cheapest: NonNullable<FlightRow["cheapest"]> } {
+  const listed = book.cheapestListed?.(origin, destination, date, nights);
+  if (listed !== undefined && listed > 0) return { fare: listed, cheapest: { how: "listed", middle } };
+  const ratio = book.cheapestRatio?.(destination);
+  if (ratio !== undefined) return { fare: Math.round(middle * ratio * 100) / 100, cheapest: { how: "ratio", middle, ratio } };
+  return { fare: middle, cheapest: { how: "none", middle } };
+}
+
 export function decideFlightFare(
   book: Pick<PriceBook, "setting">,
   row: FlightRow | undefined,
@@ -861,14 +876,8 @@ export function priceTrip(
     let modelFare = decided.modelFare;
     let cheapest: FlightRow["cheapest"];
     if (params.priceBasis === "cheapest") {
-      const listed = book.cheapestListed?.(params.origin, destination, start, params.nights);
-      const ratio = book.cheapestRatio?.(destination);
-      const middle = modelFare;
-      if (listed !== undefined && listed > 0) { modelFare = listed; cheapest = { how: "listed", middle }; }
-      else if (ratio !== undefined) {
-        modelFare = Math.round(middle * ratio * 100) / 100;
-        cheapest = { how: "ratio", middle, ratio };
-      } else cheapest = { how: "none", middle };
+      const c = cheapestBasisFare(book, params.origin, destination, start, params.nights, modelFare);
+      modelFare = c.fare; cheapest = c.cheapest;
       // The cheapest fare we know of is now this one, not the middle.
       if (floor > 0) floor = Math.min(floor, modelFare);
     }
