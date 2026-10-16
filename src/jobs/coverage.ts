@@ -15,6 +15,7 @@
  */
 import { unzipBody } from "../rawResponses.js";
 import { loadForecastScores } from "../fareForecasts.js";
+import { rawPeek } from "./rawPeek.js";
 import { flightRows, yardsticks, inTypical, withinZone, quantile } from "../userGrades.js";
 import { loadScoreboard } from "../fareScoreboard.js";
 import { loadModelInputs } from "../fareModelDb.js";
@@ -48,6 +49,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
 
   out.push(`# Cache coverage from ${origin} — generated ${today}`);
   out.push("");
+  try { out.push(...await rawPeek(db)); } catch (e) { out.push(`raw peek failed: ${(e as Error).message}`); }
 
   // --- 1. What the flight cache actually holds, by destination and month ---
   const fp = await db.query<{ destination: string; month: string; trip_length: number; source: string | null; carrier: string | null; n: string; min_p: string; max_p: string; med_p: string }>(
