@@ -7,13 +7,15 @@ name: Pricing the Magic popular routes
 # bounded three ways: POPULAR_ROUTES_LIMIT (how many routes),
 # POPULAR_ROUTES_DATES (how many sample dates each), and
 # SERPAPI_FLIGHTS_BUDGET (a hard ceiling on lookups per run, enforced inside
-# the provider). Sized for SerpApi Starter (1,000 searches/month): 18 x 1 =
-# 18 lookups a night, ~540/month — raised from 10 on 2026-09-26 once the
-# in-app live-fare button (~180/month) was removed. With the refresh's 12
-# hotel lookups a night that is ~900/month, ~100 left for manual runs.
+# the provider). Sized for SerpApi Starter (1,000 searches/month): 24 x 1 =
+# 24 lookups a night, ~720/month — 10 until 2026-09-26, 18 until
+# 2026-10-16, when the refresh's hotel searches dropped from 12 to 6 a
+# night (they were re-buying the same nights every ~5 days) and the owner
+# moved the spare to flights. With 6 hotel lookups a night that is
+# ~900/month, ~100 left for manual runs.
 #
 # Slots: up to 6 for the routes we read furthest off, a third of the night
-# (6) always kept for rotation (routeDemand.ts's rotationRoutes,
+# (8) always kept for rotation (routeDemand.ts's rotationRoutes,
 # stalest-route-first, one route per home airport at a time), and demand
 # gets the rest. Rotation used to get only what demand left, which by
 # 2026-10-10 was nothing: 13 of the 19 big airports had never been bought. Before launch route_searches is empty,
@@ -32,7 +34,7 @@ on:
         description: How many popular routes to buy fares for
         required: false
         type: string
-        default: "18"
+        default: "24"
       dates:
         description: Sample departure dates per route/month
         required: false
@@ -42,7 +44,7 @@ on:
         description: Hard ceiling on paid lookups for this run
         required: false
         type: string
-        default: "18"
+        default: "24"
       routes:
         description: "Buy ONLY these (e.g. IAD-CDG-2027-03,IAD-NRT-2027-06); blank = a normal night"
         required: false
@@ -68,7 +70,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
-          POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '18' }}
+          POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '24' }}
           POPULAR_ROUTES_DATES: ${{ inputs.dates || '1' }}
-          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '18' }}
+          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '24' }}
           POPULAR_ROUTES_ONLY: ${{ inputs.routes || '' }}

@@ -24,22 +24,23 @@
  *
  * HOTELS, per resort and plannable month: Google's rates kept in the last 45
  * days, the last search and what it priced, and when the nightly rotation
- * (stalest first, HOTEL_SEARCHES_PER_NIGHT a night) next reaches it. A month
+ * (stalest first, HOTEL_SEARCHES_PER_NIGHT a night, never within
+ * HOTEL_REBUY_DAYS of the last search) next reaches it. A month
  * Google won't price yet (past ~360 days) says so.
  */
 import type { Db } from "./db.js";
 import { ALL_ORIGINS, ORIGINS, RESORTS, isLocalRoute, isMainArrivalAirport, mainArrivalAirport, plannableMonths } from "./config.js";
 import { MONTHLY_MIN_TICKETS } from "./book.js";
 import { rotationRoutes } from "./routeDemand.js";
-import { rotateHotelSlots } from "./jobs/hotelRotation.js";
+import { HOTEL_REBUY_DAYS, rotateHotelSlots } from "./jobs/hotelRotation.js";
 import { sampleCheckIn } from "./providers/serpapi.js";
 import { loadIndexSeries, latestPeriod, periodName } from "./airfareIndex.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 
-/** Rotation slots popular-routes keeps every night (a third of 18). */
-export const ROTATION_PER_NIGHT = 6;
-/** Paid hotel searches a night (refresh, SERPAPI_HOTELS_BUDGET). */
-export const HOTEL_SEARCHES_PER_NIGHT = 12;
+/** Rotation slots popular-routes keeps every night (a third of 24). */
+export const ROTATION_PER_NIGHT = 8;
+/** Paid hotel searches a night (refresh, SERPAPI_HOTELS_BUDGET; 12 until 2026-10-16). */
+export const HOTEL_SEARCHES_PER_NIGHT = 6;
 export const HOLES_SHOWN = 25;
 
 export type RouteAction =
@@ -90,6 +91,8 @@ export interface DataHoles {
   newestSurvey: string | null;
   hotels: { total: number; empty: number; holes: HotelHole[] };
 }
+
+const laterOf = (a: ISODate, b?: ISODate): ISODate => (b && b > a ? b : a);
 
 const count = async (db: Db, sql: string, params: unknown[] = []) => {
   const m = new Map<string, number>();
@@ -152,8 +155,11 @@ export async function loadDataHoles(db: Db, now: Date = new Date()): Promise<Dat
 
   // Hotels: every resort x plannable month, in the order the rotation takes them.
   const months = plannableMonths(today);
-  const order = await rotateHotelSlots(db, { months, limit: 10_000, today }).catch(() => []);
+  // The whole queue in order (no re-buy wait), then each month's own wait.
+  const order = await rotateHotelSlots(db, { months, limit: 10_000, today, rebuyDays: 0 }).catch(() => []);
   const hotelPlace = new Map(order.map((s, i) => [`${s.resortId}|${s.month}`, i]));
+  const waitsUntil = new Map(order.filter((s) => s.lastPulledAt > 0).map((s) => [
+    `${s.resortId}|${s.month}`, addDaysISO(new Date(s.lastPulledAt).toISOString().slice(0, 10) as ISODate, HOTEL_REBUY_DAYS + 1)]));
   const samples = new Map<string, number>();
   const last = new Map<string, { at: string; priced: number }>();
   try {
@@ -177,7 +183,7 @@ export async function loadDataHoles(db: Db, now: Date = new Date()): Promise<Dat
       hotelRows.push({
         resortId: r.id, month: m, samples45: samples.get(k) ?? 0,
         lastSearch: last.get(k)?.at ?? null, lastPriced: last.get(k)?.priced ?? null,
-        nextSearch: tooFar || pos === undefined ? null : addDaysISO(today, Math.floor(pos / HOTEL_SEARCHES_PER_NIGHT) + 1),
+        nextSearch: tooFar || pos === undefined ? null : laterOf(addDaysISO(today, Math.floor(pos / HOTEL_SEARCHES_PER_NIGHT) + 1), waitsUntil.get(k)),
         tooFar,
       });
     }
