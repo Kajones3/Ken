@@ -19,7 +19,7 @@
 import type { Db } from "./db.js";
 import { settingsMap } from "./settings.js";
 import { loadScoreboard, type GroupScore } from "./fareScoreboard.js";
-import { loadUserGrades, loadDisneyInputs, gradeDisney, type Grade, type HotelSide } from "./userGrades.js";
+import { loadUserGrades, loadDisneyInputs, gradeDisney, luckPoints, type Grade, type HotelSide } from "./userGrades.js";
 import { ESTIMATE_LEAN_KEY, INTL_ESTIMATE_LEAN_KEY, DEFAULT_ESTIMATE_LEAN, TYPICAL_TRIM_KEY, DEFAULT_TYPICAL_TRIM } from "./pricing.js";
 import { USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
@@ -103,7 +103,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const both = (s: { us: HotelSide; intl: HotelSide }): Grade => {
   const a = s.us.typical.month, b = s.intl.typical.month;
   const n = a.n + b.n, right = a.right + b.right;
-  return { n, right, pct: n ? Math.round((right / n) * 100) : null };
+  return { n, right, pct: n ? Math.round((right / n) * 100) : null, luck: luckPoints(right, n) };
 };
 const x2 = (n: number) => `×${n.toFixed(2)}`;
 

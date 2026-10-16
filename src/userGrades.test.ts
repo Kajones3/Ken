@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { inTypical, withinZone, weekly, gradeFlights, gradeDisney, gradeOffProperty, summaryLines, quantile, yardsticks, GRADE_MIN } from "./userGrades.js";
+import { inTypical, withinZone, weekly, gradeFlights, gradeDisney, gradeOffProperty, summaryLines, quantile, yardsticks, GRADE_MIN, GRADE_WINDOW_DAYS, luckPoints } from "./userGrades.js";
 import type { GoogleDisneyRate } from "./disneyEvidence.js";
 
 const NOW = new Date("2026-10-16T12:00:00Z");
@@ -32,16 +32,34 @@ test("cheapest: within ±zone of the cheapest listed, either direction", () => {
   assert.equal(withinZone(89, 100, 0.1), false);
 });
 
-test("weekly: this week vs last week, a trend only with enough numbers", () => {
+test("weekly: the last two weeks vs the two before, a trend only past the luck (2026-10-16)", () => {
   const items = [
-    ...Array.from({ length: GRADE_MIN }, (_, i) => ({ at: daysAgo(1), ok: i < 6 })),
-    ...Array.from({ length: GRADE_MIN }, (_, i) => ({ at: daysAgo(9), ok: i < 2 })),
+    ...Array.from({ length: GRADE_MIN }, (_, i) => ({ at: daysAgo(3), ok: i < 6 })),
+    ...Array.from({ length: GRADE_MIN }, (_, i) => ({ at: daysAgo(10), ok: i < 6 })),   // still "recent": 14-day window
+    ...Array.from({ length: GRADE_MIN }, (_, i) => ({ at: daysAgo(20), ok: i < 2 })),
   ];
   const w = weekly(items, NOW);
-  assert.equal(w.thisWeek.pct, 75);
-  assert.equal(w.lastWeek.pct, 25);
+  assert.equal(GRADE_WINDOW_DAYS, 14);
+  assert.equal(w.recent.n, 2 * GRADE_MIN);
+  assert.equal(w.recent.pct, 75);
+  assert.equal(w.before.pct, 25);
+  assert.ok(w.recent.luck! > 0 && w.before.luck! > 0, "each grade carries its luck");
+  // 50 points apart is far outside ±(10 + 13) of luck: a real change.
   assert.equal(w.trend, "better");
   assert.equal(weekly(items.slice(0, 3), NOW).trend, "too few");
+  // 60% vs 50% on 20 numbers each is inside the luck: "about the same".
+  const close = [
+    ...Array.from({ length: 20 }, (_, i) => ({ at: daysAgo(2), ok: i < 12 })),
+    ...Array.from({ length: 20 }, (_, i) => ({ at: daysAgo(18), ok: i < 10 })),
+  ];
+  assert.equal(weekly(close, NOW).trend, "about the same");
+});
+
+test("luckPoints: about ±6 points on 60 numbers at 50%, smaller with more", () => {
+  assert.equal(luckPoints(30, 60), 6);
+  assert.ok(luckPoints(120, 240)! <= 3);
+  assert.equal(luckPoints(0, 0), null);
+  assert.ok(luckPoints(8, 8)! >= 1, "8 of 8 still shows a margin");
 });
 
 test("flights: typical, cheapest and overall, split US / international", () => {

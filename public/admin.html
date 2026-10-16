@@ -318,8 +318,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="sees">
     <section class="sheet">
       <h2>What the user sees</h2>
-      <p class="count" style="margin-bottom:10px">How often the board is right. Big number: share right <b>this week</b>
-        (or the last 30 days when the week has too few). Arrow: change from last week.</p>
+      <p class="count" style="margin-bottom:10px">How often the board is right. Big number: share right over <b>the last two weeks</b>
+        (or the last 30 days when two weeks have too few). <b>±</b>: how far it can move by luck alone on that many numbers.
+        Arrow: change from the two weeks before, shown only when it is bigger than both margins of luck added together.</p>
       <div id="ugBoard"><p class="count">Loading…</p></div>
       <div id="ugTodo"></div>
       <details class="group" style="margin-top:12px">
@@ -390,7 +391,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
         date. <b>Just before</b> buying each one we write down what a traveler would have seen and what the
         candidate formula would have said. Those are the numbers at the top of this page: nothing could have
         learned from the fare it is graded on, so they are the honest answer to &ldquo;how far off are we right
-        now?&rdquo; Every day they should get better; the week-by-week table says whether they are.</p>
+        now?&rdquo; Every day they should get better; the two-week table says whether they are, beyond luck.</p>
       <p><b>Accurate</b> means within &plusmn;<span class="flZone">10</span>% of the real fare, <b>in either
         direction</b>: $100 low and $100 high are the same miss. (Change the &plusmn; in Rates &amp; settings,
         <code>flight.zonePct</code>; it only changes the grading.)</p>
@@ -1910,14 +1911,15 @@ window.addEventListener("hashchange", route);
 
 
 /* --------------------------- what the user sees --------------------------- */
-const ugPick = w => w.thisWeek.n >= 8 ? { g: w.thisWeek, week: true } : { g: w.month, week: false };
+const ugPick = w => w.recent.n >= 8 ? { g: w.recent, week: true } : { g: w.month, week: false };
 const ugCell = w => {
   const { g, week } = ugPick(w);
   if(!g.n) return `<td class="c"><span class="n">—</span></td>`;
   const cls = g.pct >= 60 ? "g-ok" : g.pct >= 40 ? "g-mid" : "g-bad";
-  const d = week && w.trend !== "too few" && w.trend !== "about the same" ? g.pct - w.lastWeek.pct : null;
+  const d = week && w.trend !== "too few" && w.trend !== "about the same" ? g.pct - w.before.pct : null;
   const arrow = d === null ? "" : ` <span class="${d > 0 ? "up" : "dn"}">${d > 0 ? "▲" : "▼"}${Math.abs(d)}</span>`;
-  return `<td class="c ${cls}"><span class="p">${g.pct}%</span>${arrow}<div class="n">${g.right} of ${g.n}${week ? "" : " · 30 days"}</div></td>`;
+  const luck = g.luck == null ? "" : ` · <span title="How far this can move by luck alone on ${g.n} numbers">±${g.luck}</span>`;
+  return `<td class="c ${cls}"><span class="p">${g.pct}%</span>${arrow}<div class="n">${g.right} of ${g.n}${luck}${week ? "" : " · 30 days"}</div></td>`;
 };
 const ugLean = x => x.leanPct === null ? `<td class="c"><span class="n">—</span></td>`
   : `<td class="c"><span class="p" style="font-size:15px">${x.leanPct > 0 ? "+" : ""}${Math.round(x.leanPct)}%</span></td>`;
@@ -2286,13 +2288,15 @@ function renderForecasts(fc){
       ${line("Candidate", fc[k].candidate)}` : "";
   const pr = fc.progress;
   const TREND = { better: "Better ✓", worse: "WORSE ✗", "about the same": "About the same", "too few fares": "Too few fares yet" };
-  const progressHtml = pr ? `<h4 style="margin:14px 0 6px">Are we getting better? This week vs last week</h4>
-    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Trend</th><th class="n">This week: typically off</th><th class="n">Within ±${z}%</th>
-      <th class="n">Last week: typically off</th><th class="n">Within ±${z}%</th></tr></thead>
+  const lk = x => x == null ? "" : ` <span class="count">±${x}</span>`;
+  const progressHtml = pr ? `<h4 style="margin:14px 0 6px">Are we getting better? The last two weeks vs the two before</h4>
+    <p class="count" style="margin:0 0 6px">± is luck: how far "typically off" moves by chance on that many fares. A change smaller than both margins added together reads "About the same".</p>
+    <div style="overflow-x:auto"><table class="ctab"><thead><tr><th></th><th class="n">Trend</th><th class="n">Last 2 weeks: typically off</th><th class="n">Within ±${z}%</th>
+      <th class="n">2 weeks before: typically off</th><th class="n">Within ±${z}%</th></tr></thead>
       <tbody>${pr.lines.map(l => `<tr><td>${l.group}, ${l.formula === "shown" ? "what travelers see" : "candidate"}</td>
         <td class="n"${l.trend === "worse" ? ' style="color:var(--bad);font-weight:700"' : l.trend === "better" ? ' style="font-weight:700"' : ""}>${TREND[l.trend]}</td>
-        ${cell(offBy(l.thisWeek.typicalOffPct))}${cell(pc(l.thisWeek.inZonePct))}${cell(offBy(l.lastWeek.typicalOffPct))}${cell(pc(l.lastWeek.inZonePct))}</tr>`).join("")}</tbody></table></div>
-    ${pr.destinations.length ? `<p class="count" style="margin-top:8px">Which way each destination leaned this week (shown fares, then candidate), first place to look when a line gets worse:
+        ${cell(offBy(l.recent.typicalOffPct) + lk(l.luck && l.luck.recent))}${cell(pc(l.recent.inZonePct))}${cell(offBy(l.before.typicalOffPct) + lk(l.luck && l.luck.before))}${cell(pc(l.before.inZonePct))}</tr>`).join("")}</tbody></table></div>
+    ${pr.destinations.length ? `<p class="count" style="margin-top:8px">Which way each destination leaned over the last two weeks (shown fares, then candidate), first place to look when a line gets worse:
       ${pr.destinations.map(d => `${esc(d.destination)} ${leanW(d.shownReads)} (candidate ${leanW(d.candidateReads)}, ${num(d.n)})`).join(" · ")}</p>` : ""}` : "";
   const leanHtml = (fc.lean || []).length ? `<div style="border:1px solid var(--line, #ccc);border-radius:10px;padding:12px;margin-bottom:12px">
       <b>How our guesses lean</b>${fc.lean.map(l => /^\s/.test(l) ? `<div style="margin-left:14px">${esc(l.trim())}</div>`

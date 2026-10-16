@@ -1,3 +1,4 @@
+import { luckPoints } from "./userGrades.js";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { adviseLean, adviseCandidate, adviseByGrade, ADVICE_MIN } from "./recommendations.js";
@@ -7,7 +8,7 @@ const group = (n: number, now: number, byLean: [number, number][]): GroupScore =
   n, medianPct: 5, typicalOffPct: now, within15Pct: 50, bestLean: null,
   byLean: byLean.map(([lean, off]) => ({ lean, medianPct: 0, typicalOffPct: off })),
 });
-const g = (right: number, n: number) => ({ right, n, pct: n ? Math.round((right / n) * 100) : null });
+const g = (right: number, n: number) => ({ right, n, pct: n ? Math.round((right / n) * 100) : null, luck: luckPoints(right, n) });
 
 test("lean: recommends the lean with the smallest typical miss, when it wins clearly", () => {
   const a = adviseLean("k", "US flight lean", 50, group(40, 16, [[0, 20], [25, 12], [50, 16], [75, 19], [100, 23]]));

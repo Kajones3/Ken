@@ -115,14 +115,14 @@ test("scoreForecasts grades a miss the same in either direction, split US / inte
   assert.equal(s.since, "2026-10-08");
 });
 
-test("progressOf: this week vs last week, before-buying grades, and where to look first", async () => {
+test("progressOf: the last two weeks vs the two before, before-buying grades, and where to look first", async () => {
   const { progressOf, progressReport } = await import("./fareForecasts.js");
   const now = new Date("2026-10-20T12:00:00Z");
   const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000);
   const rows = [
-    // Last week: US shown off by 20%, candidate by 10%.
-    ...Array.from({ length: 10 }, (_, i) => ({ destination: "MCO", boughtAt: at(8 + (i % 5)), price: 100, shown: 120, candidate: 110 })),
-    // This week: shown 5% off (better), candidate 25% off (worse).
+    // The two weeks before: US shown off by 20%, candidate by 10%.
+    ...Array.from({ length: 10 }, (_, i) => ({ destination: "MCO", boughtAt: at(15 + (i % 5)), price: 100, shown: 120, candidate: 110 })),
+    // The last two weeks: shown 5% off (better), candidate 25% off (worse).
     ...Array.from({ length: 10 }, (_, i) => ({ destination: "MCO", boughtAt: at(1 + (i % 5)), price: 100, shown: 105, candidate: 75 })),
     // International: too few fares to judge.
     { destination: "NRT", boughtAt: at(2), price: 1000, shown: 900, candidate: 1000 },
@@ -136,6 +136,24 @@ test("progressOf: this week vs last week, before-buying grades, and where to loo
   const r = progressReport(p);
   assert.equal(r.worse.length, 1);
   assert.ok(r.lines.some((l) => l.startsWith("US, candidate") && l.endsWith("WORSE")));
+  assert.equal(line("US", "shown").luck.recent, 0, "ten identical misses: no luck in them");
+});
+
+test("progressOf: a change inside the luck is 'about the same' (2026-10-16)", async () => {
+  const { progressOf, typicalOffLuck } = await import("./fareForecasts.js");
+  const now = new Date("2026-10-20T12:00:00Z");
+  const at = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000);
+  // Scattered misses: typically off ~15% then ~13%, on 12 fares each.
+  const spread = [-30, -22, -15, -12, -6, -2, 3, 9, 14, 16, 25, 33];
+  const rows = [
+    ...spread.map((e, i) => ({ destination: "MCO", boughtAt: at(16 + (i % 5)), price: 100, shown: 100 + e, candidate: 100 + e })),
+    ...spread.map((e, i) => ({ destination: "MCO", boughtAt: at(1 + (i % 5)), price: 100, shown: 100 + e * 0.87, candidate: 100 + e * 0.87 })),
+  ];
+  const l = progressOf(rows, 10, now).lines.find((x) => x.group === "US" && x.formula === "shown")!;
+  assert.ok(l.recent.typicalOffPct! < l.before.typicalOffPct!, "the number did go down");
+  assert.ok(l.luck.recent! > 2, `but the luck is wide (${l.luck.recent})`);
+  assert.equal(l.trend, "about the same");
+  assert.equal(typicalOffLuck(spread.map((e) => e / 100)), typicalOffLuck(spread.map((e) => e / 100)), "the same fares, the same luck");
 });
 
 test("leanLines: says which way we lean in the owner's words, and how close separately", async () => {
