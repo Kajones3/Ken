@@ -255,6 +255,63 @@ export async function errorBudget(db: Db): Promise<string[]> {
     const sxx = xs.reduce((s, x) => s + (x - mx) ** 2, 0), sxy = xs.reduce((s, x, i) => s + (x - mx) * (ys[i]! - my), 0);
     out.push(`    ${intl ? "Intl" : "US  "} a list twice as long has a middle ${sxx ? ((Math.exp((sxy / sxx) * Math.log(2)) - 1) * 100).toFixed(1) : "-"}% different (after destination, month and home airport)`);
   }
+  // 7. The honest head to head: the fares where we wrote our number down
+  // BEFORE buying. Every model learns only from fares bought before that
+  // moment, exactly like the live board did.
+  out.push("  7. HONEST HEAD TO HEAD: the fares we wrote down BEFORE buying; every model learns only from earlier fares");
+  const fc = (await db.query<{ origin: string; destination: string; depart_date: unknown; forecast_at: unknown;
+    shown_usd: string | null; candidate_usd: string | null; price_usd: string }>(
+    `select origin, destination, depart_date, forecast_at, shown_usd, candidate_usd, price_usd
+       from fare_forecasts where price_usd > 0 order by forecast_at`).catch(() => ({ rows: [] as never[] }))).rows;
+  type P = { intl: boolean; y: number; shown: number; cand: number; a: number; b: number; c: number; r: number; now: number };
+  const preds: P[] = [];
+  const fitCache = new Map<number, { fits: Map<string, Additive>; cm: ReturnType<typeof fitFareModel> | null }>();
+  for (const f of fc) {
+    const at = asDate(f.forecast_at).getTime();
+    const hour = Math.floor(at / 3_600_000);
+    if (!fitCache.has(hour)) {
+      const earlier = rows.filter((r) => r.at.getTime() < at - 60_000);
+      const fits = new Map<string, Additive>();
+      for (const intl of [false, true]) {
+        const tr = earlier.filter((r) => r.intl === intl);
+        fits.set(`${intl}|a`, fitAdditive(obs(tr), ["all", "dest", "month"]));
+        fits.set(`${intl}|b`, fitAdditive(obs(tr), ["all", "dest", "month", "origin"]));
+        fits.set(`${intl}|r`, fitAdditive(obs(tr), ["all", "dest", "month", "origin", "route"]));
+        const wp = tr.filter((r) => r.prior);
+        fits.set(`${intl}|c`, fitAdditive(obs(wp, { prior: true }), ["all", "dest", "month", "origin"]));
+      }
+      const cm = earlier.length >= 20 ? fitFareModel({ ...inputs, fares: earlier.map((r) => inputs.fares[r.i]!) } as ModelInputs) : null;
+      fitCache.set(hour, { fits, cm });
+    }
+    const { fits, cm } = fitCache.get(hour)!;
+    const o = f.origin.trim(), d = f.destination.trim(), dep = dateStr(f.depart_date);
+    const intl = isInternational(d), mm = Number(dep.slice(5, 7));
+    const prior = intl ? undefined : mon.get(`${o}|${d}|${mm}`) ?? bts.get(`${o}|${d}|${Math.ceil(mm / 3)}`);
+    const ob: Obs = { y: 0, keys: { all: "x", dest: d, month: `${intl ? "intl" : "us"}-${mm}`, origin: o, route: `${o}|${d}` } };
+    const nowP = cm?.predict(o, d, dep as never)?.value;
+    preds.push({
+      intl, y: Math.log(Number(f.price_usd)),
+      shown: f.shown_usd ? Math.log(Number(f.shown_usd)) : NaN, cand: f.candidate_usd ? Math.log(Number(f.candidate_usd)) : NaN,
+      a: predictAdditive(fits.get(`${intl}|a`)!, ob), b: predictAdditive(fits.get(`${intl}|b`)!, ob),
+      r: predictAdditive(fits.get(`${intl}|r`)!, ob),
+      c: prior ? predictAdditive(fits.get(`${intl}|c`)!, { ...ob, offset: Math.log(prior) }) : NaN,
+      now: nowP ? Math.log(nowP) : NaN,
+    });
+  }
+  for (const intl of [false, true]) {
+    const ps = preds.filter((p) => p.intl === intl);
+    if (!ps.length) continue;
+    const y = ps.map((p) => p.y);
+    const L = (name: string, k: keyof P) => out.push(`    ${(intl ? "Intl " : "US   ") + name.padEnd(52)} ${fmt(score(ps.map((p) => p[k] as number), y))}`);
+    L("what travelers saw (the live formula)", "shown");
+    L("the candidate as it was that night", "cand");
+    L("the candidate, today's code, earlier fares only", "now");
+    L("destination + month", "a");
+    L("destination + month + home airport", "b");
+    L("destination + month + home airport + the route itself", "r");
+    if (!intl) L("survey figure + destination + month + home airport", "c");
+  }
+
   out.push("");
   return out;
 }
