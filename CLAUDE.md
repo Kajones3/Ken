@@ -205,6 +205,32 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-16, last — Data holes (part 3); why the "middle half" grade came out LOWER
+
+- **/admin "Data holes"** (`src/dataHoles.ts`, GET `/api/admin/holes`, nav
+  after What the user sees). Tiles: routes with no fares bought (90 days),
+  hotel months with no Google rates (45 days), newest BTS monthly survey,
+  newest BLS index month. Routes = every home airport x each resort's MAIN
+  airport (local/drive-only skipped): searches, bought (90d), free feed (90d),
+  Google lists kept (90d), survey quarterly/monthly ("none (abroad)" for
+  international). Order: need = (searches + 1) / (bought + 1). Action:
+  rotation airports (19) "Nightly job, ~date" from `rotationRoutes()` queue
+  place / `ROTATION_PER_NIGHT` 6; the other 22 "Not in rotation" (buy via the
+  popular-routes `routes` box, or screenshot into price checks); US routes
+  with fares but no monthly survey "Waiting on the government". Hotels:
+  resort x plannable month, fewest Google rates first, last search, next
+  search from `rotateHotelSlots()` order / 12 a night, "too far ahead".
+- **Owner: "our accuracy dropped when we expanded 'correct' to the IQR. How is
+  that even possible?"** Coverage run 38835849474 ("Old yardstick vs new,
+  same fares"): Google's lists are BUNCHED (many itineraries at the same
+  price), so the middle half is usually NARROWER than ±10%: median list runs
+  -3.3% to +6.8% (US) and -3.4% to +2.4% (international) around its middle;
+  39 of 60 US and 58 of 78 intl lists have their top quarter starting under
+  +10%. Some lists are one price ten times ($1,748 x10), so only that exact
+  number counts. Same 138 fares: US old 18% -> new 20%; intl old 35% -> new
+  31%. Proposed to the owner, NOT built: count "typical" as inside the middle
+  half OR within ±10% of the middle, whichever is wider (`inTypical()`).
+
 ### 2026-10-16, later — the tab is a table now; Rates & settings says what the data says (part 2)
 
 Owner: "way too text heavy. Build the second part".
