@@ -49,6 +49,10 @@ test("the forecast is written down BEFORE the fare, so it never learns from the 
   assert.equal(Number(f[0]!.shown_usd), before, "what travelers saw just before buying");
   assert.equal(f[0]!.shown_kind, "estimate");
   assert.equal(f[0]!.formula, "live");
+  // The cheapest-trip number is written down too (2026-10-16). With no kept
+  // Google answers there is no cheapest ratio yet, so it equals the typical.
+  const c = (await db.query<{ shown_cheapest_usd: string | null }>(`select shown_cheapest_usd from fare_forecasts`)).rows;
+  assert.equal(Number(c[0]!.shown_cheapest_usd), before);
 
   // The bought fare now pulls the route's estimate toward itself: grading
   // today's number against it would flatter us. The forecast doesn't.

@@ -24,7 +24,7 @@
 import type { Db } from "./db.js";
 import { RESORTS } from "./config.js";
 import { loadBook } from "./book.js";
-import { decideFlightFare, quotedEstimate } from "./pricing.js";
+import { decideFlightFare, quotedEstimate, cheapestBasisFare } from "./pricing.js";
 import { loadFareModel } from "./fareModelDb.js";
 import { holidayMultiplier, isInternational, USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { scoreZone, type ZoneScore } from "./fareScoreboard.js";
@@ -40,6 +40,9 @@ export interface Forecast {
   /** Per-seat fare the board showed; undefined when it had nothing to show. */
   shownUsd?: number;
   shownKind?: "real_fare" | "estimate";
+  /** What "the cheapest trip" would have shown for the same date
+   *  (since 2026-10-16), graded against the cheapest flight Google listed. */
+  shownCheapestUsd?: number;
   formula: "live" | "candidate";
   /** The live formula's estimate alone (leaned, holiday included). */
   liveEstimateUsd?: number;
@@ -65,7 +68,8 @@ export async function forecastFare(
     const est = book.flightEstimate?.(origin, destination, departDate);
     if (!row && !est) return undefined;
     const d = decideFlightFare(book, row, est, departDate, intl);
-    return { usd: r2(d.modelFare), kind: d.useRow ? "real_fare" as const : "estimate" as const };
+    const cheap = cheapestBasisFare(book, origin, destination, departDate, tripLength, d.modelFare).fare;
+    return { usd: r2(d.modelFare), cheapest: r2(cheap), kind: d.useRow ? "real_fare" as const : "estimate" as const };
   };
 
   const live = await loadBook(db, req, { formula: "live" });
@@ -83,7 +87,7 @@ export async function forecastFare(
 
   return {
     origin, destination, departDate, tripLength,
-    shownUsd: shown?.usd, shownKind: shown?.kind,
+    shownUsd: shown?.usd, shownKind: shown?.kind, shownCheapestUsd: shown?.cheapest,
     formula: useCandidate ? "candidate" : "live",
     liveEstimateUsd: quotedEstimate(live, origin, destination, departDate),
     candidateUsd, forecastAt,
@@ -95,10 +99,11 @@ export async function recordForecast(db: Db, f: Forecast, priceUsd: number | nul
   await db.query(
     `insert into fare_forecasts
        (origin, destination, depart_date, trip_length, shown_usd, shown_kind, formula,
-        live_estimate_usd, candidate_usd, price_usd, job, forecast_at)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+        live_estimate_usd, candidate_usd, price_usd, job, forecast_at, shown_cheapest_usd)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
     [f.origin, f.destination, f.departDate, f.tripLength, f.shownUsd ?? null, f.shownKind ?? null, f.formula,
-     f.liveEstimateUsd ?? null, f.candidateUsd ?? null, priceUsd, job, f.forecastAt.toISOString()],
+     f.liveEstimateUsd ?? null, f.candidateUsd ?? null, priceUsd, job, f.forecastAt.toISOString(),
+     f.shownCheapestUsd ?? null],
   );
 }
 

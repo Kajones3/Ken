@@ -205,6 +205,38 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-16 — /admin "What the user sees" (part 1 of the /admin rework)
+
+Owner approved the plan (conversation of 2026-10-15/16): (1) "Overall" =
+typical + cheapest grades combined; (2) Disney cheapest = the cheapest hotel
+IN THE CATEGORY the traveler picked ("if they select moderate, it should be
+the cheapest moderate"); (3) the old Flights & hotels / What moves the price
+/ Indicator study tabs moved under one "Behind the numbers" tab (#behind,
+links to #flights, #signals, #indicators, each with a back link).
+- `src/userGrades.ts` (pure graders + `loadUserGrades`), GET
+  `/api/admin/grades`, /admin `#sees`. US / international, this week vs
+  last week (`GRADE_MIN` 8, `GRADE_NOISE_POINTS` 3), else last 30 days.
+- **Flights:** each `fare_forecasts` row (written BEFORE buying) matched to
+  the kept Google answer for the same search (`provider_responses`, same
+  origin/dest/outbound/return, closest fetch within 2 days). Typical = shown
+  inside the MIDDLE HALF of Google's list (p25-p75); cheapest = new column
+  **`fare_forecasts.shown_cheapest_usd`** (written since 2026-10-16 via
+  `cheapestBasisFare()` in pricing.ts, the one home of the cheapest-trip
+  fare) within ±zone of the cheapest listed. Also the lean vs the list's
+  middle and the candidate's typical grade on the same fares.
+- **Hotels:** Disney typical = shown (our rate x correction refitted
+  LEAVE-ONE-OUT without that hotel+month's Google rates) inside the middle
+  half of Google's rates for that hotel+month; Disney cheapest = per
+  resort+month+category, our cheapest vs Google's cheapest among hotels
+  Google priced. Off property: each search graded by the one before (season
+  curve moved): typical inside its middle half; cheapest per price third.
+  Fewer than 4 prices = within ±zone of their middle instead (said on page).
+- `summaryLines()`: plain sentences, each backed by a number; also the
+  morning email's "What the user sees" section.
+- **Governing rule #4:** popular-routes now writes `shown_cheapest_usd`.
+  Check the next run: forecasts kept = written, and the column filled.
+- Next: part 2 (Rates & settings with recommendations), part 3 (Data holes).
+
 ### 2026-10-15, last — food is priced MEAL BY MEAL, owner-editable
 
 Owner: "I should be able to enter [character dining 50-75] as a price ...

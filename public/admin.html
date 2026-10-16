@@ -254,9 +254,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 <div class="shell">
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
-    <a href="#flights">Flights &amp; hotels</a>
-    <a href="#signals">What moves the price</a>
-    <a href="#indicators">Indicator study</a>
+    <a href="#sees">What the user sees</a>
     <a href="#checks">Prices you've checked</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
@@ -264,6 +262,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
     <a href="#waits">Wait times</a>
+    <a href="#behind">Behind the numbers</a>
     <span class="navnote">Every section keeps its own spreadsheet download and upload.</span>
   </nav>
   <main>
@@ -300,8 +299,46 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     </section>
   </div>
 
+  <div class="page" data-page="sees">
+    <section class="sheet">
+      <h2>What the user sees</h2>
+      <p>How often the numbers on the board are right, judged the way a traveler would judge them. Flights are
+        graded on the number we wrote down <b>before</b> buying each fare, against Google's whole list for that
+        same search. Hotels are graded against every rate Google showed us.</p>
+      <ul class="count" style="margin:6px 0 12px 18px">
+        <li><b>Typical trip</b>: our number lands inside the middle half of Google's list (the cheapest quarter and
+          the most expensive quarter dropped). With fewer than 4 prices to go on, within &plusmn;<span class="ugZone">10</span>%
+          of their middle counts instead.</li>
+        <li><b>Cheapest trip</b>: within &plusmn;<span class="ugZone">10</span>% of the cheapest one listed. For Disney
+          hotels, the cheapest in the category the traveler picked; off property, the cheapest in each price third
+          (budget, mid-range, upscale).</li>
+        <li><b>Overall</b>: both together.</li>
+      </ul>
+      <div id="ugSummary"><p class="count">Loading…</p></div>
+      <h3>Flights</h3>
+      <div id="ugFlights"></div>
+      <h3>Hotels</h3>
+      <div id="ugHotels"></div>
+    </section>
+  </div>
+
+  <div class="page" data-page="behind">
+    <section class="sheet">
+      <h2>Behind the numbers</h2>
+      <p>The detailed working that sits behind "What the user sees". Nothing here is needed day to day.</p>
+      <ul style="margin:6px 0 0 18px; line-height:1.9">
+        <li><a href="#flights">Flight and hotel scoreboards</a>: every fare and hotel graded, the hotels we hold, the
+          routes people search, the government airfare index.</li>
+        <li><a href="#signals">What moves the price</a>: the evidence side by side.</li>
+        <li><a href="#indicators">Indicator study</a>: which signals move fares, and how much.</li>
+      </ul>
+    </section>
+  </div>
+
   <div class="page" data-page="flights">
     <section class="sheet">
+      <p class="count" style="margin:0 0 8px"><a href="#behind">&larr; Behind the numbers</a></p>
+
       <h2>How close our flight estimates are</h2>
       <p>Every night we buy about 18 real Google Flights fares, each the middle-priced flight for one route and
         date. <b>Just before</b> buying each one we write down what a traveler would have seen and what the
@@ -426,6 +463,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
   <div class="page" data-page="signals">
   <section class="sheet">
+      <p class="count" style="margin:0 0 8px"><a href="#behind">&larr; Behind the numbers</a></p>
+
     <h2>What moves the price</h2>
     <p>Read only. This puts the evidence we already hold side by side, so you can see which signals line up with
       real fares before any of them is allowed to change a number travelers see. Nothing on this page changes a
@@ -469,6 +508,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
   <div class="page" data-page="indicators">
   <section class="sheet">
+      <p class="count" style="margin:0 0 8px"><a href="#behind">&larr; Behind the numbers</a></p>
+
     <h2>Indicator study: what actually moves a fare</h2>
     <p>Read only. Every paid fare we've bought goes into one regression (a ridge regression on the log of the fare,
       so every effect reads as a percentage). It answers two questions: <b>which indicators really move the price</b>,
@@ -1802,13 +1843,44 @@ function route(){
   const page = PAGES.includes(want) ? want : "visitors";
   document.querySelectorAll("[data-page]").forEach(el => { el.hidden = el.dataset.page !== page; });
   document.querySelectorAll(".adminnav a").forEach(a => {
-    const on = a.getAttribute("href") === "#" + page;
+    const navPage = ["flights", "signals", "indicators"].includes(page) ? "behind" : page;
+    const on = a.getAttribute("href") === "#" + navPage;
     if(on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
     if(on && a.scrollIntoView) a.scrollIntoView({ block: "nearest", inline: "nearest" });
   });
   window.scrollTo(0, 0);
 }
 window.addEventListener("hashchange", route);
+
+
+/* --------------------------- what the user sees --------------------------- */
+const ugTrend = w => w.trend === "too few" ? "" : w.trend === "about the same" ? " · about the same as last week"
+  : ` · ${w.trend === "better" ? "▲ up" : "▼ down"} from ${w.lastWeek.pct}%`;
+const ugTile = (name, w) => {
+  const g = w.thisWeek.n >= 8 ? w.thisWeek : w.month;
+  const when = w.thisWeek.n >= 8 ? "this week" : "last 30 days";
+  return g.n ? tile(name, `${g.pct}%`, `${g.right} of ${g.n} right · ${when}${w.thisWeek.n >= 8 ? ugTrend(w) : ""}`)
+    : tile(name, "—", "nothing to grade yet");
+};
+const ugSide = (label, x, extra) => `<h4 style="margin:12px 0 6px">${esc(label)}</h4>
+  <div class="tiles">${ugTile("Typical trip", x.typical)}${ugTile("Cheapest trip", x.cheapest)}${ugTile("Overall", x.overall)}</div>${extra || ""}`;
+async function loadGrades(){
+  const r = await fetch("/api/admin/grades", { headers: { accept: "application/json" } });
+  if(!r.ok){ $("#ugSummary").innerHTML = `<p class="count">Couldn't load the grades.</p>`; return; }
+  const g = await r.json();
+  document.querySelectorAll(".ugZone").forEach(el => el.textContent = g.flights.zonePct);
+  $("#ugSummary").innerHTML = g.summary.length
+    ? `<div class="tile" style="margin:8px 0 4px">${g.summary.map(l => /^\s/.test(l)
+        ? `<div class="count" style="margin-left:14px">${esc(l.trim())}</div>` : `<div style="margin-top:4px">${esc(l)}</div>`).join("")}</div>`
+    : `<p class="count">Nothing graded yet.</p>`;
+  const fx = x => `<p class="count">${x.leanPct === null ? "" : `Our typical fares lean ${x.leanPct === 0 ? "even" : (x.leanPct > 0 ? "high" : "low") + " by " + Math.abs(Math.round(x.leanPct)) + "%"} against the middle of Google's list. `}${x.candidateTypical.n ? `The candidate formula, same fares, typical trip: ${x.candidateTypical.pct}% (${x.candidateTypical.right} of ${x.candidateTypical.n}, last 30 days).` : ""}</p>`;
+  $("#ugFlights").innerHTML = ugSide("US", g.flights.us, fx(g.flights.us)) + ugSide("International", g.flights.intl, fx(g.flights.intl))
+    + (g.flights.unmatched ? `<p class="count">${g.flights.unmatched} fare(s) bought in the last 30 days had no Google list kept to grade against, so they are left out.</p>` : "")
+    + `<p class="count">Cheapest-trip fares have been written down before buying since 2026-10-16, so that column starts small and grows about 18 a night.</p>`;
+  $("#ugHotels").innerHTML = ugSide("Disney's own hotels, US", g.hotels.disney.us) + ugSide("Disney's own hotels, international", g.hotels.disney.intl)
+    + ugSide("Off property, US", g.hotels.offProperty.us) + ugSide("Off property, international", g.hotels.offProperty.intl)
+    + `<p class="count">Disney hotels are graded with that hotel and month's own Google rates left out of our correction, so Google never grades the price it set. Off property, each search is graded by what the search before it showed.</p>`;
+}
 
 /* ------------------------------- visitors ------------------------------ */
 const BOOK_LABEL = { flights: "Kayak flights", tickets: "Official ticket page", hotel_disney: "Disney hotel page",
@@ -2296,6 +2368,7 @@ $("#stDays").addEventListener("click", e => {
 
 route();
 load();
+loadGrades();
 loadFares();
 loadAttractions();
 loadDeals();
