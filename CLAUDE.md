@@ -205,6 +205,30 @@ sections below.
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-16, later — the tab is a table now; Rates & settings says what the data says (part 2)
+
+Owner: "way too text heavy. Build the second part".
+- **#sees is ONE table**: rows Flights / Disney hotels / Off property x US /
+  International; columns Typical, Cheapest, Overall (big %, "N of M", ▲/▼
+  points vs last week; "· 30 days" when the week has too few) and Lean for
+  flights. Green 60%+, amber 40-59, red under 40 (60-70% is the noise floor).
+  The explanations sit in a closed "How these are graded". Advice that says
+  "change" shows as chips linking to Rates & settings. `summaryLines()` now
+  feeds only the morning email.
+- **Rates & settings "What the data says"** (`src/recommendations.ts`, GET
+  `/api/admin/recommendations`): a card per judgeable dial: what it does,
+  current -> suggested, Change / Keep / Can't tell yet, one evidence line,
+  "Find it below". Rules: `ADVICE_MIN` 20 graded numbers, a change must win
+  by `ADVICE_MARGIN` 3 points. Leans: scoreboard byLean (lowest typical
+  miss). Candidate switch: its typical grade vs shown, same fares, must win
+  on BOTH US and international. Google's Disney weight (0/1/2) and checks
+  prior weight (1/3/6): Disney hotels re-graded leave-one-out
+  (`loadDisneyInputs` in userGrades.ts). Free feed weight and typical-day
+  trim: "Can't tell yet", with why. Below: "What the formulas learned on
+  their own" (candidate levers, cheapest/middle ratios, hotel usual weight),
+  read-only. Nothing moves a setting; the owner does.
+- Next: part 3, Data holes.
+
 ### 2026-10-16 — /admin "What the user sees" (part 1 of the /admin rework)
 
 Owner approved the plan (conversation of 2026-10-15/16): (1) "Overall" =

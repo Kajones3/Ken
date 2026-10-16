@@ -5,6 +5,7 @@
  * Every endpoint reads the cache. None of them calls a provider.
  */
 import { loadUserGrades } from "./userGrades.js";
+import { loadRecommendations } from "./recommendations.js";
 import { loadNearbyCheaper, type NearbyCheaper } from "./nearbyAirports.js";
 import { createServer, type IncomingMessage } from "node:http";
 import { randomUUID } from "node:crypto";
@@ -1721,6 +1722,11 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/admin/grades" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       return send(200, await loadUserGrades(db), { cache: "no-store" });
+    }
+
+    if (url.pathname === "/api/admin/recommendations" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await loadRecommendations(db), { cache: "no-store" });
     }
 
     if (url.pathname === "/api/admin/indicators" && req.method === "GET") {
