@@ -148,8 +148,9 @@ sections below.
 
 ### Pick up here FIRST — session starting 2026-10-14 (supersedes older lists)
 
-**Newer (2026-10-16): read "2026-10-16, end — A-E BUILT" below first; its
-governing rule #4 check comes before this list.**
+**Newer (2026-10-17): read "2026-10-17 — first two nights after A-E" below
+first, then "2026-10-16, end — A-E BUILT". Their open items come before this
+list.**
 
 1. **Governing rule #4 on #172** (a check-in is scheduled for 2026-10-14
    13:30 UTC, trigger trig_019FFM6aKw3utrbjFmpTw4V4): read the popular-routes
@@ -216,6 +217,75 @@ governing rule #4 check comes before this list.**
    and >= 5% a seat. Test search: from Charlotte (CLT), March 2027, open
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
+
+### 2026-10-17 — first two nights after A-E (governing rule #4 check). START HERE.
+
+Checked 2026-10-17 from the job logs of the Oct 16 and Oct 17 runs plus
+coverage run 39036893280. **Render is live on 32db02d (= master, PR #182)**,
+so travelers see the plain formula.
+
+**Hotels: 0 paid searches on Oct 16 AND Oct 17** (refresh log "0 paid hotel
+search(es) tonight", coverage "Hotel searches per refresh run" 0 / 0 both
+nights). Cause, proven from the data, not guessed: Oct 4-15 made 12 searches
+every night; Oct 10-15 alone was 72 searches over 66 resort-months, so when
+the 10-day wait (`HOTEL_REBUY_DAYS`) went live every resort-month had been
+searched within ~6 days and all of them waited. Claude did not foresee this
+when changing the budget and the wait together; told the owner plainly. No
+money wasted (unmade searches aren't billed), but ~4-5 nights (~24-30
+searches) go unused. **Self-corrects ~Oct 19-21** as months reach 10 days;
+after that ~6 a night, each month every ~11 nights. **Open, owner's call
+(asked, not answered):** a one-time catch-up so those nights aren't lost.
+**Next session: confirm hotels resumed** (refresh log "N paid hotel
+search(es) tonight: wdw 2027-xx (check-in ...)", check-ins NOT all the 14th,
+made = kept in the coverage table). Newest kept Google hotel answer was Oct 15.
+
+**Flights: 23 bought on Oct 16, 17 on Oct 17 (24 searches budgeted each night).**
+Written = kept both nights (23/23, 17/17), all with Google's typical range;
+Oct 17 "17 forecasts kept" (= written). Cause of the shortfall, from
+`popularRoutes.ts`: slots are assigned (worst 6, demand, rotation 8,
+anchors) BEFORE the main-airport merge; demand aimed at old alternates (NRT,
+SNA, from route_searches, mostly the owner's own test searches) is moved to
+HND/LAX, and a moved route that duplicates one already listed or was bought
+in the last 10 days is DROPPED with no refill. Oct 17: 8 moved, 7 slots
+empty. Not new: it also explains 12 / 16 / 13 on Oct 13-15. Wastes no money,
+leaves searches unspent. **Not fixed; fix (owner to say): move to the main
+airport BEFORE slots are filled, or refill from rotation after the merge.**
+**Not yet checked:** whether the new `fare_forecasts` rows have
+`shown_cheapest_usd` filled and `formula = 'candidate'` (the coverage report
+prints neither; a query is needed).
+
+**The plain formula's grade** (coverage run 39036893280):
+- Before buying (error budget section 7), each model trained only on
+  earlier fares. US (75): old live formula 20% within ±10% / 21.0% typically
+  off; old lever candidate 25% / 18.7%; **plain 36% / 14.6%**. International
+  (103): live 33% / 16.4%; lever 41% / 12.0%; **plain 45% / 11.8%**.
+- Leave-one-out on every bought fare: US 34% -> 44%; international 48% ->
+  45% (slightly worse, inside the luck).
+- Watch, don't act yet: international dest + month + home + route now reads
+  50% / 9.7% vs plain 45% (two days earlier it was the other way, 49 vs 50).
+  Small samples flip; re-check at the accuracy review (~10-21 to 10-28).
+- What the plain formula learned (US, 107 fares): typical $412; MCO 0.89,
+  LAX 1.05, SNA 1.16; December 0.80, January 0.92; RDU|MCO route 0.73.
+  International (162): typical $1,464; CDG 0.77, HND 1.21, NRT 1.18,
+  HKG 0.90, PVG 1.05. Fare-age BLS weight 0 (expected until ~mid-December).
+- Database 89 MB of Neon's 512.
+
+**Owner questions answered this session (no code changed):**
+- "How are we re-buying hotels so quickly?" One paid hotel search is ONE
+  resort for ONE month ("hotels near <resort>", one 4-night stay, 2 adults),
+  returning a list of ~20 hotels at once; Disney's own hotels are never
+  searched one by one (priced from settings, Google's list rates used as
+  evidence). 6 resorts x 11 plannable months = 66 resort-months; at 12 a
+  night each came around every ~5.5 nights on the same 14th check-in.
+- "What does 'Not in rotation' mean?" (Data holes) The home airport isn't
+  one of the 19 rotation airports (`ORIGINS`); RDU is one of the 22
+  `PLUS_ORIGINS`. Those routes still get bought through the "most searched"
+  slots (RDU routes: 60 searches, 5-6 fares each). The label only checks
+  rotation, so it undersells this. Offered, NOT built: say "Bought when
+  people search it (not in the nightly rotation)" for routes with searches.
+
+**Scheduled check-ins:** trig_013ob8N4YSLpuZbfjapJatXk (Oct 17) has fired.
+None is scheduled for the hotel restart; check it by hand next session.
 
 ### 2026-10-16, end — A-E BUILT: plain formula live, bought fares win, 2-week grades, hotels stop re-buying
 
