@@ -233,6 +233,12 @@ prototype.html's look has changed yet.
   of the page is the TAB ICON (sparkle on an orbit), not the castle. Totals
   stay plain Bricolage numbers: a split-flap "flip board" total was tried
   and REJECTED (2026-10-21: "The numbers aren't clear"). Don't bring it back.
+  **Headline (G mock-ups, 2026-10-21): "Six Disney trips, / priced side by
+  side."** Owner: "There isn't one honest price. It's that you can see
+  everything at one time to compare it" (e.g. Paris only ~$400-500 over
+  WDW). So "One honest price." is retired. Count-free fallback for when Abu
+  Dhabi arrives: "Every Disney trip, priced side by side." The live site
+  still says the old line until G is built.
 - **Rejected, don't bring back:** A's all-black airport look ("lacked a
   certain magic and whimsy needed for Disney"), E in dark ("just looks like an
   AI site": navy + condensed sans + thin borders), F (A + E hybrid), B, C, D.
