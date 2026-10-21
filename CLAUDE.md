@@ -294,6 +294,13 @@ this section).
     90 + 360) % 360) / 360 * 1200, y = (60 - lat) * 6; the page shows x
     20-1000). On phones the map keeps 220px height and swipes sideways,
     starting on the home airport.
+  - **Both maps are FULL WIDTH, no frame** (owner, 2026-10-21: a map in a
+    box "is part of the AI feel"). `.bleed` steps a figure out of the
+    column to the window edges, `.bleed-in` puts its caption back in the
+    column; `html, body{overflow-x:clip}` stops 100vw adding a sideways
+    scroll. The route base has NO sea (the page ground is the ocean) and
+    its land fades out at top and bottom so no straight edge reads as a
+    box. Don't put either map back in a panel.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

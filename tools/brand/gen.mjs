@@ -191,7 +191,7 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
 
 // Dark is "After Dark": black, not navy (owner, 2026-10-21).
 writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null }));
-writeFileSync(`${out}/map-light.svg`, map({ dot: "#BFD1D8", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
+writeFileSync(`${out}/map-light.svg`, map({ dot: "#B2C6CE", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
   writeFileSync(`${out}/map-cover-${r.id}.svg`, map({ dot: "#D5DFEF", label: "#3A4670", pin: "#C98A12", route: "#C98A1288", line: "#2B3A67", focus: r.id }));
@@ -242,13 +242,17 @@ const routeProj = d3.geoProjection((l, p) => [l, p * RK])
   .rotate([90, 0]).scale(RS).translate([RW / 2, (60 * Math.PI / 180) * RS * RK])
   .clipExtent([[0, 0], [RW, RH]]);
 const routePath = d3.geoPath(routeProj).digits(1);
-const graticule = d3.geoGraticule().step([15, 10]);
-function routeBase({ sea, land: fill, coast, grid }) {
+// No sea and no frame: the oceans are the page itself, and the land fades
+// out at the top and bottom so the map has no straight edge to read as a box
+// (owner, 2026-10-21: a map in a box "is part of the AI feel").
+function routeBase({ land: fill, coast }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW} ${RH}" width="${RW}" height="${RH}" preserveAspectRatio="none">` +
-    `<rect width="${RW}" height="${RH}" fill="${sea}"/>` +
-    `<path d="${routePath(graticule())}" fill="none" stroke="${grid}" stroke-width="1"/>` +
-    `<path d="${routePath(land)}" fill="${fill}" stroke="${coast}" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+    `<defs><linearGradient id="f" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".12" stop-color="#fff"/>` +
+    `<stop offset=".9" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>` +
+    `<mask id="m"><rect width="${RW}" height="${RH}" fill="url(#f)"/></mask></defs>` +
+    `<path mask="url(#m)" d="${routePath(land)}" fill="${fill}" stroke="${coast}" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
 }
-writeFileSync(`${out}/route-map-light.svg`, routeBase({ sea: "#CFE0E5", land: "#FBFAF6", coast: "#AFC3CA", grid: "#BED2D8" }));
-writeFileSync(`${out}/route-map-dark.svg`, routeBase({ sea: "#08080A", land: "#17171C", coast: "#34343C", grid: "#141418" }));
+writeFileSync(`${out}/route-map-light.svg`, routeBase({ land: "#FBFAF6", coast: "#B5C8CF" }));
+writeFileSync(`${out}/route-map-dark.svg`, routeBase({ land: "#19191E", coast: "#2E2E35" }));
 console.log(`map ${W}x${H}, ${dots.length} dots`);
