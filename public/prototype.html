@@ -806,6 +806,9 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .li .l b{font-weight:600; display:block}
 .li .l small{color:var(--muted); font-size:11px}
 .li .p{font-family:var(--f-body); font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
+/* A deal, on the line it came off. */
+.li.dealrow{border-top:1px dashed var(--accent-line)}
+.li.dealrow b,.li.dealrow .p{color:var(--accent)}
 .book{display:inline-block; margin-top:11px; font-size:12.5px; font-weight:700; color:var(--ink); border-bottom:2px solid var(--accent-line); text-decoration:none; padding-bottom:1px}
 .ovcell{display:grid; gap:7px; align-content:start; margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--rule-strong)}
 .ovcell .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
@@ -2367,14 +2370,16 @@ async function fetchCalendarFor(resortId){
  *  resort simply doesn't have one. Returns `{cost, swapped}` so the caller
  *  can say so instead of pricing a category that doesn't exist. */
 async function hotelAtTier(item, t){
-  if(t === +params.tier) return { cost: item.price.hotel, swapped: item.price.hotelTier.swapped };
+  if(t === +params.tier) return { cost: item.price.hotel, swapped: item.price.hotelTier.swapped,
+    roomDeal: dealsOff(dealsOn(item.price, "rooms")) };
   // stripNightly=true: this is "what would a DIFFERENT tier cost", so your
   // own nightly-rate override (which only claims to know the tier you
   // actually searched) must not apply here — see calendarQuery().
   const data = await apiGet("/api/calendar", calendarQuery(item.resortId, item.price.start, item.price.start, t, true));
   const day = data.days[0];
   if(!day || day.total === null) return { cost: null, swapped: false };
-  return { cost: day.total - item.price.total + item.price.hotel, swapped: !!(day.hotelTier && day.hotelTier.swapped) };
+  return { cost: day.total - item.price.total + item.price.hotel, swapped: !!(day.hotelTier && day.hotelTier.swapped),
+    roomDeal: day.roomDeal || 0 };
 }
 
 function setSearchBusy(busy){
@@ -2506,6 +2511,19 @@ function foodExamplesLine(r, style){
    the deal may have conditions (members only, packages) the traveler doesn't
    meet, and the dates may move. */
 function autoDeals(x){ return ((x && x.appliedPromos) || []).filter(a => a.auto && !a.skipped && a.amountUsd > 0); }
+/* Every deal pricing.ts took off a line, by the line it came off. A deal is
+ * shown on the line it changed (owner, 2026-10-21: "hotel discounts need to
+ * be shown at the hotel level"), so a card's own numbers add up on their own. */
+const DEAL_LINE = { room_pct_off:"rooms", room_flat_off:"rooms", room_night_off:"rooms",
+  ticket_pct_off:"tickets", free_dining:"food", kids_free_dining:"food", flat_off_total:"total" };
+function dealsOn(x, line){
+  return ((x && x.appliedPromos) || []).filter(a => DEAL_LINE[a.kind] === line && !a.skipped && a.amountUsd > 0);
+}
+const dealsOff = list => list.reduce((s, d) => s + d.amountUsd, 0);
+function dealWhy(d){
+  return (d.source === "personal" ? "Your own discount" : d.auto ? "A Disney deal for these dates, taken off for you" : "The deal you picked")
+    + (d.conditions ? ". Only if you qualify: " + d.conditions : "");
+}
 function dealChip(item){
   const d = autoDeals(item.price)[0];
   if(!d) return "";
@@ -3229,13 +3247,21 @@ async function renderDetail(){
   const roomCount = Math.max(1, x.roomCount || 1);
   const roomsNote = roomCount > 1 ? ` × ${roomCount} rooms` : "";
   const perNightAll = roomCount > 1 ? ` / night for ${roomCount} rooms` : " / night";
+  // The hotel line shows the REGULAR price for the whole stay; any room deal
+  // follows it as its own line, so regular − deal = the Hotel tile above.
+  const roomDealList = dealsOn(x, "rooms");
+  const roomDeal = dealsOff(roomDealList);
+  const regularRooms = x.rooms + roomDeal;
+  const regularNightly = regularRooms / Math.max(1, p.nights) / roomCount;
+  const roomDealRows = roomDealList.map(d => `<div class="li dealrow"><div class="l"><b>${esc(d.label)}</b>
+      <small>${esc(dealWhy(d))}</small></div><div class="p">&minus;${usd(d.amountUsd)}</div></div>`).join("");
   const hotelPickRow = noHotel
     ? `<div class="li"><div class="l"><b>No hotel</b><small>Not counted in this trip's total</small></div><div class="p">$0</div></div>`
     : x.hotelTier.custom
     ? `<div class="li"><div class="l"><b>Your rate</b><small>${usd(hp.nightly)} / night × ${p.nights} nights${roomsNote}</small></div>
-        <div class="p">${usd(x.rooms)}</div></div>`
-    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,hp.nightly)} / night${roomsNote}</small></div>
-        <div class="p">${usd(x.rooms)}</div></div>`;
+        <div class="p">${usd(regularRooms)}</div></div>${roomDealRows}`
+    : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,regularNightly)} / night${roomDeal ? " regular rate" : ""}${roomsNote}</small></div>
+        <div class="p">${usd(regularRooms)}</div></div>${roomDealRows}`;
   const hotelRows = hotelPickRow
     + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
         <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":` per car × ${p.cars} car${p.cars===1?"":"s"}`}</small></div>
@@ -3256,11 +3282,11 @@ async function renderDetail(){
   const tierCompare = noHotel ? "" : (() => {
     const rows = [0,1,2].map(t => ({ t, ...tierRows[t] }));
     if (stayNow) {
-      return rows.map(({ t, cost, swapped }) => {
+      return rows.map(({ t, cost, swapped, roomDeal: rd }) => {
         const label = TIER_LABEL[ON_TIERS[t]];
         const detail = swapped ? `Not offered at ${r.name}`
           : cost===null ? "no cached rate for this date"
-          : `${usd(cost/p.nights)}${perNightAll}`;
+          : `${usd(cost/p.nights)}${perNightAll}${rd > 0 ? ` after the deal (${usd(rd)} off)` : ""}`;
         return `<div class="li"><div class="l"><b>${label}</b>
           <small>${detail}</small></div>
           <div class="p"${+p.tier===t?' style="color:var(--accent)"':""}>${swapped || cost===null?"—":usd(cost)}</div></div>`;
@@ -3379,7 +3405,9 @@ async function renderDetail(){
     `}
   </div>`;
 
-  const modelNightly = x.hotelTier.custom ? 0 : hp.nightly;
+  // The regular rate over the stay, before any deal: what the board would
+  // charge if you typed nothing and no deal applied.
+  const modelNightly = x.hotelTier.custom ? 0 : regularNightly;
   /* Food, typed as what the WHOLE PARTY spends in a day — the owner's call,
    * because "we spend about $250 a day" is a number people know about
    * themselves and a per-head figure is one they have to work out. The cost
@@ -3410,7 +3438,8 @@ async function renderDetail(){
            placeholder="${Math.round(modelNightly)}" aria-label="Your nightly hotel rate">
     <div class="ovhint">${ovR.nightly
       ? "Your rate is treated as fixed, so this resort's calendar now moves on flights, tickets and food alone. Our estimate was " + usd(modelNightly) + "."
-      : "Type what you know you can get, for one room, one night. Blank uses our estimate of " + usd(modelNightly) + " a night."}</div>
+      : "Type what you know you can get, for one room, one night. Blank uses our estimate of " + usd(modelNightly) + " a night"
+        + (roomDeal ? ", less the deal below. A rate you type is used as it is, without the deal." : ".")}</div>
     ${ovR.nightly ? `<div class="ovacts"><button class="btn btn-sm" data-reset="nightly">Back to the model</button>
       <span class="yourchip">Your number</span></div>` : ""}
     `}
@@ -3555,7 +3584,7 @@ async function renderDetail(){
           ${noHotel ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">${roomCount > 1 ? "Per room, per night" : "Per night"}</div>
               <div class="v">${usd(x.rooms / Math.max(1, p.nights) / roomCount)}</div>
-              <div class="s">${x.hotelTier.custom ? "your rate" : "estimate"}</div></div>
+              <div class="s">${roomDeal ? "after the deal" : x.hotelTier.custom ? "your rate" : "estimate"}</div></div>
             <div class="kpitile"><div class="k">${roomCount > 1 ? "Rooms × nights" : "Nights"}</div>
               <div class="v">${roomCount > 1 ? roomCount + " × " + p.nights : p.nights}</div><div class="s">${x.transport ? "+ parking" : "no parking"}</div></div>
             <div class="kpitile total"><div class="k">Hotel</div>
@@ -4847,19 +4876,25 @@ function costTableHtml(item){
     rows.push(`<tr${cls?` class="${cls}"`:""}><td>${label}</td><td class="n">${usd(amount)}</td></tr>`);
   };
 
+  // A deal sits under the line it came off, and that line shows its regular
+  // price, so the table adds up (the lines were already after the deal, and
+  // the deal was then listed again at the bottom).
+  const deals = dealLine => {
+    for(const promo of dealsOn(pr, dealLine)){
+      rows.push(`<tr class="sub"><td>${esc(promo.label)}${promo.auto ? " (a Disney deal for these dates" + (promo.conditions ? "; only if you qualify: " + esc(promo.conditions) : "") + ")" : ""}</td><td class="n">&minus;${usd(promo.amountUsd)}</td></tr>`);
+    }
+  };
+  const regular = dealLine => dealsOff(dealsOn(pr, dealLine));
   if(pr.transportMode === "drive"){
     line("Driving there and back", pr.driving);
   } else {
     line("Flights", pr.flights);
   }
-  line("Park tickets", pr.tickets);
-  line("Hotel", pr.rooms);
+  line("Park tickets", pr.tickets + regular("tickets")); deals("tickets");
+  line("Hotel", pr.rooms + regular("rooms")); deals("rooms");
   line("Parking and transfers", pr.transport);
-  line("Food", pr.food);
-  for(const promo of (pr.appliedPromos || [])){
-    if(promo.skipped || !promo.amountUsd) continue;
-    rows.push(`<tr class="sub"><td>${esc(promo.label)}${promo.auto ? " (a Disney deal for these dates" + (promo.conditions ? "; only if you qualify: " + esc(promo.conditions) : "") + ")" : ""}</td><td class="n">&minus;${usd(promo.amountUsd)}</td></tr>`);
-  }
+  line("Food", pr.food + regular("food")); deals("food");
+  deals("total");
   const dvc = pr.membership && pr.membership.dvc;
   if(dvc && dvc.creditUsd){
     rows.push(`<tr class="sub"><td>Renting out ${dvc.points} DVC points (take-home)</td>`

@@ -1129,6 +1129,13 @@ export function priceTrip(
         });
         return;
       }
+      // A Disney deal on rooms is for Disney's own hotels: it never comes off
+      // an off-property hotel (found 2026-10-21, once the deal was shown on
+      // the hotel line it came off). Your own discount is your own claim.
+      if (source === "global" && !hotelPick.onProperty) {
+        appliedPromos.push({ source, label, kind, amountUsd: 0, historical, skipped: "a Disney hotel deal, and this stay is off property" });
+        return;
+      }
       const before = rooms;
       // "$250 off per night" is per room, per night of this stay.
       const off = kind === "room_night_off" ? value * params.nights * roomCountOf(params) : value;
@@ -1170,7 +1177,7 @@ export function priceTrip(
   // one worth the most to this trip, and never one whose shortest stay this
   // trip doesn't meet.
   if (!ov.promoId) {
-    const roomBlocked = ov.nightly !== undefined || ov.excludeHotel;
+    const roomBlocked = ov.nightly !== undefined || ov.excludeHotel || !hotelPick.onProperty;
     const worth = (p: PromoRow): number => {
       const v = p.effectValue;
       switch (p.effectKind) {

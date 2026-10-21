@@ -851,6 +851,24 @@ test("deals: a real deal whose dates include the arrival day is applied on its o
   assert.ok(picked.ok && picked.price.appliedPromos[0]!.promoId === "small" && !picked.price.appliedPromos[0]!.auto);
 });
 
+test("deals: a Disney room deal never comes off an off-property hotel; your own discount still does", () => {
+  const off: TripParams = { ...base, stay: "off", tier: 0 };
+  const plain = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), off, {}, START);
+  const book = fullBook("wdw", "MCO", { promos: [promo({ effectKind: "room_pct_off", effectValue: 30, historical: false })] });
+  const auto = priceTrip(book, resortById("wdw"), off, {}, START);
+  assert.ok(plain.ok && auto.ok);
+  assert.equal(auto.price.hotelPick.onProperty, false);
+  assert.equal(auto.price.rooms, plain.price.rooms, "not taken off a non-Disney hotel");
+  assert.equal(auto.price.appliedPromos.length, 0, "and not auto-applied");
+  const picked = priceTrip(book, resortById("wdw"), off, { wdw: { promoId: "p1" } }, START);
+  assert.ok(picked.ok && picked.price.rooms === plain.price.rooms);
+  assert.match(picked.price.appliedPromos[0]!.skipped ?? "", /off property/);
+  const mine = priceTrip(book, resortById("wdw"), off,
+    { wdw: { promoId: "none", personalPromo: { label: "Custom room discount", kind: "room_pct_off", value: 10 } } }, START);
+  assert.ok(mine.ok);
+  assert.equal(Math.round(mine.price.rooms), Math.round(plain.price.rooms * 0.9));
+});
+
 test("deals: never applied on their own outside their dates, as a 'historical pattern', or below the shortest stay", () => {
   const plain = priceTrip(fullBook("wdw", "MCO"), resortById("wdw"), base, {}, START);
   for (const p of [
