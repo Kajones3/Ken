@@ -16,12 +16,22 @@
    single-value form is the primary way in and has to work with a thumb, and
    the spreadsheet is the bulk escape hatch rather than the main event. */
 :root{
-  /* The site's "Enchanted Atlas" palette, light only, like the main page. */
+  /* The site's "Enchanted Atlas" palette; dark below. */
   color-scheme:light;
   --bg:#DFEAEC; --surface:#FBFAF6; --surface-2:#F1F5F4; --rule:#D5E1E5; --rule-strong:#AFC3CA;
   --ink:#16204A; --ink-2:#4C5878; --muted:#626D88;
   --accent:#8A6100; --accent-bg:#F7EBCB; --accent-line:#E8B23E;
   --ok:#1c6b45; --ok-bg:#e8f6ee; --bad:#9a2a2a; --bad-bg:#fbeaea;
+}
+/* After Dark, the same black look as the main page, following the device. */
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme:dark;
+    --bg:#08080A; --surface:#111114; --surface-2:#18181D; --rule:#26262C; --rule-strong:#3B3B43;
+    --ink:#F5EFE0; --ink-2:#BDB6A6; --muted:#8E897E;
+    --accent:#E8B23E; --accent-bg:#231B0A; --accent-line:#8A6E2F;
+    --ok:#6ed2a0; --ok-bg:#12271d; --bad:#f08c8c; --bad-bg:#2a1414;
+  }
 }
 *{box-sizing:border-box}
 body{margin:0; background:var(--bg); color:var(--ink);

@@ -255,8 +255,14 @@ this section).
   (masthead, PDF cover, coming-soon page); `mark.svg` (the castle mark) is
   no longer used by any page. `.png` added to server.ts MIME.
 - **The reskin, as built 2026-10-21 (needs a Render redeploy):**
-  - prototype.html tokens are G and **LIGHT ONLY** (both dark scopes removed:
-    the owner rejected every dark version). Fonts: Bricolage Grotesque
+  - prototype.html tokens are G. **Dark mode = "After Dark" (owner,
+    2026-10-21: "I need a dark mode ... maybe just black"): BLACK #08080A,
+    not navy** (every navy dark was rejected), cream ink #F5EFE0, gold #E8B23E
+    as text, flights bar cream, 2px frames `--frame` at cream 24%, a faint
+    star field (`--stars`, 420px tile) behind the page. Follows the device
+    until the masthead moon/sun button is pressed (`#themeTop`, kept in
+    localStorage `pf_theme`, set before first paint by a script in <head>).
+    admin.html and the coming-soon page follow the device only. Fonts: Bricolage Grotesque
     (`--f-head`: headlines, totals, card titles), Public Sans (`--f-body`,
     replaces Karla and JetBrains Mono), Barlow Condensed (`--f-label`: the
     small uppercase captions). Archivo/Karla/JetBrains Mono are gone.
@@ -278,9 +284,19 @@ this section).
   - Short titles are title case ("Six Resorts, Cheapest First", "Park
     Tickets", "Your Budget", "Sign In", "Coming Soon"); questions and
     sentences stay sentence case.
-  - NOT built from the mock-up: the results route map (flight paths from the
-    traveler's own airport) — it needs map coordinates for all 41 home
-    airports. Ask the owner before building it.
+  - **Flight-path map** (owner: "I want the flight path"), above the board
+    (`#routeFig`, `routeMapHtml()` / `renderRouteMap()` in prototype.html):
+    routes from the home airport (config lat/lon; a drive starts from the
+    typed city and is a solid line) to each park, castle badges set off
+    from their park (`RM_PARKS`), numbered cheapest first, the cheapest
+    route thicker; a castle opens that resort's details. Base art
+    `route-map-light/dark.svg` from gen.mjs (real coastlines; x = ((lon -
+    90 + 360) % 360) / 360 * 1200, y = (60 - lat) * 6; the page shows x
+    20-1000). On phones the map keeps 220px height and swipes sideways,
+    starting on the home airport.
+  - **Lesson (2026-10-21): the reskin was pushed to the branch but never
+    merged, so the owner's redeploy showed nothing.** Render deploys
+    master; check `/health` version against master after merging.
 
 ### 2026-10-17 — first two nights after A-E (governing rule #4 check). START HERE.
 

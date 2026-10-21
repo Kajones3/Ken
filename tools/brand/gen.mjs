@@ -189,7 +189,8 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
   return o.join("");
 }
 
-writeFileSync(`${out}/map-dark.svg`, map({ dot: "#26325E", label: "#AEB9DA", pin: GOLD, route: "#E8B23E99", line: null }));
+// Dark is "After Dark": black, not navy (owner, 2026-10-21).
+writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null }));
 writeFileSync(`${out}/map-light.svg`, map({ dot: "#BFD1D8", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
@@ -229,4 +230,25 @@ const tabIcon = (bleed) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0
   `<circle cx="53" cy="22" r="3" fill="#F5EFE0"/></svg>`;
 writeFileSync(`${out}/tab-icon.svg`, tabIcon(false));
 writeFileSync(`${out}/tab-icon-bleed.svg`, tabIcon(true));
+// The results route map (G "Enchanted Atlas", owner: "I want the flight
+// path"): real coastlines on chart paper, 90°E at the left edge so Asia sits
+// left, the US in the middle and Europe right, latitudes 60°N to 10°N
+// stretched 1.8x so the band holding all six resorts and every home airport
+// fills the frame. The page draws routes and castles on top
+// (routeMapHtml() in prototype.html) with the same arithmetic:
+//   x = ((lon - 90 + 360) % 360) / 360 * 1200,  y = (60 - lat) * 6.
+const RW = 1200, RH = 300, RK = 1.8, RS = RW / (2 * Math.PI);
+const routeProj = d3.geoProjection((l, p) => [l, p * RK])
+  .rotate([90, 0]).scale(RS).translate([RW / 2, (60 * Math.PI / 180) * RS * RK])
+  .clipExtent([[0, 0], [RW, RH]]);
+const routePath = d3.geoPath(routeProj).digits(1);
+const graticule = d3.geoGraticule().step([15, 10]);
+function routeBase({ sea, land: fill, coast, grid }) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW} ${RH}" width="${RW}" height="${RH}" preserveAspectRatio="none">` +
+    `<rect width="${RW}" height="${RH}" fill="${sea}"/>` +
+    `<path d="${routePath(graticule())}" fill="none" stroke="${grid}" stroke-width="1"/>` +
+    `<path d="${routePath(land)}" fill="${fill}" stroke="${coast}" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+}
+writeFileSync(`${out}/route-map-light.svg`, routeBase({ sea: "#CFE0E5", land: "#FBFAF6", coast: "#AFC3CA", grid: "#BED2D8" }));
+writeFileSync(`${out}/route-map-dark.svg`, routeBase({ sea: "#08080A", land: "#17171C", coast: "#34343C", grid: "#141418" }));
 console.log(`map ${W}x${H}, ${dots.length} dots`);

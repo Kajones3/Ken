@@ -127,6 +127,8 @@ export function comingSoonHtml(opts: { next?: string; error?: string } = {}): st
 <style>
 :root{color-scheme:light;--plane:#DFEAEC;--surface:#FBFAF6;--ink:#16204A;--ink-2:#4C5878;--muted:#626D88;
   --rule:#AFC3CA;--cream:#F5EFE0;--gold:#E8B23E;--bad:#9a2a2a}
+@media (prefers-color-scheme:dark){:root{color-scheme:dark;--plane:#08080A;--surface:#111114;--ink:#F5EFE0;
+  --ink-2:#BDB6A6;--muted:#8E897E;--rule:#3B3B43;--cream:#08080A;--bad:#f08c8c}}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--plane);color:var(--ink);font:16px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
