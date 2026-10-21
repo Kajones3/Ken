@@ -229,10 +229,10 @@ prototype.html's look has changed yet.
   castle badges (`public/brand/badge-*.svg`) as map markers and in the result
   rows + navy #16204A / gold #E8B23E + Bricolage Grotesque headlines + the
   plane / bed / ticket / fork-and-knife price icons on every cost line.
-  Owner's last changes: no wavy line under the headline; every TOTAL is a
-  split-flap board whose digits spin and land one by one, cheapest resort
-  first, "while the totals are being calculated" (in the real site: while
-  /api/compare loads; honor prefers-reduced-motion).
+  Owner's last changes: no wavy line under the headline; the logo at the top
+  of the page is the TAB ICON (sparkle on an orbit), not the castle. Totals
+  stay plain Bricolage numbers: a split-flap "flip board" total was tried
+  and REJECTED (2026-10-21: "The numbers aren't clear"). Don't bring it back.
 - **Rejected, don't bring back:** A's all-black airport look ("lacked a
   certain magic and whimsy needed for Disney"), E in dark ("just looks like an
   AI site": navy + condensed sans + thin borders), F (A + E hybrid), B, C, D.
@@ -242,8 +242,10 @@ prototype.html's look has changed yet.
   `public/brand/tab-icon.svg` (+ `tab-icon-bleed.svg`, square corners for
   phones), PNGs `favicon-32.png`, `favicon-48.png`, `apple-touch-icon.png`
   from `sh tools/brand/png.sh` (headless Chromium), `tabIcon()` in
-  `tools/brand/gen.mjs`. The page LOGO stays the castle `mark.svg`. The
-  locked coming-soon page inlines the same icon (`TAB_ICON_SVG`,
+  `tools/brand/gen.mjs`. The live page logo is still the castle `mark.svg`;
+  the G mock-ups use the tab icon as the logo too (owner's ask), so switch it
+  when G is built (or sooner if the owner asks). The locked coming-soon page
+  inlines the same icon (`TAB_ICON_SVG`,
   siteGate.ts). `.png` added to server.ts MIME. Needs a Render redeploy.
 - Next: owner to confirm G, then plan moving prototype.html onto it.
 
