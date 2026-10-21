@@ -307,9 +307,14 @@ this section).
     "1", the name, its castle, a 76px total "for two · $X a person", the
     cost bar, the bill line by line (any remainder = parking/transfers or
     deals, so the lines add up), "See the whole trip". Right: "And the rest,
-    in order" (`restRowHtml()`): rank, castle, name, four icon amounts, total
-    and "$X more" than No. 1 in red; the whole row opens its details. The
-    details open full width UNDER the board (`#detail`), not inside a row.
+    in order" (`restRowHtml()`): rank, castle, name, the COLORED COST BAR
+    (owner: "I like that better than just having the numbers and symbols")
+    and the total. **No "$X more"** (owner removed it). **Clicking a resort
+    on the right (or a castle on the map, `data-hero`) makes it the HERO**,
+    keeping its own rank ("3 Disneyland Resort", eyebrow "No. 3 of 6, ...",
+    the list becomes "The others, in order" and includes No. 1). The hero
+    IS `selected`, so open details follow it. The details open full width
+    UNDER the board (`#detail`), not inside a row.
     No panel round the board (rules on the page ground). On phones the two
     columns stack. The yellow-wash `.row.best` look is gone; don't bring it
     back. Four other No. 1 treatments (bigger card, navy ticket, gold
