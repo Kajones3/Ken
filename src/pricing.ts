@@ -404,6 +404,38 @@ export interface TicketRow {
   adult: number; child: number; junior?: number; checkAdjust?: CheckAdjust;
   /** From Disney's own ticket calendar (ticketCalendar.ts), not the curve. */
   fromCalendar?: boolean;
+  /** Disney's calendar prices for a ticket STARTING this date, per length
+   *  held (days -> adult per-day USD, before tax). */
+  calendar?: CalendarByLength;
+}
+/** One date's newest calendar price per ticket length: days -> per-day USD. */
+export type CalendarByLength = Record<number, number>;
+
+/** The held length closest to `want` (a tie goes to the longer ticket). */
+export function nearestLength(byLength: CalendarByLength, want: number): number | null {
+  let best: number | null = null;
+  for (const k of Object.keys(byLength).map(Number)) {
+    if (best === null || Math.abs(k - want) < Math.abs(best - want)
+      || (Math.abs(k - want) === Math.abs(best - want) && k > best)) best = k;
+  }
+  return best;
+}
+
+/**
+ * The adult per-day price of a `parkDays`-day ticket starting on a date with
+ * Disney's calendar prices: that length's own calendar when held (exact),
+ * otherwise the nearest length held, carried to this length by the resort's
+ * published length discounts (Disney's 2-day and 4-day calendars are
+ * different prices, owner 2026-10-21).
+ */
+export function calendarPerDay(resort: Resort, byLength: CalendarByLength, parkDays: number):
+  { perDay: number; fromDays: number } | null {
+  const fromDays = nearestLength(byLength, parkDays);
+  if (fromDays === null) return null;
+  const held = byLength[fromDays]!;
+  if (fromDays === parkDays) return { perDay: held, fromDays };
+  const f = ticketMultiDay(resort, fromDays);
+  return { perDay: (held / (f > 0 ? f : 1)) * ticketMultiDay(resort, parkDays), fromDays };
 }
 export interface PromoRow {
   id: string; resortId: string | null; label: string;
@@ -539,6 +571,9 @@ export interface TripPrice {
   ticketTaxPct: number;
   /** Every park day priced from Disney's own ticket calendar. */
   ticketsFromCalendar: boolean;
+  /** The length of Disney's calendar that priced the tickets (the trip's own
+   *  park days = exact; another = the nearest length held, scaled). */
+  ticketCalendarDays: number | null;
   /** Which lines the owner's own price checks nudged, and by how much. Null
    *  when none did. See checkFactors.ts. */
   checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
@@ -955,18 +990,24 @@ export function priceTrip(
   // has Disney's calendar price, every day of the ticket is priced from it.
   const startRow = book.ticket(resort.id, start);
   const byStart = !!startRow?.fromCalendar;
+  // Which of Disney's calendars priced it: this ticket's own length, or the
+  // nearest length held (scaled). The row's adult figure is replaced by that
+  // per-day price; child and junior keep their ratio to the adult.
+  const cal = byStart && startRow!.calendar && parkDays > 0 ? calendarPerDay(resort, startRow!.calendar, parkDays) : null;
+  const ticketCalendarDays = cal ? cal.fromDays : null;
   for (let i = 0; i < parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
     const t = byStart ? startRow : book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
     if (!t.fromCalendar) ticketsFromCalendar = false;
+    const perDayScale = cal && t.adult > 0 ? cal.perDay / (t.adult * multiDay) : 1;
     ages.forEach((age, idx) => {
       const band = ticketBandOf(resort, age);
       const gate = band === "infant" ? 0
         : band === "child" ? t.child
         : band === "junior" ? (t.junior ?? t.adult * (resort.ticket.junior ?? 0.9))
         : t.adult;
-      ticketPerHead[idx] = (ticketPerHead[idx] ?? 0) + gate * multiDay * ticketTax;
+      ticketPerHead[idx] = (ticketPerHead[idx] ?? 0) + gate * multiDay * perDayScale * ticketTax;
     });
   }
   let tickets = ticketPerHead.reduce((a, b) => a + b, 0);
@@ -1306,7 +1347,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, checkAdjust,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, checkAdjust,
       membership, parkDays: days,
     },
   };

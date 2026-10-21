@@ -10,6 +10,7 @@ import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pr
 import { RESORTS, type Tier } from "./config.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
 import { isRental } from "./rentals.js";
+import { latestCalendar } from "./ticketCalendar.js";
 import {
   computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
   GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, type CountedCheck,
@@ -225,12 +226,18 @@ export async function loadBook(
       where resort_id = any($1) and park_date between $2 and $3`,
     [req.resortIds, req.from, req.to],
   );
+  // Disney's calendar prices per ticket length, for a trip of any length
+  // starting on that date (ticketCalendar.ts). Only read when a row says so.
+  const calendar = t.rows.some((r) => r.from_calendar) ? await latestCalendar(db, req.from, req.to) : new Map();
   for (const r of t.rows) {
     const date = dateStr(r.park_date);
-    tickets.set(`${r.resort_id}|${date}`, {
+    const key = `${r.resort_id}|${date}`;
+    const byLength = r.from_calendar ? calendar.get(key) : undefined;
+    tickets.set(key, {
       adult: Number(r.adult_usd), child: Number(r.child_usd),
       junior: r.junior_usd === null || r.junior_usd === undefined ? undefined : Number(r.junior_usd),
       ...(r.from_calendar ? { fromCalendar: true } : {}),
+      ...(byLength ? { calendar: byLength } : {}),
     });
     seen(r.updated_at);
   }

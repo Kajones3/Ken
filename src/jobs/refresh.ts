@@ -7,7 +7,7 @@
  *   2. Stay under the rate limit and back off on 429 (the provider does this).
  *   3. Log every run, so when prices look wrong in three months you can find out why.
  */
-import { latestCalendar } from "../ticketCalendar.js";
+import { latestCalendar, calendarOneDay } from "../ticketCalendar.js";
 import { randomUUID } from "node:crypto";
 import {
   ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute, firstPlannableMonth, lastPlannableMonth,
@@ -196,12 +196,14 @@ export async function seedTickets(db: Db, months: string[], resortIds?: string[]
       const vals: unknown[] = [];
       const tuples = dates.map((d, i) => {
         const b = i * 7;
-        const cal = calendar.get(`${resort.id}|${d}`);
+        const byLength = calendar.get(`${resort.id}|${d}`);
+        const calAdult = byLength ? calendarOneDay(resort, byLength) : null;
+        const cal = calAdult !== null;
         const s = 1 + (seasonOf(resort.id, d).m - 1) * 0.55;
-        const adult = cal ? cal.adult : Math.round(resort.ticket.base * s * 100) / 100;
+        const adult = cal ? calAdult : Math.round(resort.ticket.base * s * 100) / 100;
         const child = Math.round(adult * resort.ticket.child * 100) / 100;
         const junior = resort.ticket.junior ? Math.round(adult * resort.ticket.junior * 100) / 100 : null;
-        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl, !!cal);
+        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl, cal);
         return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now(),$${b+7})`;
       });
       await db.query(
