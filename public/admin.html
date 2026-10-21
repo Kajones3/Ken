@@ -255,6 +255,18 @@ table.ctab th, table.ctab td{text-align:left; padding:6px 6px; border-bottom:1px
 table.ctab th{font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
 table.ctab th.n{text-align:right}
 table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap}
+.calcard{border:1px solid var(--rule); border-radius:12px; padding:12px; margin:12px 0; background:var(--surface)}
+.calcard .calhead{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end}
+.calcard .calhead > div{display:flex; flex-direction:column; gap:3px}
+.calcard .calhead label{font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
+.calgrid{display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; margin-top:10px}
+.calgrid .wd{font-size:11px; color:var(--muted); text-align:center; text-transform:uppercase; letter-spacing:.05em}
+.calgrid .cell{border:1px solid var(--rule); border-radius:6px; padding:3px 4px; min-width:0}
+.calgrid .cell .dn{font-size:11px; color:var(--muted)}
+.calgrid .cell input{width:100%; min-width:0; font-size:16px; padding:2px 3px; border:1px solid var(--rule-strong); border-radius:4px; background:transparent; color:inherit; font-variant-numeric:tabular-nums}
+.calgrid .cell.miss{border-color:var(--bad)}
+.calgrid .cell.miss input{border-color:var(--bad)}
+.calwarn{color:var(--bad); font-size:13px; margin:6px 0 0}
 .fare .bandpill{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
   border:1px solid var(--rule-strong); border-radius:99px; padding:1px 7px; margin-left:6px; white-space:nowrap}
 </style>
@@ -275,6 +287,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#sees">What the user sees</a>
     <a href="#holes">Data holes</a>
     <a href="#checks">Prices you've checked</a>
+    <a href="#tickets">Ticket calendars</a>
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
     <a href="#deals">Deals</a>
@@ -690,6 +703,32 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <div id="cList"></div>
   </section>
 
+  </div>
+
+  <div class="page" data-page="tickets">
+  <section class="sheet" id="tickets">
+    <h2>Ticket calendars</h2>
+    <p>Disney's own ticket prices, date by date. On Disney's ticket page pick a ticket length (say
+      <b>5 days</b>), and screenshot the calendar that shows <b>a price under every day</b>, one month per
+      screenshot. Drop them here, several at once if you like. Each month opens as a little calendar to check:
+      fix any misread box, then save. From then on the board prices tickets on those dates from Disney's
+      number, and the other ticket lengths follow Disney's own per-length prices.</p>
+    <p class="count">Read on this device, like the other readers: the pictures aren't sent anywhere. The prices
+      are Disney's &ldquo;per day&rdquo; price for adults (Ages 10+), before tax; the app adds the tax and works
+      out the child price. Every import is kept; a newer one of the same month wins.</p>
+    <div class="cgrid">
+      <div><label for="tResort">Resort</label><select id="tResort"></select></div>
+    </div>
+    <div class="dropzone" data-drop="tickets">
+      <span class="dzt"><b>Drop calendar screenshots here</b>, paste one, or</span>
+      <button class="btn" id="tPick">Choose screenshots</button>
+      <input type="file" id="tFile" accept="image/*" multiple class="hidden">
+    </div>
+    <p class="count" id="tStatus">You can also paste a screenshot anywhere on this page.</p>
+    <div id="tCards"></div>
+    <h3>Months we hold</h3>
+    <div id="tList"><p class="count">Loading…</p></div>
+  </section>
   </div>
 
   <div class="page" data-page="numbers">
@@ -1850,6 +1889,7 @@ document.addEventListener("paste", e => {
   e.preventDefault();
   // A pasted picture goes to whichever reader is on screen.
   if(location.hash === "#deals") readDealShot(item.getAsFile());
+  else if(location.hash === "#tickets") readCalendarShots([item.getAsFile()]);
   else readShot(item.getAsFile());
 });
 
@@ -1858,7 +1898,8 @@ document.addEventListener("paste", e => {
    handling at all, so the browser simply opened the picture instead). A
    picture dropped anywhere goes to the reader on screen; on a page with no
    reader it is refused rather than letting the browser navigate away. */
-const dropTarget = () => location.hash === "#deals" ? "deals" : location.hash === "#checks" ? "checks" : null;
+const dropTarget = () => location.hash === "#deals" ? "deals" : location.hash === "#checks" ? "checks"
+  : location.hash === "#tickets" ? "tickets" : null;
 const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
 let dragDepth = 0;
 const markZone = on => document.querySelectorAll(".dropzone").forEach(z => z.classList.toggle("over", on && z.dataset.drop === dropTarget()));
@@ -1875,15 +1916,16 @@ document.addEventListener("drop", e => {
   dragDepth = 0; markZone(false);
   const file = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
   const where = dropTarget();
-  const say = where === "deals" ? $("#dStatus") : $("#sStatus");
+  const say = where === "deals" ? $("#dStatus") : where === "tickets" ? $("#tStatus") : $("#sStatus");
   if(!where) return;
   if(!file){ say.textContent = "That isn't a picture. Drop a screenshot (PNG or JPG)."; return; }
-  if(where === "deals") readDealShot(file); else readShot(file);
+  if(where === "tickets") readCalendarShots([...e.dataTransfer.files].filter(f => f.type.startsWith("image/")));
+  else if(where === "deals") readDealShot(file); else readShot(file);
 });
 // Clicking the empty part of a drop area opens the picker too.
 document.querySelectorAll(".dropzone").forEach(z => z.addEventListener("click", e => {
   if(e.target.closest("button,input")) return;
-  (z.dataset.drop === "deals" ? $("#dFile") : $("#sFile")).click();
+  (z.dataset.drop === "deals" ? $("#dFile") : z.dataset.drop === "tickets" ? $("#tFile") : $("#sFile")).click();
 }));
 document.addEventListener("click", e => {
   const a = e.target.closest("[data-useamt]");
@@ -2493,8 +2535,137 @@ $("#stDays").addEventListener("click", e => {
   loadStats();
 });
 
+/* ------------------------------ ticket calendars ------------------------------
+ * Disney's per-date ticket prices, read from the owner's screenshots by
+ * readTicketCalendar() (screenshot-reader.js), checked box by box, saved to
+ * /api/admin/ticket-calendar. See src/ticketCalendar.ts. */
+const T_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const ymName = ym => { const [y, m] = ym.split("-").map(Number); return `${T_MONTHS[m-1]} ${y}`; };
+let tMeta = { resorts: [], months: [], planMonths: [] };
+let tSeq = 0;
+async function loadTicketCalendars(){
+  const r = await fetch("/api/admin/ticket-calendar");
+  if(!r.ok){ $("#tList").innerHTML = `<p class="count">Couldn't load the ticket calendars.</p>`; return; }
+  tMeta = await r.json();
+  let keep = $("#tResort").value;
+  try{ keep = keep || localStorage.getItem("pf_tresort") || "wdw"; }catch{ keep = keep || "wdw"; }
+  $("#tResort").innerHTML = tMeta.resorts.map(x => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("");
+  if(tMeta.resorts.some(x => x.id === keep)) $("#tResort").value = keep;
+  renderTicketList();
+}
+$("#tResort").addEventListener("change", () => { try{ localStorage.setItem("pf_tresort", $("#tResort").value); }catch{} });
+function renderTicketList(){
+  const rows = tMeta.months;
+  const held = new Set(rows.map(x => x.resortId + "|" + x.month));
+  const needed = tMeta.resorts.map(r => {
+    const miss = (tMeta.planMonths || []).filter(m => !held.has(r.id + "|" + m));
+    return miss.length ? `<p class="count"><b>${esc(r.name)}</b> still needs: ${miss.map(ymName).join(", ")}.</p>`
+      : `<p class="count"><b>${esc(r.name)}</b>: every month a traveler can pick is from Disney's calendar.</p>`;
+  }).join("");
+  const name = id => (tMeta.resorts.find(r => r.id === id) || {}).name || id;
+  $("#tList").innerHTML = needed + (rows.length ? `<table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
+      <th class="n">Ticket</th><th class="n">Days held</th><th class="n">Per day</th><th>Imported</th></tr></thead><tbody>
+      ${rows.map(x => `<tr><td>${esc(name(x.resortId))}</td><td>${esc(ymName(x.month))}</td><td class="n">${x.ticketDays}-day</td>
+        <td class="n">${x.dates}</td><td class="n">${money(x.low)}${x.high !== x.low ? "–" + money(x.high) : ""}</td>
+        <td>${esc(new Date(x.lastImported).toLocaleDateString("en-US", { month: "short", day: "numeric" }))}</td></tr>`).join("")}
+      </tbody></table>` : `<p class="count">None yet.</p>`);
+}
+$("#tPick").addEventListener("click", () => $("#tFile").click());
+$("#tFile").addEventListener("change", e => { const fs = [...e.target.files]; e.target.value = ""; if(fs.length) readCalendarShots(fs); });
+
+async function readCalendarShots(files){
+  const R = await getReader();
+  for(const file of files){
+    const id = ++tSeq;
+    const card = document.createElement("div");
+    card.className = "calcard"; card.id = "tc" + id;
+    card.innerHTML = `<p class="count">Reading ${esc(file.name || "the screenshot")}…</p>`;
+    $("#tCards").prepend(card);
+    let cal;
+    try {
+      const { words } = await R.readWords(file, { onProgress: (pr, st) => {
+        const c = card.querySelector(".count"); if(c) c.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(pr * 100)}%` : "Getting the reader ready…"; } });
+      cal = R.readTicketCalendar(words);
+    } catch(err){
+      card.innerHTML = `<p class="calwarn">Couldn't read that picture: ${esc(err.message || err)}</p>`; continue;
+    }
+    renderCalCard(card, cal, URL.createObjectURL(file));
+  }
+  $("#tStatus").textContent = "Check each month's boxes against its picture, then save it.";
+}
+
+function renderCalCard(card, cal, imgUrl){
+  const month = cal.month || (tMeta.planMonths || [])[0] || "";
+  const prices = new Map((cal.prices || []).map(p => [p.date, p.perDay]));
+  const days = cal.ticketDays || 5;
+  card.innerHTML = `
+    <div class="calhead">
+      <div><label>Month</label><input type="month" class="tcMonth" value="${esc(month)}"></div>
+      <div><label>Ticket length</label><select class="tcDays">${Array.from({length:10},(_,i)=>i+1).map(n => `<option value="${n}"${n===days?" selected":""}>${n}-day</option>`).join("")}</select></div>
+      <div><span class="count tcRead"></span></div>
+    </div>
+    ${cal.month ? "" : `<p class="calwarn">Couldn't find the month in the picture. Pick it above.</p>`}
+    ${cal.ticketDays ? "" : `<p class="calwarn">Couldn't find the ticket length (like "5-Day Ticket"). Pick it above.</p>`}
+    ${cal.adultAges && cal.adultAges !== "10+" ? `<p class="calwarn">The picture says Ages ${esc(cal.adultAges)}. Use the adult calendar.</p>` : ""}
+    ${(cal.warnings || []).map(w => `<p class="calwarn">${esc(w)}</p>`).join("")}
+    <details style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">The picture</summary>
+      <img class="shot" src="${imgUrl}" alt="The calendar being read" style="max-height:none"></details>
+    <div class="calgrid"></div>
+    <div class="tools" style="margin-top:10px"><button class="btn primary tcSave">Save this month</button>
+      <button class="btn tcDrop">Discard</button></div>
+    <div class="said tcSaid"></div>`;
+  const grid = card.querySelector(".calgrid");
+  let shownYm = "";
+  const draw = () => {
+    // Keep what's typed when the month is changed by hand.
+    if(shownYm) grid.querySelectorAll("input[data-day]").forEach(i => {
+      const v = Number(i.value.replace(/[$,+\s]/g, ""));
+      prices.delete(`${shownYm}-${i.dataset.day}`);
+      if(i.value.trim() && v) prices.set(`${shownYm}-${i.dataset.day}`, v);
+    });
+    const ym = card.querySelector(".tcMonth").value;
+    if(!/^\d{4}-\d{2}$/.test(ym)){ grid.innerHTML = ""; shownYm = ""; return; }
+    if(shownYm && shownYm !== ym){
+      // Moving the month moves the prices with it: same day numbers.
+      for(const [k, v] of [...prices]) if(k.startsWith(shownYm + "-")){ prices.delete(k); prices.set(ym + k.slice(7), v); }
+    }
+    shownYm = ym;
+    const [y, m] = ym.split("-").map(Number);
+    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    let h = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => `<div class="wd">${d}</div>`).join("");
+    for(let i = 0; i < first; i++) h += `<div></div>`;
+    let read = 0;
+    for(let d = 1; d <= n; d++){
+      const dd = String(d).padStart(2, "0"), v = prices.get(`${ym}-${dd}`);
+      if(v) read++;
+      h += `<div class="cell${v ? "" : " miss"}"><div class="dn">${d}</div>
+        <input data-day="${dd}" inputmode="decimal" value="${v ?? ""}" aria-label="${esc(ymName(ym))} ${d}, price per day"></div>`;
+    }
+    grid.innerHTML = h;
+    card.querySelector(".tcRead").textContent = `${read} of ${n} days read${read < n ? " — fill in the red ones, or leave them blank" : ""}.`;
+  };
+  draw();
+  card.querySelector(".tcMonth").addEventListener("change", draw);
+  grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c) c.classList.toggle("miss", !e.target.value); });
+  card.querySelector(".tcDrop").addEventListener("click", () => card.remove());
+  card.querySelector(".tcSave").addEventListener("click", async () => {
+    const ym = card.querySelector(".tcMonth").value;
+    const list = [...grid.querySelectorAll("input[data-day]")].filter(i => i.value.trim())
+      .map(i => ({ date: `${ym}-${i.dataset.day}`, perDay: Number(i.value.replace(/[$,+\s]/g, "")) }));
+    const said = card.querySelector(".tcSaid");
+    const r = await fetch("/api/admin/ticket-calendar", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ resortId: $("#tResort").value, ticketDays: +card.querySelector(".tcDays").value, month: ym, prices: list }) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ said.textContent = d.message || "Couldn't save that."; return; }
+    said.textContent = `Saved ${d.saved} days of ${ymName(ym)}. The board now prices tickets on those dates from Disney's calendar.`;
+    card.querySelector(".tcSave").disabled = true;
+    tMeta.months = d.months; renderTicketList();
+  });
+}
+
 route();
 load();
+loadTicketCalendars();
 loadGrades();
 renderAdvice();
 loadHoles();

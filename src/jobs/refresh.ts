@@ -7,6 +7,7 @@
  *   2. Stay under the rate limit and back off on 429 (the provider does this).
  *   3. Log every run, so when prices look wrong in three months you can find out why.
  */
+import { latestCalendar } from "../ticketCalendar.js";
 import { randomUUID } from "node:crypto";
 import {
   ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute, firstPlannableMonth, lastPlannableMonth,
@@ -181,28 +182,35 @@ export async function upsertHotels(db: Db, rows: HotelQuote[], source: string): 
  * so the system runs end to end; replace it with rows you maintain by hand
  * against each resort's published calendar. Alarm if any resort's rows go stale.
  */
-export async function seedTickets(db: Db, months: string[]): Promise<number> {
+export async function seedTickets(db: Db, months: string[], resortIds?: string[]): Promise<number> {
   let n = 0;
-  for (const resort of RESORTS) {
+  if (!months.length) return 0;
+  // Disney's own calendar wins on any date the owner has imported one for
+  // (ticketCalendar.ts); every other date is the curve, as before.
+  const sorted = [...months].sort();
+  const calendar = await latestCalendar(db, monthBounds(sorted[0]!)[0], monthBounds(sorted[sorted.length - 1]!)[1]);
+  for (const resort of RESORTS.filter((r) => !resortIds || resortIds.includes(r.id))) {
     for (const m of months) {
       const [from, to] = monthBounds(m);
       const dates = range(from, to);
       const vals: unknown[] = [];
       const tuples = dates.map((d, i) => {
-        const b = i * 6;
+        const b = i * 7;
+        const cal = calendar.get(`${resort.id}|${d}`);
         const s = 1 + (seasonOf(resort.id, d).m - 1) * 0.55;
-        const adult = Math.round(resort.ticket.base * s * 100) / 100;
+        const adult = cal ? cal.adult : Math.round(resort.ticket.base * s * 100) / 100;
         const child = Math.round(adult * resort.ticket.child * 100) / 100;
         const junior = resort.ticket.junior ? Math.round(adult * resort.ticket.junior * 100) / 100 : null;
-        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl);
-        return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now())`;
+        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl, !!cal);
+        return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now(),$${b+7})`;
       });
       await db.query(
-        `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd,junior_usd,source_url,updated_at)
+        `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd,junior_usd,source_url,updated_at,from_calendar)
          values ${tuples.join(",")}
          on conflict (resort_id,park_date) do update set
            adult_usd = excluded.adult_usd, child_usd = excluded.child_usd,
-           junior_usd = excluded.junior_usd, updated_at = excluded.updated_at`,
+           junior_usd = excluded.junior_usd, updated_at = excluded.updated_at,
+           from_calendar = excluded.from_calendar`,
         vals,
       );
       n += dates.length;

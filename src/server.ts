@@ -44,6 +44,8 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
+import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary } from "./ticketCalendar.js";
+import { seedTickets } from "./jobs/refresh.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
@@ -1748,6 +1750,27 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/admin/signals" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       return send(200, await loadFareSignals(db), { cache: "no-store" });
+    }
+
+    /* Ticket calendars: Disney's own per-date ticket prices, read from the
+     * owner's screenshots in the browser and checked by them before saving.
+     * See ticketCalendar.ts. Saving re-seeds that month's ticket rows at
+     * once, so the board prices from Disney's number straight away. */
+    if (url.pathname === "/api/admin/ticket-calendar" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, {
+        resorts: CALENDAR_RESORTS.map((id) => ({ id, name: RESORT_BY_ID.get(id)!.name })),
+        months: await calendarSummary(db), planMonths: plannableMonths(todayISO()),
+      }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/ticket-calendar" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const v = validateCalendar(await readBody(req), todayISO());
+      if (!v.ok) return send(400, { error: "rejected", message: v.reason });
+      const saved = await saveCalendar(db, v.value, owner.email);
+      await seedTickets(db, [v.value.month], [v.value.resortId]);
+      return send(200, { ok: true, saved, months: await calendarSummary(db) }, { cache: "no-store" });
     }
 
     /* The Lands page: each resort's lands exactly as the PDF prints them,

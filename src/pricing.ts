@@ -400,7 +400,11 @@ export interface HotelNight {
   nightly: number; tier: Tier; onProperty: boolean; deepLink?: string;
   checkAdjust?: CheckAdjust;
 }
-export interface TicketRow { adult: number; child: number; junior?: number; checkAdjust?: CheckAdjust }
+export interface TicketRow {
+  adult: number; child: number; junior?: number; checkAdjust?: CheckAdjust;
+  /** From Disney's own ticket calendar (ticketCalendar.ts), not the curve. */
+  fromCalendar?: boolean;
+}
 export interface PromoRow {
   id: string; resortId: string | null; label: string;
   effectKind: PromoEffectKind; effectValue: number;
@@ -533,6 +537,8 @@ export interface TripPrice {
   /** Sales tax already inside the ticket line, percent (0 where the resort's
    *  price includes it). */
   ticketTaxPct: number;
+  /** Every park day priced from Disney's own ticket calendar. */
+  ticketsFromCalendar: boolean;
   /** Which lines the owner's own price checks nudged, and by how much. Null
    *  when none did. See checkFactors.ts. */
   checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
@@ -943,10 +949,17 @@ export function priceTrip(
   // to land near the right answer for a party that is all adults and be
   // wrong for every other party.
   const ticketPerHead = ages.map(() => 0);
+  let ticketsFromCalendar = parkDays > 0;
+  // Disney prices a multi-day ticket by the day it STARTS: its calendar shows
+  // "a 5-day ticket starting the 8th" as one price. So when the start date
+  // has Disney's calendar price, every day of the ticket is priced from it.
+  const startRow = book.ticket(resort.id, start);
+  const byStart = !!startRow?.fromCalendar;
   for (let i = 0; i < parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
-    const t = book.ticket(resort.id, day);
+    const t = byStart ? startRow : book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
+    if (!t.fromCalendar) ticketsFromCalendar = false;
     ages.forEach((age, idx) => {
       const band = ticketBandOf(resort, age);
       const gate = band === "infant" ? 0
@@ -1293,7 +1306,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, checkAdjust,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, checkAdjust,
       membership, parkDays: days,
     },
   };

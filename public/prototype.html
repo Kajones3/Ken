@@ -3566,14 +3566,14 @@ async function renderDetail(){
           ${ticketDaysCtl}
           <div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
-              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">estimate</div></div>
+              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">${x.ticketsFromCalendar ? "Disney's calendar" : "estimate"}</div></div>
             <div class="kpitile"><div class="k">Party</div>
               <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
             <div class="kpitile total"><div class="k">Tickets</div>
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
           ${ticketRowsHtml}
-          ${x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">Includes ${x.ticketTaxPct}% sales tax, which Disney adds at checkout.</p>` : ""}
+          ${x.ticketsFromCalendar || x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">${x.ticketsFromCalendar ? "From Disney's own ticket calendar for these dates. " : ""}${x.ticketTaxPct ? `Includes ${x.ticketTaxPct}% sales tax, which Disney adds at checkout.` : ""}</p>` : ""}
           <div class="foot">
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ticket page →</a>
           </div>

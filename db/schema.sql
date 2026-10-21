@@ -943,3 +943,24 @@ create table if not exists bls_series_values (
   fetched_at   timestamptz  not null default now()
 );
 create index if not exists bls_series_values_key on bls_series_values (series_id, period, fetched_at desc);
+
+-- 2026-10-21: Disney's own ticket calendars, read from the owner's
+-- screenshots in /admin -> Ticket calendars (owner: "build a screen reader for
+-- the calendars so I can do it on the website"). One row per date as the
+-- calendar showed it: the PER-DAY price of an N-day adult ticket starting
+-- that day, before tax. Append-only, like every record of a price we were
+-- shown: a later import of the same month adds rows, readers take the newest.
+create table if not exists ticket_calendar (
+  id           bigserial    primary key,
+  resort_id    text         not null,
+  ticket_days  integer      not null check (ticket_days between 1 and 10),
+  park_date    date         not null,
+  per_day_usd  numeric(9,2) not null check (per_day_usd > 0),
+  source       text         not null default 'owner_screenshot',
+  entered_by   text,
+  observed_at  timestamptz  not null default now()
+);
+create index if not exists ticket_calendar_lookup on ticket_calendar (resort_id, park_date, observed_at desc);
+-- The nightly ticket rows say when they came from that calendar, so the
+-- owner's older price checks don't nudge a real Disney price a second time.
+alter table ticket_prices add column if not exists from_calendar boolean not null default false;
