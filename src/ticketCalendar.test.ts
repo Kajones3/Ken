@@ -62,7 +62,7 @@ test("ticket calendar import: checked, kept append-only, and the board prices fr
   const held = await db.query(`select count(*)::int as n from ticket_calendar where resort_id = 'wdw'`);
   assert.equal(Number((held.rows[0] as { n: number }).n), 62, "both imports kept");
   const latest = await latestCalendar(db, `${month}-01`, `${month}-31`);
-  assert.equal(latest.get(`wdw|${month}-15`)!.perDay, 160);
+  assert.equal(latest.get(`wdw|${month}-15`)![5], 160);
   await seedTickets(db, [month], ["wdw"]);
   const row = (await db.query(`select adult_usd, from_calendar from ticket_prices where resort_id = 'wdw' and park_date = '${month}-15'`)).rows[0] as { adult_usd: string; from_calendar: boolean };
   assert.equal(row.from_calendar, true);
@@ -71,7 +71,7 @@ test("ticket calendar import: checked, kept append-only, and the board prices fr
   assert.ok(Math.abs(Number(row.adult_usd) * ticketMultiDay(wdw, 5) * 5 - 800) < 0.1);
   assert.equal(oneDayFigure(wdw, 160, 5), Number(row.adult_usd));
   const sum = await calendarSummary(db);
-  assert.deepEqual(sum.map((x) => [x.resortId, x.month, x.dates, x.low]), [["wdw", month, 31, 160]]);
+  assert.deepEqual(sum.map((x) => [x.resortId, x.month, x.ticketDays, x.dates, x.low]), [["wdw", month, 5, 31, 160]]);
 });
 
 test("a calendar date prices the whole ticket from its START day, as Disney does", async () => {
@@ -93,4 +93,56 @@ test("a calendar date prices the whole ticket from its START day, as Disney does
   assert.equal(r.price.ticketsFromCalendar, true);
   // 5 x the start day's $150, plus Disney's 6.5% tax; not the average of the 2nd-6th.
   assert.ok(Math.abs(r.price.tickets - 150 * 5 * 1.065) < 0.05, String(r.price.tickets));
+});
+
+test("ticket calendars: each LENGTH is kept on its own; a second length adds, never replaces", async () => {
+  const db = await memoryDb();
+  const month = "2099-10";
+  const prices = (perDay: number) => Array.from({ length: 31 }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, perDay }));
+  for (const [days, perDay] of [[2, 193], [4, 179]] as const) {
+    const v = validateCalendar({ resortId: "wdw", ticketDays: days, month, prices: prices(perDay) }, "2026-10-21");
+    assert.ok(v.ok);
+    if (v.ok) await saveCalendar(db, v.value, "owner@example.com");
+  }
+  const latest = await latestCalendar(db, `${month}-01`, `${month}-31`);
+  assert.deepEqual(latest.get(`wdw|${month}-08`), { 2: 193, 4: 179 }, "the 4-day import did not replace the 2-day one");
+  const sum = await calendarSummary(db);
+  assert.deepEqual(sum.map((x) => [x.month, x.ticketDays, x.dates]), [[month, 2, 31], [month, 4, 31]]);
+  // The nightly row's one-day figure comes from the length nearest Walt Disney
+  // World's suggested 5 park days: the 4-day calendar.
+  await seedTickets(db, [month], ["wdw"]);
+  const row = (await db.query(`select adult_usd from ticket_prices where resort_id = 'wdw' and park_date = '${month}-08'`)).rows[0] as { adult_usd: string };
+  assert.equal(Number(row.adult_usd), oneDayFigure(RESORT_BY_ID.get("wdw")!, 179, 4));
+});
+
+test("ticket calendars: a trip uses its own length exactly, else the nearest length held", async () => {
+  const { priceTrip, calendarPerDay } = await import("./pricing.js");
+  const { bookFrom } = await import("./book.js");
+  const wdw = RESORT_BY_ID.get("wdw")!;
+  const start = "2099-10-08";
+  const dates = Array.from({ length: 8 }, (_, i) => `2099-10-${String(i + 8).padStart(2, "0")}`);
+  const calendar = { 2: 193, 4: 179 };
+  const book = bookFrom({
+    flights: dates.map((date) => ({ dest: "MCO", date, row: { price: 400, stops: 0 } })),
+    hotels: dates.map((date) => ({ resortId: "wdw", date, night: { hotelId: "m", name: "Moderate", descriptor: "Moderate resort", nightly: 300, tier: "moderate" as const, onProperty: true } })),
+    tickets: dates.map((date) => ({ resortId: "wdw", date, row: { adult: oneDayFigure(wdw, 179, 4), child: oneDayFigure(wdw, 179, 4) * 0.966, fromCalendar: true, calendar } })),
+    promos: [],
+  });
+  const price = (parkDays: number) => {
+    const r = priceTrip(book, wdw, { origin: "ATL", adults: 1, childAges: [], nights: 6, parkDays, stay: "on", tier: 1, food: "mix" }, {}, start);
+    assert.ok(r.ok);
+    return r.ok ? r.price : null!;
+  };
+  // Disney's own numbers for Oct 8 2027: 2-day $386, 4-day $716 (plus 6.5% tax).
+  const two = price(2), four = price(4), five = price(5), three = price(3);
+  assert.ok(Math.abs(two.tickets - 193 * 2 * 1.065) < 0.05, String(two.tickets));
+  assert.equal(two.ticketCalendarDays, 2);
+  assert.ok(Math.abs(four.tickets - 179 * 4 * 1.065) < 0.05, String(four.tickets));
+  assert.equal(four.ticketCalendarDays, 4);
+  // No 5-day calendar: the 4-day one, carried by Disney's length discount.
+  assert.equal(five.ticketCalendarDays, 4);
+  assert.ok(Math.abs(five.tickets - calendarPerDay(wdw, calendar, 5)!.perDay * 5 * 1.065) < 0.05);
+  assert.ok(five.tickets > four.tickets);
+  // 3 days is as near 2 as 4: the longer ticket wins the tie.
+  assert.equal(three.ticketCalendarDays, 4);
 });

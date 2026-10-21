@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**859 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**861 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -367,6 +367,19 @@ this section).
     full and half size (`src/testdata/wdw-ticket-calendar-2027-10.words.json`).
     **Disneyland's calendar layout was NOT seen**: ask for one screenshot.
     The page lists each resort's plannable months still missing.
+    **Each ticket LENGTH is its own calendar (owner, "Yes, do that",
+    2026-10-21):** Disney's 2-day and 4-day prices for the same date differ
+    (Oct 8 2027: 2-day $193/day, 4-day $179, 5-day $154.36), and "From $X"
+    is that length's cheapest date anywhere. `latestCalendar` is newest per
+    resort + date + LENGTH (`CalendarByLength` days -> per-day), so a second
+    length ADDS. `loadBook` attaches it to calendar rows (`TicketRow.calendar`);
+    `calendarPerDay()` (pricing.ts) prices N park days from the N-day
+    calendar exactly, else the nearest length held (tie -> longer) x
+    `ticketMultiDay(N) / ticketMultiDay(held)`; `TripPrice.ticketCalendarDays`
+    says which (card: "From Disney's own 4-day ticket calendar ... adjusted
+    to 5 days"). The nightly row's one-day figure (`calendarOneDay`) uses the
+    length nearest the resort's suggested park days. /admin lists one row per
+    month + length.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

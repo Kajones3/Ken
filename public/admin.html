@@ -712,10 +712,14 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <b>5 days</b>), and screenshot the calendar that shows <b>a price under every day</b>, one month per
       screenshot. Drop them here, several at once if you like. Each month opens as a little calendar to check:
       fix any misread box, then save. From then on the board prices tickets on those dates from Disney's
-      number, and the other ticket lengths follow Disney's own per-length prices.</p>
+      number.</p>
+    <p><b>Each ticket length is its own calendar.</b> Disney's 2-day and 4-day prices for the same date are
+      different, so import as many lengths per month as you like: a 4-day October never replaces a 2-day
+      October. A trip of N park days uses the N-day calendar when you've imported it (Disney's exact price),
+      otherwise the nearest length you have, adjusted by Disney's published length discounts.</p>
     <p class="count">Read on this device, like the other readers: the pictures aren't sent anywhere. The prices
       are Disney's &ldquo;per day&rdquo; price for adults (Ages 10+), before tax; the app adds the tax and works
-      out the child price. Every import is kept; a newer one of the same month wins.</p>
+      out the child price. Every import is kept; a newer one of the same month and length wins.</p>
     <div class="cgrid">
       <div><label for="tResort">Resort</label><select id="tResort"></select></div>
     </div>
@@ -2556,6 +2560,8 @@ async function loadTicketCalendars(){
 $("#tResort").addEventListener("change", () => { try{ localStorage.setItem("pf_tresort", $("#tResort").value); }catch{} });
 function renderTicketList(){
   const rows = tMeta.months;
+  // A month counts as held once ANY length is in; trips of other lengths then
+  // use the nearest length held.
   const held = new Set(rows.map(x => x.resortId + "|" + x.month));
   const needed = tMeta.resorts.map(r => {
     const miss = (tMeta.planMonths || []).filter(m => !held.has(r.id + "|" + m));

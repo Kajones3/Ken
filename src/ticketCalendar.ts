@@ -15,15 +15,17 @@
  * a calendar price is priced from Disney's own number and every other date
  * still from the curve.
  *
- * One price per date, any ticket length: an N-day calendar is turned into the
- * same "one-day" figure the ticket rows already hold by dividing out the
- * resort's own multi-day shape (`ticketMultiDay`), so pricing an N-day ticket
- * on that date gives back exactly the calendar's N x per-day price, and the
- * other lengths follow Disney's published length discounts.
+ * Each ticket LENGTH is kept on its own (owner, 2026-10-21: "prices change
+ * drastically based on how many days you select"). Disney's 2-day and 4-day
+ * calendars for the same month are different prices, not one price shown
+ * twice, so a 4-day import never replaces a 2-day one. A trip uses the
+ * calendar for its own length when one is held, and otherwise the nearest
+ * length held, carried by Disney's published length discounts
+ * (`calendarPerDay` in pricing.ts).
  */
 import type { Db } from "./db.js";
-import { RESORT_BY_ID, type Resort } from "./config.js";
-import { ticketMultiDay } from "./pricing.js";
+import { RESORT_BY_ID, SUGGESTED_PARK_DAYS, type Resort } from "./config.js";
+import { ticketMultiDay, nearestLength, type CalendarByLength } from "./pricing.js";
 
 /** The resorts whose ticket calendars are in US dollars and read today. */
 export const CALENDAR_RESORTS = ["wdw", "dlr"] as const;
@@ -89,28 +91,39 @@ export async function saveCalendar(db: Db, v: CalendarImport, by: string): Promi
 }
 
 /**
- * The newest calendar price per resort and date, as the one-day figure the
- * ticket rows hold. Key: `${resortId}|${date}`.
+ * The newest calendar price per resort, date AND ticket length.
+ * Key: `${resortId}|${date}`.
  */
-export async function latestCalendar(db: Db, from: string, to: string): Promise<Map<string, { adult: number; perDay: number; ticketDays: number }>> {
-  const out = new Map<string, { adult: number; perDay: number; ticketDays: number }>();
+export async function latestCalendar(db: Db, from: string, to: string): Promise<Map<string, CalendarByLength>> {
+  const out = new Map<string, CalendarByLength>();
   let rows: Array<Record<string, unknown>> = [];
   try {
     rows = (await db.query(
-      `select distinct on (resort_id, park_date) resort_id, park_date, ticket_days, per_day_usd
+      `select distinct on (resort_id, park_date, ticket_days) resort_id, park_date, ticket_days, per_day_usd
          from ticket_calendar
         where park_date between $1 and $2
-        order by resort_id, park_date, observed_at desc, id desc`, [from, to])).rows as Array<Record<string, unknown>>;
+        order by resort_id, park_date, ticket_days, observed_at desc, id desc`, [from, to])).rows as Array<Record<string, unknown>>;
   } catch { return out; }   // no table yet: the curve prices everything, as before
   for (const r of rows) {
     const resort = RESORT_BY_ID.get(String(r.resort_id));
     if (!resort) continue;
     const date = r.park_date instanceof Date ? r.park_date.toISOString().slice(0, 10) : String(r.park_date).slice(0, 10);
-    const perDay = Number(r.per_day_usd);
-    const ticketDays = Number(r.ticket_days);
-    out.set(`${resort.id}|${date}`, { adult: oneDayFigure(resort, perDay, ticketDays), perDay, ticketDays });
+    const key = `${resort.id}|${date}`;
+    const byLength = out.get(key) ?? {};
+    byLength[Number(r.ticket_days)] = Number(r.per_day_usd);
+    out.set(key, byLength);
   }
   return out;
+}
+
+/**
+ * The one-day figure the nightly ticket row holds for a calendar date (what
+ * readers other than the trip price see): from the resort's suggested ticket
+ * length if that calendar is held, else the nearest length held.
+ */
+export function calendarOneDay(resort: Resort, byLength: CalendarByLength): number | null {
+  const days = nearestLength(byLength, SUGGESTED_PARK_DAYS[resort.id]?.days ?? 4);
+  return days === null ? null : oneDayFigure(resort, byLength[days]!, days);
 }
 
 /**
@@ -122,20 +135,20 @@ export function oneDayFigure(resort: Resort, perDay: number, ticketDays: number)
   return Math.round((perDay / (f > 0 ? f : 1)) * 100) / 100;
 }
 
-/** What /admin lists: each resort's months, how many dates, when. */
+/** What /admin lists: each resort's months and ticket lengths, how many dates, when. */
 export async function calendarSummary(db: Db): Promise<Array<{
   resortId: string; month: string; ticketDays: number; dates: number; low: number; high: number; lastImported: string;
 }>> {
   try {
     const r = await db.query(
       `with latest as (
-         select distinct on (resort_id, park_date) resort_id, park_date, ticket_days, per_day_usd, observed_at
-           from ticket_calendar order by resort_id, park_date, observed_at desc, id desc)
-       select resort_id, to_char(park_date, 'YYYY-MM') as month, max(ticket_days) as ticket_days,
+         select distinct on (resort_id, park_date, ticket_days) resort_id, park_date, ticket_days, per_day_usd, observed_at
+           from ticket_calendar order by resort_id, park_date, ticket_days, observed_at desc, id desc)
+       select resort_id, to_char(park_date, 'YYYY-MM') as month, ticket_days,
               count(*)::int as dates, min(per_day_usd) as low, max(per_day_usd) as high,
               max(observed_at) as last
-         from latest group by resort_id, to_char(park_date, 'YYYY-MM')
-        order by resort_id, month`);
+         from latest group by resort_id, to_char(park_date, 'YYYY-MM'), ticket_days
+        order by resort_id, month, ticket_days`);
     return (r.rows as Array<Record<string, unknown>>).map((x) => ({
       resortId: String(x.resort_id), month: String(x.month), ticketDays: Number(x.ticket_days),
       dates: Number(x.dates), low: Number(x.low), high: Number(x.high),
