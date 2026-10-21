@@ -218,6 +218,35 @@ list.**
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-18 to 10-21 — site redesign: mock-ups only, plus the new tab icon (READ FIRST)
+
+Owner: "I've seen three vibe coded sites in the last two days that all look
+exactly like this." Mock-ups live on a claude.ai Design canvas (owner's
+account, "Pricing the Magic — design skins"), NOT in the repo. Nothing in
+prototype.html's look has changed yet.
+- **Direction picked: G "Enchanted Atlas"**: E's light chart-paper route map
+  (real coastlines, equirectangular centred on the Pacific) + the ORIGINAL
+  castle badges (`public/brand/badge-*.svg`) as map markers and in the result
+  rows + navy #16204A / gold #E8B23E + Bricolage Grotesque headlines + the
+  plane / bed / ticket / fork-and-knife price icons on every cost line.
+  Owner's last changes: no wavy line under the headline; every TOTAL is a
+  split-flap board whose digits spin and land one by one, cheapest resort
+  first, "while the totals are being calculated" (in the real site: while
+  /api/compare loads; honor prefers-reduced-motion).
+- **Rejected, don't bring back:** A's all-black airport look ("lacked a
+  certain magic and whimsy needed for Disney"), E in dark ("just looks like an
+  AI site": navy + condensed sans + thin borders), F (A + E hybrid), B, C, D.
+  Owner likes: E's map, the castles, the price icons, the flip-board totals.
+- **Tab icon DECIDED: "Sparkle on an orbit"** (gold sparkle in a dashed
+  orbit, navy square). Built and wired 2026-10-21:
+  `public/brand/tab-icon.svg` (+ `tab-icon-bleed.svg`, square corners for
+  phones), PNGs `favicon-32.png`, `favicon-48.png`, `apple-touch-icon.png`
+  from `sh tools/brand/png.sh` (headless Chromium), `tabIcon()` in
+  `tools/brand/gen.mjs`. The page LOGO stays the castle `mark.svg`. The
+  locked coming-soon page inlines the same icon (`TAB_ICON_SVG`,
+  siteGate.ts). `.png` added to server.ts MIME. Needs a Render redeploy.
+- Next: owner to confirm G, then plan moving prototype.html onto it.
+
 ### 2026-10-17 — first two nights after A-E (governing rule #4 check). START HERE.
 
 Checked 2026-10-17 from the job logs of the Oct 16 and Oct 17 runs plus
@@ -1276,7 +1305,8 @@ $9,483, Tokyo $9,715. `SAMPLE_TRIP` (prototype.html) now carries `stay`;
   longer does.
 - Phone hero: castle badges removed. "Which day should we price?" moved up
   beside Nights so the park-days "?" note opens under its own row.
-- **Tab icon: owner still deciding** between globe and sparkle variations
+- **Tab icon: DECIDED 2026-10-21, "Sparkle on an orbit" (see the redesign
+  section at the top).** Was: owner still deciding between globe and sparkle variations
   (Claude suggested B2 simple globe + sparkle, or C3 sparkle on a dashed
   orbit). Nothing that COUNTS the parks: a seventh resort (Abu Dhabi) is
   coming, which will also need the "Six Disney resorts" headline reworded.

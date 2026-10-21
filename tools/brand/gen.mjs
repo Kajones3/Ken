@@ -216,4 +216,17 @@ const mark = (bg, fg, gold) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
   `<path d="M28 50 v-7 a4 4 0 0 1 8 0 v7 Z" fill="${bg}"/>` +
   `<rect x="14" y="52.5" width="36" height="3" rx="1.5" fill="${gold}"/></svg>`;
 writeFileSync(`${out}/mark.svg`, mark("#16204A", "#F5EFE0", GOLD));
+
+// The tab icon (owner's pick, 2026-10-21: "Sparkle on an orbit"): a gold
+// sparkle inside a dashed orbit. It counts no parks, so a seventh resort never
+// makes it wrong. The page logo stays the castle mark above. `bleed` drops the
+// rounded corners for the phone home-screen icon, which iOS rounds itself.
+// The PNG copies (Safari ignores SVG tab icons) come from tools/brand/png.sh.
+const tabIcon = (bleed) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
+  (bleed ? `<rect width="64" height="64" fill="#16204A"/>` : `<rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/>`) +
+  `<ellipse cx="32" cy="32" rx="25" ry="10" transform="rotate(-24 32 32)" fill="none" stroke="#F5EFE0" stroke-width="2.5" stroke-dasharray="3.5 4"/>` +
+  `<path d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z" fill="${GOLD}"/>` +
+  `<circle cx="53" cy="22" r="3" fill="#F5EFE0"/></svg>`;
+writeFileSync(`${out}/tab-icon.svg`, tabIcon(false));
+writeFileSync(`${out}/tab-icon-bleed.svg`, tabIcon(true));
 console.log(`map ${W}x${H}, ${dots.length} dots`);

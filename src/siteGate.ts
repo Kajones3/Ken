@@ -111,6 +111,9 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) =>
  *  nothing under /public is served, so the page can't link to it. */
 const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/><path d="M14 50 V33 h5 v-6 l3.5 -9 l3.5 9 v6 h12 v-6 l3.5 -9 l3.5 9 v6 h5 V50 Z" fill="#F5EFE0"/><path d="M27.5 33 V22 l4.5 -12 l4.5 12 V33 Z" fill="#F5EFE0"/><circle cx="32" cy="8.5" r="2.6" fill="#E8B23E"/><path d="M28 50 v-7 a4 4 0 0 1 8 0 v7 Z" fill="#16204A"/><rect x="14" y="52.5" width="36" height="3" rx="1.5" fill="#E8B23E"/></svg>`;
 
+/** The tab icon (public/brand/tab-icon.svg), inline for the same reason. */
+const TAB_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/><ellipse cx="32" cy="32" rx="25" ry="10" transform="rotate(-24 32 32)" fill="none" stroke="#F5EFE0" stroke-width="2.5" stroke-dasharray="3.5 4"/><path d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z" fill="#E8B23E"/><circle cx="53" cy="22" r="3" fill="#F5EFE0"/></svg>`;
+
 export function comingSoonHtml(opts: { next?: string; error?: string } = {}): string {
   const next = safeNext(opts.next);
   return `<!doctype html>
@@ -120,7 +123,7 @@ export function comingSoonHtml(opts: { next?: string; error?: string } = {}): st
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>Pricing the Magic · Coming soon</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(MARK_SVG)}">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(TAB_ICON_SVG)}">
 <style>
 :root{color-scheme:light;--plane:#F1F2F6;--surface:#FBFBFD;--ink:#14161F;--ink-2:#565B6B;--muted:#878DA0;
   --rule:#E1E3EB;--accent:#9A6A00;--accent-bg:#F6E7C4;--accent-line:#D9A22B;--bad:#B3261E}
