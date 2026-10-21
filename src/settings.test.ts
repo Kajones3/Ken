@@ -192,7 +192,21 @@ test("an override for Park Hopper moves the ticket line", async () => {
   const raised = priceTrip(bookWith({ "hopper.wdw.adult": ownerValue }), wdw, p, {}, START);
   assert.ok(shipped.ok && raised.ok);
   if (!shipped.ok || !raised.ok) return;
-  assert.equal(Math.round(raised.price.tickets - shipped.price.tickets), 25 * 2, "two adults");
+  // Plus Walt Disney World's 6.5% ticket tax, which the hopper carries too.
+  assert.equal(Math.round(raised.price.tickets - shipped.price.tickets), Math.round(25 * 2 * 1.065), "two adults, taxed");
+});
+
+test("Walt Disney World tickets carry Disney's 6.5% checkout tax; a 0 setting takes it off", async () => {
+  const wdw = RESORTS.find((r) => r.id === "wdw")!;
+  const taxed = priceTrip(bookWith({}), wdw, baseParams, {}, START);
+  const untaxed = priceTrip(bookWith({ "tickets.wdw.taxPct": 0 }), wdw, baseParams, {}, START);
+  assert.ok(taxed.ok && untaxed.ok);
+  if (!taxed.ok || !untaxed.ok) return;
+  assert.equal(taxed.price.ticketTaxPct, 6.5);
+  assert.equal(untaxed.price.ticketTaxPct, 0);
+  assert.ok(Math.abs(taxed.price.tickets / untaxed.price.tickets - 1.065) < 1e-9);
+  const lines = taxed.price.ticketLines.reduce((a, l) => a + l.totalUsd, 0);
+  assert.ok(Math.abs(lines - taxed.price.tickets) < 0.05, "the ticket lines add up to the taxed line");
 });
 
 test("no overrides at all prices identically to the shipped defaults", async () => {

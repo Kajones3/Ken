@@ -32,7 +32,7 @@
  * December, and the owner's nightly job list already warns about it.
  */
 import type { Db } from "./db.js";
-import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey } from "./config.js";
+import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, TICKET_TAX_PCT, ticketTaxKey } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
 import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
 import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
@@ -126,6 +126,14 @@ export const SETTINGS: SettingDef[] = [
     key: suggestedParkDaysKey(r.id), label: `${r.name} — park days we suggest`, group: "Park tickets",
     kind: "number", default: SUGGESTED_PARK_DAYS[r.id]!.days, min: 1, max: 10,
     help: `Ticket days priced when a traveler leaves "Park days" on our suggestion. Shipped as ${SUGGESTED_PARK_DAYS[r.id]!.days}: ${SUGGESTED_PARK_DAYS[r.id]!.why}. Travelers can still change it for any resort on its detail card.`,
+  })),
+  // Sales tax on park tickets, where the resort's own price leaves it out.
+  ...RESORTS.map((r): SettingDef => ({
+    key: ticketTaxKey(r.id), label: `${r.name} — sales tax on park tickets`, group: "Park tickets",
+    kind: "percent", default: TICKET_TAX_PCT[r.id] ?? 0, min: 0, max: 25,
+    help: r.id === "wdw"
+      ? "Added to every ticket and Park Hopper. 6.5% is what Disney's own cart charges (checked 2026-10-21)."
+      : "Added to every ticket and Park Hopper. 0 because this resort's prices already include tax, or (Disneyland) California doesn't tax admission; check a real cart if unsure.",
   })),
   // Annual passes. Every tier is here because Disney raises them roughly once
   // a year and the owner should never have to wait for a code change to be

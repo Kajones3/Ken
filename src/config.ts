@@ -1015,6 +1015,17 @@ export function localResortFor(originIata: string): Resort | null {
  * nothing. The free refresh still keeps near months warm; that costs nothing
  * and an old saved search for a month that has since come close still prices.
  */
+/**
+ * Sales tax on park tickets, percent, where the price Disney quotes leaves it
+ * out. Walt Disney World's cart adds 6.5% (owner's screenshot, 2026-10-21:
+ * $199.40 tax on $3,067.43 of 5-day tickets). Every other resort is 0: the
+ * four overseas resorts quote prices with tax included, and California does
+ * not tax admission tickets (Claude's understanding, not checked against a
+ * Disneyland cart yet). Owner-editable: `tickets.<resort>.taxPct`.
+ */
+export const TICKET_TAX_PCT: Record<string, number> = { wdw: 6.5 };
+export const ticketTaxKey = (resortId: string) => `tickets.${resortId}.taxPct`;
+
 export const PLANNING_LEAD_MONTHS = 2;
 export const PLANNING_LAST_MONTH = 10;
 

@@ -3573,6 +3573,7 @@ async function renderDetail(){
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
           ${ticketRowsHtml}
+          ${x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">Includes ${x.ticketTaxPct}% sales tax, which Disney adds at checkout.</p>` : ""}
           <div class="foot">
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ticket page →</a>
           </div>
