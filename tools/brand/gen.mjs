@@ -190,7 +190,7 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
 }
 
 writeFileSync(`${out}/map-dark.svg`, map({ dot: "#26325E", label: "#AEB9DA", pin: GOLD, route: "#E8B23E99", line: null }));
-writeFileSync(`${out}/map-light.svg`, map({ dot: "#CBD7EC", label: "#3A4670", pin: "#C98A12", route: "#C98A12AA", line: "#2B3A67" }));
+writeFileSync(`${out}/map-light.svg`, map({ dot: "#BFD1D8", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
   writeFileSync(`${out}/map-cover-${r.id}.svg`, map({ dot: "#D5DFEF", label: "#3A4670", pin: "#C98A12", route: "#C98A1288", line: "#2B3A67", focus: r.id }));

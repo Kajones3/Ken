@@ -6,154 +6,112 @@
 <link rel="apple-touch-icon" href="/public/brand/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Karla:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700&display=swap">
 
 <style>
-/* ---------- tokens: light is the base, both dark scopes override ---------- */
+/* ---------- tokens: "Enchanted Atlas" (owner picked it 2026-10-21) ----------
+   Chart-paper ground, navy ink, gold only as a fill. Light only, on purpose:
+   the owner turned down every dark version ("just looks like an AI site"),
+   so a visitor whose phone is in dark mode still gets the paper map. */
 :root{
   color-scheme: light;
-  --plane:#F1F2F6;
-  --surface:#FBFBFD;
-  --surface-2:#F6F7FA;
-  --ink:#14161F;
-  --ink-2:#565B6B;
-  --muted:#878DA0;
-  --rule:#E1E3EB;
-  --rule-strong:#C9CCD8;
-  --accent:#9A6A00;        /* amber, ink-safe on light */
-  --accent-bg:#F6E7C4;
-  --accent-line:#D9A22B;
-  --s1:#2a78d6;            /* flights  */
-  --s2:#eb6834;            /* tickets  */
-  --s3:#1baf7a;            /* hotel    */
-  --s4:#4a3aa7;            /* food     */
-  --s5:#0f8f7c;            /* weather (was airport transport, since removed) */
-  --s6:#b0761c;            /* crowds   */
+  --plane:#DFEAEC;          /* the ground the page sits on */
+  --surface:#FBFAF6;        /* paper: panels, the board, dialogs */
+  --surface-2:#F1F5F4;      /* a card or input sitting on paper */
+  --ink:#16204A;            /* navy */
+  --ink-2:#4C5878;
+  --muted:#626D88;
+  --rule:#D5E1E5;
+  --rule-strong:#AFC3CA;
+  --accent:#8A6100;         /* gold as TEXT (the gold fill is too light to read) */
+  --accent-bg:#F7EBCB;
+  --accent-line:#E8B23E;    /* gold as a fill or a line */
+  --cream:#F5EFE0;
+  --s1:#16204A;             /* flights / driving */
+  --s2:#E8B23E;             /* tickets  */
+  --s3:#5B8DB8;             /* hotel    */
+  --s4:#C0563F;             /* food     */
+  --s5:#3F8A8C;             /* weather  */
+  --s6:#A86A12;             /* crowds   */
+  --warnbg:#FBEFD3; --warnfg:#8A4B00; --warnbd:#D9A22B;
   --dv-lo-4:#0d366b; --dv-lo-3:#256abf; --dv-lo-2:#6da7ec; --dv-lo-1:#b7d3f6;
-  --dv-mid:#E6E6E2;
+  --dv-mid:#C7D5DA;
   --dv-hi-1:#f7c9c5; --dv-hi-2:#eb8b85; --dv-hi-3:#cf3f3f; --dv-hi-4:#8c2323;
-  --lock:rgba(20,22,31,.055);
-  --shadow:0 1px 2px rgba(20,22,31,.05), 0 8px 24px -12px rgba(20,22,31,.14);
-  --ring:rgba(20,22,31,.10);
-  /* The hero illustration (tools/brand/gen.mjs), one per theme. */
+  --lock:rgba(22,32,74,.06);
+  --shadow:none;
+  --ring:rgba(22,32,74,.12);
   --hero-map:url("/public/brand/map-light.svg");
-  --hero-bg:#F3F6FB;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    color-scheme: dark;
-    --plane:#0B0D13;
-    --surface:#14171F;
-    --surface-2:#1A1E27;
-    --ink:#F4F5FA;
-    --ink-2:#A8AEC0;
-    --muted:#7C8296;
-    --rule:#252935;
-    --rule-strong:#39404F;
-    --accent:#E8B23E;
-    --accent-bg:#2B2412;
-    --accent-line:#E8B23E;
-    --s1:#3987e5;
-    --s2:#d95926;
-    --s3:#199e70;
-    --s4:#9085e9;
-    --s5:#2dd4c4;
-  --s6:#e0a93f;
-    --s6:#e0a93f;
-    --dv-lo-4:#cde2fb; --dv-lo-3:#86b6ef; --dv-lo-2:#2a78d6; --dv-lo-1:#1c4478;
-    --dv-mid:#3A3F49;
-    --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
-    --lock:rgba(255,255,255,.05);
-    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
-    --ring:rgba(255,255,255,.11);
-    --hero-map:url("/public/brand/map-dark.svg");
-    --hero-bg:#0E1530;
-  }
-}
-:root[data-theme="dark"]{
-  color-scheme: dark;
-  --plane:#0B0D13;
-  --surface:#14171F;
-  --surface-2:#1A1E27;
-  --ink:#F4F5FA;
-  --ink-2:#A8AEC0;
-  --muted:#7C8296;
-  --rule:#252935;
-  --rule-strong:#39404F;
-  --accent:#E8B23E;
-  --accent-bg:#2B2412;
-  --accent-line:#E8B23E;
-  --s1:#3987e5;
-  --s2:#d95926;
-  --s3:#199e70;
-  --s4:#9085e9;
-  --s5:#2dd4c4;
-  --dv-lo-4:#cde2fb; --dv-lo-3:#86b6ef; --dv-lo-2:#2a78d6; --dv-lo-1:#1c4478;
-  --dv-mid:#3A3F49;
-  --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
-  --lock:rgba(255,255,255,.05);
-  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
-  --ring:rgba(255,255,255,.11);
-  --hero-map:url("/public/brand/map-dark.svg");
-  --hero-bg:#0E1530;
+  --hero-bg:var(--surface);
+  --f-head:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Public Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-label:"Barlow Condensed","Public Sans",sans-serif;
 }
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{
   margin:0; background:var(--plane); color:var(--ink);
-  font-family:"Karla",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-family:var(--f-body);
   font-size:15px; line-height:1.5;
   -webkit-font-smoothing:antialiased;
 }
-h1,h2,h3,.disp{font-family:"Archivo",ui-sans-serif,system-ui,sans-serif; text-wrap:balance; margin:0}
-.mono,.num{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace; font-variant-numeric:tabular-nums}
+h1,h2,h3,.disp{font-family:var(--f-head); text-wrap:balance; margin:0}
+.mono,.num{font-family:var(--f-body); font-variant-numeric:tabular-nums}
 button{font:inherit; color:inherit; cursor:pointer}
 a{color:var(--ink)}
-:focus-visible{outline:2px solid var(--accent-line); outline-offset:2px; border-radius:3px}
+:focus-visible{outline:2px solid var(--ink); outline-offset:2px; border-radius:4px}
 
 .wrap{max-width:1180px; margin:0 auto; padding:20px 20px 72px}
 
 /* ---------- masthead ---------- */
-.masthead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:6px 0 18px}
+.masthead{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; padding:6px 0 16px; margin-bottom:22px; border-bottom:2px solid var(--ink)}
 .brand{display:flex; align-items:center; gap:12px}
-.mark{width:40px; height:40px; display:block; flex:none}
-.brand h1{font-family:"Bricolage Grotesque","Archivo",sans-serif; font-size:24px; font-weight:800; letter-spacing:-.025em; line-height:1.05}
-.brand h1 span, .hero h2 span{color:var(--accent)}
+.mark{width:42px; height:42px; display:block; flex:none}
+.brand h1{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.05}
 
 /* ---------- hero ----------
    The six-castle map (owner, 2026-10-07). It greets a visitor and steps
    aside once a comparison is on screen, so the results never sit below a
    400px picture. */
-.hero{background:var(--hero-bg); border-radius:18px; overflow:hidden; margin:0 0 18px; padding:34px 20px 0; text-align:center}
-.hero h2{font-family:"Bricolage Grotesque","Archivo",sans-serif; font-weight:800; font-size:clamp(32px,5.4vw,58px);
-  line-height:1.03; letter-spacing:-.03em; color:var(--ink)}
-.hero p{margin:14px auto 0; max-width:38em; font-size:clamp(15px,1.7vw,18px); line-height:1.5; color:var(--ink-2)}
-.heromap{width:calc(100% + 40px); margin:10px -20px 0; aspect-ratio:1440/547;
-  background:var(--hero-map) center/100% auto no-repeat}
+.hero{margin:6px 0 24px}
+.herotop{display:flex; flex-wrap:wrap; gap:20px 40px; align-items:flex-end; justify-content:space-between}
+.herohead{flex:1 1 560px; min-width:0}
+.eyebrow{display:flex; align-items:center; gap:8px; margin:0; font-family:var(--f-label); font-weight:700;
+  font-size:16px; letter-spacing:.2em; text-transform:uppercase; color:var(--accent)}
+.sparkle{width:15px; height:15px; flex:none; display:block}
+.hero h2{margin-top:10px; font-family:var(--f-head); font-weight:800; font-size:clamp(46px,7.4vw,92px);
+  line-height:.95; letter-spacing:-.02em; color:var(--ink)}
+.hero h2 span{display:block}
+.heroside{flex:0 1 380px; display:flex; flex-direction:column; gap:14px}
+.heroside p{margin:0; font-size:clamp(16px,1.6vw,19px); line-height:1.5; color:var(--ink)}
+.heroicons{display:flex; flex-wrap:wrap; gap:10px 16px; font-size:14px; font-weight:600}
+.heroicons span{display:inline-flex; align-items:center; gap:8px}
+.herofig{margin:28px 0 0; background:var(--surface); border:2px solid var(--ink); border-radius:16px; padding:14px 14px 0; overflow:hidden}
+.heromap{width:100%; aspect-ratio:1440/547; border-radius:10px; background:var(--hero-map) center/100% auto no-repeat}
 @media (max-width:560px){
-  .hero{padding:24px 14px 14px; text-align:left; border-radius:14px}
-  .hero p{margin-top:10px}
-  .heromap{width:calc(100% + 28px); margin:12px -14px 0}
-  .herostory{padding:14px 0 6px}
+  .hero h2{font-size:clamp(40px,12vw,56px)}
+  .herofig{margin-top:20px; padding:10px 10px 0; border-radius:14px}
+  .herostory{padding:14px 2px 8px}
+  .heroicons{gap:8px 12px; font-size:13px}
+  .heroicons .ci.lg{width:28px; height:28px; border-radius:8px}
 }
 .tag{margin:1px 0 0; color:var(--ink-2); font-size:12.5px}
 .acct{display:flex; align-items:center; gap:9px; flex-wrap:wrap; row-gap:8px}
 .chip{
-  font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-  padding:5px 9px; border-radius:999px; border:1px solid var(--rule-strong); color:var(--ink-2);
+  font-family:var(--f-label); font-size:13px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  padding:5px 11px; border-radius:999px; border:1.5px solid var(--rule-strong); color:var(--ink-2);
   white-space:nowrap;
 }
 .chip.plus{background:var(--accent-bg); border-color:var(--accent-line); color:var(--accent)}
-.btn{border:1px solid var(--rule-strong); background:var(--surface); border-radius:9px; padding:8px 14px; font-weight:600; font-size:13.5px}
-.btn:hover{border-color:var(--ink-2)}
-.btn-primary{background:var(--ink); color:var(--plane); border:1px solid var(--ink); border-radius:9px; padding:11px 20px; font-weight:700; font-size:14px; letter-spacing:-.01em; display:inline-flex; align-items:center; gap:8px}
+.btn{border:1.5px solid var(--ink); background:var(--surface); color:var(--ink); border-radius:999px; padding:8px 16px; font-weight:600; font-size:13.5px; text-decoration:none}
+.btn:hover{background:var(--surface-2)}
+.btn-primary{background:var(--ink); color:var(--cream); border:1.5px solid var(--ink); border-radius:999px; padding:12px 26px; font-family:var(--f-head); font-weight:800; font-size:17px; letter-spacing:-.01em; display:inline-flex; align-items:center; gap:9px}
+.btn-primary:hover{background:var(--ink)}
 .btn-primary:hover{opacity:.88}
 .btn-primary:disabled{opacity:.7; cursor:default}
-.spinner{width:13px; height:13px; border-radius:50%; border:2px solid rgba(255,255,255,.35); border-top-color:var(--plane); animation:spin .7s linear infinite; flex:none}
-:root[data-theme="light"] .spinner, :root:not([data-theme="dark"]) .spinner{border-color:rgba(20,22,31,.25); border-top-color:var(--plane)}
+.spinner{width:14px; height:14px; border-radius:50%; border:2px solid rgba(245,239,224,.35); border-top-color:var(--accent-line); animation:spin .7s linear infinite; flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
-.btn-sm{padding:6px 11px; font-size:12.5px; border-radius:7px}
+.btn-sm{padding:6px 13px; font-size:12.5px; border-radius:999px}
 /* The signed-in indicator. A bordered button with an avatar rather than a
    chip, because the complaint it fixes was "I have no real idea that I am
    signed in" — a small gray chip among other small gray chips was not
@@ -175,11 +133,11 @@ a{color:var(--ink)}
    stretched each checkbox across the row and pushed its label out of view. */
 .attrpick input[type=checkbox]{margin-top:2px; flex:none; width:auto; min-height:0; padding:0}
 .attrpick .who{color:var(--muted); font-size:11.5px; display:block}
-.acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1px solid var(--rule-strong);
-  border-radius:999px; background:var(--surface-2); text-align:left; max-width:260px}
+.acctbtn{display:flex; align-items:center; gap:9px; padding:5px 12px 5px 5px; border:1.5px solid var(--ink);
+  border-radius:999px; background:var(--surface); text-align:left; max-width:260px}
 .acctbtn:hover{border-color:var(--ink-2)}
 .acctbtn[hidden]{display:none}
-.avatar{width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--plane); flex:none;
+.avatar{width:28px; height:28px; border-radius:50%; background:var(--ink); color:var(--cream); flex:none;
   display:grid; place-items:center; font-weight:800; font-size:12.5px; text-transform:uppercase}
 .acctmeta{display:flex; flex-direction:column; min-width:0; line-height:1.25}
 .acctname{font-size:12.5px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -203,12 +161,14 @@ a{color:var(--ink)}
 /* ---------- demo banner ---------- */
 .demo{
   display:flex; gap:10px; align-items:flex-start;
-  border:1px dashed var(--accent-line); background:var(--accent-bg);
-  color:var(--ink); border-radius:10px; padding:10px 13px; margin-bottom:18px; font-size:13px;
+  border:1px solid var(--rule-strong); border-left:4px solid var(--accent-line); background:var(--surface);
+  color:var(--ink); border-radius:12px; padding:11px 14px; margin-bottom:18px; font-size:13.5px;
 }
 .mhead .pwhonest{font-size:13px; opacity:.85; margin-top:8px}
 .demo b{font-weight:700}
-.demo .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-line);margin-top:7px;flex:none}
+/* A small gold sparkle, the same four-point star as the tab icon. */
+.demo .dot{width:13px;height:13px;background:var(--accent-line);margin-top:3px;flex:none;
+  clip-path:polygon(50% 0,62% 38%,100% 50%,62% 62%,50% 100%,38% 62%,0 50%,38% 38%)}
 /* ---------- intro ----------
    This used to be a dashed "prototype build" banner explaining that the
    plumbing was a stand-in. It isn't one any more, and a notice telling
@@ -219,9 +179,9 @@ a{color:var(--ink)}
 /* The owner's story sits under the map as its caption: same quiet ink as the
    subhead, a hairline above it, no colored box (owner, 2026-10-08: the old
    amber panel read as a warning, "super yellow" in dark mode). */
-.herostory{max-width:40em; margin:0 auto; padding:18px 0 26px; border-top:1px solid var(--rule)}
-.hero .herostory p{margin:0; max-width:none; font-size:15px; line-height:1.6; color:var(--ink-2)}
-.hero .herostory .herosign{margin-top:10px; font-family:"Bricolage Grotesque","Archivo",sans-serif;
+.herostory{padding:16px 6px 20px; border-top:1px solid var(--rule)}
+.hero .herostory p{margin:0; max-width:46em; font-size:15px; line-height:1.6; color:var(--ink-2)}
+.hero .herostory .herosign{margin-top:10px; font-family:var(--f-head);
   font-weight:700; font-size:17px; letter-spacing:-.01em; color:var(--ink)}
 .gtk{margin-bottom:16px}
 .gtk ul{margin:6px 0 0; padding-left:18px}
@@ -230,8 +190,8 @@ a{color:var(--ink)}
 
 /* ---------- search panel ---------- */
 .panel{
-  background:var(--surface); border:1px solid var(--rule); border-radius:14px;
-  padding:16px 16px 14px; box-shadow:var(--shadow); margin-bottom:22px;
+  background:var(--surface); border:2px solid var(--ink); border-radius:16px;
+  padding:18px 18px 16px; margin-bottom:22px;
 }
 .panel-lab{font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:12px}
 .fields{display:grid; grid-template-columns:repeat(3,1fr); gap:12px 16px; align-items:end}
@@ -245,17 +205,17 @@ a{color:var(--ink)}
  * the row, never inside the column, so the dropdowns stay on one line. */
 .labrow{display:flex; align-items:center; gap:6px}
 .qhelp{width:18px; height:18px; flex:none; padding:0; border-radius:50%; border:1px solid var(--rule);
-  background:var(--surface); color:var(--ink-2); font:700 11px/1 "Karla",sans-serif; cursor:pointer}
+  background:var(--surface); color:var(--ink-2); font:700 11px/1 var(--f-body); cursor:pointer}
 .qhelp[aria-expanded="true"]{background:var(--ink-2); color:var(--surface); border-color:var(--ink-2)}
 .helpnote{font-size:12px; color:var(--ink-2); margin:6px 0 10px; padding:8px 10px; border-left:3px solid var(--rule-strong); background:var(--surface-2)}
 .f select,.f input{
-  width:100%; background:var(--surface-2); color:var(--ink);
-  border:1px solid var(--rule-strong); border-radius:8px; padding:9px 10px;
-  font-family:"JetBrains Mono",monospace; font-size:13px; font-variant-numeric:tabular-nums;
+  width:100%; background:var(--surface); color:var(--ink);
+  border:1.5px solid var(--rule-strong); border-radius:10px; padding:9px 11px;
+  font-family:var(--f-body); font-size:14.5px; font-weight:600; font-variant-numeric:tabular-nums;
 }
-.f select{font-family:"Karla",sans-serif; font-size:13.5px}
+.f select:focus,.f input:focus{border-color:var(--ink); outline:none}
 .bbill select{width:100%; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong);
-  border-radius:8px; padding:8px 10px; font:13.5px "Karla",sans-serif}
+  border-radius:8px; padding:8px 10px; font:13.5px var(--f-body)}
 .ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .ages[hidden]{display:none}
 .gt-block{margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
@@ -273,7 +233,7 @@ a{color:var(--ink)}
 .ages .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); align-self:center; margin-right:2px}
 .agef{display:flex; flex-direction:column; gap:4px}
 .agef label{font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
-.agef select{width:92px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:7px 8px; font-family:"JetBrains Mono",monospace; font-size:12.5px}
+.agef select{width:92px; background:var(--surface-2); color:var(--ink); border:1px solid var(--rule-strong); border-radius:8px; padding:7px 8px; font-family:var(--f-body); font-size:12.5px}
 .bandnote{font-size:11px; color:var(--muted); margin-top:3px}
 /* Collapsed state: everything in the panel hides except its label and the
    one-line summary. `!important` because `.fields`/`.f` set an explicit
@@ -281,7 +241,7 @@ a{color:var(--ink)}
 .panel.collapsed > *:not(.panel-lab):not(#tripCollapsed):not(#tripExtras){display:none!important}
 .collapsed-trip{display:flex; gap:12px; align-items:center; justify-content:space-between;
   flex-wrap:wrap; padding:2px 0}
-.collapsed-trip b{font-family:"Archivo"; font-size:15px; font-weight:700; letter-spacing:-.01em}
+.collapsed-trip b{font-family:var(--f-head); font-size:15px; font-weight:700; letter-spacing:-.01em}
 .collapsed-trip small{display:block; font-size:12px; color:var(--muted); margin-top:2px}
 /* Extra costs live WITH the saved search they belong to, not in a panel
    floating above every search. The old standalone box read as having
@@ -300,14 +260,14 @@ a{color:var(--ink)}
 
 /* ---------- results ---------- */
 .res-head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; margin-bottom:10px}
-.res-head h2{font-size:17px; font-weight:700; letter-spacing:-.02em}
-.res-sub{font-size:12.5px; color:var(--ink-2); margin-top:2px}
+.res-head h2{font-family:var(--f-head); font-size:clamp(28px,3.6vw,40px); font-weight:800; letter-spacing:-.02em; line-height:1}
+.res-sub{font-size:14px; color:var(--ink-2); margin-top:6px}
 .legend{display:flex; gap:14px; align-items:center; flex-wrap:wrap}
-.lg{display:flex; align-items:center; gap:6px; font-size:12px; color:var(--ink-2)}
+.lg{display:flex; align-items:center; gap:7px; font-size:13px; font-weight:600; color:var(--ink)}
 .sw{width:11px; height:11px; border-radius:3px; flex:none}
-.viewtog{display:flex; border:1px solid var(--rule-strong); border-radius:8px; overflow:hidden}
+.viewtog{display:flex; border:1.5px solid var(--ink); border-radius:999px; overflow:hidden}
 .viewtog button{background:var(--surface); border:0; padding:6px 11px; font-size:12px; font-weight:600; color:var(--ink-2)}
-.viewtog button[aria-pressed="true"]{background:var(--ink); color:var(--plane)}
+.viewtog button[aria-pressed="true"]{background:var(--ink); color:var(--cream)}
 
 .estnote.staynote{color:var(--ink-2)}
 /* Weather: a KPI row of stat tiles, not a chart — three headline numbers is
@@ -397,13 +357,13 @@ a{color:var(--ink)}
 
   /* --- the cover --- */
   .pcover{break-after:page}
-  .pcover .psample{display:inline-block; font:800 9pt "Archivo",sans-serif; letter-spacing:.12em; text-transform:uppercase;
+  .pcover .psample{display:inline-block; font:800 9pt var(--f-head); letter-spacing:.12em; text-transform:uppercase;
     border:1.5px solid #b07c0c; color:#b07c0c!important; border-radius:4px; padding:2px 8px; margin:0 0 10px}
-  .pcover h1{font-family:"Archivo",sans-serif; font-size:26pt; font-weight:800;
+  .pcover h1{font-family:var(--f-head); font-size:26pt; font-weight:800;
     letter-spacing:-.025em; line-height:1.12; margin:0 0 14px}
   .pcover p{font-size:11.5pt; line-height:1.6; margin:0 0 10px; max-width:50em}
   .pcover .psub{font-size:9pt; color:#555; border-top:1px solid #ccc; padding-top:9px; margin-top:18px}
-  .pcover .pbrand{display:flex; align-items:center; gap:8px; font-family:"Bricolage Grotesque","Archivo",sans-serif;
+  .pcover .pbrand{display:flex; align-items:center; gap:8px; font-family:var(--f-head);
     font-weight:800; font-size:13pt; margin:0 0 28px}
   .pcover .pbrand img{width:26px; height:26px}
   .pcover .pmap{display:block; width:100%; height:auto; margin:22px 0 4px}
@@ -414,11 +374,11 @@ a{color:var(--ink)}
      would leave a blank sheet between them, which is the exact complaint
      that started this work. */
   .presort:first-of-type{break-before:auto}
-  .presort h2{font-family:"Archivo",sans-serif; font-size:18pt; font-weight:800;
+  .presort h2{font-family:var(--f-head); font-size:18pt; font-weight:800;
     letter-spacing:-.02em; margin:0 0 2px}
   .presort .prank{font-size:9pt; color:#555; margin:0 0 14px; font-weight:600;
     text-transform:uppercase; letter-spacing:.05em}
-  .presort h3{font-family:"Archivo",sans-serif; font-size:11.5pt; font-weight:700;
+  .presort h3{font-family:var(--f-head); font-size:11.5pt; font-weight:700;
     margin:17px 0 6px; padding-bottom:3px; border-bottom:1px solid #ddd}
   .presort p{margin:0 0 8px; max-width:52em}
   .presort ul{margin:4px 0 10px; padding-left:19px}
@@ -452,28 +412,31 @@ a{color:var(--ink)}
 /* overflow:clip, not hidden: a hidden box can still be scrolled sideways by
    the browser (focusing a button near its edge does it), which slid the open
    details left and cut words off both sides (owner, 2026-10-08). */
-.board{list-style:none; margin:0; padding:0; background:var(--surface); border:1px solid var(--rule); border-radius:14px; overflow:hidden; overflow:clip; box-shadow:var(--shadow)}
+.board{list-style:none; margin:0; padding:0; background:var(--surface); border:2px solid var(--ink); border-radius:16px; overflow:hidden; overflow:clip}
 .row{
-  display:grid; grid-template-columns:34px minmax(190px,1.35fr) minmax(200px,1.5fr) 150px 96px;
-  gap:16px; align-items:center; padding:15px 16px; border-top:1px solid var(--rule);
+  display:grid; grid-template-columns:60px minmax(190px,1.3fr) minmax(220px,1.6fr) 170px 96px;
+  gap:16px; align-items:center; padding:18px 20px; border-top:1px solid var(--rule);
   position:relative;
 }
 .row:first-child{border-top:0}
-.row.best{background:linear-gradient(90deg,var(--accent-bg) 0%, transparent 62%)}
-.row.best::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent-line)}
+.row.best{background:linear-gradient(90deg,var(--accent-bg) 0%, transparent 66%)}
+.row.best::before{content:""; position:absolute; inset:0 auto 0 0; width:4px; background:var(--accent-line)}
 .row.empty-prompt{display:block; padding:28px 16px; text-align:center}
 .row.empty-prompt .rname{font-size:14.5px}
 .row.empty-prompt .rmeta{justify-content:center; margin-top:5px}
-.rank{font-family:"Archivo"; font-weight:800; font-size:19px; color:var(--muted); letter-spacing:-.03em}
-.row.best .rank{color:var(--accent)}
+/* The rank's column holds the resort's castle badge; the number itself is
+   written in the eyebrow above the name ("No. 1 · Cheapest"). */
+.rank{font-family:var(--f-head); font-weight:800; font-size:19px; color:var(--muted); letter-spacing:-.03em}
+.rank img{width:58px; height:58px; display:block}
+.reyebrow{font-family:var(--f-label); font-weight:700; font-size:13.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); line-height:1.2}
 .ident{min-width:0}
-.rname{font-family:"Archivo"; font-weight:700; font-size:15.5px; letter-spacing:-.02em; line-height:1.2}
-.rmeta{font-size:11.5px; color:var(--ink-2); margin-top:3px; display:flex; gap:6px; align-items:center; flex-wrap:wrap}
-.code{font-family:"JetBrains Mono",monospace; font-size:10.5px; font-weight:600; letter-spacing:.04em; border:1px solid var(--rule-strong); border-radius:4px; padding:1px 4px; color:var(--ink)}
+.rname{font-family:var(--f-head); font-weight:800; font-size:23px; letter-spacing:-.015em; line-height:1.08}
+.rmeta{font-size:12.5px; color:var(--ink-2); margin-top:4px; display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.code{font-family:var(--f-label); font-size:12.5px; font-weight:700; letter-spacing:.1em; border:1.5px solid var(--rule-strong); border-radius:6px; padding:0 5px; color:var(--ink)}
 .bestflag{display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:1px solid var(--accent-line); border-radius:999px; padding:1px 7px}
 
 .bar-wrap{min-width:0}
-.bar{display:flex; gap:2px; height:12px; border-radius:3px; overflow:hidden; margin-bottom:6px}
+.bar{display:flex; gap:2px; height:16px; border-radius:999px; overflow:hidden; margin-bottom:9px; background:var(--surface)}
 .seg{height:100%}
 .lowconf{display:inline-flex; align-items:center; font-size:9.5px; font-weight:800;
   letter-spacing:.08em; text-transform:uppercase; cursor:help;
@@ -527,10 +490,9 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
    owner saw the tickets square sitting high, which is exactly what this
    coupling produces elsewhere. Centring decouples them: an item's square now
    depends only on that item. */
-.barlabs{display:flex; gap:12px; font-size:11px; color:var(--ink-2); flex-wrap:wrap;
+.barlabs{display:flex; gap:6px 16px; font-size:13px; color:var(--ink); flex-wrap:wrap;
   align-items:center; align-content:center}
-.barlabs span{display:flex; align-items:center; gap:5px; white-space:nowrap; line-height:1.45}
-.barlabs i{width:7px;height:7px;border-radius:2px; display:block; flex:none}
+.barlabs > span{display:flex; align-items:center; gap:6px; white-space:nowrap; line-height:1.45}
 /* And the chip no longer inflates the line it sits in. */
 .barlabs .estchip,.barlabs .exactchip{line-height:1.3}
 
@@ -538,8 +500,8 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
    every detail card (`.kpitile.total`), which is how the card tiles went wonky
    between phone and desktop widths: see the 940px rule below. */
 .row > .total{text-align:right}
-.tnum{font-family:"Archivo"; font-weight:800; font-size:21px; letter-spacing:-.035em; font-variant-numeric:tabular-nums}
-.tsub{font-size:11px; color:var(--ink-2); margin-top:2px; font-variant-numeric:tabular-nums}
+.tnum{font-family:var(--f-head); font-weight:800; font-size:32px; line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
+.tsub{font-size:12px; color:var(--ink-2); margin-top:5px; font-variant-numeric:tabular-nums}
 .rowbtn{justify-self:end}
 
 /* locked rows */
@@ -551,25 +513,25 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 .lockover span{font-size:12.5px; font-weight:600; color:var(--ink)}
 
 /* table view */
-.tablewrap{overflow-x:auto; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow)}
+.tablewrap{overflow-x:auto; background:var(--surface); border:2px solid var(--ink); border-radius:16px}
 table{border-collapse:collapse; width:100%; font-size:13px}
 th,td{padding:10px 14px; text-align:right; white-space:nowrap; border-top:1px solid var(--rule)}
 th{font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:700; border-top:0}
 th:first-child,td:first-child{text-align:left}
-td.n{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums}
+td.n{font-family:var(--f-body); font-variant-numeric:tabular-nums}
 tbody tr:hover{background:var(--surface-2)}
 tbody tr[data-open]{cursor:pointer}
 tbody tr[data-open].sel{background:var(--surface-2)}
 
 /* ---------- detail ---------- */
-.detail{margin-top:26px; background:var(--surface); border:1px solid var(--rule); border-radius:14px; box-shadow:var(--shadow); overflow:hidden; overflow:clip; min-width:0}
+.detail{margin-top:26px; background:var(--surface); border:2px solid var(--ink); border-radius:16px; overflow:hidden; overflow:clip; min-width:0}
 /* Inline detail: a child of the row's own grid, spanning every column so it
    sits directly under the row you opened instead of a separate section far
    down the page — collapsing it brings the board straight back into view. */
-.row-detail{grid-column:1/-1; margin:14px -16px -15px; border-left:0; border-right:0; border-radius:0; border-top:1px solid var(--rule-strong)}
-.dhead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:16px 18px; border-bottom:1px solid var(--rule)}
-.dhead h3{font-size:16px; font-weight:700; letter-spacing:-.02em}
-.dhead p{margin:3px 0 0; font-size:12.5px; color:var(--ink-2)}
+.row-detail{grid-column:1/-1; margin:16px -20px -18px; border-left:0; border-right:0; border-radius:0; border-top:1px solid var(--rule-strong)}
+.dhead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:18px 20px; border-bottom:1px solid var(--rule)}
+.dhead h3{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.05}
+.dhead p{margin:5px 0 0; font-size:13.5px; color:var(--ink-2)}
 .dbody{padding:18px}
 .sec-lab{font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
 
@@ -580,7 +542,7 @@ tbody tr[data-open].sel{background:var(--surface-2)}
 button.mtile{cursor:pointer}
 button.mtile:hover{border-color:var(--rule-strong)}
 .mtile .mname{font-size:11.5px; font-weight:700; letter-spacing:.04em; color:var(--ink-2)}
-.mtile .mtotal{font-family:"JetBrains Mono",monospace; font-size:14px; font-variant-numeric:tabular-nums}
+.mtile .mtotal{font-family:var(--f-head); font-weight:800; font-size:17px; font-variant-numeric:tabular-nums}
 .mtile .mlevel{font-size:11px; color:var(--muted)}
 .mtile.cheaper{border-left:4px solid var(--dv-lo-3)}
 .mtile.pricier{border-left:4px solid var(--dv-hi-3)}
@@ -595,7 +557,7 @@ button.mtile:hover{border-color:var(--rule-strong)}
 .calgate-cta{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px,calc(100% - 24px));
   background:var(--surface); border:1px solid var(--accent-line); border-radius:12px; padding:16px 18px; text-align:center;
   box-shadow:0 8px 30px rgba(0,0,0,.18); display:flex; flex-direction:column; gap:8px; align-items:center}
-.calgate-cta b{font-family:"Archivo"; font-size:14px; letter-spacing:-.01em}
+.calgate-cta b{font-family:var(--f-head); font-size:14px; letter-spacing:-.01em}
 .calgate-cta span{font-size:12.5px; color:var(--ink-2)}
 
 /* ---------- budget page ---------- */
@@ -604,24 +566,24 @@ button.mtile:hover{border-color:var(--rule-strong)}
    list of hidden flags, so a future section can't forget to join. */
 body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .bhead{margin:4px 0 16px}
-.bhead h2{font-family:"Archivo"; font-size:24px; letter-spacing:-.03em; margin:12px 0 4px}
-.bgate b{font-family:"Archivo"; font-size:16px}
+.bhead h2{font-family:var(--f-head); font-size:clamp(30px,4vw,44px); font-weight:800; letter-spacing:-.02em; margin:14px 0 4px}
+.bgate b{font-family:var(--f-head); font-size:16px}
 .bgate p{font-size:13.5px; color:var(--ink-2); margin:8px 0 12px; max-width:62ch}
 .bmiles{list-style:none; margin:0; padding:0}
 .bmiles li{display:grid; grid-template-columns:110px minmax(0,1fr) auto; gap:4px 14px; align-items:baseline;
   padding:10px 0; border-top:1px solid var(--rule)}
 .bmiles li:first-child{border-top:0}
-.bmiles .when{font-family:"Archivo"; font-weight:700; font-size:13.5px; color:var(--accent)}
-.bmiles .when small{display:block; font:500 11.5px "Karla",sans-serif; color:var(--muted)}
+.bmiles .when{font-family:var(--f-head); font-weight:700; font-size:13.5px; color:var(--accent)}
+.bmiles .when small{display:block; font:500 11.5px var(--f-body); color:var(--muted)}
 .bmiles .what{font-size:13.5px}
-.bmiles .amt{font-family:"JetBrains Mono",monospace; font-size:13px; text-align:right}
+.bmiles .amt{font-family:var(--f-body); font-size:13px; text-align:right}
 .bmiles li.short .when{color:var(--warnfg,#f0c674)}
 @media (max-width:560px){ .bmiles li{grid-template-columns:minmax(0,1fr) auto} .bmiles .what{grid-column:1 / -1} }
 .bpass{width:100%; border-collapse:collapse; font-size:13px; margin:6px 0 4px}
 .bpass th{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); text-align:left; padding:6px 8px 6px 0}
 .bpass td,.bpass th{text-align:left; white-space:normal}
 .bpass td{padding:8px 8px 8px 0; border-top:1px solid var(--rule); vertical-align:top}
-.bpass td.n{font-family:"JetBrains Mono",monospace; white-space:nowrap}
+.bpass td.n{font-family:var(--f-body); white-space:nowrap}
 .bpass small{display:block; color:var(--muted); font-size:11px}
 .bpass .good{color:var(--accent); font-weight:700}
 .bpasswrap{overflow-x:auto}
@@ -629,7 +591,7 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 /* line items */
 .upsell{display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
   border:1px solid var(--accent-line); background:var(--accent-bg); border-radius:12px; padding:13px 16px; margin-top:22px}
-.upsell b{display:block; font-family:"Archivo"; font-weight:700; font-size:13.5px; letter-spacing:-.01em}
+.upsell b{display:block; font-family:var(--f-head); font-weight:700; font-size:13.5px; letter-spacing:-.01em}
 .upsell span{font-size:12.5px; color:var(--ink-2)}
 /* Cards in a row share a height and pin their footer, so the "why" links and
    official-page links line up across the grid instead of floating wherever
@@ -639,7 +601,7 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 @media (max-width:1040px){ .cols{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .cols > *{min-width:0; overflow-wrap:anywhere}
 @media (max-width:620px){ .cols{grid-template-columns:1fr} }
-.card{border:1px solid var(--rule); border-radius:11px; padding:14px; background:var(--surface-2);
+.card{border:1px solid var(--rule-strong); border-radius:14px; padding:16px; background:var(--surface-2);
   display:flex; flex-direction:column}
 /* Everything after this marker sits at the bottom of the card. */
 .card .foot{margin-top:auto; padding-top:10px}
@@ -673,7 +635,7 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
   .kpi > .kpitile:nth-child(3){grid-column:1 / -1}
   .kpitile .v{font-size:17px}
 }
-.kpitile{background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:10px 11px;
+.kpitile{background:var(--surface); border:1px solid var(--rule); border-radius:12px; padding:10px 11px;
   min-width:0; display:flex; flex-direction:column}
 /* Labels WRAP rather than clip. Clipping them silently turned "Average high"
    and "Average low" into two tiles both reading "AVERAGE" — a label that is
@@ -685,8 +647,8 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 /* The number shrinks a little with the card (cqi = 1% of the card's width) so
    a seven-character total like "$12,480" still fits a third of a narrow card.
    19px is the ceiling; browsers without container units just keep 19px. */
-.kpitile .v{margin-top:auto; padding-top:5px; font-size:19px; font-size:clamp(15px, calc(7.9cqi - 6.5px), 19px); font-weight:650; color:var(--ink);
-  line-height:1.15; font-family:"JetBrains Mono",monospace; letter-spacing:-.02em}
+.kpitile .v{margin-top:auto; padding-top:5px; font-size:20px; font-size:clamp(16px, calc(8.2cqi - 6.5px), 21px); font-weight:800; color:var(--ink);
+  line-height:1.1; font-family:var(--f-head); letter-spacing:-.015em; font-variant-numeric:tabular-nums}
 .kpitile .s{margin-top:2px; font-size:11px; color:var(--muted)}
 /* The total is the answer, so it is the one tile that reads as emphasis. */
 .kpitile.total{background:var(--accent-bg); border-color:var(--accent-line)}
@@ -703,29 +665,29 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .why[open] > summary::after{transform:rotate(90deg)}
 .why > summary:hover{color:var(--ink)}
 .why .whybody{margin-top:6px; line-height:1.55}
-.card h5{margin:0 0 2px; font-family:"Archivo"; font-size:13.5px; font-weight:700; letter-spacing:-.01em; display:flex; align-items:center; gap:7px}
-.card h5 i{width:9px;height:9px;border-radius:2px;display:block;flex:none}
-.card .sub{font-size:11.5px; color:var(--muted); margin:0 0 10px}
-.li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-top:1px solid var(--rule); font-size:12.5px; align-items:baseline}
+.card h5{margin:0 0 4px; font-family:var(--f-head); font-size:18px; font-weight:800; letter-spacing:-.01em; display:flex; align-items:center; gap:9px; line-height:1.15}
+.card h5 .ci{width:28px; height:28px; border-radius:9px}
+.card .sub{font-size:12.5px; color:var(--muted); margin:0 0 10px}
+.li{display:flex; justify-content:space-between; gap:10px; padding:8px 0; border-top:1px solid var(--rule); font-size:13px; align-items:baseline}
 .li:first-of-type{border-top:0}
 .li .l{min-width:0}
 .li .l b{font-weight:600; display:block}
 .li .l small{color:var(--muted); font-size:11px}
-.li .p{font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
-.book{display:inline-block; margin-top:11px; font-size:11.5px; font-weight:700; color:var(--ink); border-bottom:1.5px solid var(--accent-line); text-decoration:none; padding-bottom:1px}
+.li .p{font-family:var(--f-body); font-variant-numeric:tabular-nums; font-weight:600; white-space:nowrap}
+.book{display:inline-block; margin-top:11px; font-size:12.5px; font-weight:700; color:var(--ink); border-bottom:2px solid var(--accent-line); text-decoration:none; padding-bottom:1px}
 .ovcell{display:grid; gap:7px; align-content:start; margin-bottom:14px; padding-bottom:14px; border-bottom:1px dashed var(--rule-strong)}
 .ovcell .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
-.ovcell .lab b{font-family:"JetBrains Mono",monospace; font-size:15px; color:var(--ink); letter-spacing:0}
-.ovcell input[type=number], .ovcell select{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink)}
+.ovcell .lab b{font-family:var(--f-body); font-size:15px; color:var(--ink); letter-spacing:0}
+.ovcell input[type=number], .ovcell select{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:9px 11px; font-family:var(--f-body); font-size:14px; color:var(--ink)}
 .ovcell select{font-size:16px; font-family:inherit}
 .ovcell input[type=range]{-webkit-appearance:none; appearance:none; width:100%; height:7px; border-radius:99px; background:var(--rule-strong); outline:none; margin:7px 0 2px; cursor:pointer}
 .ovcell input[type=range]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:22px; height:22px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); box-shadow:0 1px 5px rgba(0,0,0,.32); cursor:pointer}
 .ovcell input[type=range]::-moz-range-thumb{width:16px; height:16px; border-radius:50%; background:var(--accent-line); border:3px solid var(--surface); cursor:pointer}
-.ovends{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); font-family:"JetBrains Mono",monospace}
+.ovends{display:flex; justify-content:space-between; font-size:10.5px; color:var(--muted); font-family:var(--f-body)}
 .ovrow{margin-top:13px; padding-top:12px; border-top:1px dashed var(--rule-strong); display:grid; gap:8px}
 .ovrow .lab{font-size:10.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); display:flex; justify-content:space-between; align-items:baseline; gap:8px}
-.ovrow .lab b{font-family:"JetBrains Mono",monospace; font-size:14px; color:var(--ink); letter-spacing:0}
-.ovrow input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:8px 10px; font-family:"JetBrains Mono",monospace; font-size:13px; color:var(--ink)}
+.ovrow .lab b{font-family:var(--f-body); font-size:14px; color:var(--ink); letter-spacing:0}
+.ovrow input[type=number]{width:100%; background:var(--surface); border:1px solid var(--rule-strong); border-radius:8px; padding:8px 10px; font-family:var(--f-body); font-size:13px; color:var(--ink)}
 .ovrow input[type=range]{width:100%; accent-color:var(--accent-line); margin:0; height:20px}
 .ovhint{font-size:11px; color:var(--muted); line-height:1.45}
 .ovacts{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
@@ -739,17 +701,17 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .gate .g-over p{margin:0 0 8px; font-size:12.5px; font-weight:600}
 
 /* ---------- paywall ---------- */
-.back{position:fixed; inset:0; background:rgba(8,9,13,.62); display:none; place-items:center; padding:20px; z-index:50}
+.back{position:fixed; inset:0; background:rgba(22,32,74,.55); display:none; place-items:center; padding:20px; z-index:50}
 .back.on{display:grid}
-.modal{background:var(--surface); border:1px solid var(--rule-strong); border-radius:16px; max-width:640px; width:100%; box-shadow:0 24px 60px -18px rgba(0,0,0,.5); overflow:hidden; max-height:92vh; overflow-y:auto}
+.modal{background:var(--surface); border:2px solid var(--ink); border-radius:18px; max-width:640px; width:100%; box-shadow:0 24px 60px -18px rgba(0,0,0,.5); overflow:hidden; max-height:92vh; overflow-y:auto}
 .mhead{padding:22px 22px 16px; border-bottom:1px solid var(--rule)}
-.mhead h3{font-size:21px; font-weight:800; letter-spacing:-.03em}
+.mhead h3{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em}
 .mhead p{margin:6px 0 0; color:var(--ink-2); font-size:13.5px}
 .plans{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 22px}
-.plan{border:1px solid var(--rule-strong); border-radius:12px; padding:15px; text-align:left; background:var(--surface-2)}
+.plan{border:1.5px solid var(--rule-strong); border-radius:14px; padding:15px; text-align:left; background:var(--surface-2)}
 .plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
 .plan .pn{font-size:11px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2)}
-.plan .pp{font-family:"Archivo"; font-weight:800; font-size:25px; letter-spacing:-.035em; margin-top:5px}
+.plan .pp{font-family:var(--f-head); font-weight:800; font-size:25px; letter-spacing:-.035em; margin-top:5px}
 .plan .pp small{font-size:12px; font-weight:600; color:var(--ink-2); letter-spacing:0}
 .plan .ps{font-size:11.5px; color:var(--ink-2); margin-top:3px}
 .feat{list-style:none; margin:0; padding:0 22px 6px; display:grid; gap:7px}
@@ -762,21 +724,25 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 /* ---------- tooltip ---------- */
 .tip{
   position:fixed; z-index:60; pointer-events:none; opacity:0; transition:opacity .09s;
-  background:var(--ink); color:var(--plane); border-radius:7px; padding:7px 9px; font-size:11.5px;
-  font-family:"JetBrains Mono",monospace; white-space:nowrap; box-shadow:0 6px 20px -6px rgba(0,0,0,.5);
+  background:var(--ink); color:var(--cream); border-radius:8px; padding:7px 10px; font-size:12px;
+  font-family:var(--f-body); white-space:nowrap; box-shadow:0 6px 20px -6px rgba(0,0,0,.5);
 }
 .tip.on{opacity:1}
-.tip b{font-family:"Karla",sans-serif; font-size:12px; display:block; margin-bottom:2px}
+.tip b{font-family:var(--f-body); font-size:12px; display:block; margin-bottom:2px}
 
 /* ---------- footer ---------- */
-footer{margin-top:34px; border-top:1px solid var(--rule); padding-top:18px; color:var(--ink-2); font-size:12.5px}
-footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+footer{margin-top:40px; border-top:2px solid var(--ink); padding-top:18px; color:var(--ink-2); font-size:13px}
+footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:0 0 8px}
 .srcs{display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:16px}
 .srcs p{margin:0 0 6px}
 .srcs b{color:var(--ink); font-weight:600}
 
 @media (max-width:940px){
-  .row{grid-template-columns:26px 1fr 130px; grid-template-areas:"rank ident total" ". bar bar" ". btn btn"; gap:10px 12px}
+  .row{grid-template-columns:46px 1fr 130px; grid-template-areas:"rank ident total" ". bar bar" ". btn btn"; gap:10px 12px; padding:16px}
+  .row-detail{margin:14px -16px -16px}
+  .rank img{width:46px; height:46px}
+  .rname{font-size:20px}
+  .tnum{font-size:26px}
   /* `.row >` on every one of these. Unscoped, `.total{grid-area:total}` also
      hit `.kpitile.total` in the detail cards, which have no area called
      "total" — so the browser invented extra columns for it and the total
@@ -789,13 +755,42 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   .plans{grid-template-columns:1fr}
   .wrap{padding:14px 13px 60px}
 }
+/* ---------- the price icons ----------
+   Plane, bed, ticket, fork-and-knife (plus car, sun, people) in a colored
+   tile, one per cost line, on the board, the cards and the hero. Drawn with a
+   CSS mask so the markup is one empty <i class="ci ci-flight">: the tile is
+   the cost's own color and the glyph sits in a color that reads on it. */
+.ci{--tile:var(--ink); --glyph:var(--accent-line); width:22px; height:22px; border-radius:7px; flex:none;
+  display:inline-grid; place-items:center; background:var(--tile); font-style:normal}
+.ci::before{content:""; width:66%; height:66%; background:var(--glyph);
+  -webkit-mask:var(--icon) center/contain no-repeat; mask:var(--icon) center/contain no-repeat}
+.ci.lg{width:34px; height:34px; border-radius:10px}
+.ci-flight{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z'/%3E%3C/svg%3E")}
+.ci-car{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z'/%3E%3C/svg%3E")}
+.ci-hotel{--tile:var(--s3); --glyph:#fff; --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 13c1.66 0 3-1.34 3-3S8.66 7 7 7s-3 1.34-3 3 1.34 3 3 3zm12-6h-8v7H3V5H1v15h2v-3h18v3h2v-9c0-2.21-1.79-4-4-4z'/%3E%3C/svg%3E")}
+.ci-ticket{--tile:var(--s2); --glyph:var(--ink); --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M22 10V6c0-1.1-.9-2-2-2H4c-1.1 0-1.99.89-1.99 2v4c1.1 0 1.99.9 1.99 2s-.89 2-2 2v4c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2v-4c-1.1 0-2-.9-2-2s.9-2 2-2z'/%3E%3C/svg%3E")}
+.ci-food{--tile:var(--s4); --glyph:#fff; --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z'/%3E%3C/svg%3E")}
+.ci-weather{--tile:var(--s5); --glyph:#fff; --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V19.5h-2v2.95zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z'/%3E%3C/svg%3E")}
+.ci-crowd{--tile:var(--s6); --glyph:#fff; --icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'/%3E%3C/svg%3E")}
+.ci-star{--icon:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-10 -10 20 20'%3E%3Cpath d='M0 -10L2.4 -2.4L10 0L2.4 2.4L0 10L-2.4 2.4L-10 0L-2.4 -2.4Z'/%3E%3C/svg%3E")}
+
+/* Small uppercase captions, all in the one condensed face. */
+.panel-lab,.f label,.ages .cap,.agef label,#tripExtras .cap,.sec-lab,.kpitile .k,th,footer h4,
+.jumprow .cap,.authfield label,.namefield label,.ovcell .lab,.ovrow .lab,.brief dt,.plan .pn,
+.bpass th,.acctplan,.attrpick .grp{font-family:var(--f-label); font-weight:700; letter-spacing:.13em}
+.panel-lab{font-size:15px; color:var(--accent); letter-spacing:.18em; margin-bottom:14px}
+.f label,.ages .cap,#tripExtras .cap,.jumprow .cap,.authfield label,.namefield label{font-size:13.5px; color:var(--ink-2)}
+.agef label,.ovcell .lab,.ovrow .lab,.brief dt,.plan .pn,.bpass th,.acctplan,.attrpick .grp{font-size:12.5px}
+.sec-lab,th,footer h4{font-size:13px}
+.kpitile .k{font-size:12px; letter-spacing:.1em}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
 
 <div class="wrap">
   <header class="masthead">
     <div class="brand">
-      <img class="mark" src="/public/brand/mark.svg" alt="">
+      <img class="mark" src="/public/brand/tab-icon.svg" alt="">
       <div>
         <h1>Pricing the <span>Magic</span></h1>
         <p class="tag">Help to decide the best time to explore this small world.</p>
@@ -841,7 +836,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   <section id="budgetPage" hidden>
     <div class="bhead">
       <button class="btn btn-sm" id="budgetBack">&larr; Back to the comparison</button>
-      <h2>Your budget <span class="pluschip">Plus</span></h2>
+      <h2>Your Budget <span class="pluschip">Plus</span></h2>
       <p class="hint">How to pay for the trip: what to set aside, when you'll have enough for each part, and whether a pass pays for itself.</p>
     </div>
 
@@ -953,15 +948,30 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
   </section>
 
   <section class="hero" id="hero">
-    <h2>Six Disney resorts.<br><span>One honest price.</span></h2>
-    <p>Compare the whole trip &mdash; flights, hotel, tickets and food &mdash; at every Disney resort in the world, and see where the magic can take you.</p>
-    <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
-    <div class="herostory" id="intro">
-      <p>It started with one question: could we go to Shanghai instead of renewing our Annual Passes? Answering it meant
-      pricing flights, hotels, tickets, groceries and visas for every Disney resort in the world. This is that work, built
-      so you don't have to do it yourself.</p>
-      <p class="herosign">We make the budget. You take the trip.</p>
+    <div class="herotop">
+      <div class="herohead">
+        <p class="eyebrow"><svg class="sparkle" viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0 -10L2.4 -2.4L10 0L2.4 2.4L0 10L-2.4 2.4L-10 0L-2.4 -2.4Z" fill="#E8B23E"/></svg>Every Disney Resort in the World</p>
+        <h2><span>Six Disney Trips.</span><span>One Search.</span></h2>
+      </div>
+      <div class="heroside">
+        <p>Compare the whole trip &mdash; flights, hotel, tickets and food &mdash; at every Disney resort in the world, and see where the magic can take you.</p>
+        <div class="heroicons" aria-hidden="true">
+          <span><i class="ci lg ci-flight"></i>Flights</span>
+          <span><i class="ci lg ci-hotel"></i>Hotel</span>
+          <span><i class="ci lg ci-ticket"></i>Tickets</span>
+          <span><i class="ci lg ci-food"></i>Food</span>
+        </div>
+      </div>
     </div>
+    <figure class="herofig" style="margin-left:0; margin-right:0">
+      <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
+      <figcaption class="herostory" id="intro">
+        <p>It started with one question: could we go to Shanghai instead of renewing our Annual Passes? Answering it meant
+        pricing flights, hotels, tickets, groceries and visas for every Disney resort in the world. This is that work, built
+        so you don't have to do it yourself.</p>
+        <p class="herosign">We make the budget. You take the trip.</p>
+      </figcaption>
+    </figure>
   </section>
 
 
@@ -1055,7 +1065,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
           <label for="milesPct">% off the cash fare, no floor</label>
           <input type="range" id="milesPct" min="0" max="100" step="5" value="50" style="width:100%">
         </div>
-        <div class="agef"><label>&nbsp;</label><b id="milesPctVal" style="font-family:'JetBrains Mono',monospace">50%</b></div>
+        <div class="agef"><label>&nbsp;</label><b id="milesPctVal" style="font-family:var(--f-body)">50%</b></div>
       </div>
 
       <div id="driveBlock" hidden>
@@ -1216,14 +1226,14 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 
   <div class="res-head">
     <div>
-      <h2 id="resTitle">Six resorts, cheapest first</h2>
+      <h2 id="resTitle">Six Resorts, Cheapest First</h2>
       <p class="res-sub" id="resSub"></p>
     </div>
     <div class="legend">
-      <span class="lg"><i class="sw" style="background:var(--s1)"></i>Flights</span>
-      <span class="lg"><i class="sw" style="background:var(--s2)"></i>Tickets</span>
-      <span class="lg"><i class="sw" style="background:var(--s3)"></i>Hotel</span>
-      <span class="lg"><i class="sw" style="background:var(--s4)"></i>Food</span>
+      <span class="lg"><i class="ci ci-flight"></i>Flights</span>
+      <span class="lg"><i class="ci ci-hotel"></i>Hotel</span>
+      <span class="lg"><i class="ci ci-ticket"></i>Tickets</span>
+      <span class="lg"><i class="ci ci-food"></i>Food</span>
       <span class="viewtog">
         <button id="rAll" aria-pressed="true">All</button>
         <button id="rDom" aria-pressed="false">Domestic</button>
@@ -1330,7 +1340,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="nameModal" role="dialog" aria-modal="true" aria-labelledby="nameTitle">
   <div class="modal" style="max-width:420px">
     <div class="mhead">
-      <h3 id="nameTitle">Save this search</h3>
+      <h3 id="nameTitle">Save This Search</h3>
       <p id="nameIntro">Give it a name you'll recognize later.</p>
     </div>
     <div class="namefield">
@@ -1352,7 +1362,7 @@ footer h4{font-family:"Archivo"; font-size:12px; font-weight:700; letter-spacing
 <div class="back" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="modal" style="max-width:460px">
     <div class="mhead">
-      <h3 id="authTitle">Sign in</h3>
+      <h3 id="authTitle">Sign In</h3>
       <p id="authIntro"></p>
     </div>
 
@@ -2371,6 +2381,11 @@ function renderCrowdNote(){
   el.hidden = false;
 }
 
+/* The resort's castle badge (tools/brand/gen.mjs), the same art as the map. */
+function badgeImg(id){
+  return /^[a-z]+$/.test(id||"") ? `<img src="/public/brand/badge-${id}.svg" alt="" width="58" height="58">` : "";
+}
+
 function renderBoard(){
   renderCrowdNote();
   const board = $("#board");
@@ -2392,8 +2407,9 @@ function renderBoard(){
     const r = item.resort;
     if(!item.ok){
       return `<li class="row" data-i="${i}">
-        <div class="rank">${pos+1}</div>
+        <div class="rank">${badgeImg(item.resortId)}</div>
         <div class="ident">
+          <div class="reyebrow">No. ${pos+1}</div>
           <div class="rname">${item.name}</div>
           <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
           ${attractionChip(item)}
@@ -2428,12 +2444,12 @@ function renderBoard(){
     const open = unlocked(i);
     return `
     <li class="row${pos===0?" best":""}${open?"":" locked"}${item.resortId===leadResortId?" printlead":""}" data-i="${i}">
-      <div class="rank">${pos+1}</div>
+      <div class="rank">${badgeImg(item.resortId)}</div>
       <div class="ident">
+        <div class="reyebrow">No. ${pos+1}${pos===0?" · Cheapest":""}</div>
         <div class="rname">${r.name}</div>
         <div class="rmeta">
           <span class="code">${item.iata}</span>${r.city} · ${r.note}
-          ${pos===0?'<span class="bestflag">Cheapest</span>':""}
           ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
           ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
         </div>
@@ -2443,19 +2459,19 @@ function renderBoard(){
         ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
       </div>
       <div class="bar-wrap">
-        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, tickets ${usd(x.tickets)}, hotel ${usd(x.hotel)}, food ${usd(x.food)}">
+        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, hotel ${usd(x.hotel)}, tickets ${usd(x.tickets)}, food ${usd(x.food)}">
           <div class="seg f1" style="width:${w(getThere)}"></div>
-          <div class="seg f2" style="width:${w(x.tickets)}"></div>
           <div class="seg f3" style="width:${w(x.hotel)}"></div>
+          <div class="seg f2" style="width:${w(x.tickets)}"></div>
           <div class="seg f4" style="width:${w(x.food)}"></div>
         </div>
         <div class="barlabs">
-          <span><i style="background:var(--s1)"></i>${getThereLabel} ${usd(getThere)}${
+          <span><i class="ci ${x.transportMode==="drive"?"ci-car":"ci-flight"}"></i>${getThereLabel} ${usd(getThere)}${
             est ? ' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>'
                 : live ? ' <span class="exactchip" title="A real fare we found recently, not a computed estimate — prices can still move">live</span>' : ""}</span>
-          <span><i style="background:var(--s2)"></i>Tickets ${usd(x.tickets)}</span>
-          <span><i style="background:var(--s3)"></i>Hotel ${usd(x.hotel)}</span>
-          <span><i style="background:var(--s4)"></i>Food ${usd(x.food)}</span>
+          <span><i class="ci ci-hotel"></i>Hotel ${usd(x.hotel)}</span>
+          <span><i class="ci ci-ticket"></i>Tickets ${usd(x.tickets)}</span>
+          <span><i class="ci ci-food"></i>Food ${usd(x.food)}</span>
         </div>
         ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}.</div>`:""}
         ${item.noFlightsYet?`<div class="estnote">${esc(item.noFlightsYet)}.</div>`:""}
@@ -2557,7 +2573,7 @@ function membershipCard(x, p){
       <small>${usd(dvc.takeHomePerPointUsd)} take-home per point — what you receive, not what the renter pays</small></div>
       <div class="p">−${usd(dvc.creditUsd)}</div></div>`;
   return `<div class="card">
-    <h5><i style="background:var(--s2)"></i>Your passes &amp; points</h5>
+    <h5><i class="ci ci-ticket"></i>Your Passes &amp; Points</h5>
     <p class="sub">${[pass ? pass.label : "", dvc ? "DVC points rented" : ""].filter(Boolean).join(" · ")}</p>
     ${passHtml}
     ${dvcHtml}
@@ -2604,7 +2620,7 @@ function promosCard(item, x, promoList){
     : "";
 
   return `<div class="card">
-    <h5>Promos &amp; discounts</h5>
+    <h5><i class="ci ci-star"></i>Promos &amp; Discounts</h5>
     <p class="sub">Disney's own offers for these dates, plus your own codes. A deal is taken off on its own when your arrival date is inside its dates.</p>
     ${dealsOff?`<div class="li"><div class="l"><b>Deals are off for ${esc(item.resort.name)}</b><small>You turned them off, so no deal is in this total.</small></div>
       <div class="p"><button class="btn btn-sm" data-applypromo="" data-resort="${item.resortId}">Turn back on</button></div></div>`:""}
@@ -3188,7 +3204,7 @@ async function renderDetail(){
              straight down. Weather sits last because it is context, not a
              cost, and age bands follow tickets because they explain them. -->
         ${x.transportMode==="drive" ? `<div class="card">
-          <h5><i style="background:var(--s1)"></i>Driving</h5>
+          <h5><i class="ci ci-car"></i>Driving</h5>
           <p class="sub">Gas${x.drivingPick && x.drivingPick.overnightUsd ? " + one overnight stop" : ""} · from ${x.drivingPick ? x.drivingPick.from : p.origin}</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Round trip</div>
@@ -3209,7 +3225,7 @@ async function renderDetail(){
             <small>Your own estimate</small></div><div class="p">${usd(x.drivingPick.overnightUsd)}</div></div>` : ""}
 
         </div>` : `<div class="card">
-          <h5><i style="background:var(--s1)"></i>Flights</h5>
+          <h5><i class="ci ci-flight"></i>Flights</h5>
           <p class="sub">Round trip per person · into ${x.destination}${x.transportMode==="miles" ? " · paid with miles" : ""}</p>
           ${excludeFlights ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">Per person</div>
@@ -3232,7 +3248,7 @@ async function renderDetail(){
           </div>
         </div>`}
         <div class="card">
-          <h5><i style="background:var(--s2)"></i>Park tickets</h5>
+          <h5><i class="ci ci-ticket"></i>Park Tickets</h5>
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${daysOf(x)}-day ticket</p>
           ${ticketDaysCtl}
           <div class="kpi">
@@ -3250,7 +3266,7 @@ async function renderDetail(){
         </div>
         ${membershipCard(x, p)}
         <div class="card">
-          <h5><i style="background:var(--s3)"></i>Hotel · ${p.nights} nights${roomCount > 1 ? ` · ${roomCount} rooms` : ""}</h5>
+          <h5><i class="ci ci-hotel"></i>Hotel · ${p.nights} nights${roomCount > 1 ? ` · ${roomCount} rooms` : ""}</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
           ${noHotel ? "" : `<div class="kpi">
             <div class="kpitile"><div class="k">${roomCount > 1 ? "Per room, per night" : "Per night"}</div>
@@ -3274,7 +3290,7 @@ async function renderDetail(){
             Disney's site can't take dates in a link, so enter ${fmtDate(x.start)} to ${fmtDate(checkout)} once you're there.</p>` : ""}
         </div>
         <div class="card">
-          <h5><i style="background:var(--s4)"></i>Food</h5>
+          <h5><i class="ci ci-food"></i>Food</h5>
           <p class="sub">${fi ? fi.label + " · requires an on-property stay" : ({grocery:"We'll bring our own food",someQs:"Some Quick Service",qs:"All Quick Service",mix:"Some Quick Service, some Table Service",ts:"All Table Service",someCharacter:"Some Character Meals",character:"All Character Meals"})[(x.foodStyle||p.food)==="plan"?"qs":(x.foodStyle||p.food)]}${x.foodStyle==="grocery"&&p.food!=="grocery"&&!ovR.foodPerDayUsd?" · the cheapest trip eats from the grocery store":""}</p>
           <div class="kpi">
             <div class="kpitile"><div class="k">Per day</div>
@@ -3301,7 +3317,7 @@ async function renderDetail(){
           const c = f => Math.round((f - 32) * 5 / 9);
           const monthName = MONTHSFULL[sd.getUTCMonth()];
           return `<div class="card">
-            <h5><i style="background:var(--s5)"></i>Weather in ${monthName}</h5>
+            <h5><i class="ci ci-weather"></i>Weather in ${monthName}</h5>
             <p class="sub">What ${r.city.split(",")[0]} is typically like — averages, not a forecast</p>
             <div class="kpi">
               <div class="kpitile"><div class="k"><span aria-hidden="true">☀️</span>Average high</div>
@@ -3337,7 +3353,7 @@ async function renderDetail(){
           const pct = [12, 30, 52, 76, 100][cr.rank] || 52;
           const tone = cr.rank >= 4 ? "var(--s1)" : cr.rank === 3 ? "var(--s2)" : "var(--s5)";
           return `<div class="card">
-            <h5><i style="background:var(--s6)"></i>Crowds in ${monthName}</h5>
+            <h5><i class="ci ci-crowd"></i>Crowds in ${monthName}</h5>
             <p class="sub">How busy ${esc(r.name)} usually is — a forecast of demand, not a head count</p>
             <div class="kpi two">
               <div class="kpitile"><div class="k"><span aria-hidden="true">👥</span>Typical crowds</div>
@@ -3617,7 +3633,7 @@ let authMode = "signup";
 
 function syncAuthMode(){
   const up = authMode === "signup";
-  $("#authTitle").textContent = up ? "Create your account" : "Sign in";
+  $("#authTitle").textContent = up ? "Create Your Account" : "Sign In";
   $("#authIntro").textContent = up
     ? "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read."
     : "Welcome back. Every account needs a password now — if yours predates that, create the account again with the same email to set one.";
@@ -3642,7 +3658,7 @@ function openAuth(mode){
   $("#authAccount").hidden = !on;
   $("#signoutBtn").hidden = !on;
   $("#acctUpgradeBtn").hidden = !on || session.plus;
-  $("#authTitle").textContent = on ? "Your account" : "Sign in";
+  $("#authTitle").textContent = on ? "Your Account" : "Sign In";
   $("#authIntro").textContent = on
     ? "Everything below is tied to this account — saved searches and Plus follow the email, not this browser."
     : "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read.";
@@ -4503,7 +4519,7 @@ function coverHtml(lead, chosen){
     : ` Here is how that breaks down.`;
 
   return `<section class="pcover">
-    <p class="pbrand"><img src="/public/brand/mark.svg" alt="">Pricing the Magic</p>
+    <p class="pbrand"><img src="/public/brand/tab-icon.svg" alt="">Pricing the Magic</p>
     ${sampleMode ? `<p class="psample">Sample</p>` : ""}
     <h1>Let's go to ${esc(lead.resort.name)}!</h1>
     <p>This trip was planned${planner ? ` by <b>${esc(planner)}</b>` : ""} for ${esc(whenPhrase(p))} &mdash;
@@ -4999,7 +5015,7 @@ function buildPrintDoc(){
   // finished document from being free.
   if(!session.plus && !sampleMode){
     doc.innerHTML = `<section class="pcover">
-      <p class="pbrand"><img src="/public/brand/mark.svg" alt="">Pricing the Magic</p>
+      <p class="pbrand"><img src="/public/brand/tab-icon.svg" alt="">Pricing the Magic</p>
       <h1>The trip PDF is part of Plus</h1>
       <p>With Plus, this page becomes a written plan for your trip: a cover for the resort you pick, what every
       part costs, the booking links, and how the other resorts compare. Get Plus at pricingthemagic.com.</p>
@@ -5091,7 +5107,7 @@ function printImagesReady(root, ms = 4000){
 const BRAND_PRELOAD = [];
 function preloadBrandArt(){
   if(BRAND_PRELOAD.length) return;
-  for(const src of ["mark.svg", ...RESORTS.map(r => `map-cover-${r.id}.svg`)]){
+  for(const src of ["tab-icon.svg", ...RESORTS.map(r => `map-cover-${r.id}.svg`)]){
     const img = new Image(); img.src = "/public/brand/" + src; BRAND_PRELOAD.push(img);
   }
 }

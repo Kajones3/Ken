@@ -107,11 +107,8 @@ export function clearGateFailures(ip: string): void {
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** The logo mark (public/brand/mark.svg), inline: while the site is locked
- *  nothing under /public is served, so the page can't link to it. */
-const MARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/><path d="M14 50 V33 h5 v-6 l3.5 -9 l3.5 9 v6 h12 v-6 l3.5 -9 l3.5 9 v6 h5 V50 Z" fill="#F5EFE0"/><path d="M27.5 33 V22 l4.5 -12 l4.5 12 V33 Z" fill="#F5EFE0"/><circle cx="32" cy="8.5" r="2.6" fill="#E8B23E"/><path d="M28 50 v-7 a4 4 0 0 1 8 0 v7 Z" fill="#16204A"/><rect x="14" y="52.5" width="36" height="3" rx="1.5" fill="#E8B23E"/></svg>`;
-
-/** The tab icon (public/brand/tab-icon.svg), inline for the same reason. */
+/** The tab icon (public/brand/tab-icon.svg), which is also the logo. Inline:
+ *  while the site is locked nothing under /public is served. */
 const TAB_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"><rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/><ellipse cx="32" cy="32" rx="25" ry="10" transform="rotate(-24 32 32)" fill="none" stroke="#F5EFE0" stroke-width="2.5" stroke-dasharray="3.5 4"/><path d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z" fill="#E8B23E"/><circle cx="53" cy="22" r="3" fill="#F5EFE0"/></svg>`;
 
 export function comingSoonHtml(opts: { next?: string; error?: string } = {}): string {
@@ -122,39 +119,39 @@ export function comingSoonHtml(opts: { next?: string; error?: string } = {}): st
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>Pricing the Magic · Coming soon</title>
+<title>Pricing the Magic · Coming Soon</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,${encodeURIComponent(TAB_ICON_SVG)}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Public+Sans:wght@400;600&display=swap">
 <style>
-:root{color-scheme:light;--plane:#F1F2F6;--surface:#FBFBFD;--ink:#14161F;--ink-2:#565B6B;--muted:#878DA0;
-  --rule:#E1E3EB;--accent:#9A6A00;--accent-bg:#F6E7C4;--accent-line:#D9A22B;--bad:#B3261E}
-@media (prefers-color-scheme:dark){:root{color-scheme:dark;--plane:#0B0D13;--surface:#14171F;--ink:#F4F5FA;
-  --ink-2:#A8AEC0;--muted:#7C8296;--rule:#252935;--accent:#E8B23E;--accent-bg:#2B2412;--accent-line:#E8B23E;--bad:#F2B8B5}}
+:root{color-scheme:light;--plane:#DFEAEC;--surface:#FBFAF6;--ink:#16204A;--ink-2:#4C5878;--muted:#626D88;
+  --rule:#AFC3CA;--cream:#F5EFE0;--gold:#E8B23E;--bad:#9a2a2a}
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--plane);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+body{background:var(--plane);color:var(--ink);font:16px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   display:flex;align-items:center;justify-content:center;padding:24px 16px}
 main{width:100%;max-width:440px;text-align:center}
 .mark{display:inline-block;width:64px;height:64px}
-.name{font-weight:800;font-size:20px;letter-spacing:-.01em;margin:10px 0 0}
-.name span{color:var(--accent)}
-h1{font-size:34px;line-height:1.15;margin:20px 0 8px;letter-spacing:-.01em}
+.name{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:22px;margin:10px 0 0}
+h1{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:44px;line-height:1;margin:20px 0 10px;letter-spacing:-.02em}
 p.lede{color:var(--ink-2);margin:0 0 36px}
-details{border-top:1px solid var(--rule);padding-top:20px;text-align:left}
+details{border-top:2px solid var(--ink);padding-top:20px;text-align:left}
 summary{cursor:pointer;color:var(--muted);font-size:14px;text-align:center;list-style:none}
 summary::-webkit-details-marker{display:none}
 form{display:flex;gap:8px;margin-top:14px}
-input{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;
-  border:1px solid var(--rule);background:var(--surface);color:var(--ink)}
-button{font:inherit;font-weight:600;padding:10px 16px;border-radius:10px;border:1px solid var(--accent-line);
-  background:var(--accent-bg);color:var(--accent);cursor:pointer}
+input{flex:1;min-width:0;font:inherit;font-size:16px;padding:10px 14px;border-radius:999px;
+  border:1.5px solid var(--rule);background:var(--surface);color:var(--ink)}
+button{font:inherit;font-weight:600;padding:10px 20px;border-radius:999px;border:1.5px solid var(--ink);
+  background:var(--ink);color:var(--cream);cursor:pointer}
 .err{color:var(--bad);font-size:14px;margin:10px 0 0;text-align:center}
 </style>
 </head>
 <body>
 <main>
-  <span class="mark">${MARK_SVG}</span>
-  <p class="name">Pricing the <span>Magic</span></p>
-  <h1>Coming soon</h1>
+  <span class="mark">${TAB_ICON_SVG}</span>
+  <p class="name">Pricing the Magic</p>
+  <h1>Coming Soon</h1>
   <p class="lede">We're getting ready. Check back soon.</p>
   <details${opts.error ? " open" : ""}>
     <summary>Have the password?</summary>

@@ -218,12 +218,14 @@ list.**
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
-### 2026-10-18 to 10-21 — site redesign: mock-ups only, plus the new tab icon (READ FIRST)
+### 2026-10-18 to 10-21 — site redesign: G "Enchanted Atlas" is LIVE in the code, plus the new tab icon (READ FIRST)
 
 Owner: "I've seen three vibe coded sites in the last two days that all look
 exactly like this." Mock-ups live on a claude.ai Design canvas (owner's
-account, "Pricing the Magic — design skins"), NOT in the repo. Nothing in
-prototype.html's look has changed yet.
+account, "Pricing the Magic — design skins"), NOT in the repo. On
+2026-10-21 the owner said "reskin everything" and G was applied to
+prototype.html, admin.html and the coming-soon page (details at the end of
+this section).
 - **Direction picked: G "Enchanted Atlas"**: E's light chart-paper route map
   (real coastlines, equirectangular centred on the Pacific) + the ORIGINAL
   castle badges (`public/brand/badge-*.svg`) as map markers and in the result
@@ -233,12 +235,13 @@ prototype.html's look has changed yet.
   of the page is the TAB ICON (sparkle on an orbit), not the castle. Totals
   stay plain Bricolage numbers: a split-flap "flip board" total was tried
   and REJECTED (2026-10-21: "The numbers aren't clear"). Don't bring it back.
-  **Headline (G mock-ups, 2026-10-21): "Six Disney trips, / priced side by
-  side."** Owner: "There isn't one honest price. It's that you can see
+  **Headline (owner's pick, 2026-10-21): "Six Disney Trips. / One Search."**
+  in TITLE CASE, two lines (owner: "Make sure everything is capitalized
+  correctly"). Owner: "There isn't one honest price. It's that you can see
   everything at one time to compare it" (e.g. Paris only ~$400-500 over
-  WDW). So "One honest price." is retired. Count-free fallback for when Abu
-  Dhabi arrives: "Every Disney trip, priced side by side." The live site
-  still says the old line until G is built.
+  WDW). So "One honest price." is retired; "priced side by side" was an
+  interim line, also superseded. When Abu Dhabi arrives the "Six" needs
+  rewording.
 - **Rejected, don't bring back:** A's all-black airport look ("lacked a
   certain magic and whimsy needed for Disney"), E in dark ("just looks like an
   AI site": navy + condensed sans + thin borders), F (A + E hybrid), B, C, D.
@@ -248,12 +251,36 @@ prototype.html's look has changed yet.
   `public/brand/tab-icon.svg` (+ `tab-icon-bleed.svg`, square corners for
   phones), PNGs `favicon-32.png`, `favicon-48.png`, `apple-touch-icon.png`
   from `sh tools/brand/png.sh` (headless Chromium), `tabIcon()` in
-  `tools/brand/gen.mjs`. The live page logo is still the castle `mark.svg`;
-  the G mock-ups use the tab icon as the logo too (owner's ask), so switch it
-  when G is built (or sooner if the owner asks). The locked coming-soon page
-  inlines the same icon (`TAB_ICON_SVG`,
-  siteGate.ts). `.png` added to server.ts MIME. Needs a Render redeploy.
-- Next: owner to confirm G, then plan moving prototype.html onto it.
+  `tools/brand/gen.mjs`. The tab icon is now ALSO the logo everywhere
+  (masthead, PDF cover, coming-soon page); `mark.svg` (the castle mark) is
+  no longer used by any page. `.png` added to server.ts MIME.
+- **The reskin, as built 2026-10-21 (needs a Render redeploy):**
+  - prototype.html tokens are G and **LIGHT ONLY** (both dark scopes removed:
+    the owner rejected every dark version). Fonts: Bricolage Grotesque
+    (`--f-head`: headlines, totals, card titles), Public Sans (`--f-body`,
+    replaces Karla and JetBrains Mono), Barlow Condensed (`--f-label`: the
+    small uppercase captions). Archivo/Karla/JetBrains Mono are gone.
+  - Cost colors: flights #16204A navy (`--s1`), tickets #E8B23E gold
+    (`--s2`), hotel #5B8DB8 blue (`--s3`), food #C0563F red (`--s4`). The
+    board bar now runs flights, hotel, tickets, food.
+  - Price icons are CSS-masked tiles: `<i class="ci ci-flight|ci-car|
+    ci-hotel|ci-ticket|ci-food|ci-weather|ci-crowd|ci-star">` (one empty
+    element, the glyph is in the stylesheet). Used on board rows, the legend,
+    every card header and the hero.
+  - Board rows: castle badge (`badgeImg()`) in the rank column, "No. N ·
+    Cheapest" eyebrow, 23px Bricolage name, pill bar, 32px totals. Panels,
+    the board and dialogs: paper #FBFAF6 with a 2px navy border, 16px
+    corners, no shadows; buttons are pills.
+  - Hero: eyebrow "Every Disney Resort in the World", the headline, the four
+    icon chips, then the existing castle world map in a paper frame with the
+    owner's story as its caption. `map-light.svg` re-colored to G
+    (gen.mjs line ~193); the PDF cover maps and badges are unchanged.
+  - Short titles are title case ("Six Resorts, Cheapest First", "Park
+    Tickets", "Your Budget", "Sign In", "Coming Soon"); questions and
+    sentences stay sentence case.
+  - NOT built from the mock-up: the results route map (flight paths from the
+    traveler's own airport) — it needs map coordinates for all 41 home
+    airports. Ask the owner before building it.
 
 ### 2026-10-17 — first two nights after A-E (governing rule #4 check). START HERE.
 
