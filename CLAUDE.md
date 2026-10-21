@@ -301,6 +301,19 @@ this section).
     scroll. The route base has NO sea (the page ground is the ocean) and
     its land fades out at top and bottom so no straight edge reads as a
     box. Don't put either map back in a panel.
+  - **The board is a split, not a list of rows** (owner, 2026-10-21, pointing
+    at the "Editorial" mock-up: "I meant like this"). Left: No. 1 large
+    (`leadHtml()`): "The cheapest trip, <month>, from <city>", a big gold
+    "1", the name, its castle, a 76px total "for two · $X a person", the
+    cost bar, the bill line by line (any remainder = parking/transfers or
+    deals, so the lines add up), "See the whole trip". Right: "And the rest,
+    in order" (`restRowHtml()`): rank, castle, name, four icon amounts, total
+    and "$X more" than No. 1 in red; the whole row opens its details. The
+    details open full width UNDER the board (`#detail`), not inside a row.
+    No panel round the board (rules on the page ground). On phones the two
+    columns stack. The yellow-wash `.row.best` look is gone; don't bring it
+    back. Four other No. 1 treatments (bigger card, navy ticket, gold
+    frame, map spotlight) were shown and NOT chosen.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

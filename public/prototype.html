@@ -502,25 +502,83 @@ a{color:var(--ink)}
 .jumprow{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:13px; padding-top:12px; border-top:1px solid var(--rule)}
 .jumprow .cap{font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--ink-2); margin-right:2px}
 
-/* overflow:clip, not hidden: a hidden box can still be scrolled sideways by
-   the browser (focusing a button near its edge does it), which slid the open
-   details left and cut words off both sides (owner, 2026-10-08). */
-.board{list-style:none; margin:0; padding:0; background:var(--surface); border:2px solid var(--frame); border-radius:16px; overflow:hidden; overflow:clip}
-.row{
-  display:grid; grid-template-columns:60px minmax(190px,1.3fr) minmax(220px,1.6fr) 170px 96px;
-  gap:16px; align-items:center; padding:18px 20px; border-top:1px solid var(--rule);
-  position:relative;
+/* ---------- the board: No. 1 large on the left, the rest ranked on the right ----------
+   The owner's layout (2026-10-21, from the "Editorial" skin). No panel round
+   it: rules on the page ground, like the maps (a box is "part of the AI feel").
+   overflow:clip, not hidden, on anything that clips: a hidden box can still be
+   scrolled sideways by the browser, which cut words off the open details
+   (owner, 2026-10-08). */
+.board{margin:0; min-width:0}
+.boardempty{padding:28px 16px; text-align:center; border-top:2px solid var(--frame); border-bottom:1px solid var(--rule-strong)}
+.boardempty .rname{font-size:18px}
+.boardempty .rmeta{justify-content:center; margin-top:5px}
+.split{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:0 52px; align-items:start}
+.split.alone{grid-template-columns:minmax(0,1fr)}
+.collab{font-family:var(--f-label); font-weight:700; font-size:14px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink);
+  padding:10px 0 14px; border-top:2px solid var(--frame)}
+
+.leadname{display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:0 18px; align-items:start;
+  padding:4px 0 22px; border-bottom:1px solid var(--rule-strong)}
+.bignum{font-family:var(--f-head); font-weight:800; font-size:150px; line-height:.74; letter-spacing:-.06em; color:var(--accent-line)}
+.leadid{min-width:0; padding-top:6px}
+.leadid h3{font-family:var(--f-head); font-weight:800; font-size:46px; line-height:1; letter-spacing:-.025em; margin:0 0 10px}
+.leadbadge img{width:84px; height:84px; display:block}
+.leadtotal{display:flex; align-items:baseline; gap:6px 20px; flex-wrap:wrap; padding:22px 0 16px}
+.leadnum{font-family:var(--f-head); font-weight:800; font-size:76px; line-height:.92; letter-spacing:-.035em; font-variant-numeric:tabular-nums; white-space:nowrap}
+.leadsub{font-size:14px; color:var(--ink-2); line-height:1.5; font-variant-numeric:tabular-nums}
+.leadcol .bar{height:12px; margin:0 0 6px}
+.leadlines{list-style:none; margin:0; padding:0}
+.leadlines li{display:flex; justify-content:space-between; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--rule-strong); font-size:15px}
+.leadlines li > span{display:flex; align-items:center; gap:10px; min-width:0}
+.leadlines b{font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap}
+.leadcol .estnote{margin-top:10px}
+.leadopen{margin-top:20px; background:none; border:0; padding:0; font:inherit; font-weight:700; font-size:15.5px; color:var(--ink); cursor:pointer;
+  text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:5px; text-decoration-color:var(--accent-line)}
+.leadopen:hover{text-decoration-color:var(--ink)}
+
+.rest{list-style:none; margin:0; padding:0}
+.rrow{position:relative; display:grid; grid-template-columns:36px 46px minmax(0,1fr) auto; gap:0 14px; align-items:start;
+  padding:18px 0; border-bottom:1px solid var(--rule-strong)}
+.rest > .rrow:first-child{padding-top:6px}
+/* The whole row opens its details. A real button under the text, so the
+   keyboard reaches it; the chips sit above it so their notes still show. */
+.rhit{position:absolute; inset:0; background:none; border:0; padding:0; cursor:pointer; z-index:1; border-radius:4px}
+.rhit:focus-visible{outline:2px solid var(--accent-line); outline-offset:2px}
+.rrow .attrline{position:relative; z-index:2}
+.rnum{font-family:var(--f-head); font-weight:800; font-size:40px; line-height:.86; letter-spacing:-.04em; color:var(--ink)}
+.rbadge img{width:46px; height:46px; display:block}
+.rid{min-width:0}
+.rrow .rname{font-size:23px}
+.rrow:hover .rname,.rrow.sel .rname{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; text-decoration-color:var(--accent-line)}
+.rlines{display:flex; flex-wrap:wrap; gap:5px 13px; font-size:13px; color:var(--ink-2); margin-top:8px; font-variant-numeric:tabular-nums}
+.rlines > span{display:inline-flex; align-items:center; gap:5px; white-space:nowrap}
+.rlines .ci{width:18px; height:18px; border-radius:6px}
+.rtot{text-align:right}
+.rtot .tnum{font-size:30px}
+.rmore{font-size:13.5px; font-weight:700; color:var(--s4); margin-top:6px; white-space:nowrap}
+.ropen{font-size:12.5px; font-weight:600; color:var(--ink-2); margin-top:6px; white-space:nowrap}
+
+@media (max-width:940px){
+  .split{grid-template-columns:minmax(0,1fr); gap:30px}
+  .bignum{font-size:112px}
+  .leadid h3{font-size:36px}
+  .leadnum{font-size:60px}
+  .leadbadge img{width:66px; height:66px}
 }
-.row:first-child{border-top:0}
-.row.best{background:linear-gradient(90deg,var(--accent-bg) 0%, transparent 66%)}
-.row.best::before{content:""; position:absolute; inset:0 auto 0 0; width:4px; background:var(--accent-line)}
-.row.empty-prompt{display:block; padding:28px 16px; text-align:center}
-.row.empty-prompt .rname{font-size:14.5px}
-.row.empty-prompt .rmeta{justify-content:center; margin-top:5px}
+@media (max-width:560px){
+  .bignum{font-size:84px}
+  .leadname{gap:0 12px}
+  .leadid h3{font-size:29px}
+  .leadbadge img{width:48px; height:48px}
+  .leadnum{font-size:50px}
+  .rrow{grid-template-columns:26px 36px minmax(0,1fr) auto; gap:0 10px}
+  .rnum{font-size:30px}
+  .rbadge img{width:36px; height:36px}
+  .rrow .rname{font-size:19px}
+  .rtot .tnum{font-size:23px}
+}
 /* The rank's column holds the resort's castle badge; the number itself is
    written in the eyebrow above the name ("No. 1 · Cheapest"). */
-.rank{font-family:var(--f-head); font-weight:800; font-size:19px; color:var(--muted); letter-spacing:-.03em}
-.rank img{width:58px; height:58px; display:block}
 .reyebrow{font-family:var(--f-label); font-weight:700; font-size:13.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--accent); line-height:1.2}
 .ident{min-width:0}
 .rname{font-family:var(--f-head); font-weight:800; font-size:23px; letter-spacing:-.015em; line-height:1.08}
@@ -589,21 +647,8 @@ button.pluspill:focus-visible{outline:2px solid var(--accent); outline-offset:2p
 /* And the chip no longer inflates the line it sits in. */
 .barlabs .estchip,.barlabs .exactchip{line-height:1.3}
 
-/* Scoped to the board row. A bare `.total` also caught the gold total tile in
-   every detail card (`.kpitile.total`), which is how the card tiles went wonky
-   between phone and desktop widths: see the 940px rule below. */
-.row > .total{text-align:right}
 .tnum{font-family:var(--f-head); font-weight:800; font-size:32px; line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums}
 .tsub{font-size:12px; color:var(--ink-2); margin-top:5px; font-variant-numeric:tabular-nums}
-.rowbtn{justify-self:end}
-
-/* locked rows */
-.row.locked .ident,.row.locked .bar-wrap,.row.locked .total{filter:blur(4.5px); opacity:.5; user-select:none}
-.lockover{
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:10px;
-  background:var(--lock); backdrop-filter:blur(1px);
-}
-.lockover span{font-size:12.5px; font-weight:600; color:var(--ink)}
 
 /* table view */
 .tablewrap{overflow-x:auto; background:var(--surface); border:2px solid var(--frame); border-radius:16px}
@@ -617,11 +662,8 @@ tbody tr[data-open]{cursor:pointer}
 tbody tr[data-open].sel{background:var(--surface-2)}
 
 /* ---------- detail ---------- */
-.detail{margin-top:26px; background:var(--surface); border:2px solid var(--frame); border-radius:16px; overflow:hidden; overflow:clip; min-width:0}
-/* Inline detail: a child of the row's own grid, spanning every column so it
-   sits directly under the row you opened instead of a separate section far
-   down the page — collapsing it brings the board straight back into view. */
-.row-detail{grid-column:1/-1; margin:16px -20px -18px; border-left:0; border-right:0; border-radius:0; border-top:1px solid var(--rule-strong)}
+/* Opens under the whole board, full width, for whichever resort was picked. */
+.detail{margin-top:30px; background:var(--surface); border:2px solid var(--frame); border-radius:16px; overflow:hidden; overflow:clip; min-width:0}
 .dhead{display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; padding:18px 20px; border-bottom:1px solid var(--rule)}
 .dhead h3{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em; line-height:1.05}
 .dhead p{margin:5px 0 0; font-size:13.5px; color:var(--ink-2)}
@@ -831,18 +873,6 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
 .srcs b{color:var(--ink); font-weight:600}
 
 @media (max-width:940px){
-  .row{grid-template-columns:46px 1fr 130px; grid-template-areas:"rank ident total" ". bar bar" ". btn btn"; gap:10px 12px; padding:16px}
-  .row-detail{margin:14px -16px -16px}
-  .rank img{width:46px; height:46px}
-  .rname{font-size:20px}
-  .tnum{font-size:26px}
-  /* `.row >` on every one of these. Unscoped, `.total{grid-area:total}` also
-     hit `.kpitile.total` in the detail cards, which have no area called
-     "total" — so the browser invented extra columns for it and the total
-     tile dropped to its own row, stranded on the right, between 560px and
-     940px wide. */
-  .row > .rank{grid-area:rank} .row > .ident{grid-area:ident} .row > .total{grid-area:total}
-  .row > .bar-wrap{grid-area:bar} .row > .rowbtn{grid-area:btn; justify-self:start}
 }
 @media (max-width:560px){
   .plans{grid-template-columns:1fr}
@@ -1414,7 +1444,7 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
     </div>
   </details>
 
-  <ol class="board" id="board"></ol>
+  <div class="board" id="board"></div>
   <div class="tablewrap" id="tablewrap" hidden></div>
 
 </div>
@@ -2605,105 +2635,146 @@ function renderBoard(){
   const board = $("#board");
   if(!results.length){
     renderRouteMap([]);
-    board.innerHTML = `<li class="row empty-prompt">
-      <div class="ident">
+    board.innerHTML = `<div class="boardempty">
         <div class="rname">No comparison yet</div>
         <div class="rmeta">Set your trip details above, then click "Compare six resorts" to see prices.</div>
-      </div>
-    </li>`;
+    </div>`;
     return;
   }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
-  // Tagged, not reordered: on screen the board stays in price order, which is
-  // the app's one job. Only the print stylesheet lifts this row to the top.
   renderRouteMap(list);
-  const lead = leadResort();
-  const leadResortId = lead ? lead.resortId : null;
-  board.innerHTML = list.map(({item,i},pos)=>{
-    const r = item.resort;
-    if(!item.ok){
-      return `<li class="row" data-i="${i}">
-        <div class="rank">${badgeImg(item.resortId)}</div>
-        <div class="ident">
-          <div class="reyebrow">No. ${pos+1}</div>
-          <div class="rname">${item.name}</div>
-          <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div>
-          ${attractionChip(item)}
-        ${crowdChip(item)}
-        </div>
-        <div></div><div></div>
-        <div class="total"><div class="tnum">—</div><div class="tsub">${item.reason}</div></div>
-        <div></div>
-      </li>`;
-    }
-    const x = item.price, tot = x.total, pax = x.partySize;
-    const w = n => (n/tot*100).toFixed(2)+"%";
-    // An estimated fare must look different from a quoted one right here on
-    // the board, not only inside Details — the board is where most people
-    // decide, and an unmarked estimate reads as a quote.
-    const est = x.flightPick && x.flightPick.estimate;
-    // A priced fare with no estimate attached is a real one somebody bought —
-    // the nightly job, or a traveler checking a live price for this date.
-    // Say so on the board, not only inside Details: it's the more expensive
-    // thing to get and should be visible where people actually compare.
-    // Never called "exact" — a real fare found today can still move by the
-    // time somebody actually books, and the owner's call (2026-09-25) was to
-    // stop implying a precision the site can't stand behind.
-    const live = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
-    const getThere = x.flights + x.driving;   // flights/driving mutually exclusive — one is always 0
-    const getThereLabel = x.transportMode==="drive" ? "Driving" : "Flights";
-    const perPD = tot/pax/(params.nights+1);
-    const bands = params.ages.length
-      ? params.ages.map(a=>a+" → "+BANDNAME[bandOf(r,a)]).join(" · ") : "";
-    const sd = new Date(x.start+"T00:00:00Z");
-    const dateStr = MONTHS[sd.getUTCMonth()]+" "+sd.getUTCDate();
-    const open = unlocked(i);
-    return `
-    <li class="row${pos===0?" best":""}${open?"":" locked"}${item.resortId===leadResortId?" printlead":""}" data-i="${i}">
-      <div class="rank">${badgeImg(item.resortId)}</div>
-      <div class="ident">
-        <div class="reyebrow">No. ${pos+1}${pos===0?" · Cheapest":""}</div>
-        <div class="rname">${r.name}</div>
-        <div class="rmeta">
-          <span class="code">${item.iata}</span>${r.city} · ${r.note}
-          ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}
-          ${r.dataConfidence?`<span class="lowconf" title="${esc(r.dataConfidence.note)}">${esc(r.dataConfidence.level)}</span>`:""}
-        </div>
-        ${attractionChip(item)}
-        ${crowdChip(item)}
-        ${dealChip(item)}
-        ${bands?`<div class="bandnote">Ages ${bands}</div>`:""}
+  if(!list.length){
+    board.innerHTML = `<div class="boardempty"><div class="rname">No resorts in this filter</div>
+      <div class="rmeta">Try "All" instead.</div></div>`;
+    return;
+  }
+  // The owner's layout (2026-10-21, from the "Editorial" skin): No. 1 large on
+  // the left with its whole bill, the rest ranked on the right with how much
+  // more each costs. Still price order, top to bottom and left to right.
+  const [first, ...rest] = list;
+  const leadTotal = first.item.ok ? first.item.price.total : null;
+  const detailHere = detailOpen && list.some(({i}) => i === selected);
+  board.innerHTML = `<div class="split${rest.length ? "" : " alone"}">
+      ${leadHtml(first)}
+      ${rest.length ? `<div class="restcol">
+        <div class="collab">And the rest, in order</div>
+        <ol class="rest">${rest.map(({item,i},k)=>restRowHtml(item, i, k+2, leadTotal)).join("")}</ol>
+      </div>` : ""}
+    </div>
+    ${detailHere ? `<div class="detail" id="detail"></div>` : ""}`;
+}
+
+/** The pieces of one priced resort the lead and the rest both show. */
+function boardBits(item){
+  const x = item.price, pax = x.partySize;
+  // An estimated fare must look different from a quoted one right here on
+  // the board, not only inside Details: the board is where people decide.
+  const est = x.flightPick && x.flightPick.estimate;
+  // A priced fare with no estimate attached is a real one somebody bought.
+  // Never called "exact": a real fare found today can still move by the time
+  // somebody books (owner, 2026-09-25).
+  const live = !!(x.flightPick && !x.flightPick.estimate) && x.transportMode !== "drive";
+  const drive = x.transportMode === "drive";
+  const sd = new Date(x.start+"T00:00:00Z");
+  return { x, pax, est, drive,
+    getThere: x.flights + x.driving,   // one of the two is always 0
+    getThereLabel: drive ? "Driving" : "Flights",
+    chip: est ? ' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>'
+      : live ? ' <span class="exactchip" title="A real fare we found recently, not a computed estimate — prices can still move">live</span>' : "",
+    dateStr: MONTHS[sd.getUTCMonth()]+" "+sd.getUTCDate(),
+    tilde: est ? '<span class="tilde" title="Total includes an estimated fare">~</span>' : "" };
+}
+function costBar(b){
+  const w = n => (n/b.x.total*100).toFixed(2)+"%";
+  return `<div class="bar" role="img" aria-label="Cost split: ${b.getThereLabel.toLowerCase()} ${usd(b.getThere)}, hotel ${usd(b.x.hotel)}, tickets ${usd(b.x.tickets)}, food ${usd(b.x.food)}">
+      <div class="seg f1" style="width:${w(b.getThere)}"></div>
+      <div class="seg f3" style="width:${w(b.x.hotel)}"></div>
+      <div class="seg f2" style="width:${w(b.x.tickets)}"></div>
+      <div class="seg f4" style="width:${w(b.x.food)}"></div>
+    </div>`;
+}
+const COUNT_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
+const countWord = n => COUNT_WORDS[n] || String(n);
+function leadHtml({item, i}){
+  const r = item.resort;
+  const home = ORIGINS.concat(PLUS_ORIGINS).find(o => o.iata === params.origin);
+  const from = params.originPoint && params.originPoint.label ? params.originPoint.label.split(",")[0]
+    : home ? home.name : params.origin;
+  const eyebrow = `The cheapest trip, ${tripWhenLabel()}${from ? ", from " + esc(from) : ""}`;
+  if(!item.ok){
+    return `<div class="leadcol" data-i="${i}">
+      <div class="collab">${eyebrow}</div>
+      <div class="leadname"><span class="bignum" aria-hidden="true">1</span>
+        <div class="leadid"><h3>${item.name}</h3>
+        <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div></div></div>
+    </div>`;
+  }
+  const b = boardBits(item), x = b.x, nights = params.nights;
+  const open = i === selected && detailOpen;
+  const lines = [
+    [b.drive ? "ci-car" : "ci-flight", b.drive ? "Driving there and back" : `Flights, ${countWord(b.pax)} seat${b.pax===1?"":"s"}`, b.getThere, b.chip],
+    ["ci-hotel", x.hotel ? `Hotel, ${countWord(nights)} night${nights===1?"":"s"}` : "Hotel", x.hotel, ""],
+    ["ci-ticket", "Park tickets", x.tickets, ""],
+    ["ci-food", "Food", x.food, ""],
+  ];
+  // Parking, transfers, deals and credits: whatever the four lines don't
+  // cover, so the lines always add up to the total printed above them.
+  const other = x.total - lines.reduce((a,l)=>a+l[2],0);
+  if(Math.abs(other) >= 1) lines.push(["ci-star", other < 0 ? "Deals and credits" : "Parking, transfers and extras", other, ""]);
+  return `<div class="leadcol" data-i="${i}">
+    <div class="collab">${eyebrow}</div>
+    <div class="leadname">
+      <span class="bignum" aria-hidden="true">1</span>
+      <div class="leadid">
+        <h3>${r.name}</h3>
+        <div class="rmeta"><span class="code">${item.iata}</span>${r.city} · ${r.note}
+          ${hasOv(r.id)?'<span class="yourchip">Your numbers</span>':""}</div>
+        ${attractionChip(item)}${crowdChip(item)}${dealChip(item)}
       </div>
-      <div class="bar-wrap">
-        <div class="bar" role="img" aria-label="Cost split: ${getThereLabel.toLowerCase()} ${usd(getThere)}, hotel ${usd(x.hotel)}, tickets ${usd(x.tickets)}, food ${usd(x.food)}">
-          <div class="seg f1" style="width:${w(getThere)}"></div>
-          <div class="seg f3" style="width:${w(x.hotel)}"></div>
-          <div class="seg f2" style="width:${w(x.tickets)}"></div>
-          <div class="seg f4" style="width:${w(x.food)}"></div>
-        </div>
-        <div class="barlabs">
-          <span><i class="ci ${x.transportMode==="drive"?"ci-car":"ci-flight"}"></i>${getThereLabel} ${usd(getThere)}${
-            est ? ' <span class="estchip" title="Estimated fare, not a cached quote">est.</span>'
-                : live ? ' <span class="exactchip" title="A real fare we found recently, not a computed estimate — prices can still move">live</span>' : ""}</span>
-          <span><i class="ci ci-hotel"></i>Hotel ${usd(x.hotel)}</span>
-          <span><i class="ci ci-ticket"></i>Tickets ${usd(x.tickets)}</span>
-          <span><i class="ci ci-food"></i>Food ${usd(x.food)}</span>
-        </div>
-        ${est?`<div class="estnote">Flights estimated: typical range ${usd(est.low*pax)}–${usd(est.high*pax)} for ${pax}.</div>`:""}
-        ${item.noFlightsYet?`<div class="estnote">${esc(item.noFlightsYet)}.</div>`:""}
-        ${item.drivenBecauseClose?`<div class="estnote">${esc(item.drivenBecauseClose)}.</div>`:""}
-      </div>
-      <div class="total">
-        <div class="tnum">${usd(tot)}${est?'<span class="tilde" title="Total includes an estimated fare">~</span>':""}</div>
-        <div class="tsub">${usd(perPD)} / person / day · from ${dateStr}</div>
-      </div>
-      <button class="btn btn-sm rowbtn" data-open="${i}">${open?(i===selected&&detailOpen?"Collapse":"Details"):"Unlock"}</button>
-      ${open?"":`<div class="lockover"><span>Locked on the free plan</span></div>`}
-      ${(open && i===selected && detailOpen) ? `<div class="detail row-detail" id="detail"></div>` : ""}
+      <span class="leadbadge">${badgeImg(item.resortId)}</span>
+    </div>
+    <div class="leadtotal">
+      <div class="leadnum">${usd(x.total)}${b.tilde}</div>
+      <div class="leadsub">for ${countWord(b.pax)} · ${usd(x.total/b.pax)} a person<br>arriving ${b.dateStr}</div>
+    </div>
+    ${costBar(b)}
+    <ul class="leadlines">${lines.map(([ic,lab,v,chip])=>`<li><span><i class="ci ${ic}"></i>${lab}${chip}</span><b>${v<0?"&minus;"+usd(-v):usd(v)}</b></li>`).join("")}</ul>
+    ${b.est?`<div class="estnote">Flights estimated: typical range ${usd(b.est.low*b.pax)}–${usd(b.est.high*b.pax)} for ${b.pax}.</div>`:""}
+    ${item.noFlightsYet?`<div class="estnote">${esc(item.noFlightsYet)}.</div>`:""}
+    ${item.drivenBecauseClose?`<div class="estnote">${esc(item.drivenBecauseClose)}.</div>`:""}
+    <button class="leadopen" data-open="${i}">${open ? "Close the whole trip ↑" : "See the whole trip →"}</button>
+  </div>`;
+}
+function restRowHtml(item, i, rank, leadTotal){
+  const r = item.resort;
+  if(!item.ok){
+    return `<li class="rrow" data-i="${i}">
+      <span class="rnum">${rank}</span>
+      <span class="rbadge">${badgeImg(item.resortId)}</span>
+      <div class="rid"><div class="rname">${item.name}</div>
+        <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div></div>
+      <div class="rtot"><div class="tnum">—</div></div>
     </li>`;
-  }).join("");
-  if(!list.length) board.innerHTML = `<li class="row"><div class="ident"><div class="rname">No resorts in this filter</div>
-    <div class="rmeta">Try "All" instead.</div></div></li>`;
+  }
+  const b = boardBits(item), x = b.x;
+  const sel = i === selected && detailOpen;
+  const more = leadTotal != null ? x.total - leadTotal : null;
+  return `<li class="rrow${sel?" sel":""}" data-i="${i}">
+    <button class="rhit" data-open="${i}" aria-label="Number ${rank}, ${esc(r.name)}, ${usd(x.total)}. ${sel?"Close":"Open"} details"></button>
+    <span class="rnum">${rank}</span>
+    <span class="rbadge">${badgeImg(item.resortId)}</span>
+    <div class="rid">
+      <div class="rname">${r.name}</div>
+      <div class="rmeta"><span class="code">${item.iata}</span>${r.city}${hasOv(r.id)?' <span class="yourchip">Your numbers</span>':""}</div>
+      <div class="rlines"><span><i class="ci ${b.drive?"ci-car":"ci-flight"}"></i>${usd(b.getThere)}${b.chip}</span><span><i class="ci ci-hotel"></i>${usd(x.hotel)}</span><span><i class="ci ci-ticket"></i>${usd(x.tickets)}</span><span><i class="ci ci-food"></i>${usd(x.food)}</span></div>
+      ${attractionChip(item)}${crowdChip(item)}${dealChip(item)}
+    </div>
+    <div class="rtot">
+      <div class="tnum">${usd(x.total)}${b.tilde}</div>
+      ${more != null ? `<div class="rmore">${more >= 0.5 ? usd(more) + " more" : more <= -0.5 ? usd(-more) + " less" : "Same price"}</div>` : ""}
+      <div class="ropen">${sel ? "Close ↑" : "Details →"}</div>
+    </div>
+  </li>`;
 }
 
 function renderTable(){
@@ -3022,9 +3093,8 @@ function tripLinks(item, p){
 async function renderDetail(){
   const token = ++detailToken;
   const box = $("#detail");
-  // No row is expanded right now — renderBoard() only creates #detail
-  // inside the selected row when detailOpen is true, so this is the normal
-  // state whenever nothing's open, not an error.
+  // Nothing is open right now: renderBoard() only creates #detail (under
+  // the board) when detailOpen is true, so this is the normal state.
   if(!box) return;
   const item = results[selected];
   if(!item){ box.innerHTML = ""; return; }
@@ -3726,7 +3796,7 @@ $("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
    and lets the keyboard press a castle too. */
 $("#routeMap").addEventListener("click", e=>{
   const c = e.target.closest("[data-open]"); if(!c) return;
-  setTimeout(()=>{ const row = $(`#board li[data-i="${c.dataset.open}"]`); row && row.scrollIntoView({ behavior:"smooth", block:"start" }); }, 0);
+  setTimeout(()=>{ const box = $("#detail"); box && box.scrollIntoView({ behavior:"smooth", block:"start" }); }, 0);
 });
 $("#routeMap").addEventListener("keydown", e=>{
   if(e.key !== "Enter" && e.key !== " ") return;
@@ -3754,7 +3824,7 @@ document.addEventListener("click", e=>{
       // renderBoard() call.
       renderBoard();
       renderDetail();
-      $(`.row[data-i="${i}"]`)?.scrollIntoView({behavior:"smooth", block:"nearest"});
+      $("#detail")?.scrollIntoView({behavior:"smooth", block:"start"});
     }
     return;
   }
