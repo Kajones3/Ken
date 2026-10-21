@@ -218,6 +218,86 @@ list.**
    Walt Disney World's Details.
 9. Database **86 MB of Neon's 512** (2026-10-13). Never delete raw answers.
 
+### 2026-10-18 to 10-21 — site redesign: G "Enchanted Atlas" is LIVE in the code, plus the new tab icon (READ FIRST)
+
+Owner: "I've seen three vibe coded sites in the last two days that all look
+exactly like this." Mock-ups live on a claude.ai Design canvas (owner's
+account, "Pricing the Magic — design skins"), NOT in the repo. On
+2026-10-21 the owner said "reskin everything" and G was applied to
+prototype.html, admin.html and the coming-soon page (details at the end of
+this section).
+- **Direction picked: G "Enchanted Atlas"**: E's light chart-paper route map
+  (real coastlines, equirectangular centred on the Pacific) + the ORIGINAL
+  castle badges (`public/brand/badge-*.svg`) as map markers and in the result
+  rows + navy #16204A / gold #E8B23E + Bricolage Grotesque headlines + the
+  plane / bed / ticket / fork-and-knife price icons on every cost line.
+  Owner's last changes: no wavy line under the headline; the logo at the top
+  of the page is the TAB ICON (sparkle on an orbit), not the castle. Totals
+  stay plain Bricolage numbers: a split-flap "flip board" total was tried
+  and REJECTED (2026-10-21: "The numbers aren't clear"). Don't bring it back.
+  **Headline (owner's pick, 2026-10-21): "Six Disney Trips. / One Search."**
+  in TITLE CASE, two lines (owner: "Make sure everything is capitalized
+  correctly"). Owner: "There isn't one honest price. It's that you can see
+  everything at one time to compare it" (e.g. Paris only ~$400-500 over
+  WDW). So "One honest price." is retired; "priced side by side" was an
+  interim line, also superseded. When Abu Dhabi arrives the "Six" needs
+  rewording.
+- **Rejected, don't bring back:** A's all-black airport look ("lacked a
+  certain magic and whimsy needed for Disney"), E in dark ("just looks like an
+  AI site": navy + condensed sans + thin borders), F (A + E hybrid), B, C, D.
+  Owner likes: E's map, the castles, the price icons, the flip-board totals.
+- **Tab icon DECIDED: "Sparkle on an orbit"** (gold sparkle in a dashed
+  orbit, navy square). Built and wired 2026-10-21:
+  `public/brand/tab-icon.svg` (+ `tab-icon-bleed.svg`, square corners for
+  phones), PNGs `favicon-32.png`, `favicon-48.png`, `apple-touch-icon.png`
+  from `sh tools/brand/png.sh` (headless Chromium), `tabIcon()` in
+  `tools/brand/gen.mjs`. The tab icon is now ALSO the logo everywhere
+  (masthead, PDF cover, coming-soon page); `mark.svg` (the castle mark) is
+  no longer used by any page. `.png` added to server.ts MIME.
+- **The reskin, as built 2026-10-21 (needs a Render redeploy):**
+  - prototype.html tokens are G. **Dark mode = "After Dark" (owner,
+    2026-10-21: "I need a dark mode ... maybe just black"): BLACK #08080A,
+    not navy** (every navy dark was rejected), cream ink #F5EFE0, gold #E8B23E
+    as text, flights bar cream, 2px frames `--frame` at cream 24%, a faint
+    star field (`--stars`, 420px tile) behind the page. Follows the device
+    until the masthead moon/sun button is pressed (`#themeTop`, kept in
+    localStorage `pf_theme`, set before first paint by a script in <head>).
+    admin.html and the coming-soon page follow the device only. Fonts: Bricolage Grotesque
+    (`--f-head`: headlines, totals, card titles), Public Sans (`--f-body`,
+    replaces Karla and JetBrains Mono), Barlow Condensed (`--f-label`: the
+    small uppercase captions). Archivo/Karla/JetBrains Mono are gone.
+  - Cost colors: flights #16204A navy (`--s1`), tickets #E8B23E gold
+    (`--s2`), hotel #5B8DB8 blue (`--s3`), food #C0563F red (`--s4`). The
+    board bar now runs flights, hotel, tickets, food.
+  - Price icons are CSS-masked tiles: `<i class="ci ci-flight|ci-car|
+    ci-hotel|ci-ticket|ci-food|ci-weather|ci-crowd|ci-star">` (one empty
+    element, the glyph is in the stylesheet). Used on board rows, the legend,
+    every card header and the hero.
+  - Board rows: castle badge (`badgeImg()`) in the rank column, "No. N ·
+    Cheapest" eyebrow, 23px Bricolage name, pill bar, 32px totals. Panels,
+    the board and dialogs: paper #FBFAF6 with a 2px navy border, 16px
+    corners, no shadows; buttons are pills.
+  - Hero: eyebrow "Every Disney Resort in the World", the headline, the four
+    icon chips, then the existing castle world map in a paper frame with the
+    owner's story as its caption. `map-light.svg` re-colored to G
+    (gen.mjs line ~193); the PDF cover maps and badges are unchanged.
+  - Short titles are title case ("Six Resorts, Cheapest First", "Park
+    Tickets", "Your Budget", "Sign In", "Coming Soon"); questions and
+    sentences stay sentence case.
+  - **Flight-path map** (owner: "I want the flight path"), above the board
+    (`#routeFig`, `routeMapHtml()` / `renderRouteMap()` in prototype.html):
+    routes from the home airport (config lat/lon; a drive starts from the
+    typed city and is a solid line) to each park, castle badges set off
+    from their park (`RM_PARKS`), numbered cheapest first, the cheapest
+    route thicker; a castle opens that resort's details. Base art
+    `route-map-light/dark.svg` from gen.mjs (real coastlines; x = ((lon -
+    90 + 360) % 360) / 360 * 1200, y = (60 - lat) * 6; the page shows x
+    20-1000). On phones the map keeps 220px height and swipes sideways,
+    starting on the home airport.
+  - **Lesson (2026-10-21): the reskin was pushed to the branch but never
+    merged, so the owner's redeploy showed nothing.** Render deploys
+    master; check `/health` version against master after merging.
+
 ### 2026-10-17 — first two nights after A-E (governing rule #4 check). START HERE.
 
 Checked 2026-10-17 from the job logs of the Oct 16 and Oct 17 runs plus
@@ -1276,7 +1356,8 @@ $9,483, Tokyo $9,715. `SAMPLE_TRIP` (prototype.html) now carries `stay`;
   longer does.
 - Phone hero: castle badges removed. "Which day should we price?" moved up
   beside Nights so the park-days "?" note opens under its own row.
-- **Tab icon: owner still deciding** between globe and sparkle variations
+- **Tab icon: DECIDED 2026-10-21, "Sparkle on an orbit" (see the redesign
+  section at the top).** Was: owner still deciding between globe and sparkle variations
   (Claude suggested B2 simple globe + sparkle, or C3 sparkle on a dashed
   orbit). Nothing that COUNTS the parks: a seventh resort (Abu Dhabi) is
   coming, which will also need the "Six Disney resorts" headline reworded.

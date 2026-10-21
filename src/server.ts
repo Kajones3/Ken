@@ -81,6 +81,7 @@ function escapeHtml(v: string): string {
 }
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
+  ".png": "image/png",
 };
 
 /**

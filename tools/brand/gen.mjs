@@ -189,8 +189,9 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
   return o.join("");
 }
 
-writeFileSync(`${out}/map-dark.svg`, map({ dot: "#26325E", label: "#AEB9DA", pin: GOLD, route: "#E8B23E99", line: null }));
-writeFileSync(`${out}/map-light.svg`, map({ dot: "#CBD7EC", label: "#3A4670", pin: "#C98A12", route: "#C98A12AA", line: "#2B3A67" }));
+// Dark is "After Dark": black, not navy (owner, 2026-10-21).
+writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null }));
+writeFileSync(`${out}/map-light.svg`, map({ dot: "#BFD1D8", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
   writeFileSync(`${out}/map-cover-${r.id}.svg`, map({ dot: "#D5DFEF", label: "#3A4670", pin: "#C98A12", route: "#C98A1288", line: "#2B3A67", focus: r.id }));
@@ -216,4 +217,38 @@ const mark = (bg, fg, gold) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox=
   `<path d="M28 50 v-7 a4 4 0 0 1 8 0 v7 Z" fill="${bg}"/>` +
   `<rect x="14" y="52.5" width="36" height="3" rx="1.5" fill="${gold}"/></svg>`;
 writeFileSync(`${out}/mark.svg`, mark("#16204A", "#F5EFE0", GOLD));
+
+// The tab icon (owner's pick, 2026-10-21: "Sparkle on an orbit"): a gold
+// sparkle inside a dashed orbit. It counts no parks, so a seventh resort never
+// makes it wrong. The page logo stays the castle mark above. `bleed` drops the
+// rounded corners for the phone home-screen icon, which iOS rounds itself.
+// The PNG copies (Safari ignores SVG tab icons) come from tools/brand/png.sh.
+const tabIcon = (bleed) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
+  (bleed ? `<rect width="64" height="64" fill="#16204A"/>` : `<rect x="2" y="2" width="60" height="60" rx="14" fill="#16204A"/>`) +
+  `<ellipse cx="32" cy="32" rx="25" ry="10" transform="rotate(-24 32 32)" fill="none" stroke="#F5EFE0" stroke-width="2.5" stroke-dasharray="3.5 4"/>` +
+  `<path d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z" fill="${GOLD}"/>` +
+  `<circle cx="53" cy="22" r="3" fill="#F5EFE0"/></svg>`;
+writeFileSync(`${out}/tab-icon.svg`, tabIcon(false));
+writeFileSync(`${out}/tab-icon-bleed.svg`, tabIcon(true));
+// The results route map (G "Enchanted Atlas", owner: "I want the flight
+// path"): real coastlines on chart paper, 90°E at the left edge so Asia sits
+// left, the US in the middle and Europe right, latitudes 60°N to 10°N
+// stretched 1.8x so the band holding all six resorts and every home airport
+// fills the frame. The page draws routes and castles on top
+// (routeMapHtml() in prototype.html) with the same arithmetic:
+//   x = ((lon - 90 + 360) % 360) / 360 * 1200,  y = (60 - lat) * 6.
+const RW = 1200, RH = 300, RK = 1.8, RS = RW / (2 * Math.PI);
+const routeProj = d3.geoProjection((l, p) => [l, p * RK])
+  .rotate([90, 0]).scale(RS).translate([RW / 2, (60 * Math.PI / 180) * RS * RK])
+  .clipExtent([[0, 0], [RW, RH]]);
+const routePath = d3.geoPath(routeProj).digits(1);
+const graticule = d3.geoGraticule().step([15, 10]);
+function routeBase({ sea, land: fill, coast, grid }) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${RW} ${RH}" width="${RW}" height="${RH}" preserveAspectRatio="none">` +
+    `<rect width="${RW}" height="${RH}" fill="${sea}"/>` +
+    `<path d="${routePath(graticule())}" fill="none" stroke="${grid}" stroke-width="1"/>` +
+    `<path d="${routePath(land)}" fill="${fill}" stroke="${coast}" stroke-width="1.2" stroke-linejoin="round"/></svg>`;
+}
+writeFileSync(`${out}/route-map-light.svg`, routeBase({ sea: "#CFE0E5", land: "#FBFAF6", coast: "#AFC3CA", grid: "#BED2D8" }));
+writeFileSync(`${out}/route-map-dark.svg`, routeBase({ sea: "#08080A", land: "#17171C", coast: "#34343C", grid: "#141418" }));
 console.log(`map ${W}x${H}, ${dots.length} dots`);
