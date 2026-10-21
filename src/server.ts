@@ -503,7 +503,11 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
     if (!r.ok) return { date: d, total: null };
     return {
       date: d, total: Math.round(r.price.total),
-      ...(singleDay ? { hotelTier: r.price.hotelTier } : {}),
+      // roomDeal: what a deal took off the room line, so the hotel card's
+      // "every category" rows can say which of them have a deal in them.
+      ...(singleDay ? { hotelTier: r.price.hotelTier, roomDeal: Math.round(r.price.appliedPromos
+        .filter((a) => !a.skipped && (a.kind === "room_pct_off" || a.kind === "room_flat_off" || a.kind === "room_night_off"))
+        .reduce((sum, a) => sum + a.amountUsd, 0)) } : {}),
     };
   });
   return { resortId: resort.id, destination: params.destination, pricesAsOf: book.oldestFetchedAt, days };

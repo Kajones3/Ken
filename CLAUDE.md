@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**852 tests** (all pass, 2026-10-16), and typecheck is clean. `npm run smoke` runs the pipeline.
+**853 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -319,6 +319,18 @@ this section).
     columns stack. The yellow-wash `.row.best` look is gone; don't bring it
     back. Four other No. 1 treatments (bigger card, navy ticket, gold
     frame, map spotlight) were shown and NOT chosen.
+  - **Deals show on the line they came off** (owner, 2026-10-21: "hotel
+    discounts need to be shown at the hotel level"; "up to 30%" taken at the
+    full 30% is FINE). Hotel card: the hotel line is the REGULAR price for
+    the stay (average regular nightly, not the first night), the room deal
+    is its own gold line under it (`dealsOn(x, "rooms")`, `dealWhy()`), the
+    per-night tile says "after the deal", the "every category" rows say
+    "after the deal ($X off)" (`/api/calendar` single-day `roomDeal`), and
+    the rate box says "less the deal below". PDF cost table: each deal sits
+    under its own line, which shows its regular price, so the table adds up
+    (it used to list after-deal lines AND the deal again). **And a Disney
+    room deal never comes off an OFF-property hotel** (it did: the sample
+    PDF's WDW total moves $8,261 -> $8,735); your own discount still does.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.
