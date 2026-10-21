@@ -427,6 +427,144 @@ export function findColumnCuts(lum, width, height) {
   return cuts;
 }
 
+/* --------------------------------------------- Disney's ticket calendars */
+
+const CAL_MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+const CAL_WEEKDAYS = ["sun","mon","tue","wed","thu","fri","sat"];
+const cleanWord = t => String(t || "").trim().replace(/^[^\w$]+|[^\w+.$]+$/g, "");
+
+/**
+ * Disney's ticket calendar ("Choose the Start Date of Your 5-Day Ticket",
+ * a month with "$153+" in every day) read into one per-day price per date
+ * (owner, 2026-10-21). Pure: it takes the WORDS the OCR found, each with its
+ * box, and works out the dates from the picture's own grid:
+ *  - the month and year from the "October 2027" heading;
+ *  - the ticket length from "5-Day Ticket";
+ *  - each "$153+" price's column from the Sun..Sat headings above it (or, if
+ *    those were missed, from the spread of the prices themselves: a month
+ *    fills all seven columns), and its week from its height on the page;
+ *  - then checks itself against the day numbers printed in the cells.
+ * The owner checks every box before saving; a misread digit is fixed there.
+ *
+ * words: [{ text, x0, y0, x1, y1 }]
+ * Returns { month: "YYYY-MM" | null, ticketDays, adultAges, prices: [{date, perDay}],
+ *           missing: [dates], warnings: [] }
+ */
+export function readTicketCalendar(words) {
+  const W = (words || []).filter(w => w && String(w.text || "").trim())
+    .map(w => ({ ...w, t: cleanWord(w.text), cx: (w.x0 + w.x1) / 2, cy: (w.y0 + w.y1) / 2, h: w.y1 - w.y0 }));
+  const warnings = [];
+  const text = W.map(w => w.text).join(" ");
+
+  // The heading: a full month name followed by a year ("October 2027").
+  let month = null, heading = null;
+  for (let i = 0; i < W.length - 1; i++) {
+    const m = CAL_MONTHS.indexOf(W[i].t.toLowerCase());
+    const y = /^(20\d\d)$/.exec(W[i + 1].t);
+    if (m >= 0 && y && Math.abs(W[i + 1].cy - W[i].cy) < Math.max(W[i].h, 8)) {
+      const ym = `${y[1]}-${String(m + 1).padStart(2, "0")}`;
+      if (!month) { month = ym; heading = W[i]; }
+      else if (ym !== month) { warnings.push(`It also mentions ${CAL_MONTHS[m]} ${y[1]}; read as ${month}. Check the month.`); break; }
+    }
+  }
+  const len = /(\d{1,2})\s*-?\s*Day\s+Ticket/i.exec(text) || /(\d{1,2})\s*-?\s*day\s+ticket/i.exec(text.replace(/\s+/g, " "));
+  const ticketDays = len ? Number(len[1]) : null;
+  const ages = /Ages?\s*(\d{1,2})\s*\+/i.exec(text);
+  const adultAges = ages ? `${ages[1]}+` : null;
+
+  // The weekday headings, the top of the grid.
+  const heads = W.filter(w => CAL_WEEKDAYS.includes(w.t.slice(0, 3).toLowerCase()) && w.t.length <= 9
+    && /^[A-Za-z]+$/.test(w.t) && (!heading || w.cy > heading.cy));
+  // Keep one heading per weekday, the row the most of them share.
+  const byDay = new Map();
+  for (const h of heads) {
+    const d = CAL_WEEKDAYS.indexOf(h.t.slice(0, 3).toLowerCase());
+    const prev = byDay.get(d);
+    if (!prev || (heading && Math.abs(h.cy - heading.cy) < Math.abs(prev.cy - heading.cy))) byDay.set(d, h);
+  }
+  const headRowY = byDay.size ? [...byDay.values()].map(h => h.cy).sort((a, b) => a - b)[Math.floor(byDay.size / 2)] : null;
+
+  // The prices: "$153+" (or "153+"); a lone "$153" only if no "+" prices were read.
+  const priceOf = w => {
+    const m = /^\$?(\d{2,4}(?:\.\d{1,2})?)([+t*])?$/.exec(w.t.replace(/,/g, ""));
+    if (!m) return null;
+    const v = Number(m[1]);
+    return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
+  };
+  let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && /\$|\+/.test(x.w.text))
+    .filter(x => headRowY === null || x.w.cy > headRowY);
+  const plus = cands.filter(x => x.p.plus);
+  if (plus.length >= 7) cands = plus;
+  const prices = cands.map(x => ({ ...x.w, v: x.p.v }));
+  if (!month) return { month: null, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
+  if (!prices.length) return { month, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
+
+  // Columns: from the headings when at least two were read, else from the prices' spread.
+  let colOf;
+  const hs = [...byDay.entries()];
+  if (hs.length >= 2) {
+    const n = hs.length, sx = hs.reduce((a, [d]) => a + d, 0), sy = hs.reduce((a, [, h]) => a + h.cx, 0);
+    const sxx = hs.reduce((a, [d]) => a + d * d, 0), sxy = hs.reduce((a, [d, h]) => a + d * h.cx, 0);
+    const b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
+    colOf = cx => Math.max(0, Math.min(6, Math.round((cx - a) / b)));
+  } else {
+    const xs = prices.map(p => p.cx), lo = Math.min(...xs), hi = Math.max(...xs);
+    colOf = cx => hi > lo ? Math.max(0, Math.min(6, Math.round((cx - lo) / (hi - lo) * 6))) : 0;
+    warnings.push("Couldn't read the Sun–Sat headings; worked out the columns from the prices.");
+  }
+
+  // Weeks: prices sorted top to bottom, a new week when the height jumps.
+  const hMed = [...prices.map(p => p.h)].sort((a, b) => a - b)[Math.floor(prices.length / 2)] || 10;
+  const sorted = [...prices].sort((a, b) => a.cy - b.cy);
+  const rows = [];
+  for (const p of sorted) {
+    const row = rows[rows.length - 1];
+    if (row && p.cy - row.y < hMed * 2) row.items.push(p); else rows.push({ y: p.cy, items: [p] });
+  }
+  const [yy, mm] = month.split("-").map(Number);
+  const firstDow = new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay();
+  const daysIn = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const placed = [];
+  rows.forEach((row, r) => row.items.forEach(p => placed.push({ p, day: r * 7 + colOf(p.cx) - firstDow + 1 })));
+
+  // Check the weeks against the day numbers printed in the cells (top right
+  // of each cell, above its price). A whole-week slip shows as +-7.
+  const rowGap = rows.length > 1 ? (rows[rows.length - 1].y - rows[0].y) / (rows.length - 1) : hMed * 6;
+  const colW = (() => { const xs = placed.map(x => x.p.cx).sort((a, b) => a - b); return xs.length > 1 ? (xs[xs.length - 1] - xs[0]) / 6 : 100; })();
+  const nums = W.filter(w => /^\d{1,2}$/.test(w.t) && Number(w.t) >= 1 && Number(w.t) <= 31 && (headRowY === null || w.cy > headRowY));
+  const votes = new Map();
+  for (const x of placed) {
+    let best = null, bestD = Infinity;
+    for (const n of nums) {
+      const dy = x.p.cy - n.cy, dx = n.cx - x.p.cx;
+      if (dy <= 0 || dy > rowGap * 0.9 || dx < -colW * 0.3 || dx > colW * 1.1) continue;
+      const dist = dy + Math.abs(dx) * 0.2;
+      if (dist < bestD) { bestD = dist; best = n; }
+    }
+    if (best) { const d = Number(best.t) - x.day; votes.set(d, (votes.get(d) || 0) + 1); }
+  }
+  const top = [...votes.entries()].sort((a, b) => b[1] - a[1])[0];
+  if (top && top[0] !== 0 && top[0] % 7 === 0 && top[1] >= Math.max(3, placed.length * 0.3)) {
+    placed.forEach(x => { x.day += top[0]; });
+    warnings.push("The calendar's own day numbers moved the weeks; check the first and last week.");
+  }
+
+  const out = new Map();
+  for (const x of placed) {
+    if (x.day < 1 || x.day > daysIn) { warnings.push(`A price ($${x.p.v}) didn't fall on a day of the month and was left out.`); continue; }
+    const date = `${month}-${String(x.day).padStart(2, "0")}`;
+    if (out.has(date)) { warnings.push(`Two prices landed on ${date}; kept $${out.get(date)}. Check that day.`); continue; }
+    out.set(date, x.p.v);
+  }
+  const all = Array.from({ length: daysIn }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
+  return {
+    month, ticketDays, adultAges,
+    prices: all.filter(d => out.has(d)).map(d => ({ date: d, perDay: out.get(d) })),
+    missing: all.filter(d => !out.has(d)),
+    warnings,
+  };
+}
+
 /* ------------------------------------------------------------ the OCR */
 
 let loading = null;
@@ -461,6 +599,44 @@ export async function readImage(image, { langs = "eng", onProgress, columns = fa
     const parts = [];
     for (const rectangle of rects) parts.push((await worker.recognize(image, { rectangle })).data.text || "");
     return parts.join("\n");
+  } finally {
+    await worker.terminate();
+  }
+}
+
+/**
+ * Every word in an image with its box, for readers that need WHERE a word
+ * sits (the ticket calendar). Small screenshots are doubled first, which
+ * reads small calendar digits far more reliably; boxes are in that scale.
+ */
+export async function readWords(image, { onProgress } = {}) {
+  const T = await loadTesseract();
+  const worker = await T.createWorker("eng", 1, {
+    logger: (m) => { if (onProgress && typeof m.progress === "number") onProgress(m.progress, m.status || ""); },
+  });
+  try {
+    // "Sparse text": a calendar is scattered words, not paragraphs.
+    await worker.setParameters({ tessedit_pageseg_mode: "11" });
+    let src = image;
+    try {
+      const bmp = await createImageBitmap(image);
+      const k = bmp.width < 1600 ? 2 : 1;
+      const c = document.createElement("canvas");
+      c.width = bmp.width * k; c.height = bmp.height * k;
+      const g = c.getContext("2d");
+      g.imageSmoothingQuality = "high";
+      g.drawImage(bmp, 0, 0, c.width, c.height);
+      src = c;
+    } catch { /* read it as it is */ }
+    const { data } = await worker.recognize(src, {}, { blocks: true, text: true });
+    const words = [];
+    for (const b of data.blocks || []) for (const p of b.paragraphs || []) for (const l of p.lines || []) for (const w of l.words || []) {
+      words.push({ text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 });
+    }
+    if (!words.length && Array.isArray(data.words)) {
+      for (const w of data.words) words.push({ text: w.text, x0: w.bbox.x0, y0: w.bbox.y0, x1: w.bbox.x1, y1: w.bbox.y1 });
+    }
+    return { words, text: data.text || "" };
   } finally {
     await worker.terminate();
   }

@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**854 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**859 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -347,10 +347,26 @@ this section).
     6.5% sales tax"). (2) the LEVEL by date: our 2026 table (5-day $565) is
     near Disney's cheapest dates (2027 "from $103/day" = $515) and the season
     curve (DVC points x 0.55 in `seedTickets`) puts October at x1.02 when
-    Disney's own 5-day calendar runs ~$145-160/day all October. NOT fixed
-    yet: asked the owner for the 5-day calendar screenshot of each plannable
-    month (Dec 2026 - Aug 2027) to build a real per-date table. Disneyland
-    likely has the same shape of problem; one Disneyland calendar would tell.
+    Disney's own 5-day calendar runs ~$145-160/day all October. (2) is
+    now fixable by the owner: **/admin -> Ticket calendars** (owner: "build
+    a screen reader for the calendars so I can do it on the website"). Drop
+    Disney's N-day ticket calendar screenshots (one month each, several at
+    once); `readWords()` + `readTicketCalendar()` (screenshot-reader.js, OCR
+    on the owner's device, PSM 11, small images doubled) read the month, the
+    ticket length, the Ages and each "$153+" by the grid (Sun-Sat headings or
+    the prices' spread; rows by height; checked against the printed day
+    numbers). Each month opens as an editable calendar; Save posts to
+    `/api/admin/ticket-calendar` (`src/ticketCalendar.ts`: WDW and Disneyland
+    only, append-only `ticket_calendar`, newest per date wins) and re-seeds
+    that month. `seedTickets` writes a calendar date as the one-day figure
+    per-day / `ticketMultiDay(N)` with `ticket_prices.from_calendar`; the
+    price-check factor skips those rows; pricing prices a calendar date by
+    its START day (Disney's rule) and sets `TripPrice.ticketsFromCalendar`
+    (card: "Disney's calendar"). Child = adult x `ticket.child`. Tested on a
+    rebuilt copy of the owner's October 2027 calendar with real OCR: 31/31 at
+    full and half size (`src/testdata/wdw-ticket-calendar-2027-10.words.json`).
+    **Disneyland's calendar layout was NOT seen**: ask for one screenshot.
+    The page lists each resort's plannable months still missing.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

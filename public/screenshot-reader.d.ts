@@ -23,3 +23,9 @@ export function findDollarsOff(text: string): number[];
 export function findColumnCuts(lum: ArrayLike<number>, width: number, height: number): number[];
 export function readTicketPage(text: string, resortCurrency?: string):
   { adult: FoundAmount | null; child: FoundAmount | null; days: number | null; perPerson: boolean } | null;
+export interface OcrWord { text: string; x0: number; y0: number; x1: number; y1: number }
+export function readWords(image: Blob, opts?: { onProgress?: (p: number, status: string) => void }): Promise<{ words: OcrWord[]; text: string }>;
+export function readTicketCalendar(words: OcrWord[]): {
+  month: string | null; ticketDays: number | null; adultAges: string | null;
+  prices: Array<{ date: string; perDay: number }>; missing: string[]; warnings: string[];
+};

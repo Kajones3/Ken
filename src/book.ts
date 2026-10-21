@@ -220,7 +220,7 @@ export async function loadBook(
   }
 
   const t = await db.query(
-    `select resort_id, park_date, adult_usd, child_usd, junior_usd, updated_at
+    `select resort_id, park_date, adult_usd, child_usd, junior_usd, updated_at, from_calendar
        from ticket_prices
       where resort_id = any($1) and park_date between $2 and $3`,
     [req.resortIds, req.from, req.to],
@@ -230,6 +230,7 @@ export async function loadBook(
     tickets.set(`${r.resort_id}|${date}`, {
       adult: Number(r.adult_usd), child: Number(r.child_usd),
       junior: r.junior_usd === null || r.junior_usd === undefined ? undefined : Number(r.junior_usd),
+      ...(r.from_calendar ? { fromCalendar: true } : {}),
     });
     seen(r.updated_at);
   }
@@ -485,6 +486,8 @@ export async function loadBook(
       }
     }
     for (const [key, row] of tickets) {
+      // Disney's own calendar price for this date: real already, never nudged.
+      if (row.fromCalendar) continue;
       const f = factors.get(`ticket|${key.split("|")[0]}`);
       if (!f) continue;
       tickets.set(key, {
