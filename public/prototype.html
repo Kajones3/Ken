@@ -549,13 +549,10 @@ a{color:var(--ink)}
 .rbadge img{width:46px; height:46px; display:block}
 .rid{min-width:0}
 .rrow .rname{font-size:23px}
-.rrow:hover .rname,.rrow.sel .rname{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; text-decoration-color:var(--accent-line)}
-.rlines{display:flex; flex-wrap:wrap; gap:5px 13px; font-size:13px; color:var(--ink-2); margin-top:8px; font-variant-numeric:tabular-nums}
-.rlines > span{display:inline-flex; align-items:center; gap:5px; white-space:nowrap}
-.rlines .ci{width:18px; height:18px; border-radius:6px}
+.rrow:hover .rname{text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:4px; text-decoration-color:var(--accent-line)}
+.rrow .bar{height:12px; margin:11px 0 2px}
 .rtot{text-align:right}
 .rtot .tnum{font-size:30px}
-.rmore{font-size:13.5px; font-weight:700; color:var(--s4); margin-top:6px; white-space:nowrap}
 .ropen{font-size:12.5px; font-weight:600; color:var(--ink-2); margin-top:6px; white-space:nowrap}
 
 @media (max-width:940px){
@@ -2411,8 +2408,8 @@ async function runSearch(keepId){
     $("#hero").hidden = true;
   } catch(e){
     console.error(e);
-    $("#board").innerHTML = `<li class="row"><div class="ident"><div class="rname">Could not load prices</div>
-      <div class="rmeta">${String((e && e.message) || e)}</div></div></li>`;
+    $("#board").innerHTML = `<div class="boardempty"><div class="rname">Could not load prices</div>
+      <div class="rmeta">${esc(String((e && e.message) || e))}</div></div>`;
   } finally {
     if(token === searchToken) setSearchBusy(false);
   }
@@ -2589,7 +2586,7 @@ function routeMapHtml(rows, home, drivePoint){
     routes.push(`<path class="rt${pos === 0 ? " best" : ""}${drive ? " drive" : ""}" d="${rmCurve(from[0], from[1], px, py)}"/>`);
     leads.push(`<line class="lead" x1="${f1(px)}" y1="${f1(py)}" x2="${pk.bx}" y2="${pk.by}"/><circle class="pin" cx="${f1(px)}" cy="${f1(py)}" r="4"/>`);
     const name = item.resort.name;
-    castles.push(`<g class="castle" data-open="${i}" role="button" tabindex="0" aria-label="Number ${pos + 1}, ${esc(name)}, ${usd(item.price.total)}. Open details">
+    castles.push(`<g class="castle" data-hero="${i}" role="button" tabindex="0" aria-label="Number ${pos + 1}, ${esc(name)}, ${usd(item.price.total)}. Show it on the board">
       <title>${esc(name)} · ${usd(item.price.total)}</title>
       <image href="/public/brand/badge-${item.resortId}.svg" x="${pk.bx - 27}" y="${pk.by - 27}" width="54" height="54"/>
       <g class="rk"><circle cx="${pk.bx + 21}" cy="${pk.by - 20}" r="11"/><text x="${pk.bx + 21}" y="${pk.by - 15}" text-anchor="middle">${pos + 1}</text></g>
@@ -2648,20 +2645,23 @@ function renderBoard(){
       <div class="rmeta">Try "All" instead.</div></div>`;
     return;
   }
-  // The owner's layout (2026-10-21, from the "Editorial" skin): No. 1 large on
-  // the left with its whole bill, the rest ranked on the right with how much
-  // more each costs. Still price order, top to bottom and left to right.
-  const [first, ...rest] = list;
-  const leadTotal = first.item.ok ? first.item.price.total : null;
-  const detailHere = detailOpen && list.some(({i}) => i === selected);
+  // The owner's layout (2026-10-21, from the "Editorial" skin): one resort
+  // large on the left with its whole bill (the "hero"), the others ranked on
+  // the right with their cost bars. The hero starts as the cheapest; clicking
+  // another makes it the hero, keeping its own rank ("3 Disneyland Resort").
+  // The hero is `selected`, so the details always describe the hero.
+  const hero = list.find(e => e.i === selected) || list[0];
+  selected = hero.i;
+  const rankOf = e => list.indexOf(e) + 1;
+  const rest = list.filter(e => e !== hero);
   board.innerHTML = `<div class="split${rest.length ? "" : " alone"}">
-      ${leadHtml(first)}
+      ${leadHtml(hero, rankOf(hero), list.length)}
       ${rest.length ? `<div class="restcol">
-        <div class="collab">And the rest, in order</div>
-        <ol class="rest">${rest.map(({item,i},k)=>restRowHtml(item, i, k+2, leadTotal)).join("")}</ol>
+        <div class="collab">${rankOf(hero) === 1 ? "And the rest, in order" : "The others, in order"}</div>
+        <ol class="rest">${rest.map(e=>restRowHtml(e.item, e.i, rankOf(e))).join("")}</ol>
       </div>` : ""}
     </div>
-    ${detailHere ? `<div class="detail" id="detail"></div>` : ""}`;
+    ${detailOpen ? `<div class="detail" id="detail"></div>` : ""}`;
 }
 
 /** The pieces of one priced resort the lead and the rest both show. */
@@ -2695,16 +2695,16 @@ function costBar(b){
 }
 const COUNT_WORDS = ["zero","one","two","three","four","five","six","seven","eight","nine","ten"];
 const countWord = n => COUNT_WORDS[n] || String(n);
-function leadHtml({item, i}){
+function leadHtml({item, i}, rank, count){
   const r = item.resort;
   const home = ORIGINS.concat(PLUS_ORIGINS).find(o => o.iata === params.origin);
   const from = params.originPoint && params.originPoint.label ? params.originPoint.label.split(",")[0]
     : home ? home.name : params.origin;
-  const eyebrow = `The cheapest trip, ${tripWhenLabel()}${from ? ", from " + esc(from) : ""}`;
+  const eyebrow = `${rank === 1 ? "The cheapest trip" : `No. ${rank} of ${count}`}, ${tripWhenLabel()}${from ? ", from " + esc(from) : ""}`;
   if(!item.ok){
     return `<div class="leadcol" data-i="${i}">
       <div class="collab">${eyebrow}</div>
-      <div class="leadname"><span class="bignum" aria-hidden="true">1</span>
+      <div class="leadname"><span class="bignum" aria-hidden="true">${rank}</span>
         <div class="leadid"><h3>${item.name}</h3>
         <div class="rmeta"><span class="code">${item.iata}</span>No cached price for these dates</div></div></div>
     </div>`;
@@ -2724,7 +2724,7 @@ function leadHtml({item, i}){
   return `<div class="leadcol" data-i="${i}">
     <div class="collab">${eyebrow}</div>
     <div class="leadname">
-      <span class="bignum" aria-hidden="true">1</span>
+      <span class="bignum" aria-hidden="true">${rank}</span>
       <div class="leadid">
         <h3>${r.name}</h3>
         <div class="rmeta"><span class="code">${item.iata}</span>${r.city} · ${r.note}
@@ -2745,10 +2745,11 @@ function leadHtml({item, i}){
     <button class="leadopen" data-open="${i}">${open ? "Close the whole trip ↑" : "See the whole trip →"}</button>
   </div>`;
 }
-function restRowHtml(item, i, rank, leadTotal){
+function restRowHtml(item, i, rank){
   const r = item.resort;
   if(!item.ok){
     return `<li class="rrow" data-i="${i}">
+      <button class="rhit" data-hero="${i}" aria-label="Number ${rank}, ${esc(item.name)}. Show it on the left"></button>
       <span class="rnum">${rank}</span>
       <span class="rbadge">${badgeImg(item.resortId)}</span>
       <div class="rid"><div class="rname">${item.name}</div>
@@ -2757,22 +2758,19 @@ function restRowHtml(item, i, rank, leadTotal){
     </li>`;
   }
   const b = boardBits(item), x = b.x;
-  const sel = i === selected && detailOpen;
-  const more = leadTotal != null ? x.total - leadTotal : null;
-  return `<li class="rrow${sel?" sel":""}" data-i="${i}">
-    <button class="rhit" data-open="${i}" aria-label="Number ${rank}, ${esc(r.name)}, ${usd(x.total)}. ${sel?"Close":"Open"} details"></button>
+  return `<li class="rrow" data-i="${i}">
+    <button class="rhit" data-hero="${i}" aria-label="Number ${rank}, ${esc(r.name)}, ${usd(x.total)}. Show it on the left"></button>
     <span class="rnum">${rank}</span>
     <span class="rbadge">${badgeImg(item.resortId)}</span>
     <div class="rid">
       <div class="rname">${r.name}</div>
       <div class="rmeta"><span class="code">${item.iata}</span>${r.city}${hasOv(r.id)?' <span class="yourchip">Your numbers</span>':""}</div>
-      <div class="rlines"><span><i class="ci ${b.drive?"ci-car":"ci-flight"}"></i>${usd(b.getThere)}${b.chip}</span><span><i class="ci ci-hotel"></i>${usd(x.hotel)}</span><span><i class="ci ci-ticket"></i>${usd(x.tickets)}</span><span><i class="ci ci-food"></i>${usd(x.food)}</span></div>
+      ${costBar(b)}
       ${attractionChip(item)}${crowdChip(item)}${dealChip(item)}
     </div>
     <div class="rtot">
       <div class="tnum">${usd(x.total)}${b.tilde}</div>
-      ${more != null ? `<div class="rmore">${more >= 0.5 ? usd(more) + " more" : more <= -0.5 ? usd(-more) + " less" : "Same price"}</div>` : ""}
-      <div class="ropen">${sel ? "Close ↑" : "Details →"}</div>
+      <div class="ropen">View →</div>
     </div>
   </li>`;
 }
@@ -3791,20 +3789,28 @@ function render(){
 
 $("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
 
-/* A castle on the flight-path map opens that resort's details (the shared
-   [data-open] handler below does the opening); this brings the row into view
-   and lets the keyboard press a castle too. */
-$("#routeMap").addEventListener("click", e=>{
-  const c = e.target.closest("[data-open]"); if(!c) return;
-  setTimeout(()=>{ const box = $("#detail"); box && box.scrollIntoView({ behavior:"smooth", block:"start" }); }, 0);
-});
+/* A castle on the flight-path map makes that resort the board's hero (the
+   shared [data-hero] handler below); this lets the keyboard press one too. */
 $("#routeMap").addEventListener("keydown", e=>{
   if(e.key !== "Enter" && e.key !== " ") return;
-  const c = e.target.closest("[data-open]"); if(!c) return;
+  const c = e.target.closest("[data-hero]"); if(!c) return;
   e.preventDefault(); c.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 });
 
 document.addEventListener("click", e=>{
+  // Another resort becomes the hero, on the left of the board. Open details
+  // stay open and follow it.
+  const h = e.target.closest("[data-hero]");
+  if(h){
+    selected = +h.dataset.hero;
+    view = "board"; syncView();
+    renderBoard();
+    if(detailOpen) renderDetail();
+    const board = $("#board");
+    if(board.getBoundingClientRect().top < 0 || e.target.closest("#routeMap"))
+      board.scrollIntoView({ behavior:"smooth", block:"start" });
+    return;
+  }
   const o = e.target.closest("[data-open]");
   if(o){
     const i = +o.dataset.open;
