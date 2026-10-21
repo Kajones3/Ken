@@ -331,6 +331,13 @@ this section).
     (it used to list after-deal lines AND the deal again). **And a Disney
     room deal never comes off an OFF-property hotel** (it did: the sample
     PDF's WDW total moves $8,261 -> $8,735); your own discount still does.
+  - **The Arriving picker runs two to TEN months out** (owner, 2026-10-21:
+    "I don't think we should price any more than 10-11 months ahead. I just
+    tried an October 2027 date and the flights weren't available on Kayak").
+    `PLANNING_LAST_MONTH` 10 (was 12), `lastPlannableMonth()`; the hotel
+    rotation no longer buys months past it; a saved search for a month now
+    too far reopens on the last month offered and says why. Airlines sell
+    ~330 days ahead; the end of month +10 is at most ~334 days away.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

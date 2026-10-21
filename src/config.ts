@@ -1002,7 +1002,12 @@ export function localResortFor(originIata: string): Resort | null {
  * Which arrival months a traveler may plan (owner, 2026-09-26: "Most people
  * don't plan an international trip in two months. And the pricing that close
  * to a trip can be wildly inconsistent."). The current month and the next one
- * are not offered; the picker runs from two months out to twelve.
+ * are not offered; the picker runs from two months out to ten (owner,
+ * 2026-10-21: "I don't think we should price any more than 10-11 months
+ * ahead. I just tried an October 2027 date and the flights weren't available
+ * on Kayak"). Airlines sell about 330 days ahead, and the end of the tenth
+ * month out is at most ~334 days away, so every month offered is one a
+ * traveler can actually book flights for (eleven reached ~365).
  *
  * One home for the rule, because three places have to agree on it: the form
  * (served as `planMonths` from /api/meta), and the two jobs that spend real
@@ -1011,7 +1016,7 @@ export function localResortFor(originIata: string): Resort | null {
  * and an old saved search for a month that has since come close still prices.
  */
 export const PLANNING_LEAD_MONTHS = 2;
-export const PLANNING_LAST_MONTH = 12;
+export const PLANNING_LAST_MONTH = 10;
 
 function addMonthsYM(today: ISODate, n: number): string {
   const [y, m] = today.split("-").map(Number) as [number, number];
@@ -1022,6 +1027,11 @@ function addMonthsYM(today: ISODate, n: number): string {
 /** "YYYY-MM" of the earliest month a traveler may plan. */
 export function firstPlannableMonth(today: ISODate): string {
   return addMonthsYM(today, PLANNING_LEAD_MONTHS);
+}
+
+/** "YYYY-MM" of the furthest month a traveler may plan. */
+export function lastPlannableMonth(today: ISODate): string {
+  return addMonthsYM(today, PLANNING_LAST_MONTH);
 }
 
 /** Every plannable month, "YYYY-MM", nearest first. */

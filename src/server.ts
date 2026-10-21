@@ -804,7 +804,7 @@ const server = createServer(async (req, res) => {
       // renders what it's handed. See holidayWindows.ts for which months
       // have one and why (and which were deliberately left out).
       // The months the "Arriving" picker offers — two months out through
-      // twelve (see firstPlannableMonth in config.ts). Sent from here so the
+      // ten (see firstPlannableMonth in config.ts). Sent from here so the
       // form and the paid overnight jobs share one rule.
       planMonths: plannableMonths(todayISO()),
       // "Airfares are up 23% from a year ago" for the board (owner,
