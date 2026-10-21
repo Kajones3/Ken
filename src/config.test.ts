@@ -466,14 +466,22 @@ test("every park has a name and at least one land, with no duplicates", () => {
   }
 });
 
-test("the Arriving picker starts two months out and runs to twelve (owner, 2026-09-26)", async () => {
-  const { firstPlannableMonth, plannableMonths } = await import("./config.js");
+test("the Arriving picker starts two months out and runs to ten (owner, 2026-09-26 and 2026-10-21)", async () => {
+  const { firstPlannableMonth, lastPlannableMonth, plannableMonths } = await import("./config.js");
   assert.equal(firstPlannableMonth("2026-09-26"), "2026-11");
   assert.equal(firstPlannableMonth("2026-11-01"), "2027-01", "crosses the year");
   const months = plannableMonths("2026-09-26");
   assert.equal(months[0], "2026-11");
-  assert.equal(months[months.length - 1], "2027-09");
-  assert.equal(months.length, 11);
+  assert.equal(months[months.length - 1], "2027-07");
+  assert.equal(lastPlannableMonth("2026-09-26"), "2027-07");
+  assert.equal(months.length, 9);
+  // "I just tried an October 2027 date and the flights weren't available on
+  // Kayak" (asked on 2026-10-21): October 2027 is no longer offered then.
+  assert.ok(!plannableMonths("2026-10-21").includes("2027-10"));
+  assert.equal(lastPlannableMonth("2026-10-21"), "2027-08");
+  // Every day of the furthest month is inside airlines' ~330-day sale window.
+  const furthest = new Date(Date.UTC(2027, 8, 0)); // last day of August 2027
+  assert.ok((furthest.getTime() - Date.UTC(2026, 9, 1)) / 86_400_000 <= 334);
   assert.ok(!months.includes("2026-09") && !months.includes("2026-10"), "this month and next are not offered");
 });
 

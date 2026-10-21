@@ -1874,7 +1874,7 @@ function matchesRegion(item){
 
 function fillSelect(el, items){ el.innerHTML = items.map(([v,l])=>`<option value="${v}">${l}</option>`).join(""); }
 
-/* The "Arriving" months: two months out through twelve. This month and next
+/* The "Arriving" months: two months out through ten. This month and next
  * are deliberately not offered (owner, 2026-09-26) — almost nobody plans an
  * international trip that close, and prices that near a date swing too much
  * to compare. The server's list (/api/meta `planMonths`) is the real one, so
@@ -1893,7 +1893,7 @@ function setMonthOpts(yms){
   const [ly, lm] = monthOpts[monthOpts.length-1][0].split("-").map(Number);
   CAL_TO = monthOpts[monthOpts.length-1][0]+"-"+pad(new Date(Date.UTC(ly,lm,0)).getUTCDate());
 }
-setMonthOpts(Array.from({length:11}, (_,i)=>{
+setMonthOpts(Array.from({length:9}, (_,i)=>{
   const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth()+2+i, 1));
   return d.getUTCFullYear()+"-"+pad(d.getUTCMonth()+1);
 }));
@@ -3573,6 +3573,7 @@ async function renderDetail(){
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
           ${ticketRowsHtml}
+          ${x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">Includes ${x.ticketTaxPct}% sales tax, which Disney adds at checkout.</p>` : ""}
           <div class="foot">
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ticket page →</a>
           </div>
@@ -4606,11 +4607,17 @@ async function openSavedTrip(trip){
   // presented as the saved one.
   const moved = $("#monthMovedNote");
   moved.hidden = true;
+  // One saved before the picker stopped at ten months out (2026-10-21) can
+  // name a month that is too FAR: it moves to the last month offered.
   if(q.month && monthOpts.some(([ym]) => ym === q.month)) $("#month").value = q.month;
   else if(q.month){
-    $("#month").value = monthOpts[0][0];
+    const tooFar = String(q.month) > monthOpts[monthOpts.length-1][0];
+    const shown = tooFar ? monthOpts[monthOpts.length-1] : monthOpts[0];
+    $("#month").value = shown[0];
     const [y, m] = String(q.month).split("-").map(Number);
-    moved.textContent = `Saved for ${MONTHSFULL[m-1]} ${y}, which is now too close to plan here — showing ${monthOpts[0][1]} instead.`;
+    moved.textContent = tooFar
+      ? `Saved for ${MONTHSFULL[m-1]} ${y}, which is too far ahead for airlines to sell flights yet — showing ${shown[1]} instead.`
+      : `Saved for ${MONTHSFULL[m-1]} ${y}, which is now too close to plan here — showing ${shown[1]} instead.`;
     moved.hidden = false;
   }
   // "Need a hotel?" and "Where you stay" are two controls over one saved

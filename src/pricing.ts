@@ -13,7 +13,7 @@ import {
   ON_TIERS, OFF_TIERS, RESORTS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
   type MileageRateLookup,
-  SUGGESTED_PARK_DAYS, suggestedParkDaysKey,
+  SUGGESTED_PARK_DAYS, suggestedParkDaysKey, TICKET_TAX_PCT, ticketTaxKey,
 } from "./config.js";
 import { addDaysISO, type ISODate } from "./dates.js";
 import { haversineMiles } from "./geo.js";
@@ -530,6 +530,9 @@ export interface TripPrice {
    *  `seniorPrice` is false so the card can say so). Pass holders are their
    *  own group at $0. Lines sum to `tickets`. */
   ticketLines: TicketLine[];
+  /** Sales tax already inside the ticket line, percent (0 where the resort's
+   *  price includes it). */
+  ticketTaxPct: number;
   /** Which lines the owner's own price checks nudged, and by how much. Null
    *  when none did. See checkFactors.ts. */
   checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
@@ -931,6 +934,10 @@ export function priceTrip(
 
   // --- tickets -----------------------------------------------------------
   const multiDay = ticketMultiDay(resort, parkDays);
+  // Sales tax where the resort's quoted price leaves it out (Walt Disney
+  // World's cart adds 6.5%), on the gate and the hopper alike.
+  const ticketTaxPct = book.setting?.(ticketTaxKey(resort.id)) ?? (TICKET_TAX_PCT[resort.id] ?? 0);
+  const ticketTax = 1 + Math.max(0, ticketTaxPct) / 100;
   // Per traveler, not one running total, because an annual pass covers
   // PEOPLE. Zeroing a share of one lump sum would be arithmetic that happens
   // to land near the right answer for a party that is all adults and be
@@ -946,7 +953,7 @@ export function priceTrip(
         : band === "child" ? t.child
         : band === "junior" ? (t.junior ?? t.adult * (resort.ticket.junior ?? 0.9))
         : t.adult;
-      ticketPerHead[idx] = (ticketPerHead[idx] ?? 0) + gate * multiDay;
+      ticketPerHead[idx] = (ticketPerHead[idx] ?? 0) + gate * multiDay * ticketTax;
     });
   }
   let tickets = ticketPerHead.reduce((a, b) => a + b, 0);
@@ -968,10 +975,10 @@ export function priceTrip(
   const hopperPerHead = ages.map((age) => {
     if (!params.hopper || !hopperAdult) return 0;
     const band = ticketBandOf(resort, age);
-    return band === "infant" ? 0
+    return ticketTax * (band === "infant" ? 0
       : band === "child" ? (hopperChild ?? hopperAdult)
       : band === "junior" ? hopperAdult * (resort.ticket.junior ?? 0.9)
-      : hopperAdult;
+      : hopperAdult);
   });
   hopperUsd = hopperPerHead.reduce((a, b) => a + b, 0);
   tickets += hopperUsd;
@@ -1286,7 +1293,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines, checkAdjust,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, checkAdjust,
       membership, parkDays: days,
     },
   };

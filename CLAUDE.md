@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**853 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**854 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -331,6 +331,26 @@ this section).
     (it used to list after-deal lines AND the deal again). **And a Disney
     room deal never comes off an OFF-property hotel** (it did: the sample
     PDF's WDW total moves $8,261 -> $8,735); your own discount still does.
+  - **The Arriving picker runs two to TEN months out** (owner, 2026-10-21:
+    "I don't think we should price any more than 10-11 months ahead. I just
+    tried an October 2027 date and the flights weren't available on Kayak").
+    `PLANNING_LAST_MONTH` 10 (was 12), `lastPlannableMonth()`; the hotel
+    rotation no longer buys months past it; a saved search for a month now
+    too far reopens on the last month offered and says why. Airlines sell
+    ~330 days ahead; the end of month +10 is at most ~334 days away.
+  - **Walt Disney World tickets read ~30% LOW (owner, 2026-10-21: "Each
+    time I pull ticket prices from Disney World to compare, we are WAY
+    off").** Oct 8 2027, 5-day, family of 3 adults + 1 child: Disney
+    $3,266.83 with tax vs ours $2,286. Two causes: (1) no tax: Disney's cart
+    adds 6.5%; NOW ADDED (`TICKET_TAX_PCT`, setting `tickets.<id>.taxPct`,
+    WDW 6.5, all others 0; `TripPrice.ticketTaxPct`; card says "Includes
+    6.5% sales tax"). (2) the LEVEL by date: our 2026 table (5-day $565) is
+    near Disney's cheapest dates (2027 "from $103/day" = $515) and the season
+    curve (DVC points x 0.55 in `seedTickets`) puts October at x1.02 when
+    Disney's own 5-day calendar runs ~$145-160/day all October. NOT fixed
+    yet: asked the owner for the 5-day calendar screenshot of each plannable
+    month (Dec 2026 - Aug 2027) to build a real per-date table. Disneyland
+    likely has the same shape of problem; one Disneyland calendar would tell.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.
