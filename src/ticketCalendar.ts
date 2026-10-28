@@ -27,9 +27,10 @@ import type { Db } from "./db.js";
 import { RESORT_BY_ID, SUGGESTED_PARK_DAYS, type Resort } from "./config.js";
 import { ticketMultiDay, nearestLength, type CalendarByLength } from "./pricing.js";
 
-/** The resorts with a ticket calendar to read. Disneyland has none: its 2+
- *  day tickets cost one price for any date (`flatMultiDay`, owner 2026-10-28). */
-export const CALENDAR_RESORTS = ["wdw"] as const;
+/** The resorts with a ticket calendar to read. Disneyland's calendar is its
+ *  1-DAY ticket only: its 2+ day tickets cost one price for any date
+ *  (`flatMultiDay`, owner 2026-10-28), so a 2+ day Disneyland calendar is refused. */
+export const CALENDAR_RESORTS = ["wdw", "dlr"] as const;
 
 export interface CalendarPrice { date: string; perDay: number }
 export interface CalendarImport {
@@ -47,10 +48,13 @@ export function validateCalendar(body: unknown, today: string):
   const b = (body ?? {}) as Record<string, unknown>;
   const resortId = String(b.resortId ?? "");
   if (!(CALENDAR_RESORTS as readonly string[]).includes(resortId)) {
-    return { ok: false, reason: "Ticket calendars are read for Walt Disney World only. Disneyland's multi-day tickets cost the same on any date, so there is no calendar to read." };
+    return { ok: false, reason: "Ticket calendars are read for Walt Disney World and Disneyland." };
   }
   const ticketDays = Math.round(Number(b.ticketDays));
   if (!(ticketDays >= 1 && ticketDays <= 10)) return { ok: false, reason: "How many days is the ticket? (1 to 10)" };
+  if (ticketDays > 1 && RESORT_BY_ID.get(resortId)?.ticket.flatMultiDay) {
+    return { ok: false, reason: `${RESORT_BY_ID.get(resortId)!.name}'s calendar is for its 1-day ticket: its 2-5 day tickets cost the same on any date. Set the ticket length to 1-day.` };
+  }
   const month = String(b.month ?? "");
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return { ok: false, reason: "Which month is the calendar?" };
   if (month < today.slice(0, 7)) return { ok: false, reason: "That month has already gone." };

@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**864 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**866 tests** (all pass, 2026-10-28), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -395,14 +395,25 @@ this section).
     (`digitLookalikes()`: n/N -> 11, l/I/| -> 1, o/O -> 0) and marks them
     `check`; /admin outlines them amber. That screenshot now reads 28/30
     (`src/testdata/wdw-ticket-calendar-2027-09.words.json`).
-    **Disneyland has NO ticket calendar** (owner: after picking a length the
+    **Disneyland has NO multi-day ticket calendar** (owner: after picking a length the
     site goes to party, then park). Its 2-5 day tickets are one price any
     date: `ticket.flatMultiDay` on `dlr` prices them at `multiDayAdultUsd`
     ($335/$425/$480/$520 = Disney's "from" prices exactly), no season curve,
     no check nudge (`TripPrice.ticketsFlat`, card "Disney's price"). The
-    1-day ticket still uses the curve. `CALENDAR_RESORTS` is WDW only.
+    1-day ticket still uses the curve unless a 1-day calendar is saved.
     Effect: a Disneyland 3-day adult moved at most ~$20 (Dec $445 -> $425,
     Jan $411 -> $425).
+    **Disneyland's 1-DAY calendar can be saved (2026-10-28, owner: "I couldn't
+    save it")**: `CALENDAR_RESORTS` is wdw + dlr again, but a `flatMultiDay`
+    resort only takes `ticketDays` 1 (validateCalendar refuses 2+). It prices
+    1-day Disneyland trips exactly; 2-5 day stay flat (test pins both). The
+    reader handles its layout: single-letter headings S M T W T F S
+    (`singleLetterHeads()`, best evenly-spaced fit, S/T appear twice), and the
+    green "$" badge on cheap days read as "0154" -> $154, marked `check`.
+    `resortGuess` ("dlr" = letter headings and no "N-Day Ticket") picks the
+    card's new Park box; Disneyland locks the length to 1-day. Owner's December
+    2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
+    Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

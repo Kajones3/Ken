@@ -49,7 +49,8 @@ test("ticket calendar import: checked, kept append-only, and the board prices fr
   const month = "2099-03";
   const prices = Array.from({ length: 31 }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, perDay: 150 }));
   assert.equal(validateCalendar({ resortId: "hkdl", ticketDays: 5, month, prices }, "2026-10-21").ok, false, "USD calendars only");
-  assert.equal(validateCalendar({ resortId: "dlr", ticketDays: 5, month, prices }, "2026-10-21").ok, false, "Disneyland has no ticket calendar");
+  assert.equal(validateCalendar({ resortId: "dlr", ticketDays: 5, month, prices }, "2026-10-21").ok, false, "Disneyland's 2-5 day tickets have no calendar");
+  assert.equal(validateCalendar({ resortId: "dlr", ticketDays: 1, month, prices }, "2026-10-21").ok, true, "Disneyland's 1-day calendar is kept");
   assert.equal(validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: prices.slice(0, 3) }, "2026-10-21").ok, false, "a crop, not a month");
   assert.equal(validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: [{ date: "2099-04-01", perDay: 150 }, ...prices] }, "2026-10-21").ok, false);
   const bad = validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: [...prices.slice(1), { date: `${month}-01`, perDay: 1534 }] }, "2026-10-21");
@@ -184,6 +185,24 @@ test("ticket calendar: a \"$11x\" price read as \"$n2+\" is repaired and marked 
   assert.deepEqual(checked, [1, 2, 5, 6, 7, 8, 9, 11]);
 });
 
+test("ticket calendar: Disneyland's 1-day calendar, letter headings and \"$\" badges, reads every day", () => {
+  // Owner's screenshot, 2026-10-28: day numbers above the prices, no "+",
+  // headings S M T W T F S (the W missed), Dec 1-2 a green "$" badge read "0154".
+  const dec = (JSON.parse(readFileSync(new URL("./testdata/dlr-ticket-calendar-2026-12.words.json", import.meta.url), "utf8")) as Array<[string, number, number, number, number]>)
+    .map(([text, x0, y0, x1, y1]) => ({ text, x0, y0, x1, y1 }));
+  const cal = readTicketCalendar(dec);
+  assert.equal(cal.month, "2026-12");
+  assert.equal(cal.ticketDays, null, "the page names no length");
+  assert.equal(cal.resortGuess, "dlr");
+  assert.deepEqual(cal.warnings, [], "the letter headings were read");
+  const want: Record<number, number> = { 1: 154, 2: 154, 3: 174, 4: 199, 5: 199, 6: 189, 7: 174, 8: 174, 9: 189, 10: 174, 11: 189, 12: 199, 18: 199, 19: 224, 20: 224, 21: 199 };
+  for (let d = 13; d <= 17; d++) want[d] = 189;
+  for (let d = 22; d <= 31; d++) want[d] = 224;
+  assert.equal(cal.prices.length, 31);
+  for (const p of cal.prices) assert.equal(p.perDay, want[Number(p.date.slice(8))], p.date);
+  assert.deepEqual(cal.prices.filter((p) => p.check).map((p) => p.date), ["2026-12-01", "2026-12-02"]);
+});
+
 test("Disneyland 2+ day tickets are one price for any date; the 1-day still follows the season", async () => {
   const { priceTrip } = await import("./pricing.js");
   const { bookFrom } = await import("./book.js");
@@ -212,4 +231,28 @@ test("Disneyland 2+ day tickets are one price for any date; the 1-day still foll
   const one = price("2099-07-01", 220, 1);
   assert.equal(one.ticketsFlat, false);
   assert.ok(Math.abs(one.tickets - 220) < 0.01, String(one.tickets));
+});
+
+test("a saved Disneyland 1-day calendar prices a 1-day trip and never moves its flat 2-5 day tickets", async () => {
+  const { priceTrip } = await import("./pricing.js");
+  const { bookFrom } = await import("./book.js");
+  const dlr = RESORT_BY_ID.get("dlr")!;
+  const dates = Array.from({ length: 8 }, (_, i) => `2099-12-${String(i + 1).padStart(2, "0")}`);
+  // A calendar row, as seedTickets writes it from a 1-day calendar: per day = the 1-day price.
+  const book = bookFrom({
+    flights: dates.map((date) => ({ dest: "LAX", date, row: { price: 300, stops: 0 } })),
+    hotels: dates.map((date) => ({ resortId: "dlr", date, night: { hotelId: "p", name: "Pixar Place", descriptor: "On property", nightly: 400, tier: "moderate" as const, onProperty: true } })),
+    tickets: dates.map((date) => ({ resortId: "dlr", date, row: { adult: 154, child: 154 * dlr.ticket.child, fromCalendar: true, calendar: { 1: 154 } } })),
+    promos: [],
+  });
+  const trip = (parkDays: number) => {
+    const r = priceTrip(book, dlr, { origin: "ATL", adults: 1, childAges: [], nights: 5, parkDays, stay: "on", tier: 1, food: "mix" }, {}, "2099-12-01");
+    assert.ok(r.ok); return r.ok ? r.price : null!;
+  };
+  const one = trip(1);
+  assert.equal(one.ticketsFromCalendar, true);
+  assert.ok(Math.abs(one.tickets - 154) < 0.01, String(one.tickets));
+  const three = trip(3);
+  assert.equal(three.ticketsFlat, true);
+  assert.ok(Math.abs(three.tickets - 425) < 0.01, String(three.tickets));
 });
