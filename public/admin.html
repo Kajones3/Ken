@@ -265,6 +265,12 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 .calgrid .cell .dn{font-size:11px; color:var(--muted)}
 .calgrid .cell input{width:100%; min-width:0; font-size:16px; padding:2px 3px; border:1px solid var(--rule-strong); border-radius:4px; background:transparent; color:inherit; font-variant-numeric:tabular-nums}
 .calgrid .cell.miss{border-color:var(--bad)}
+.calcard.saved{padding:10px 12px}
+.calsum{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between}
+.calsum b{font-weight:700}
+.calopen{display:flex; flex-wrap:wrap; gap:10px 14px; align-items:flex-end; margin:6px 0 4px}
+.calopen > div{display:flex; flex-direction:column; gap:3px}
+.calopen label{font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:var(--muted)}
 .calgrid .cell.miss input{border-color:var(--bad)}
 .calwarn{color:var(--bad); font-size:13px; margin:6px 0 0}
 .fare .bandpill{font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em;
@@ -730,6 +736,16 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     </div>
     <p class="count" id="tStatus">You can also paste a screenshot anywhere on this page.</p>
     <div id="tCards"></div>
+    <h3>Look at a saved month</h3>
+    <p class="count">Pick one to see its calendar again, or to correct a price and save it again.</p>
+    <div class="calopen">
+      <div><label for="oResort">Park</label><select id="oResort"></select></div>
+      <div><label for="oMonth">Month</label><select id="oMonth"></select></div>
+      <div><label for="oDays">Ticket length</label><select id="oDays"></select></div>
+      <button class="btn" id="oShow">Show calendar</button>
+    </div>
+    <p class="count" id="oSaid"></p>
+    <div id="oCards"></div>
     <h3>Months we hold</h3>
     <div id="tList"><p class="count">Loading…</p></div>
   </section>
@@ -2558,7 +2574,36 @@ async function loadTicketCalendars(){
   renderTicketList();
 }
 $("#tResort").addEventListener("change", () => { try{ localStorage.setItem("pf_tresort", $("#tResort").value); }catch{} });
+// The three "Look at a saved month" boxes offer only what is saved.
+function fillOpenBoxes(){
+  const rows = tMeta.months || [];
+  const name = id => (tMeta.resorts.find(r => r.id === id) || {}).name || id;
+  const keep = (sel, opts) => { const v = sel.value; sel.innerHTML = opts; if([...sel.options].some(o => o.value === v)) sel.value = v; };
+  const parks = [...new Set(rows.map(x => x.resortId))];
+  keep($("#oResort"), parks.length ? parks.map(id => `<option value="${esc(id)}">${esc(name(id))}</option>`).join("") : `<option value="">None saved yet</option>`);
+  const months = [...new Set(rows.filter(x => x.resortId === $("#oResort").value).map(x => x.month))];
+  keep($("#oMonth"), months.map(m => `<option value="${esc(m)}">${esc(ymName(m))}</option>`).join(""));
+  const lens = rows.filter(x => x.resortId === $("#oResort").value && x.month === $("#oMonth").value).map(x => x.ticketDays);
+  keep($("#oDays"), lens.map(n => `<option value="${n}">${n}-day</option>`).join(""));
+  $("#oShow").disabled = !lens.length;
+}
+$("#oResort").addEventListener("change", fillOpenBoxes);
+$("#oMonth").addEventListener("change", fillOpenBoxes);
+$("#oShow").addEventListener("click", async () => {
+  const resortId = $("#oResort").value, month = $("#oMonth").value, days = +$("#oDays").value;
+  const r = await fetch(`/api/admin/ticket-calendar?resort=${encodeURIComponent(resortId)}&month=${encodeURIComponent(month)}&days=${days}`);
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok || !(d.prices || []).length){ $("#oSaid").textContent = "Couldn't find that calendar."; return; }
+  $("#oSaid").textContent = "";
+  // One open at a time here: opening another replaces it.
+  $("#oCards").innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "calcard";
+  $("#oCards").append(card);
+  renderCalCard(card, { month, ticketDays: days, prices: d.prices, resortId, saved: true }, null);
+});
 function renderTicketList(){
+  fillOpenBoxes();
   const rows = tMeta.months;
   // A month counts as held once ANY length is in; trips of other lengths then
   // use the nearest length held.
@@ -2602,10 +2647,18 @@ async function readCalendarShots(files){
 
 function renderCalCard(card, cal, imgUrl){
   const month = cal.month || (tMeta.planMonths || [])[0] || "";
+  // The park is fixed when the card opens, so changing the Resort box later
+  // can't save this month under another park.
+  const resortId = cal.resortId || $("#tResort").value;
+  const parkName = (tMeta.resorts.find(r => r.id === resortId) || {}).name || resortId;
   const prices = new Map((cal.prices || []).map(p => [p.date, p.perDay]));
   const days = cal.ticketDays || 5;
   card.innerHTML = `
+    <div class="calsum" hidden><span class="calsumtext"></span>
+      <span><button class="btn tcShow">Show calendar</button> <button class="btn tcClose">Close</button></span></div>
+    <div class="calbody">
     <div class="calhead">
+      <div><label>Park</label><span style="padding:6px 0">${esc(parkName)}</span></div>
       <div><label>Month</label><input type="month" class="tcMonth" value="${esc(month)}"></div>
       <div><label>Ticket length</label><select class="tcDays">${Array.from({length:10},(_,i)=>i+1).map(n => `<option value="${n}"${n===days?" selected":""}>${n}-day</option>`).join("")}</select></div>
       <div><span class="count tcRead"></span></div>
@@ -2614,12 +2667,13 @@ function renderCalCard(card, cal, imgUrl){
     ${cal.ticketDays ? "" : `<p class="calwarn">Couldn't find the ticket length (like "5-Day Ticket"). Pick it above.</p>`}
     ${cal.adultAges && cal.adultAges !== "10+" ? `<p class="calwarn">The picture says Ages ${esc(cal.adultAges)}. Use the adult calendar.</p>` : ""}
     ${(cal.warnings || []).map(w => `<p class="calwarn">${esc(w)}</p>`).join("")}
-    <details style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">The picture</summary>
-      <img class="shot" src="${imgUrl}" alt="The calendar being read" style="max-height:none"></details>
+    ${imgUrl ? `<details style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">The picture</summary>
+      <img class="shot" src="${imgUrl}" alt="The calendar being read" style="max-height:none"></details>` : ""}
     <div class="calgrid"></div>
-    <div class="tools" style="margin-top:10px"><button class="btn primary tcSave">Save this month</button>
-      <button class="btn tcDrop">Discard</button></div>
-    <div class="said tcSaid"></div>`;
+    <div class="tools" style="margin-top:10px"><button class="btn primary tcSave">${cal.saved ? "Save changes" : "Save this month"}</button>
+      <button class="btn tcDrop">${cal.saved ? "Close" : "Discard"}</button></div>
+    <div class="said tcSaid"></div>
+    </div>`;
   const grid = card.querySelector(".calgrid");
   let shownYm = "";
   const draw = () => {
@@ -2654,17 +2708,33 @@ function renderCalCard(card, cal, imgUrl){
   card.querySelector(".tcMonth").addEventListener("change", draw);
   grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c) c.classList.toggle("miss", !e.target.value); });
   card.querySelector(".tcDrop").addEventListener("click", () => card.remove());
+  card.querySelector(".tcClose").addEventListener("click", () => card.remove());
+  const body = card.querySelector(".calbody"), sum = card.querySelector(".calsum");
+  card.querySelector(".tcShow").addEventListener("click", () => {
+    const open = body.hidden;
+    body.hidden = !open;
+    card.querySelector(".tcShow").textContent = open ? "Hide calendar" : "Show calendar";
+  });
+  // After a save the card folds to one line; the calendar is a click away.
+  const collapse = (text) => {
+    card.querySelector(".calsumtext").innerHTML = text;
+    sum.hidden = false; body.hidden = true;
+    card.classList.add("saved");
+    card.querySelector(".tcShow").textContent = "Show calendar";
+  };
   card.querySelector(".tcSave").addEventListener("click", async () => {
     const ym = card.querySelector(".tcMonth").value;
     const list = [...grid.querySelectorAll("input[data-day]")].filter(i => i.value.trim())
       .map(i => ({ date: `${ym}-${i.dataset.day}`, perDay: Number(i.value.replace(/[$,+\s]/g, "")) }));
     const said = card.querySelector(".tcSaid");
+    const days = +card.querySelector(".tcDays").value;
     const r = await fetch("/api/admin/ticket-calendar", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ resortId: $("#tResort").value, ticketDays: +card.querySelector(".tcDays").value, month: ym, prices: list }) });
+      body: JSON.stringify({ resortId, ticketDays: days, month: ym, prices: list }) });
     const d = await r.json().catch(() => ({}));
     if(!r.ok){ said.textContent = d.message || "Couldn't save that."; return; }
-    said.textContent = `Saved ${d.saved} days of ${ymName(ym)}. The board now prices tickets on those dates from Disney's calendar.`;
-    card.querySelector(".tcSave").disabled = true;
+    said.textContent = "";
+    const per = list.map(p => p.perDay), lo = Math.min(...per), hi = Math.max(...per);
+    collapse(`<b>Saved</b> · ${esc(parkName)} · ${esc(ymName(ym))} · ${days}-day · ${d.saved} days, ${money(lo)}${hi !== lo ? "–" + money(hi) : ""} a day`);
     tMeta.months = d.months; renderTicketList();
   });
 }

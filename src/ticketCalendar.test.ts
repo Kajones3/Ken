@@ -146,3 +146,20 @@ test("ticket calendars: a trip uses its own length exactly, else the nearest len
   // 3 days is as near 2 as 4: the longer ticket wins the tie.
   assert.equal(three.ticketCalendarDays, 4);
 });
+
+test("ticket calendars: a saved month can be opened again, newest price per date for that length", async () => {
+  const { calendarMonth } = await import("./ticketCalendar.js");
+  const db = await memoryDb();
+  const month = "2099-11";
+  const prices = (perDay: number) => Array.from({ length: 30 }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, perDay }));
+  for (const [days, perDay] of [[5, 150], [5, 155], [2, 190]] as const) {
+    const v = validateCalendar({ resortId: "wdw", ticketDays: days, month, prices: prices(perDay) }, "2026-10-21");
+    if (v.ok) await saveCalendar(db, v.value, "owner@example.com");
+  }
+  const five = await calendarMonth(db, "wdw", month, 5);
+  assert.equal(five.length, 30);
+  assert.equal(five[0]!.date, `${month}-01`);
+  assert.ok(five.every((p) => p.perDay === 155), "the newer 5-day import");
+  assert.ok((await calendarMonth(db, "wdw", month, 2)).every((p) => p.perDay === 190));
+  assert.deepEqual(await calendarMonth(db, "dlr", month, 5), []);
+});

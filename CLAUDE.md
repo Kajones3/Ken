@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**861 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**862 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -380,6 +380,14 @@ this section).
     to 5 days"). The nightly row's one-day figure (`calendarOneDay`) uses the
     length nearest the resort's suggested park days. /admin lists one row per
     month + length.
+    **A saved calendar folds to one line** (owner, 2026-10-28: "once I
+    click Save ... I don't need to see the entire calendar"): "Saved · park
+    · month · N-day · days, $low-$high a day" with Show calendar / Close.
+    **"Look at a saved month"**: three boxes, Park / Month / Ticket length,
+    listing only what is saved, + Show calendar; GET
+    `/api/admin/ticket-calendar?resort=&month=&days=` (`calendarMonth()`)
+    returns the newest price per date; "Save changes" posts a new import
+    (append-only, newest wins). A card keeps the park it opened with.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.
