@@ -1765,7 +1765,8 @@ const server = createServer(async (req, res) => {
           Number(url.searchParams.get("days"))) }, { cache: "no-store" });
       }
       return send(200, {
-        resorts: CALENDAR_RESORTS.map((id) => ({ id, name: RESORT_BY_ID.get(id)!.name })),
+        resorts: CALENDAR_RESORTS.map((id) => ({ id, name: RESORT_BY_ID.get(id)!.name,
+          oneDayOnly: !!RESORT_BY_ID.get(id)!.ticket.flatMultiDay })),
         months: await calendarSummary(db), planMonths: plannableMonths(todayISO()),
       }, { cache: "no-store" });
     }

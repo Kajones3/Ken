@@ -715,8 +715,9 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="tickets">
   <section class="sheet" id="tickets">
     <h2>Ticket calendars</h2>
-    <p class="count"><b>Walt Disney World only.</b> Disneyland's 2-5 day tickets cost one price for any
-      date (no calendar on its site), so the board already prices them at Disneyland's own figures.</p>
+    <p class="count"><b>Disneyland: 1-day calendars only.</b> Its 2-5 day tickets cost one price for any
+      date, so the board already prices them at Disneyland's own figures. Its 1-day calendar is welcome
+      but optional; it prices 1-day Disneyland trips.</p>
     <p>Disney's own ticket prices, date by date. On Disney's ticket page pick a ticket length (say
       <b>5 days</b>), and screenshot the calendar that shows <b>a price under every day</b>, one month per
       screenshot. Drop them here, several at once if you like. Each month opens as a little calendar to check:
@@ -2612,6 +2613,7 @@ function renderTicketList(){
   // use the nearest length held.
   const held = new Set(rows.map(x => x.resortId + "|" + x.month));
   const needed = tMeta.resorts.map(r => {
+    if(r.oneDayOnly) return `<p class="count"><b>${esc(r.name)}</b>: optional. Its calendar is the 1-day ticket only (2-5 day tickets cost the same on any date).</p>`;
     const miss = (tMeta.planMonths || []).filter(m => !held.has(r.id + "|" + m));
     return miss.length ? `<p class="count"><b>${esc(r.name)}</b> still needs: ${miss.map(ymName).join(", ")}.</p>`
       : `<p class="count"><b>${esc(r.name)}</b>: every month a traveler can pick is from Disney's calendar.</p>`;
@@ -2652,24 +2654,31 @@ function renderCalCard(card, cal, imgUrl){
   const month = cal.month || (tMeta.planMonths || [])[0] || "";
   // The park is fixed when the card opens, so changing the Resort box later
   // can't save this month under another park.
-  const resortId = cal.resortId || $("#tResort").value;
-  const parkName = (tMeta.resorts.find(r => r.id === resortId) || {}).name || resortId;
+  // A new screenshot names its own park when it can (Disney World's says
+  // "5-Day Ticket", Disneyland's 1-day calendar doesn't); else the Resort box.
+  const guess = tMeta.resorts.some(r => r.id === cal.resortGuess) ? cal.resortGuess : null;
+  let resortId = cal.resortId || guess || $("#tResort").value;
+  const nameOf = id => (tMeta.resorts.find(r => r.id === id) || {}).name || id;
+  // Disneyland's 2-5 day tickets are one price on any date; its calendar is the 1-day ticket.
+  const oneDayOnly = id => (tMeta.resorts.find(r => r.id === id) || {}).oneDayOnly;
   const prices = new Map((cal.prices || []).map(p => [p.date, p.perDay]));
   // Boxes read from a hard-to-read "11" (see readTicketCalendar): amber until touched.
   const unsure = new Set((cal.prices || []).filter(p => p.check).map(p => p.date));
-  const days = cal.ticketDays || 5;
+  const days = oneDayOnly(resortId) ? 1 : cal.ticketDays || 5;
   card.innerHTML = `
     <div class="calsum" hidden><span class="calsumtext"></span>
       <span><button class="btn tcShow">Show calendar</button> <button class="btn tcClose">Close</button></span></div>
     <div class="calbody">
     <div class="calhead">
-      <div><label>Park</label><span style="padding:6px 0">${esc(parkName)}</span></div>
+      <div><label>Park</label>${cal.saved ? `<span style="padding:6px 0">${esc(nameOf(resortId))}</span>`
+        : `<select class="tcPark">${tMeta.resorts.map(r => `<option value="${esc(r.id)}"${r.id === resortId ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select>`}</div>
       <div><label>Month</label><input type="month" class="tcMonth" value="${esc(month)}"></div>
       <div><label>Ticket length</label><select class="tcDays">${Array.from({length:10},(_,i)=>i+1).map(n => `<option value="${n}"${n===days?" selected":""}>${n}-day</option>`).join("")}</select></div>
       <div><span class="count tcRead"></span></div>
     </div>
     ${cal.month ? "" : `<p class="calwarn">Couldn't find the month in the picture. Pick it above.</p>`}
-    ${cal.ticketDays ? "" : `<p class="calwarn">Couldn't find the ticket length (like "5-Day Ticket"). Pick it above.</p>`}
+    <p class="calwarn tcNoLen"${cal.ticketDays || cal.saved ? " hidden" : ""}>Couldn't find the ticket length (like "5-Day Ticket"). Pick it above.</p>
+    <p class="count tcOneDay" hidden>Disneyland's calendar is its 1-day ticket: its 2-5 day tickets cost the same on any date.</p>
     ${cal.adultAges && cal.adultAges !== "10+" ? `<p class="calwarn">The picture says Ages ${esc(cal.adultAges)}. Use the adult calendar.</p>` : ""}
     ${(cal.warnings || []).map(w => `<p class="calwarn">${esc(w)}</p>`).join("")}
     ${imgUrl ? `<details style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">The picture</summary>
@@ -2709,9 +2718,20 @@ function renderCalCard(card, cal, imgUrl){
     grid.innerHTML = h;
     const amber = [...unsure].filter(k => k.startsWith(ym + "-")).length;
     card.querySelector(".tcRead").textContent = `${read} of ${n} days read${read < n ? " — fill in the red ones, or leave them blank" : ""}.`
-      + (amber ? ` ${amber} had an "11" that Disney's font makes hard to read: check the amber ones.` : "");
+      + (amber ? ` ${amber} ${amber === 1 ? "was" : "were"} hard to read (an "11" in Disney's font, or a "$" badge): check the amber ones.` : "");
   };
   draw();
+  const lenBox = card.querySelector(".tcDays");
+  const syncPark = () => {
+    const one = oneDayOnly(resortId);
+    if(one) lenBox.value = "1";
+    lenBox.disabled = !!one;
+    card.querySelector(".tcOneDay").hidden = !one;
+    if(one) card.querySelector(".tcNoLen").hidden = true;
+  };
+  syncPark();
+  const parkBox = card.querySelector(".tcPark");
+  if(parkBox) parkBox.addEventListener("change", () => { resortId = parkBox.value; syncPark(); });
   card.querySelector(".tcMonth").addEventListener("change", draw);
   grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c){ c.classList.toggle("miss", !e.target.value); c.classList.remove("check"); } });
   card.querySelector(".tcDrop").addEventListener("click", () => card.remove());
@@ -2741,7 +2761,8 @@ function renderCalCard(card, cal, imgUrl){
     if(!r.ok){ said.textContent = d.message || "Couldn't save that."; return; }
     said.textContent = "";
     const per = list.map(p => p.perDay), lo = Math.min(...per), hi = Math.max(...per);
-    collapse(`<b>Saved</b> · ${esc(parkName)} · ${esc(ymName(ym))} · ${days}-day · ${d.saved} days, ${money(lo)}${hi !== lo ? "–" + money(hi) : ""} a day`);
+    if(parkBox) parkBox.replaceWith(Object.assign(document.createElement("span"), { textContent: nameOf(resortId), style: "padding:6px 0" }));
+    collapse(`<b>Saved</b> · ${esc(nameOf(resortId))} · ${esc(ymName(ym))} · ${days}-day · ${d.saved} days, ${money(lo)}${hi !== lo ? "–" + money(hi) : ""} a day`);
     tMeta.months = d.months; renderTicketList();
   });
 }

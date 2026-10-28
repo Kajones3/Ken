@@ -437,6 +437,39 @@ const CAL_WEEKDAYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const digitLookalikes = t => String(t).replace(/[nN]/g, "11").replace(/[lI|]/g, "1").replace(/[oO]/g, "0");
 const cleanWord = t => String(t || "").trim().replace(/^[^\w$]+|[^\w+.$]+$/g, "");
 
+/** Single-letter weekday headings (S M T W T F S) on one row below the month
+ *  heading, matched to weekdays in left-to-right order. Of the orders the
+ *  letters could stand for, keep the one whose columns are most evenly
+ *  spaced. Returns [[weekday 0-6, word], ...], or [] when fewer than four. */
+function singleLetterHeads(W, heading) {
+  const PATTERN = "SMTWTFS";
+  const letters = W.filter(w => /^[SMTWF]$/.test(w.t) && (!heading || w.cy > heading.cy));
+  if (letters.length < 4) return [];
+  // The row the most letters share.
+  let row = [];
+  for (const a of letters) {
+    const same = letters.filter(b => Math.abs(b.cy - a.cy) < Math.max(a.h, 8));
+    if (same.length > row.length) row = same;
+  }
+  row.sort((a, b) => a.cx - b.cx);
+  if (row.length < 4 || row.length > 7) return [];
+  let best = null, bestErr = Infinity;
+  const walk = (i, from, picked) => {
+    if (i === row.length) {
+      const n = picked.length, sx = picked.reduce((a, d) => a + d, 0), sy = row.reduce((a, w) => a + w.cx, 0);
+      const sxx = picked.reduce((a, d) => a + d * d, 0), sxy = picked.reduce((a, d, k) => a + d * row[k].cx, 0);
+      const b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a0 = (sy - b * sx) / n;
+      if (!(b > 0)) return;
+      const err = row.reduce((e, w, k) => e + (w.cx - (a0 + b * picked[k])) ** 2, 0);
+      if (err < bestErr) { bestErr = err; best = [...picked]; }
+      return;
+    }
+    for (let d = from; d < 7; d++) if (PATTERN[d] === row[i].t) walk(i + 1, d + 1, [...picked, d]);
+  };
+  walk(0, 0, []);
+  return best ? best.map((d, k) => [d, row[k]]) : [];
+}
+
 /**
  * Disney's ticket calendar ("Choose the Start Date of Your 5-Day Ticket",
  * a month with "$153+" in every day) read into one per-day price per date
@@ -451,7 +484,8 @@ const cleanWord = t => String(t || "").trim().replace(/^[^\w$]+|[^\w+.$]+$/g, ""
  * The owner checks every box before saving; a misread digit is fixed there.
  *
  * words: [{ text, x0, y0, x1, y1 }]
- * Returns { month: "YYYY-MM" | null, ticketDays, adultAges, prices: [{date, perDay}],
+ * Returns { month: "YYYY-MM" | null, ticketDays, adultAges, resortGuess ("wdw" | "dlr" | null),
+ *           prices: [{date, perDay, check?}],
  *           missing: [dates], warnings: [] }
  */
 export function readTicketCalendar(words) {
@@ -486,6 +520,14 @@ export function readTicketCalendar(words) {
     const prev = byDay.get(d);
     if (!prev || (heading && Math.abs(h.cy - heading.cy) < Math.abs(prev.cy - heading.cy))) byDay.set(d, h);
   }
+  // Disneyland heads its calendar with single letters (S M T W T F S), and
+  // S and T each appear twice, so they are placed by order across the row:
+  // the reading of the letters that best fits evenly spaced columns.
+  let letterHeads = false;
+  if (byDay.size < 2) for (const [d, h] of singleLetterHeads(W, heading)) { byDay.set(d, h); letterHeads = true; }
+  // Disney World's calendar always names its ticket ("5-Day Ticket") under
+  // Sun..Sat headings; Disneyland's 1-day calendar names none, under letters.
+  const resortGuess = letterHeads && !ticketDays ? "dlr" : ticketDays ? "wdw" : null;
   const headRowY = byDay.size ? [...byDay.values()].map(h => h.cy).sort((a, b) => a - b)[Math.floor(byDay.size / 2)] : null;
 
   // The prices: "$153+" (or "153+"); a lone "$153" only if no "+" prices were read.
@@ -496,6 +538,12 @@ export function readTicketCalendar(words) {
       const v = Number(m[1]);
       return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
     };
+    // Disneyland marks its cheapest days with a "$" in a green circle, which
+    // the reader sees as a "0" ("$154" comes back as "0154"; owner's December
+    // 2026 calendar, 2026-10-28).
+    const badge = /^0(\d{2,3})$/.exec(w.t);
+    const b = badge && read("$" + badge[1]);
+    if (b) return { ...b, check: true, badge: true };
     const p = read(w.t);
     if (p) return p;
     // Disney's thin font draws "11" so tight that the reader sees "n"
@@ -505,13 +553,13 @@ export function readTicketCalendar(words) {
     const fixed = read(digitLookalikes(w.t));
     return fixed ? { ...fixed, check: true } : null;
   };
-  let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && /\$|\+/.test(x.w.text))
+  let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && (x.p.badge || /\$|\+/.test(x.w.text)))
     .filter(x => headRowY === null || x.w.cy > headRowY);
   const plus = cands.filter(x => x.p.plus);
   if (plus.length >= 7) cands = plus;
   const prices = cands.map(x => ({ ...x.w, v: x.p.v, check: !!x.p.check }));
-  if (!month) return { month: null, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
-  if (!prices.length) return { month, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
+  if (!month) return { month: null, ticketDays, adultAges, resortGuess, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
+  if (!prices.length) return { month, ticketDays, adultAges, resortGuess, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
 
   // Columns: from the headings when at least two were read, else from the prices' spread.
   let colOf;
@@ -573,7 +621,7 @@ export function readTicketCalendar(words) {
   }
   const all = Array.from({ length: daysIn }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
   return {
-    month, ticketDays, adultAges,
+    month, ticketDays, adultAges, resortGuess,
     prices: all.filter(d => out.has(d)).map(d => ({ date: d, perDay: out.get(d).v, ...(out.get(d).check ? { check: true } : {}) })),
     missing: all.filter(d => !out.has(d)),
     warnings,
