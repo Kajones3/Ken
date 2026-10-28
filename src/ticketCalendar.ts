@@ -27,8 +27,9 @@ import type { Db } from "./db.js";
 import { RESORT_BY_ID, SUGGESTED_PARK_DAYS, type Resort } from "./config.js";
 import { ticketMultiDay, nearestLength, type CalendarByLength } from "./pricing.js";
 
-/** The resorts whose ticket calendars are in US dollars and read today. */
-export const CALENDAR_RESORTS = ["wdw", "dlr"] as const;
+/** The resorts with a ticket calendar to read. Disneyland has none: its 2+
+ *  day tickets cost one price for any date (`flatMultiDay`, owner 2026-10-28). */
+export const CALENDAR_RESORTS = ["wdw"] as const;
 
 export interface CalendarPrice { date: string; perDay: number }
 export interface CalendarImport {
@@ -46,7 +47,7 @@ export function validateCalendar(body: unknown, today: string):
   const b = (body ?? {}) as Record<string, unknown>;
   const resortId = String(b.resortId ?? "");
   if (!(CALENDAR_RESORTS as readonly string[]).includes(resortId)) {
-    return { ok: false, reason: "Ticket calendars can be read for Walt Disney World and Disneyland." };
+    return { ok: false, reason: "Ticket calendars are read for Walt Disney World only. Disneyland's multi-day tickets cost the same on any date, so there is no calendar to read." };
   }
   const ticketDays = Math.round(Number(b.ticketDays));
   if (!(ticketDays >= 1 && ticketDays <= 10)) return { ok: false, reason: "How many days is the ticket? (1 to 10)" };

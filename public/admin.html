@@ -265,6 +265,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 .calgrid .cell .dn{font-size:11px; color:var(--muted)}
 .calgrid .cell input{width:100%; min-width:0; font-size:16px; padding:2px 3px; border:1px solid var(--rule-strong); border-radius:4px; background:transparent; color:inherit; font-variant-numeric:tabular-nums}
 .calgrid .cell.miss{border-color:var(--bad)}
+.calgrid .cell.check{border-color:var(--warn, #C98A12); border-width:2px}
 .calcard.saved{padding:10px 12px}
 .calsum{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between}
 .calsum b{font-weight:700}
@@ -714,6 +715,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="tickets">
   <section class="sheet" id="tickets">
     <h2>Ticket calendars</h2>
+    <p class="count"><b>Walt Disney World only.</b> Disneyland's 2-5 day tickets cost one price for any
+      date (no calendar on its site), so the board already prices them at Disneyland's own figures.</p>
     <p>Disney's own ticket prices, date by date. On Disney's ticket page pick a ticket length (say
       <b>5 days</b>), and screenshot the calendar that shows <b>a price under every day</b>, one month per
       screenshot. Drop them here, several at once if you like. Each month opens as a little calendar to check:
@@ -2652,6 +2655,8 @@ function renderCalCard(card, cal, imgUrl){
   const resortId = cal.resortId || $("#tResort").value;
   const parkName = (tMeta.resorts.find(r => r.id === resortId) || {}).name || resortId;
   const prices = new Map((cal.prices || []).map(p => [p.date, p.perDay]));
+  // Boxes read from a hard-to-read "11" (see readTicketCalendar): amber until touched.
+  const unsure = new Set((cal.prices || []).filter(p => p.check).map(p => p.date));
   const days = cal.ticketDays || 5;
   card.innerHTML = `
     <div class="calsum" hidden><span class="calsumtext"></span>
@@ -2698,15 +2703,17 @@ function renderCalCard(card, cal, imgUrl){
     for(let d = 1; d <= n; d++){
       const dd = String(d).padStart(2, "0"), v = prices.get(`${ym}-${dd}`);
       if(v) read++;
-      h += `<div class="cell${v ? "" : " miss"}"><div class="dn">${d}</div>
+      h += `<div class="cell${v ? (unsure.has(`${ym}-${dd}`) ? " check" : "") : " miss"}"><div class="dn">${d}</div>
         <input data-day="${dd}" inputmode="decimal" value="${v ?? ""}" aria-label="${esc(ymName(ym))} ${d}, price per day"></div>`;
     }
     grid.innerHTML = h;
-    card.querySelector(".tcRead").textContent = `${read} of ${n} days read${read < n ? " — fill in the red ones, or leave them blank" : ""}.`;
+    const amber = [...unsure].filter(k => k.startsWith(ym + "-")).length;
+    card.querySelector(".tcRead").textContent = `${read} of ${n} days read${read < n ? " — fill in the red ones, or leave them blank" : ""}.`
+      + (amber ? ` ${amber} had an "11" that Disney's font makes hard to read: check the amber ones.` : "");
   };
   draw();
   card.querySelector(".tcMonth").addEventListener("change", draw);
-  grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c) c.classList.toggle("miss", !e.target.value); });
+  grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c){ c.classList.toggle("miss", !e.target.value); c.classList.remove("check"); } });
   card.querySelector(".tcDrop").addEventListener("click", () => card.remove());
   card.querySelector(".tcClose").addEventListener("click", () => card.remove());
   const body = card.querySelector(".calbody"), sum = card.querySelector(".calsum");

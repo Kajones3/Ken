@@ -27,5 +27,5 @@ export interface OcrWord { text: string; x0: number; y0: number; x1: number; y1:
 export function readWords(image: Blob, opts?: { onProgress?: (p: number, status: string) => void }): Promise<{ words: OcrWord[]; text: string }>;
 export function readTicketCalendar(words: OcrWord[]): {
   month: string | null; ticketDays: number | null; adultAges: string | null;
-  prices: Array<{ date: string; perDay: number }>; missing: string[]; warnings: string[];
+  prices: Array<{ date: string; perDay: number; check?: boolean }>; missing: string[]; warnings: string[];
 };

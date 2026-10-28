@@ -151,6 +151,10 @@ export interface Resort {
      *  longer than one covers. Store the totals, never the factors: a total
      *  is a number somebody can check against Disney's own page. */
     multiDayAdultUsd?: number[];
+    /** The multi-day tickets cost the same on every date (Disneyland: no
+     *  price calendar, owner 2026-10-28), so 2+ day tickets are priced at
+     *  `multiDayAdultUsd` with no season curve. The 1-day ticket still varies. */
+    flatMultiDay?: boolean;
     /** Park Hopper add-on per ticket BY DAY COUNT, index 0 = one day. A flat
      *  figure was always a simplification; at Disneyland the real add-on
      *  nearly doubles between a one-day and a five-day ticket ($70 to $135),
@@ -316,7 +320,11 @@ export const RESORTS: Resort[] = [
        five-day trip. */
     ticket: {
       base: 149, child: 0.933, slope: 0.05, floor: 0.62,
+      // Disneyland's own "from" prices: 2-day $168/day, 3-day $142, 4-day
+      // $120, 5-day $104 (owner's screenshot, 2026-10-28). One price for any
+      // date; only the 1-day ticket ($104-$224) changes by date.
       multiDayAdultUsd: [149, 335, 425, 480, 520],
+      flatMultiDay: true,
       hopperByDaysUsd: [70, 100, 110, 120, 135],
       hopperAdultUsd: 110, hopperChildUsd: 110,
     },

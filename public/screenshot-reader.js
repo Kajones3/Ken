@@ -431,6 +431,10 @@ export function findColumnCuts(lum, width, height) {
 
 const CAL_MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
 const CAL_WEEKDAYS = ["sun","mon","tue","wed","thu","fri","sat"];
+/** Letters the reader mistakes for digits in Disney's price font: "n" is a
+ *  tight "11", "l"/"I"/"|" a "1", "o"/"O" a "0". Only used on words that are
+ *  already price-shaped ("$...+"). */
+const digitLookalikes = t => String(t).replace(/[nN]/g, "11").replace(/[lI|]/g, "1").replace(/[oO]/g, "0");
 const cleanWord = t => String(t || "").trim().replace(/^[^\w$]+|[^\w+.$]+$/g, "");
 
 /**
@@ -486,16 +490,26 @@ export function readTicketCalendar(words) {
 
   // The prices: "$153+" (or "153+"); a lone "$153" only if no "+" prices were read.
   const priceOf = w => {
-    const m = /^\$?(\d{2,4}(?:\.\d{1,2})?)([+t*])?$/.exec(w.t.replace(/,/g, ""));
-    if (!m) return null;
-    const v = Number(m[1]);
-    return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
+    const read = t => {
+      const m = /^\$?(\d{2,4}(?:\.\d{1,2})?)([+t*])?$/.exec(t.replace(/,/g, ""));
+      if (!m) return null;
+      const v = Number(m[1]);
+      return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
+    };
+    const p = read(w.t);
+    if (p) return p;
+    // Disney's thin font draws "11" so tight that the reader sees "n"
+    // ($112+ comes back as "$n2+"; owner's September 2027 calendar, 2026-10-28).
+    // Inside something already price-shaped, read the look-alikes as digits
+    // and mark the box for the owner to check.
+    const fixed = read(digitLookalikes(w.t));
+    return fixed ? { ...fixed, check: true } : null;
   };
   let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && /\$|\+/.test(x.w.text))
     .filter(x => headRowY === null || x.w.cy > headRowY);
   const plus = cands.filter(x => x.p.plus);
   if (plus.length >= 7) cands = plus;
-  const prices = cands.map(x => ({ ...x.w, v: x.p.v }));
+  const prices = cands.map(x => ({ ...x.w, v: x.p.v, check: !!x.p.check }));
   if (!month) return { month: null, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
   if (!prices.length) return { month, ticketDays, adultAges, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
 
@@ -531,7 +545,8 @@ export function readTicketCalendar(words) {
   // of each cell, above its price). A whole-week slip shows as +-7.
   const rowGap = rows.length > 1 ? (rows[rows.length - 1].y - rows[0].y) / (rows.length - 1) : hMed * 6;
   const colW = (() => { const xs = placed.map(x => x.p.cx).sort((a, b) => a - b); return xs.length > 1 ? (xs[xs.length - 1] - xs[0]) / 6 : 100; })();
-  const nums = W.filter(w => /^\d{1,2}$/.test(w.t) && Number(w.t) >= 1 && Number(w.t) <= 31 && (headRowY === null || w.cy > headRowY));
+  const nums = W.map(w => /^\d{1,2}$/.test(w.t) ? w : /^[nN]$/.test(w.t) ? { ...w, t: "11" } : null)
+    .filter(w => w && Number(w.t) >= 1 && Number(w.t) <= 31 && (headRowY === null || w.cy > headRowY));
   const votes = new Map();
   for (const x of placed) {
     let best = null, bestD = Infinity;
@@ -553,13 +568,13 @@ export function readTicketCalendar(words) {
   for (const x of placed) {
     if (x.day < 1 || x.day > daysIn) { warnings.push(`A price ($${x.p.v}) didn't fall on a day of the month and was left out.`); continue; }
     const date = `${month}-${String(x.day).padStart(2, "0")}`;
-    if (out.has(date)) { warnings.push(`Two prices landed on ${date}; kept $${out.get(date)}. Check that day.`); continue; }
-    out.set(date, x.p.v);
+    if (out.has(date)) { warnings.push(`Two prices landed on ${date}; kept $${out.get(date).v}. Check that day.`); continue; }
+    out.set(date, { v: x.p.v, check: x.p.check });
   }
   const all = Array.from({ length: daysIn }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
   return {
     month, ticketDays, adultAges,
-    prices: all.filter(d => out.has(d)).map(d => ({ date: d, perDay: out.get(d) })),
+    prices: all.filter(d => out.has(d)).map(d => ({ date: d, perDay: out.get(d).v, ...(out.get(d).check ? { check: true } : {}) })),
     missing: all.filter(d => !out.has(d)),
     warnings,
   };
