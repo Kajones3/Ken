@@ -156,3 +156,20 @@ export async function calendarSummary(db: Db): Promise<Array<{
     }));
   } catch { return []; }
 }
+
+/** One saved calendar as /admin shows it again: the newest price per date
+ *  for that resort, month and ticket length. */
+export async function calendarMonth(db: Db, resortId: string, month: string, ticketDays: number): Promise<CalendarPrice[]> {
+  if (!/^\d{4}-\d{2}$/.test(month)) return [];
+  try {
+    const r = await db.query(
+      `select distinct on (park_date) park_date, per_day_usd
+         from ticket_calendar
+        where resort_id = $1 and ticket_days = $2 and to_char(park_date, 'YYYY-MM') = $3
+        order by park_date, observed_at desc, id desc`, [resortId, ticketDays, month]);
+    return (r.rows as Array<Record<string, unknown>>).map((x) => ({
+      date: x.park_date instanceof Date ? x.park_date.toISOString().slice(0, 10) : String(x.park_date).slice(0, 10),
+      perDay: Number(x.per_day_usd),
+    }));
+  } catch { return []; }
+}

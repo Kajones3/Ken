@@ -44,7 +44,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary } from "./ticketCalendar.js";
+import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth } from "./ticketCalendar.js";
 import { seedTickets } from "./jobs/refresh.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
@@ -1758,6 +1758,12 @@ const server = createServer(async (req, res) => {
      * once, so the board prices from Disney's number straight away. */
     if (url.pathname === "/api/admin/ticket-calendar" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      // One saved month, to look at again or correct: ?resort=&month=&days=
+      const one = url.searchParams.get("month");
+      if (one) {
+        return send(200, { prices: await calendarMonth(db, url.searchParams.get("resort") ?? "", one,
+          Number(url.searchParams.get("days"))) }, { cache: "no-store" });
+      }
       return send(200, {
         resorts: CALENDAR_RESORTS.map((id) => ({ id, name: RESORT_BY_ID.get(id)!.name })),
         months: await calendarSummary(db), planMonths: plannableMonths(todayISO()),
