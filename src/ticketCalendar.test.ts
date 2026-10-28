@@ -49,6 +49,7 @@ test("ticket calendar import: checked, kept append-only, and the board prices fr
   const month = "2099-03";
   const prices = Array.from({ length: 31 }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, perDay: 150 }));
   assert.equal(validateCalendar({ resortId: "hkdl", ticketDays: 5, month, prices }, "2026-10-21").ok, false, "USD calendars only");
+  assert.equal(validateCalendar({ resortId: "dlr", ticketDays: 5, month, prices }, "2026-10-21").ok, false, "Disneyland has no ticket calendar");
   assert.equal(validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: prices.slice(0, 3) }, "2026-10-21").ok, false, "a crop, not a month");
   assert.equal(validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: [{ date: "2099-04-01", perDay: 150 }, ...prices] }, "2026-10-21").ok, false);
   const bad = validateCalendar({ resortId: "wdw", ticketDays: 5, month, prices: [...prices.slice(1), { date: `${month}-01`, perDay: 1534 }] }, "2026-10-21");
@@ -162,4 +163,53 @@ test("ticket calendars: a saved month can be opened again, newest price per date
   assert.ok(five.every((p) => p.perDay === 155), "the newer 5-day import");
   assert.ok((await calendarMonth(db, "wdw", month, 2)).every((p) => p.perDay === 190));
   assert.deepEqual(await calendarMonth(db, "dlr", month, 5), []);
+});
+
+// The owner's September 2027 5-day calendar (2026-10-28): Disney's thin font
+// draws "11" so tight that the reader sees "n" ("$112+" -> "$n2+").
+const SEP_2027: Record<number, number> = { 1: 112, 2: 113, 3: 114, 4: 116, 5: 115, 6: 114, 7: 112, 8: 113, 9: 113, 10: 114,
+  11: 116, 12: 116, 13: 116, 14: 115, 15: 116, 16: 116, 17: 118, 18: 119, 19: 117, 20: 115, 21: 114, 22: 116, 23: 117,
+  24: 120, 25: 127, 26: 128, 27: 132, 28: 135, 29: 140, 30: 142 };
+test("ticket calendar: a \"$11x\" price read as \"$n2+\" is repaired and marked to check", () => {
+  const sep = (JSON.parse(readFileSync(new URL("./testdata/wdw-ticket-calendar-2027-09.words.json", import.meta.url), "utf8")) as Array<[string, number, number, number, number]>)
+    .map(([text, x0, y0, x1, y1]) => ({ text, x0, y0, x1, y1 }));
+  const cal = readTicketCalendar(sep);
+  assert.equal(cal.month, "2027-09");
+  assert.equal(cal.ticketDays, 5);
+  assert.equal(cal.prices.length, 28);
+  for (const p of cal.prices) assert.equal(p.perDay, SEP_2027[Number(p.date.slice(8))], p.date);
+  // "$ns+" (118) and "7+" (117) can't be told apart from noise: left for the owner.
+  assert.deepEqual(cal.missing, ["2027-09-17", "2027-09-19"]);
+  const checked = cal.prices.filter((p) => p.check).map((p) => Number(p.date.slice(8)));
+  assert.deepEqual(checked, [1, 2, 5, 6, 7, 8, 9, 11]);
+});
+
+test("Disneyland 2+ day tickets are one price for any date; the 1-day still follows the season", async () => {
+  const { priceTrip } = await import("./pricing.js");
+  const { bookFrom } = await import("./book.js");
+  const dlr = RESORT_BY_ID.get("dlr")!;
+  const price = (start: string, oneDay: number, parkDays: number, childAges: number[] = []) => {
+    const dates = Array.from({ length: 8 }, (_, i) => { const d = new Date(start + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + i); return d.toISOString().slice(0, 10); });
+    const book = bookFrom({
+      flights: dates.map((date) => ({ dest: "LAX", date, row: { price: 300, stops: 0 } })),
+      hotels: dates.map((date) => ({ resortId: "dlr", date, night: { hotelId: "p", name: "Pixar Place", descriptor: "On property", nightly: 400, tier: "moderate" as const, onProperty: true } })),
+      tickets: dates.map((date) => ({ resortId: "dlr", date, row: { adult: oneDay, child: oneDay * dlr.ticket.child } })),
+      promos: [],
+    });
+    const r = priceTrip(book, dlr, { origin: "ATL", adults: 1, childAges, nights: 5, parkDays, stay: "on", tier: 1, food: "mix" }, {}, start);
+    assert.ok(r.ok);
+    return r.ok ? r.price : null!;
+  };
+  // A quiet day's one-day row ($110) and a peak day's ($220): the 3-day costs $425 either way.
+  const quiet = price("2099-02-02", 110, 3), peak = price("2099-07-01", 220, 3);
+  assert.ok(Math.abs(quiet.tickets - 425) < 0.01, String(quiet.tickets));
+  assert.ok(Math.abs(peak.tickets - 425) < 0.01, String(peak.tickets));
+  assert.equal(peak.ticketsFlat, true);
+  // A child (3-9) pays the child share.
+  const fam = price("2099-07-01", 220, 3, [6]);
+  assert.ok(Math.abs(fam.tickets - 425 * (1 + dlr.ticket.child)) < 0.01, String(fam.tickets));
+  // The 1-day ticket still moves with the date.
+  const one = price("2099-07-01", 220, 1);
+  assert.equal(one.ticketsFlat, false);
+  assert.ok(Math.abs(one.tickets - 220) < 0.01, String(one.tickets));
 });

@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**862 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
+**864 tests** (all pass, 2026-10-21), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -388,6 +388,21 @@ this section).
     `/api/admin/ticket-calendar?resort=&month=&days=` (`calendarMonth()`)
     returns the newest price per date; "Save changes" posts a new import
     (append-only, newest wins). A card keeps the park it opened with.
+    **"11" reads as "n" in Disney's price font** (owner's September 2027
+    calendar, 2026-10-28: 20 of 30 read; every miss was a "$11x"). Zooming,
+    black-and-white and a digits-only whitelist did NOT help (the whitelist
+    drops the "11"). `readTicketCalendar()` repairs price-shaped words
+    (`digitLookalikes()`: n/N -> 11, l/I/| -> 1, o/O -> 0) and marks them
+    `check`; /admin outlines them amber. That screenshot now reads 28/30
+    (`src/testdata/wdw-ticket-calendar-2027-09.words.json`).
+    **Disneyland has NO ticket calendar** (owner: after picking a length the
+    site goes to party, then park). Its 2-5 day tickets are one price any
+    date: `ticket.flatMultiDay` on `dlr` prices them at `multiDayAdultUsd`
+    ($335/$425/$480/$520 = Disney's "from" prices exactly), no season curve,
+    no check nudge (`TripPrice.ticketsFlat`, card "Disney's price"). The
+    1-day ticket still uses the curve. `CALENDAR_RESORTS` is WDW only.
+    Effect: a Disneyland 3-day adult moved at most ~$20 (Dec $445 -> $425,
+    Jan $411 -> $425).
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.

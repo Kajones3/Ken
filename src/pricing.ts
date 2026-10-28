@@ -574,6 +574,9 @@ export interface TripPrice {
   /** The length of Disney's calendar that priced the tickets (the trip's own
    *  park days = exact; another = the nearest length held, scaled). */
   ticketCalendarDays: number | null;
+  /** A multi-day ticket the resort sells at one price for any date
+   *  (Disneyland), priced at its published table. */
+  ticketsFlat: boolean;
   /** Which lines the owner's own price checks nudged, and by how much. Null
    *  when none did. See checkFactors.ts. */
   checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
@@ -995,7 +998,25 @@ export function priceTrip(
   // per-day price; child and junior keep their ratio to the adult.
   const cal = byStart && startRow!.calendar && parkDays > 0 ? calendarPerDay(resort, startRow!.calendar, parkDays) : null;
   const ticketCalendarDays = cal ? cal.fromDays : null;
-  for (let i = 0; i < parkDays; i++) {
+  // Disneyland sells 2+ day tickets at ONE price for any date (owner,
+  // 2026-10-28: there is no price calendar; the site goes straight to the
+  // party and the park). That price is the published table, not the curve,
+  // so no season and no price-check nudge. Its 1-day ticket still varies.
+  const table = resort.ticket.multiDayAdultUsd;
+  const ticketsFlat = !!(resort.ticket.flatMultiDay && table && table.length && parkDays >= 2);
+  if (ticketsFlat) {
+    ticketsFromCalendar = false;
+    const adultTotal = table![0]! * multiDay * parkDays;
+    ages.forEach((age, idx) => {
+      const band = ticketBandOf(resort, age);
+      const gate = band === "infant" ? 0
+        : band === "child" ? adultTotal * resort.ticket.child
+        : band === "junior" ? adultTotal * (resort.ticket.junior ?? 0.9)
+        : adultTotal;
+      ticketPerHead[idx] = gate * ticketTax;
+    });
+  }
+  for (let i = 0; !ticketsFlat && i < parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
     const t = byStart ? startRow : book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
@@ -1347,7 +1368,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, checkAdjust,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, ticketsFlat, checkAdjust,
       membership, parkDays: days,
     },
   };
