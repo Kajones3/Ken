@@ -311,6 +311,16 @@ a{color:var(--ink)}
   border-radius:8px; padding:8px 10px; font:13.5px var(--f-body)}
 .ages{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .ages[hidden]{display:none}
+.whenwhere{grid-template-columns:repeat(2,minmax(0,1fr)); margin-bottom:4px}
+.whenwhere #windowField{grid-column:1/-1}
+@media (max-width:460px){ .whenwhere{grid-template-columns:1fr} }
+.moretoggle{display:flex; flex-wrap:wrap; gap:4px 10px; align-items:baseline; width:100%; margin:14px 0; padding:12px 0;
+  border:0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); background:none; cursor:pointer;
+  color:var(--ink); font:inherit; font-weight:700; text-align:left}
+.moretoggle #moreLabel::before{content:"+ "; color:var(--gold, #E8B23E)}
+.moretoggle[aria-expanded="true"] #moreLabel::before{content:"− "}
+.moretoggle .moresum{font-weight:400; font-size:14px; color:var(--muted)}
+#moreDetails{padding-top:2px}
 .gt-block{margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)}
 .gt-block .fields{margin-bottom:0}
 .gt-sub{display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:12px}
@@ -1179,18 +1189,33 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
     <p class="helpnote" id="kidsHelp" hidden>At Disney World and Disneyland, the child ticket is for kids 3 to 9; from 10 they pay the adult price. Tokyo also sells a cheaper junior ticket for ages 12 to 17. Paris, Hong Kong and Shanghai charge the child price up to age 11. Add each child's age and every resort applies its own rule.</p>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
 
-    <div class="fields" style="grid-template-columns:1fr; margin-bottom:14px; padding-bottom:13px; border-bottom:1px solid var(--rule)">
+    <div class="fields whenwhere">
       <div class="f" id="monthField">
         <label for="month">Arriving</label>
         <select id="month"></select>
         <small id="monthMovedNote" class="downgrade" hidden></small>
       </div>
-      <div class="f" id="windowField" style="margin-top:10px" hidden>
+      <div class="f" id="originAirportField">
+        <label for="origin">Departing from</label>
+        <select id="origin"></select>
+      </div>
+      <div class="f" id="windowField" hidden>
         <label for="window">Which week</label>
         <select id="window"></select>
         <small id="windowHint" style="color:var(--muted)"></small>
       </div>
     </div>
+    <div class="notices">
+      <p id="gettingThereNote" class="notice" hidden></p>
+      <p id="originNote" class="notice warn" hidden></p>
+    </div>
+
+    <!-- The form opens short (owner, 2026-10-29: "start the page very
+         simple ... a link that's like, I want to add more details"). Every
+         control below still applies with its default while it's closed. -->
+    <button type="button" class="moretoggle" id="moreToggle" aria-expanded="false" aria-controls="moreDetails">
+      <span id="moreLabel">Add more details</span> <span class="moresum" id="moreSum"></span></button>
+    <div id="moreDetails" hidden>
 
     <div class="gt-block">
       <div class="fields">
@@ -1204,21 +1229,6 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
             <option value="driveDomestic">Driving domestically (WDW + Disneyland), flying internationally</option>
           </select>
         </div>
-        <div class="f" id="originAirportField">
-          <label for="origin">Departing from</label>
-          <select id="origin"></select>
-        </div>
-      </div>
-
-      <!-- Both notices sit BELOW the pair rather than inside a cell.
-           `.fields` bottom-aligns its columns, so a note (and worse, a
-           button) growing inside one cell shoved that cell's select down
-           and left the two dropdowns on different lines — the owner's
-           report that this "gets all wonky" when a free account picks a
-           Plus airport. A full-width strip cannot distort a column. -->
-      <div class="notices">
-        <p id="gettingThereNote" class="notice" hidden></p>
-        <p id="originNote" class="notice warn" hidden></p>
       </div>
 
       <div class="gt-sub" id="milesExtra" hidden>
@@ -1377,7 +1387,7 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
         </select>
       </div>
     </div>
-
+    </div><!-- /moreDetails -->
 
     <div class="panel-foot">
       <p class="hint" id="hint">Every number is an estimate built on what people have paid during a similar time of year. You can enter your own price and make the budget specifically fit your family. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
@@ -2389,6 +2399,7 @@ function setSearchBusy(busy){
 }
 
 async function runSearch(keepId){
+  if(typeof syncMoreDetails === "function" && $("#moreToggle")) syncMoreDetails();
   // A choice of resorts belongs to the comparison it was made against.
   // Carrying it into a new search would quietly drop resorts the traveler
   // never excluded.
@@ -5999,7 +6010,46 @@ async function boot(){
   syncView();
   syncBudgetView();
   preloadBrandArt();
+  initMoreDetails();
   await loadSavedTrips();
+}
+
+/* The form opens short: party, when and from where. "Add more details"
+ * opens the rest; while it's closed a one-line summary says what the rest
+ * is set to, so nobody prices a trip without knowing what it assumed. */
+function moreSummary(){
+  const txt = id => { const el = $("#" + id); return el && el.selectedOptions && el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : ""; };
+  const bits = [];
+  const gt = $("#gettingThere").value;
+  if(gt !== "fly") bits.push(txt("gettingThere"));
+  bits.push(`${$("#nights").value} nights`);
+  if($("#needHotel").value === "no") bits.push("no hotel");
+  else bits.push(`${txt("tier").split(" / ")[$("#stay").value === "off" ? 1 : 0]} ${$("#stay").value === "off" ? "off" : "on"} property`);
+  bits.push(txt("food").toLowerCase());
+  if($("#priceBasis").value === "cheapest") bits.push("cheapest flight on the cheapest day");
+  return "Pricing: " + bits.join(" · ");
+}
+function syncMoreDetails(){
+  const open = !$("#moreDetails").hidden;
+  $("#moreToggle").setAttribute("aria-expanded", String(open));
+  $("#moreLabel").textContent = open ? "Fewer details" : "Add more details";
+  $("#moreSum").textContent = open ? "" : moreSummary();
+  // The fine print goes with the details: the short form stays short.
+  $("#hint").hidden = !open;
+}
+function initMoreDetails(){
+  let open = false;
+  try{ open = localStorage.getItem("pf_more") === "1"; }catch{}
+  $("#moreDetails").hidden = !open;
+  syncMoreDetails();
+  $("#moreToggle").addEventListener("click", () => {
+    $("#moreDetails").hidden = !$("#moreDetails").hidden;
+    try{ localStorage.setItem("pf_more", $("#moreDetails").hidden ? "0" : "1"); }catch{}
+    syncMoreDetails();
+  });
+  // Controls can be set by code too (a reopened saved search, the drive
+  // preset for a home airport), so refresh the line on any form change.
+  $("#tripPanel").addEventListener("change", syncMoreDetails);
 }
 boot();
 
