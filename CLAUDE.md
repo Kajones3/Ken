@@ -119,6 +119,41 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-10-29, second session (newest; read first)
+
+Render was live on master (b320a6f) at the start. Owner asked for:
+- **Accuracy grade (done, coverage run 40896504108 on this branch).** Fair
+  test, written down before buying, last 14 days vs the 14 before: **US,
+  what travelers see: typically off 12.9% (±2.1), 39% within ±10% (80 fares)
+  vs 19.8% before: BETTER. International: 12.5% (±1.4), 43% within ±10% (161)
+  vs 16.8%: BETTER.** The candidate alone is flat (US 14.5%, intl 14.9%);
+  "shown" beats it because a bought Google fare now wins on the board (B).
+  Noise floor: re-bought same flight 80% within 10%; free feed, same
+  route+month 51%. Every forecast since 10-16 has `formula = candidate` and
+  `shown_cheapest_usd` filled (open item 3 of the list below: DONE). Nights
+  bought 14-23 of 24 (the popular-routes empty-slot issue, still open).
+  The coverage report now prints the two-week split and a per-night formula
+  count ("Last two weeks vs the two weeks before").
+- **Budget page rebuilt** (prototype.html `#budgetPage`, trip-page look:
+  header with the castle, ruled `.bsec` sections, sticky `#budgetSide`).
+  **Plan to have it all `lead` months before the trip, 1 by default, 1-4
+  selectable** (`#bLead`, `budgetGoal()`, kept in `pf_budget.lead`);
+  milestones after the goal are marked "after your goal"; the side panel
+  says on track / later / short. **What fits my budget?** (`#bBudget`,
+  blank = what the plan puts by at the goal): every compared resort vs the
+  budget, plus the months that fit from the best-months tiles
+  (`calendars`). **What would save the most?** (`savingIdeas()` /
+  `loadSavings()`): one change at a time (cheapest month, cheapest-trip
+  basis, 1-2 fewer nights, one fewer park day at that resort, no hopper,
+  cheaper food, one tier down, off property), each re-priced by
+  `/api/compare` with `sample=1` (never recorded as demand), 3 at a time,
+  top 6 by saving (>= $25); "Try it" changes the search form and re-prices.
+  Checked in Chromium, laptop and phone, no console errors.
+- **Answered, not built:** "Highest rated" sort source (see conversation:
+  Google rating via SerpApi or Tripadvisor's API with attribution; Amusement
+  Park Ranker covers only 4 Disney parks). Airports: the 22 Plus airports
+  (OAK etc.) cost no paid searches unless someone searches them.
+
 ## START HERE — session of 2026-10-29 ended here (newest; read first)
 
 **Render needs a redeploy.** Everything below was merged to master

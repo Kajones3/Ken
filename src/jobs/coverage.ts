@@ -14,7 +14,7 @@
  * Touches nothing: select-only, no provider calls, no writes.
  */
 import { unzipBody } from "../rawResponses.js";
-import { loadForecastScores } from "../fareForecasts.js";
+import { loadForecastScores, progressReport } from "../fareForecasts.js";
 import { rawPeek } from "./rawPeek.js";
 import { deepDive } from "./deepDive.js";
 import { errorBudget } from "./errorBudget.js";
@@ -570,6 +570,18 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
       out.push(`    live estimate:      ${z(g.live)}`);
       out.push(`    candidate:          ${z(g.candidate)}`);
     }
+    // The last two weeks vs the two before (what the morning email says), and
+    // which formula each night's forecast was written with: the plain
+    // formula became what travelers see on 2026-10-16.
+    out.push(`  Last two weeks vs the two weeks before (written down before buying):`);
+    if (fs.progress) for (const l of progressReport(fs.progress).lines) out.push(`    ${l}`);
+    const byNight = await db.query<{ day: string; formula: string; n: string; cheapest: string }>(
+      `select to_char(bought_at at time zone 'UTC', 'YYYY-MM-DD') as day, formula, count(*) as n,
+              count(shown_cheapest_usd) as cheapest
+         from fare_forecasts where bought_at > now() - interval '16 days'
+        group by 1, 2 order by 1, 2`);
+    out.push(`  Forecasts by night (formula, how many, how many with the cheapest-trip fare filled):`);
+    for (const r of byNight.rows) out.push(`    ${r.day}  ${r.formula.padEnd(10)} ${r.n} written, ${r.cheapest} with shown_cheapest_usd`);
     const sb = await loadScoreboard(db, 30);
     out.push(`  Flights page (live partly in-sample, candidate leave-one-out):`);
     out.push(`    US live ${z(sb.compare.live.domestic)}`);
