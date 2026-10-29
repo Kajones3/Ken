@@ -119,6 +119,55 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — session of 2026-10-29 ended here (newest; read first)
+
+**Render needs a redeploy.** Everything below was merged to master
+(c6d4ff4, PR #208) but Render deploys by hand. First thing: open
+`/health` on pricingthemagic.com and compare `version` with master. If it
+is older, ask the owner to redeploy before judging anything they report.
+No data job changed this session, so governing rule #4 has nothing new
+to verify (the standing daily check still applies). 871 tests pass,
+typecheck clean.
+
+| PR | What (details in the redesign section below) |
+|---|---|
+| #195 | Disneyland's green "$" badge prices read however the device sees the circle; `/public/*` served `no-cache` |
+| #196 | "prices updated 9/6/2026" removed from trip details; no freshness line, ever |
+| #197 | /admin -> Good to know: owner edits, hides, dates or adds notes (`owner_notes`) |
+| #198 | Search form opens short (party, when, from where) + "Add more details" |
+| #199 | Search page with trip cards + side panel; each trip on its own page (`#trip=<resort>`) |
+| #200 | Landing = one Expedia-style search bar over the castle map |
+| #201 | Sticky, slimmer top bar (sign-in always there); Sort by on the results |
+| #202 | Ticket card: one adult ticket with tax + how many you buy (the WDW "way off" report was a different party) |
+| #203-#204 | Owner's wording for "Why might the real price be different?" ("thousands of data points") |
+| #205 | Light-mode hero map: darker dots, navy labels (`map-light.svg?v=2`) |
+| #206-#208 | "The cheapest trip we can find": switches food to groceries, no hopper, locks stay/category, prices the cheapest lodging on OR off property, parking included; "Updating prices" indicator |
+
+**Open, in order:**
+1. **After the redeploy:** have the owner click through the new landing bar,
+   a search, a trip page and Back, on a phone and a laptop; and run one
+   "cheapest trip" search to see which lodging each resort picks on LIVE
+   data (only checked locally).
+2. **"Highest rated" sort: NOT built.** Waiting on the owner to name which
+   survey/rating to use. Never invent a rating.
+3. **The 2026-10-17 checks are still unchecked** (see that section): hotels
+   resumed after the 10-day wait (refresh log "N paid hotel search(es)
+   tonight", varied check-ins, made = kept); `fare_forecasts` rows have
+   `shown_cheapest_usd` filled and `formula = 'candidate'`.
+4. **Popular-routes empty slots** (owner's call, asked, not answered): move
+   to the main airport BEFORE filling slots, or refill from rotation.
+   Also unanswered: a one-time hotel catch-up.
+5. **Accuracy review is overdue** (~10-21 to 10-28): before-buying grade of
+   the plain formula, US / international, with the noise floor.
+6. **Paris tickets** still ~43% low: ask for screenshots (item 3 of the
+   2026-10-14 list below has the wiring). The wrong Paris price-check row
+   is still stored; remind the owner to delete it in /admin.
+7. **The Indiana Jones (Paris, January 2027) note**: the owner adds it in
+   /admin -> Good to know; not in code on purpose.
+8. Still open from before: hotels next (resort x month lever, plan in the
+   2026-10-14 list), legal blanks, Stripe, Disneyland's 1-day calendar is
+   optional.
+
 ## START HERE — state as of 2026-10-13 (end of session)
 
 **Live at https://pricingthemagic.com, behind a password** (`SITE_PASSWORD`
@@ -148,9 +197,9 @@ sections below.
 
 ### Pick up here FIRST — session starting 2026-10-14 (supersedes older lists)
 
-**Newer (2026-10-17): read "2026-10-17 — first two nights after A-E" below
-first, then "2026-10-16, end — A-E BUILT". Their open items come before this
-list.**
+**Newer: the 2026-10-29 START HERE above comes first; then "2026-10-17 —
+first two nights after A-E" and "2026-10-16, end — A-E BUILT" below. Their
+open items come before this list.**
 
 1. **Governing rule #4 on #172** (a check-in is scheduled for 2026-10-14
    13:30 UTC, trigger trig_019FFM6aKw3utrbjFmpTw4V4): read the popular-routes
@@ -446,8 +495,11 @@ this section).
     Value resort can beat a motel + $35/day parking: "we can price the lowest
     lodging option". It remembers the
     traveler's own choices so "Price a typical trip instead" puts them back.
-    Server unchanged (it already prices food as groceries and the cheapest
-    listed flight on this basis). It means the cheapest we HOLD now, not an
+    Food (groceries) and the flight (cheapest listed) were already the
+    server's rule on this basis; lodging is new (`cheapestLodging()`, above),
+    checked on LOCAL data only (WDW picked All-Star Movies on property,
+    $1,188 vs $1,313 off; the other five picked off property). Re-check on
+    live data after the redeploy. It means the cheapest we HOLD now, not an
     all-time low. The "Why might the real price be different?" note says the
     board isn't for the cheapest possible trip (the $50 budget seat) and has
     a "Price the cheapest trip" button (`#whyCheapest`). While a search runs
