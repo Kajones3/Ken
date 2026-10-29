@@ -32,6 +32,9 @@ export interface DealSaving {
   without: number; withDeal: number; saving: number;
   /** "your saved search" or "a standard trip", plus the trip in words. */
   basis: string;
+  /** The same trip WITH flights, without and with the deal, when we hold a
+   *  fare: what a member's budget is compared with. Null when no fare. */
+  withFlights: { without: number; withDeal: number } | null;
 }
 
 export const STANDARD_TRIP: TripParams = {
@@ -80,7 +83,7 @@ export function sampleDates(deal: DealForSaving, today: ISODate): ISODate[] {
 }
 
 async function savingAt(db: Db, deal: DealForSaving, resortId: string, trip: TripParams, today: ISODate):
-  Promise<{ date: ISODate; without: number; withDeal: number } | null> {
+  Promise<{ date: ISODate; without: number; withDeal: number; withFlights: DealSaving["withFlights"] } | null> {
   const resort = RESORT_BY_ID.get(resortId);
   if (!resort) return null;
   const dates = sampleDates(deal, today);
@@ -96,7 +99,12 @@ async function savingAt(db: Db, deal: DealForSaving, resortId: string, trip: Tri
   const date = typical.start;
   const withDeal = priceTrip(book, resort, trip, ov({ promoId: deal.id }), date);
   if (!withDeal.ok) return null;
-  return { date, without: typical.total, withDeal: withDeal.price.total };
+  // The whole trip, flights in, for a member's budget. A route with no fare
+  // just leaves this out; the saving above stands.
+  const full = (o: ResortOverride) => priceTrip(book, resort, trip, { [resortId]: o }, date);
+  const fw = full({ promoId: "none" }), fd = full({ promoId: deal.id });
+  const withFlights = fw.ok && fd.ok ? { without: Math.round(fw.price.total), withDeal: Math.round(fd.price.total) } : null;
+  return { date, without: typical.total, withDeal: withDeal.price.total, withFlights };
 }
 
 /**
@@ -124,9 +132,26 @@ export async function dealSaving(db: Db, deal: DealForSaving, saved: TripParams 
     // Rounded first, so the three numbers in the email add up.
     const without = Math.round(r.without), withDeal = Math.round(r.withDeal), saving = without - withDeal;
     if (saving > 0 && (!best || saving > best.saving)) {
-      best = { resortId: rid, date: r.date, without, withDeal, saving,
+      best = { resortId: rid, date: r.date, without, withDeal, saving, withFlights: r.withFlights,
         basis: `${saved ? "your saved search" : "a standard trip"} (${describeTrip(trip)})` };
     }
   }
   return best;
+}
+
+/**
+ * One sentence on the member's own budget (kept on their saved search),
+ * flights included, or null when there is no budget or no fare to judge by.
+ * Owner, 2026-10-29: "A deal just brought Paris under your $5,000 budget."
+ */
+export function budgetLine(budget: unknown, s: DealSaving, resortName: string): string | null {
+  const b = Math.round(Number(budget));
+  if (!Number.isFinite(b) || b <= 0 || !s.withFlights) return null;
+  const { without, withDeal } = s.withFlights;
+  const $ = (n: number) => `$${n.toLocaleString("en-US")}`;
+  if (without > b && withDeal <= b)
+    return `This deal brings ${resortName} under your ${$(b)} budget: ${$(without)} without it, ${$(withDeal)} with it (flights included).`;
+  if (withDeal <= b)
+    return `${resortName} already fits your ${$(b)} budget; with this deal you'd have ${$(b - withDeal)} to spare (flights included).`;
+  return `With this deal ${resortName} is ${$(withDeal - b)} over your ${$(b)} budget (${$(withDeal)}, flights included), ${$(without - withDeal)} closer than before.`;
 }

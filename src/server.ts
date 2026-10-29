@@ -1258,6 +1258,9 @@ const server = createServer(async (req, res) => {
       // reverse fires "the price dropped" about a drop that never happened.
       // The basis is part of what was promised, so it is saved with it.
       params.priceBasis = params.priceBasis === "cheapest" ? "cheapest" : "typical";
+      // The traveler's own budget, for the deal email's budget line.
+      { const b = Math.round(Number(params.budget));
+        if (Number.isFinite(b) && b > 0 && b <= 1_000_000) params.budget = b; else delete params.budget; }
       params.annualPasses = parsePassHoldings(params.annualPasses);
       params.dvcRental = parseDvcRental(
         (params.dvcRental as { points?: unknown } | null)?.points,
