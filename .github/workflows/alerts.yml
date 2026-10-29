@@ -35,6 +35,9 @@ jobs:
           # The apex, not www — see "The www trap" in CLAUDE.md. A repo
           # variable of the same name overrides it.
           PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL || 'https://pricingthemagic.com' }}
+          # CAN-SPAM wants a postal address in every deal email (a PO box is
+          # fine). A repo variable; the email prints it when set.
+          MAIL_POSTAL_ADDRESS: ${{ vars.MAIL_POSTAL_ADDRESS }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_FROM_EMAIL: ${{ secrets.ALERT_FROM_EMAIL }}
           ALERT_MAX_PER_USER_PER_DAY: "3"

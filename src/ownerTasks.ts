@@ -211,6 +211,20 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
     });
   }
 
+  // --- 1a. CAN-SPAM's postal address ------------------------------------
+  // Deal emails are marketing, and US law (CAN-SPAM) wants a valid postal
+  // address in each one. Not blocking: the unsubscribe link is there, and
+  // this is a line to add, not a broken send.
+  if (!env.MAIL_POSTAL_ADDRESS) {
+    checked({
+      id: "mail-postal-address",
+      title: "Add a postal address for deal emails (repo variable MAIL_POSTAL_ADDRESS)",
+      why: "US law (CAN-SPAM) asks every marketing email, which deal emails are, to show a real postal address. A PO box is fine. Set it as a GitHub repository variable named MAIL_POSTAL_ADDRESS and every deal email prints it under the unsubscribe link.",
+      side: "both",
+      blocking: false,
+    });
+  }
+
   // --- 1b. Hand-maintained tables that have aged out ---------------------
   // A date comparison, not a judgment: the row appears when the clock says
   // so and disappears the day the constant is bumped.

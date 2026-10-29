@@ -487,8 +487,16 @@ test("the Arriving picker starts two months out and runs to ten (owner, 2026-09-
 
 test("Plus passes are one-off, in price order, with the middle one highlighted", async () => {
   const { PLUS_PASSES, PLUS_PASS_DEFAULT } = await import("./config.js");
-  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 91], [25, 183]]);
+  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 91], [25, 274]]);
   assert.equal(PLUS_PASSES[1]!.id, PLUS_PASS_DEFAULT);
+});
+
+test("pass perks: the week pass gets no deal emails and 3 saved searches; hand-given Plus keeps everything", async () => {
+  const { passPerks } = await import("./config.js");
+  assert.deepEqual(passPerks("week"), { dealEmails: false, savedSearches: 3 });
+  assert.deepEqual(passPerks("threeMonths"), { dealEmails: true, savedSearches: 10 });
+  assert.deepEqual(passPerks("nineMonths"), { dealEmails: true, savedSearches: null });
+  assert.deepEqual(passPerks(null), { dealEmails: true, savedSearches: null });
 });
 
 test("every resort says what's beyond the parks, in one short sentence", () => {

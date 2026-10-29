@@ -30,6 +30,8 @@ export interface SessionUser {
   id: string;
   email: string;
   plusUntil: ISODate | null;
+  /** Which Plus pass (config PLUS_PASSES id); null = given by hand. */
+  plusPass: string | null;
   /** The airport this traveler flies out of, or null if they've never said.
    *  Null and "ATL" are different facts — see setHomeAirport. */
   homeAirport: string | null;
@@ -96,7 +98,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until, u.home_airport, u.email_verified_at
+    `select u.id, u.email, u.plus_until, u.plus_pass, u.home_airport, u.email_verified_at
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
@@ -106,6 +108,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   return {
     id: row.id, email: row.email,
     plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
+    plusPass: row.plus_pass ?? null,
     homeAirport: row.home_airport ?? null,
     emailVerified: row.email_verified_at != null,
   };
@@ -277,13 +280,14 @@ export async function signUp(
   const { rows } = await db.query(
     `insert into users (id, email, password_hash) values ($1,$2,$3)
      on conflict (email) do update set password_hash = excluded.password_hash
-     returning id, email, plus_until, home_airport, email_verified_at`,
+     returning id, email, plus_until, plus_pass, home_airport, email_verified_at`,
     [row?.id ?? randomUUID(), email, hash],
   );
   const u = rows[0];
   return {
     id: u.id, email: u.email,
     plusUntil: u.plus_until ? dateStr(u.plus_until) : null,
+    plusPass: u.plus_pass ?? null,
     homeAirport: u.home_airport ?? null,
     emailVerified: u.email_verified_at != null,
   };
@@ -305,10 +309,10 @@ export async function signIn(
   const email = cleanEmail(rawEmail);
   const bad = new AuthError("That email and password don't match.", "bad_credentials");
   const { rows } = await db.query<{
-    id: string; email: string; plus_until: unknown; home_airport: string | null;
+    id: string; email: string; plus_until: unknown; plus_pass: string | null; home_airport: string | null;
     password_hash: string | null; email_verified_at: unknown;
   }>(
-    `select id, email, plus_until, home_airport, password_hash, email_verified_at
+    `select id, email, plus_until, plus_pass, home_airport, password_hash, email_verified_at
        from users where email = $1`,
     [email],
   );
@@ -326,6 +330,7 @@ export async function signIn(
   return {
     id: row.id, email: row.email,
     plusUntil: row.plus_until ? dateStr(row.plus_until as never) : null,
+    plusPass: row.plus_pass ?? null,
     homeAirport: row.home_airport ?? null,
     emailVerified: row.email_verified_at != null,
   };

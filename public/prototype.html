@@ -1045,6 +1045,11 @@ body.has-results .searchside #run{width:100%}
 .tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
 .tcard .bar{height:10px; margin-bottom:0}
 .tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.tcard.locked .lockbar, .tcard.locked .lockblur{filter:blur(7px); opacity:.55; user-select:none}
+.tcard.locked .lockblur{display:inline-block}
+.guestnote{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; border:2px dashed var(--rule-strong); border-radius:16px; padding:14px 18px; margin:0 0 14px; background:var(--surface)}
+.guestnote p{margin:0; flex:1 1 320px; font-size:15px; color:var(--ink-2)}
+.guestnote p b{color:var(--ink)}
 .bt-cur{font-weight:700; color:var(--ink-2)}
 .bt-sum{margin:0; font-size:14px; line-height:1.45; color:var(--ink-2)}
 .bt-sum b{color:var(--ink)}
@@ -1067,6 +1072,7 @@ body.has-results .sb-budget input{border:0; background:transparent; font:inherit
 .pwrow b{min-width:10em}
 .pwrow .bfitm{margin:0}
 .pwlead-you{margin:12px 0 0; font-size:14.5px}
+.plan .pperks{margin-top:6px; font-weight:600; color:var(--ink)}
 .tripbudget .fits{color:var(--accent); font-weight:700}
 .tripbudget .over{color:var(--over); font-weight:700}
 .sb-budget .bt-cur{margin-right:2px}
@@ -2013,7 +2019,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself, and where that same amount could take you</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
-      <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
+      <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up (3- and 9-month passes)</span></li>
     </ul>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
@@ -2763,6 +2769,9 @@ async function fetchCalendarFor(resortId){
  *  resort simply doesn't have one. Returns `{cost, swapped}` so the caller
  *  can say so instead of pricing a category that doesn't exist. */
 async function hotelAtTier(item, t){
+  // Signed out: the one-day read that prices other categories needs an
+  // account (the server would refuse it; src/guestView.ts).
+  if(!session.email && t !== +params.tier) return { cost: null, swapped: false, guest: true };
   if(t === +params.tier) return { cost: item.price.hotel, swapped: item.price.hotelTier.swapped,
     roomDeal: dealsOff(dealsOn(item.price, "rooms")) };
   // stripNightly=true: this is "what would a DIFFERENT tier cost", so your
@@ -3074,7 +3083,14 @@ function renderBoard(){
   syncFitsSort();
   const sorted = sortTrips(list, sortBy);
   $("#resTitle").textContent = SORT_TITLES[sortBy] || SORT_TITLES.price;
-  board.innerHTML = `<ol class="tripcards">${sorted.map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
+  // Locked (signed-out) cards go last whatever the sort: they have no price.
+  const shown = sorted.filter(e => !e.item.locked), locked = sorted.filter(e => e.item.locked);
+  const guest = locked.length
+    ? `<div class="guestnote"><p><b>You're seeing ${shown.filter(e=>e.item.ok).length} of ${shown.length + locked.length} trips:</b> the cheapest in the US and the cheapest abroad.
+        Create a free account to see all six, side by side.</p>
+        <button type="button" class="btn-primary" data-signup>Create a free account</button>
+        <button type="button" class="linkbtn" data-signin>Sign in</button></div>` : "";
+  board.innerHTML = guest + `<ol class="tripcards">${shown.concat(locked).map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
 }
 
 /* Sort by (owner, 2026-10-29: "We could organize by price obviously. Maybe
@@ -3124,6 +3140,18 @@ function sortTrips(list, how){
 /** One resort as a card in the results. */
 function tripCardHtml(item, i, rank, otherSort){
   const r = item.resort;
+  // Signed out: the server sent this one without a price (src/guestView.ts).
+  // The castle and name show; the numbers are a blurred stand-in, not real.
+  if(item.locked){
+    return `<li class="tcard locked" data-i="${i}">
+      <span class="tbadge">${badgeImg(item.resortId)}</span>
+      <div class="tid"><p class="teyebrow">Free account</p><h3>${esc(item.name)}</h3>
+        <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"}</p>
+        <div class="bar lockbar" aria-hidden="true"><div class="seg f1" style="width:34%"></div><div class="seg f3" style="width:30%"></div><div class="seg f2" style="width:18%"></div><div class="seg f4" style="width:18%"></div></div></div>
+      <div class="ttot"><span class="tnum lockblur" aria-hidden="true">$8,888</span>
+        <button type="button" class="tview" data-signup>See this trip, free &rarr;</button></div>
+    </li>`;
+  }
   if(!item.ok){
     return `<li class="tcard off" data-i="${i}">
       <span class="tbadge">${badgeImg(item.resortId)}</span>
@@ -3138,7 +3166,11 @@ function tripCardHtml(item, i, rank, otherSort){
   return `<li class="tcard${rank === 1 ? " first" : ""}" data-i="${i}">
     <span class="tbadge">${badgeImg(item.resortId)}</span>
     <div class="tid">
-      <p class="teyebrow">${rank === 1 ? "Cheapest" : otherSort ? "No. " + rank + " on price" : "No. " + rank}${otherSort ? sortWhy(item) : ""}</p>
+      <p class="teyebrow">${results.some(x => x.locked)
+        // Signed out we show two of six, so "Cheapest" would be a claim we
+        // can't back: say which group each is cheapest in (src/guestView.ts).
+        ? (r.region === "dom" ? "Cheapest in the US" : "Cheapest abroad")
+        : rank === 1 ? "Cheapest" : otherSort ? "No. " + rank + " on price" : "No. " + rank}${otherSort ? sortWhy(item) : ""}</p>
       <h3><button type="button" class="tname" data-open="${i}">${esc(r.name)}</button></h3>
       <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"} · ${days} park day${days===1?"":"s"}${hasOv(r.id)?' · <span class="yourchip">Your numbers</span>':""}</p>
       ${costBar(b)}
@@ -3366,7 +3398,7 @@ function renderTable(){
   const rows = list.map(({item,i},pos)=>{
     const r = item.resort, open = unlocked(i);
     if(!item.ok){
-      return `<tr><td>${pos+1}. ${item.name}<br><small style="color:var(--muted)">No cached price</small></td>
+      return `<tr><td>${pos+1}. ${item.name}<br><small style="color:var(--muted)">${item.locked ? "Create a free account to see this trip" : "No cached price"}</small></td>
         <td class="n">${item.iata}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
         <td class="n">—</td><td class="n">—</td><td>${item.reason}</td></tr>`;
     }
@@ -3856,7 +3888,9 @@ async function renderDetail(){
    * Upscale on a real search). Off property is organized by PRICE instead —
    * sorted low to high and labeled by rank, not by a guessed category name,
    * so the card can never show a "Budget" number above a "Mid-range" one. */
-  const tierCompare = noHotel ? "" : (() => {
+  const tierCompare = noHotel ? "" : !session.email
+    ? `<p class="sub" style="margin:6px 0 0"><button type="button" class="linkbtn" data-signup>Create a free account</button> to compare every hotel category.</p>`
+    : (() => {
     const rows = [0,1,2].map(t => ({ t, ...tierRows[t] }));
     if (stayNow) {
       return rows.map(({ t, cost, swapped, roomDeal: rd }) => {
@@ -4621,7 +4655,8 @@ function openAuth(mode){
     : "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read.";
   if(on){
     $("#emailChip").textContent = session.email;
-    $("#acctPlanRow").textContent = session.plus ? "Plus" : "Free";
+    const passLabel = (PLUS_PASSES.find(x => x.id === session.plusPass) || {}).label;
+    $("#acctPlanRow").textContent = session.plus ? (passLabel ? `Plus · ${passLabel} pass` : "Plus") : "Free";
     const until = fmtPlusUntil(session.plusUntil);
     $("#acctExpiryRow").hidden = !(session.plus && until);
     if(until) $("#acctExpiry").textContent = until;
@@ -4800,7 +4835,8 @@ function fillHomeAirportOptions(){
  * deal emails — a free account would be flipping a switch attached to
  * nothing. The same setting the email's own unsubscribe link changes. */
 function syncDealEmailsUi(){
-  $("#dealEmailsRow").hidden = !(session.authenticated && session.plus);
+  // Not on the one-week pass, which carries no deal emails (2026-10-29).
+  $("#dealEmailsRow").hidden = !(session.authenticated && session.plus && (!session.perks || session.perks.dealEmails));
   $("#dealEmailsCk").checked = session.dealEmails !== false;
 }
 $("#dealEmailsCk").addEventListener("change", async (e)=>{
@@ -4913,6 +4949,7 @@ function renderPlusPlans(){
       <div class="pn">${esc(p.label)}</div>
       <div class="pp">$${p.priceUsd}<small> once</small></div>
       <div class="ps">${esc(p.note)}</div>
+      <div class="ps pperks">${p.savedSearches == null ? "Unlimited saved searches" : `Up to ${p.savedSearches} saved searches`}<br>${p.dealEmails ? "Disney deal emails" : "No deal emails"}</div>
     </button>`).join("");
 }
 $("#plusPlans").addEventListener("click", e=>{
@@ -4931,7 +4968,8 @@ async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
     ? { authenticated:true, email:me.email, plus:me.plus, plusUntil:me.plusUntil, homeAirport:me.homeAirport ?? null,
-        emailVerified:!!me.emailVerified, owner:!!me.owner, dealEmails: me.dealEmails !== false }
+        emailVerified:!!me.emailVerified, owner:!!me.owner, dealEmails: me.dealEmails !== false,
+        plusPass: me.plusPass ?? null, perks: me.perks ?? null }
     : { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
   // Repaint the masthead here rather than only in render(): boot() and the
   // paywall's own sign-in path both refresh the session without going
@@ -5209,6 +5247,13 @@ $("#nameSave").addEventListener("click", async ()=>{
     const b = $("#saveSearchBtn");
     if(b){ b.textContent = "Saved"; setTimeout(()=>{ b.textContent = "Save this search"; }, 1800); }
   } else if(res.status === 402){ closeNameDialog(); openPw(); }
+  else if(res.status === 403){
+    // The pass's saved-search limit (owner, 2026-10-29: 3 on a week pass,
+    // 10 on three months, no limit on nine months).
+    const body = await res.json().catch(()=>({}));
+    $("#nameError").textContent = `Your pass keeps up to ${body.limit || "a few"} saved searches. Delete one from My searches to make room, or pick a longer pass for more.`;
+    $("#nameError").hidden = false;
+  }
   else {
     // Never a silent return: the owner's report about the old paywall box was
     // that a dead click is indistinguishable from a broken build.
@@ -6153,7 +6198,7 @@ const PLUS_PITCH = {
   pdf: { also: "Download a written plan of your trip as a PDF" },
   months: { also: "See the best months to go, with the whole trip's cost for each" },
   pass: { also: "Check whether an annual pass is worth it, and where that money could take you instead" },
-  deals: { also: "Get an email when Disney posts a new deal" },
+  deals: { also: "Get an email when Disney posts a new deal (3- and 9-month passes)" },
 };
 function pitchAlso(kind){
   return Object.entries(PLUS_PITCH).filter(([k]) => k !== kind)
@@ -6799,6 +6844,12 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
+// "Create a free account" from a locked card, the banner or a guest note.
+document.addEventListener("click", e => {
+  const up = e.target.closest("[data-signup]"), inn = e.target.closest("[data-signin]");
+  if(up){ e.preventDefault(); openAuth("signup"); }
+  else if(inn){ e.preventDefault(); openAuth("signin"); }
+});
 $("#sbBudget").addEventListener("keydown", e => {
   if(e.key !== "Enter") return;
   e.preventDefault();
@@ -6948,6 +6999,7 @@ function tripHashId(){ const m = /^#trip=([a-z]+)$/.exec(location.hash); return 
 function openTripPage(i){
   const item = results[i];
   if(!item) return;
+  if(item.locked){ openAuth("signup"); return; }
   if(!detailOpen) searchScrollY = window.scrollY;
   selected = i;
   track("detail", item.resortId);

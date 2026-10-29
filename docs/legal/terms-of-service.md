@@ -73,8 +73,12 @@ change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a
 refund].
 
-- **Passes:** 1 week for $9, 3 months for $15, or 6 months for $25, each
-  charged once, up front.
+- **Passes:** 1 week for $9, 3 months for $15, or 9 months for $25, each
+  charged once, up front. The 1-week pass keeps up to 3 saved searches and
+  sends no deal emails; the 3-month pass keeps up to 10 and sends deal
+  emails; the 9-month pass has no saved-search limit and sends deal emails.
+  A new pass starts the day you buy it and replaces any time left on an
+  earlier one.
   **Plus never renews automatically.** When your pass ends it simply stops;
   we will never charge you again unless you choose to buy another pass.
 - **Refunds:** [e.g. "If you're unhappy, email us within 14 days of buying
@@ -102,10 +106,13 @@ back to you or to put it in your PDF. See the Privacy Policy for details.
 ## 8. Emails
 
 If you create an account, we'll email you about your account (confirming
-your address, password resets). Plus members with a confirmed address may
-get emails about new Disney deals. Every one of those emails includes a
-link to stop them — no sign-in needed — and you can also switch them off in
-your account panel.
+your address, password resets, and a reminder a few days before a Plus pass
+ends). Members with a 3- or 9-month Plus pass and a confirmed address may
+get emails about new Disney deals. Every deal email includes a link to stop
+them — no sign-in needed — and our postal address; you can also switch them
+off in your account panel. We never send email to an address that hasn't
+been confirmed, and we never sell or share your address for anyone else's
+marketing.
 
 ## 9. No warranty
 

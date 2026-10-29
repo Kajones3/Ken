@@ -267,6 +267,57 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   other card, no loans, no insurance. Not built anywhere yet; ask before
   adding it to the budget page or a trip page.
 
+### 2026-10-29, ninth round — guests see two resorts, three real tiers, ending-soon email
+
+Owner's answers (don't re-ask): show the cheapest US + cheapest
+international to guests; guests keep the sample PDF and those two trip
+pages; passes **1 week $9 / 3 months $15 / 9 months $25**, none renew;
+deal emails on 3 + 9 months only; saved searches 3 / 10 / unlimited;
+expired passes keep saved searches readable; a reminder before a pass ends;
+a new pass starts fresh (no credit); friends given Plus by hand keep
+everything.
+- **Guests (signed out)** get `lockForGuests()` (`src/guestView.ts`) from
+  `/api/compare`: the cheapest priced `dom` resort and the cheapest priced
+  international one in full, the other four as `{locked: true}` stubs with
+  NO price (in RESORTS order, so their place leaks nothing), plus
+  `guestLocked`. Served `no-store` so signing in never shows a cached locked
+  board. The only exception is the sample PDF's own trip (`sample=1` AND
+  `isSampleTrip()`: SFO, 2 adults, kids 8+11, 6 nights; keep in step with
+  prototype.html `SAMPLE_TRIP`). `/api/calendar` (even one day) answers 401
+  to guests, so the hotel card's "every category" says "Create a free
+  account" instead. Page: `tripCardHtml()` draws locked cards (castle, name,
+  blurred stand-in bar and "$8,888", "See this trip, free" -> sign-up),
+  `.guestnote` banner "You're seeing 2 of 6 trips ...", eyebrows "Cheapest
+  in the US" / "Cheapest abroad" (never "Cheapest": a hidden one may be
+  cheaper), locked cards go last under any sort, `openTripPage()` on a locked
+  row opens sign-up, `[data-signup]`/`[data-signin]` anywhere open the auth
+  dialog. Signing in already re-runs the search, so all six appear.
+- **Passes** (`PLUS_PASSES` in config.ts gained `dealEmails`,
+  `savedSearches`; `passPerks(id)`, null/unknown = everything). New
+  `users.plus_pass` (null = hand-given) and `users.plus_reminder_for`.
+  `npm run grant-plus -- email threeMonths` (or `week` / `nineMonths`, or
+  plain days = no pass) REPLACES plus_until from today. The "wants Plus"
+  email quotes the pass id. `/api/auth/me` sends `plusPass` + `perks`; the
+  account panel says "Plus · 3 months pass"; the plan buttons list each
+  pass's perks; the deal-email switch hides on a week pass.
+  `RETIRED_PASSES` now also lists `sixMonths`.
+- **Deal emails** (`findAlerts`): `plus_pass is null or = any(passes with
+  dealEmails)`. Test pins week excluded.
+- **Saved-search cap**: POST /api/trips answers 403 `saved_limit` when the
+  user's saved rows reach the cap (all rows count; deleting makes room); the
+  save dialog says so. Checked live: 3 saves then 403.
+- **Ending-soon reminder** (`src/plusReminder.ts`, run inside `runAlerts`,
+  twice daily): confirmed addresses whose plus_until is 3 days out (1 day for
+  the week pass), once per pass via `plus_reminder_for`. Says the date,
+  "Nothing renews and you won't be charged", saved searches stay readable.
+- **CAN-SPAM postal address**: deal emails print `MAIL_POSTAL_ADDRESS` (repo
+  VARIABLE, wired into alerts.yml and news-digest.yml) when set; a
+  non-blocking owner task `mail-postal-address` nags until it is. A PO box is
+  fine.
+- Legal drafts updated (passes, perks, reminder, no selling addresses).
+- Owner's email questions answered in the conversation of 2026-10-29
+  (where stored, how secure, what terms).
+
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 
 - **"Top rated first" sort BUILT from the owner's own stars** (owner: "I can

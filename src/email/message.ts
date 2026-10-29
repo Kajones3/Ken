@@ -32,6 +32,9 @@ export function buildAlertEmail(a: AlertContent, to: string, unsubscribeLink: st
     "",
     "You get these because you have Pricing the Magic Plus.",
     `Stop these emails: ${unsubscribeLink}`,
+    // CAN-SPAM: a commercial email names a valid postal address (a PO box
+    // registered with the post office is fine). Set MAIL_POSTAL_ADDRESS.
+    ...(process.env.MAIL_POSTAL_ADDRESS ? [`Pricing the Magic, ${process.env.MAIL_POSTAL_ADDRESS}`] : []),
   ].join("\n");
   // RFC 8058 one-click: Gmail and Yahoo show their own "Unsubscribe" button
   // for mail carrying both headers, and POST to the link when it's pressed.

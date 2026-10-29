@@ -16,7 +16,7 @@
  * deal emails, whose dropPct is always 0, but runAlerts stays the one path).
  */
 import { randomUUID } from "node:crypto";
-import { RESORT_BY_ID } from "../config.js";
+import { PLUS_PASSES, RESORT_BY_ID } from "../config.js";
 import { dateStr } from "../book.js";
 import { getDb, type Db } from "../db.js";
 import type { EmailSender } from "../email/types.js";
@@ -24,6 +24,7 @@ import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
 import { unsubscribeToken, unsubscribeUrl } from "../dealEmails.js";
 import { budgetLine, dealSaving, tripFromSaved } from "../dealSavings.js";
+import { sendPlusReminders } from "../plusReminder.js";
 
 export interface Candidate {
   userId: string; email: string; resortId: string | null;
@@ -90,7 +91,11 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
                        where a.user_id = u.id and a.kind = 'new_promo'), u.created_at) as since
        from users u
       where u.email_verified_at is not null and u.plus_until >= current_date
-        and u.deal_emails_off_at is null`,
+        and u.deal_emails_off_at is null
+        and (u.plus_pass is null or u.plus_pass = any($1))`,
+    // Only passes that include deal emails (owner, 2026-10-29: not the
+    // one-week pass). Hand-given Plus (no pass recorded) keeps them.
+    [PLUS_PASSES.filter((p) => p.dealEmails).map((p) => p.id)],
   );
 
   const candidates: Candidate[] = [];
@@ -233,11 +238,17 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
     }
   }
 
+  // "Your Plus ends soon" rides the same daily run (src/plusReminder.ts).
+  let reminders = { due: 0, sent: 0 };
+  try { reminders = await sendPlusReminders(db, sender); }
+  catch (e) { console.error("plus reminders failed:", (e as Error).message); }
+
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,
-    [runId, final.length, reason || `${checked} Plus members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`],
+    [runId, final.length, (reason || `${checked} Plus members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`)
+      + `; ${reminders.sent}/${reminders.due} ending-soon reminders`],
   );
-  return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final };
+  return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final, reminders };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
