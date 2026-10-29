@@ -28,6 +28,7 @@ import {
   validateAttraction, sheetWarnings, type AttractionValue,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
+import { withEffectiveNotes, adminNotes, listNoteRows, saveNote, type NoteSave } from "./goodToKnow.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
 import { quoteMonths } from "./monthView.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
@@ -746,7 +747,9 @@ const server = createServer(async (req, res) => {
       originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
       // Each resort's lands come from the code's list corrected by the
       // owner's attraction sheet, so a closed land can be taken off in /admin.
-      resorts: await effectiveParkLists(db, RESORTS),
+      // ... and their "Good to know" notes come from the code's list
+      // corrected by the owner's own (goodToKnow.ts, /admin -> Good to know).
+      resorts: await withEffectiveNotes(db, await effectiveParkLists(db, RESORTS), todayISO()),
       // Typical weather per resort per month. Its own key rather than folded
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
@@ -1781,6 +1784,20 @@ const server = createServer(async (req, res) => {
       const saved = await saveCalendar(db, v.value, owner.email);
       await seedTickets(db, [v.value.month], [v.value.resortId]);
       return send(200, { ok: true, saved, months: await calendarSummary(db) }, { cache: "no-store" });
+    }
+
+    /* Good to know: each resort's notes, the code's corrected by the
+     * owner's (goodToKnow.ts). */
+    if (url.pathname === "/api/admin/notes" && (req.method === "GET" || req.method === "POST")) {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      if (req.method === "POST") {
+        const r = await saveNote(db, RESORTS, await readBody(req) as NoteSave, owner.email);
+        if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      }
+      const rows = await listNoteRows(db), today = todayISO();
+      return send(200, { resorts: RESORTS.map((r) => ({ id: r.id, name: r.name, notes: adminNotes(r, rows, today) })) },
+        { cache: "no-store" });
     }
 
     /* The Lands page: each resort's lands exactly as the PDF prints them,

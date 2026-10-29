@@ -964,3 +964,19 @@ create index if not exists ticket_calendar_lookup on ticket_calendar (resort_id,
 -- The nightly ticket rows say when they came from that calendar, so the
 -- owner's older price checks don't nudge a real Disney price a second time.
 alter table ticket_prices add column if not exists from_calendar boolean not null default false;
+
+-- 2026-10-29: the owner's "Good to know" notes (src/goodToKnow.ts). Overlays
+-- each resort's goodToKnow in config.ts: a row edits or hides a shipped note
+-- (key = hash of its words) or is a note of the owner's own (own = true).
+-- show_until is the last day it shows. Words, not prices: editable.
+create table if not exists owner_notes (
+  key         text primary key,
+  resort_id   text not null,
+  text        text not null default '',
+  hidden      boolean not null default false,
+  show_until  date,
+  own         boolean not null default false,
+  updated_by  text not null default '',
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);

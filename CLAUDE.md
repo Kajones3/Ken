@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**867 tests** (all pass, 2026-10-29), and typecheck is clean. `npm run smoke` runs the pipeline.
+**870 tests** (all pass, 2026-10-29), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -421,6 +421,22 @@ this section).
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
     Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
+  - **"Good to know" notes are owner-editable (2026-10-29, owner: Paris is
+    closing Indiana Jones and the Temple of Peril in January 2027, "I need to
+    be able to change these").** /admin -> Good to know (`#notes`,
+    `src/goodToKnow.ts`, table `owner_notes`, GET/POST `/api/admin/notes`).
+    It OVERLAYS `goodToKnow` in config.ts like owner_attractions: empty table
+    = the shipped notes. A shipped note is keyed by a hash of its words
+    (`shippedKey`), so editing the code's text orphans an old edit rather
+    than misplacing it. Per note: edit words, Hide / Show again, "Stop
+    showing after" (last day shown; past it the note drops off but stays
+    listed), Put back the original (shipped) or Delete (owner's own). Back to
+    the shipped words, not hidden, no date = nothing stored. /api/meta serves
+    the effective notes (`withEffectiveNotes`, falls back to shipped on any
+    DB error), so the details card and the PDF follow. The details card now
+    escapes note text. The Indiana Jones note was NOT added in code: the
+    owner adds it in /admin. No freshness line, ever (owner, same day: "I
+    don't want a freshness line").
   - **"prices updated 9/6/2026" REMOVED from the detail header (2026-10-29,
     owner: RDU->Paris June showed it, "I'm not sure I want that").** It was
     `pricesAsOf` = `book.oldestFetchedAt`: the OLDEST row behind the whole
