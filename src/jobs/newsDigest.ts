@@ -144,7 +144,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
     if (prog) parts.push("Are our guesses getting better? (flights, graded before buying, the last two weeks vs the two before)\n\n" + prog.lines.join("\n"));
     if (newItems.length) {
       parts.push(newItems.map((i) => `[${i.feed}]\n${i.title}\n${i.link}`).join("\n\n")
-        + "\n\n— Review and hand-add anything worth surfacing to a resort's goodToKnow in config.ts.");
+        + "\n\n— Add anything worth surfacing in /admin → Good to know.");
     }
     // The job count belongs in the SUBJECT, not just the body. That was the
     // original reasoning for putting the mileage warning there — something

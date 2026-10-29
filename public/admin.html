@@ -212,6 +212,13 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
 .lchip button{border:0; background:none; color:var(--muted); font-size:13px; cursor:pointer; padding:4px 8px;
   border-radius:999px; min-height:32px}
 .lchip button:hover{color:var(--ink); background:var(--surface-2)}
+.note{border:1px solid var(--rule); border-radius:12px; padding:10px 12px; margin:8px 0}
+.note.off{opacity:.6}
+.note textarea{width:100%; min-height:84px; font:inherit; font-size:16px; padding:8px; border:1px solid var(--rule); border-radius:8px; background:var(--surface); color:var(--ink); box-sizing:border-box}
+.note .nrow{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:8px}
+.note .nrow label{font-size:13px; color:var(--muted)}
+.note .nrow input[type=date]{font-size:16px}
+.note .ntag{font-size:12px; color:var(--muted); margin-bottom:4px}
 .ladd{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; gap:8px; margin-top:6px}
 .ladd input,.ladd select{font-size:16px}
 @media (max-width:560px){ .ladd{grid-template-columns:1fr} }
@@ -298,6 +305,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
     <a href="#deals">Deals</a>
+    <a href="#notes">Good to know</a>
     <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
     <a href="#waits">Wait times</a>
@@ -890,6 +898,20 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   </section>
   </div>
 
+  <div class="page" data-page="notes">
+  <section class="sheet" id="notes">
+    <h2>Good to know</h2>
+    <p>The notes travelers see in each resort's details and in the PDF, under &ldquo;Good to know&rdquo;:
+      closures, visa rules, booking quirks. Changes show the moment you press Save.</p>
+    <p><b>Change</b> the words and press Save. <b>Hide</b> takes a note off without losing it.
+      <b>Stop showing after</b> is the last day a note shows, so a closure note can retire itself when
+      the ride reopens. <b>Add a note</b> is at the bottom of each resort. A note that came with the site
+      can always go back to its original words with <b>Put back the original</b>.</p>
+    <div class="said" id="nSaid"></div>
+    <div id="noteList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
   <div class="page" data-page="lands">
   <section class="sheet" id="lands">
     <h2>Lands at each resort</h2>
@@ -1392,6 +1414,68 @@ function renderAttractions(d){
   window.__attrOwner = d.owner || [];
   loadLands();   // the Lands page is drawn from these same rows
 }
+
+/* ----------------------------- good to know -----------------------------
+ * Each resort's notes, the code's corrected by the owner's (goodToKnow.ts).
+ * The server decides what shows; this only draws and saves. */
+function noteCard(r, n){
+  const tag = n.source === "yours" ? "Your note" : n.source === "edited" ? "Came with the site · your wording" : "Came with the site";
+  const state = n.hidden ? " · hidden" : n.expired ? ` · stopped showing after ${esc(n.showUntil)}` : "";
+  return `<div class="note${n.hidden || n.expired ? " off" : ""}" data-note="${esc(n.key)}" data-nresort="${esc(r.id)}">
+    <div class="ntag">${tag}${state}</div>
+    <textarea maxlength="600" aria-label="Note at ${esc(r.name)}">${esc(n.text)}</textarea>
+    <div class="nrow">
+      <label>Stop showing after <input type="date" class="nuntil" value="${esc(n.showUntil || "")}"></label>
+      <button type="button" class="btn primary" data-nsave>Save</button>
+      <button type="button" class="btn" data-nhide="${n.hidden ? "0" : "1"}">${n.hidden ? "Show again" : "Hide"}</button>
+      ${n.source === "yours" ? `<button type="button" class="btn" data-ndelete>Delete</button>`
+        : n.source === "edited" ? `<button type="button" class="btn" data-ndelete>Put back the original</button>` : ""}
+    </div></div>`;
+}
+function renderNotes(d){
+  const open = new Set([...document.querySelectorAll("#noteList details[open]")].map(x => x.dataset.r));
+  $("#noteList").innerHTML = (d.resorts || []).map((r, i) => {
+    const live = r.notes.filter(n => !n.hidden && !n.expired).length;
+    return `<details class="group" data-r="${esc(r.id)}"${open.size ? (open.has(r.id) ? " open" : "") : (i === 0 ? " open" : "")}>
+      <summary>${esc(r.name)} &middot; ${live} showing</summary>
+      ${r.notes.map(n => noteCard(r, n)).join("") || `<p class="count">No notes yet.</p>`}
+      <div class="note" data-nresort="${esc(r.id)}">
+        <div class="ntag">Add a note</div>
+        <textarea maxlength="600" placeholder="e.g. Indiana Jones and the Temple of Peril closes in January 2027." aria-label="New note at ${esc(r.name)}"></textarea>
+        <div class="nrow"><label>Stop showing after <input type="date" class="nuntil"></label>
+          <button type="button" class="btn primary" data-nadd>Add</button></div>
+      </div></details>`;
+  }).join("");
+}
+async function loadNotes(){
+  const r = await fetch("/api/admin/notes");
+  if(!r.ok){ $("#noteList").innerHTML = `<p class="count">Couldn't load the notes.</p>`; return; }
+  renderNotes(await r.json());
+}
+async function noteAction(btn, body, done){
+  btn.disabled = true;
+  const r = await fetch("/api/admin/notes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ btn.disabled = false; attrSay($("#nSaid"), false, d.message || "That didn't save."); return; }
+  attrSay($("#nSaid"), true, done);
+  renderNotes(d);
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-nsave],[data-nhide],[data-ndelete],[data-nadd]");
+  if(!b || !b.closest("#noteList")) return;
+  const card = b.closest(".note"), resortId = card.dataset.nresort, key = card.dataset.note;
+  const text = card.querySelector("textarea").value, showUntil = card.querySelector(".nuntil").value || null;
+  const hiddenNow = !!card.querySelector('[data-nhide="0"]');
+  if(b.hasAttribute("data-nadd")) return noteAction(b, { action: "save", resortId, text, showUntil }, "Added. Travelers see it now.");
+  if(b.hasAttribute("data-nsave")) return noteAction(b, { action: "save", resortId, key, text, showUntil, hidden: hiddenNow }, "Saved.");
+  if(b.hasAttribute("data-nhide")) return noteAction(b, { action: "save", resortId, key, text, showUntil, hidden: b.dataset.nhide === "1" },
+    b.dataset.nhide === "1" ? "Hidden. Show again brings it back." : "Showing again.");
+  if(b.hasAttribute("data-ndelete")){
+    const own = !card.querySelector(".ntag").textContent.startsWith("Came");
+    if(own && !confirm("Delete this note? It can't be undone.")) return;
+    return noteAction(b, { action: "delete", resortId, key }, own ? "Deleted." : "Put back the original words.");
+  }
+});
 
 /* -------------------------------- lands --------------------------------
  * Each resort's lands exactly as the PDF prints them, with Remove, Put back
@@ -2770,6 +2854,7 @@ function renderCalCard(card, cal, imgUrl){
 route();
 load();
 loadTicketCalendars();
+loadNotes();
 loadGrades();
 renderAdvice();
 loadHoles();

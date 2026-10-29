@@ -3502,7 +3502,7 @@ async function renderDetail(){
       <p style="margin:6px 0 0">${esc(r.dataConfidence.note)}</p>
       <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ${r.name} tickets →</a></div></div>` : ""}
     ${r.goodToKnow && r.goodToKnow.length ? `<div class="demo gtk"><span class="dot"></span>
-      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${n}</li>`).join("")}${
+      <div><b>Good to know about ${r.name}</b><ul>${r.goodToKnow.map(n=>`<li>${esc(n)}</li>`).join("")}${
         priceLevelHtml(r, false) ? `<li>${priceLevelHtml(r, false)}</li>` : ""}</ul>
       <a class="book" href="${r.closuresUrl}" target="_blank" rel="noopener">${r.closuresLabel} →</a></div></div>` : ""}
     <div class="dbody">
