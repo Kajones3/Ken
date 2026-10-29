@@ -1027,7 +1027,7 @@ body.has-results .searchside #run{width:100%}
 .thsub{margin:0; font-size:16px; color:var(--ink-2)}
 .tripgrid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,340px); gap:36px; align-items:start}
 .tripmain{min-width:0}
-.tripside{background:var(--surface); border:2px solid var(--frame); border-radius:16px; padding:22px; position:sticky; top:16px}
+.tripside{background:var(--surface); border:2px solid var(--frame); border-radius:16px; padding:22px; position:sticky; top:80px}
 .tslab{margin:0; font-size:13.5px; font-weight:700; color:var(--ink-2)}
 .tstotal{margin:4px 0 2px; font-family:var(--f-head); font-size:52px; font-weight:800; letter-spacing:-.03em; line-height:1}
 .tssub{margin:0 0 14px; font-size:14px; color:var(--ink-2)}
@@ -1108,20 +1108,57 @@ body.has-results .sb-btn{width:100%; min-height:44px; padding:10px 12px; border:
   background:var(--surface-2); color:var(--ink); font:inherit; font-size:16px; cursor:pointer}
 body.has-results .partypop{margin-top:10px; padding:12px; border:1px solid var(--rule-strong); border-radius:12px}
 body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
+
+/* ---------- the top bar stays put (owner, 2026-10-29) ----------
+   Anything scrolled into view lands below it, not under it. */
+html{scroll-padding-top:76px}
+/*
+   Sticky, one row, the page ground behind it out to the window edges. */
+.masthead{position:sticky; top:0; z-index:45; flex-wrap:nowrap; padding:12px 0; margin:-20px 0 22px;
+  background:var(--plane); box-shadow:0 0 0 100vmax var(--plane); clip-path:inset(0 -100vmax)}
+.brand{text-decoration:none; color:var(--ink); min-width:0}
+.brand .mark{width:36px; height:36px}
+.brand h1{font-size:23px; white-space:nowrap}
+.acct{flex-wrap:nowrap; gap:8px}
+.btn-quiet{border-color:transparent; background:transparent}
+.btn-quiet:hover{border-color:var(--rule-strong)}
+.sortby{display:inline-flex; align-items:center; gap:8px; margin-top:8px; font-size:13.5px; font-weight:600; color:var(--ink-2)}
+.sortby select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface); padding:6px 30px 6px 12px;
+  border:1.5px solid var(--rule-strong); border-radius:999px; min-height:36px}
+@media (max-width:560px){
+  .masthead{padding:10px 0; gap:10px}
+  .brand{gap:8px}
+  .brand .mark{width:30px; height:30px}
+  .brand h1{font-size:18px}
+  .acctbtn{padding:3px; border-radius:50%}
+  .acctmeta{display:none}
+  #tripsTop{padding:6px 8px}
+  #tripsTop .wide{display:none}
+}
+#tripsTop{white-space:nowrap}
+#tripsTop .narrow{display:none}
+@media (max-width:560px){ #tripsTop .narrow{display:inline} .acct #adminTop{display:none} }
+@media (max-width:380px){ .brand h1{font-size:16px} }
 </style>
 
 <div class="wrap">
+  <!-- The top bar (owner, 2026-10-29: "make the top bar more streamlined.
+       Also make it stay at the top as an ability to sign in"): the name,
+       saved searches, sign in or your account, Admin for the owner, the
+       moon/sun. Budget and the PDF live beside the results and on the trip
+       page; Get Plus and Sign out live in the account panel. -->
   <header class="masthead">
-    <div class="brand">
+    <a class="brand" href="/" aria-label="Pricing the Magic, start over">
       <img class="mark" src="/public/brand/tab-icon.svg" alt="">
-      <div>
-        <h1>Pricing the <span>Magic</span></h1>
-        <p class="tag">Help to decide the best time to explore this small world.</p>
-      </div>
-    </div>
+      <h1>Pricing the <span>Magic</span></h1>
+    </a>
     <div class="acct">
-      <span class="chip" id="planChip">Free plan</span>
-      <span class="chip" id="searchChip" hidden></span>
+      <div class="tripsmenu" id="tripsMenu" hidden>
+        <button class="btn btn-sm btn-quiet" id="tripsTop" aria-haspopup="true" aria-expanded="false"><span class="wide">My searches</span><span class="narrow">Saved</span></button>
+        <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
+      </div>
+      <a class="btn btn-sm btn-quiet" id="adminTop" href="/admin" hidden
+         title="Change the rates and other numbers this site prices with">Admin</a>
       <button class="btn btn-sm" id="signinTop">Sign in</button>
       <button class="acctbtn" id="accountTop" hidden aria-haspopup="dialog">
         <span class="avatar" id="acctInitial" aria-hidden="true"></span>
@@ -1130,16 +1167,6 @@ body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
           <span class="acctplan" id="acctPlan"></span>
         </span>
       </button>
-      <div class="tripsmenu" id="tripsMenu" hidden>
-        <button class="btn btn-sm" id="tripsTop" aria-haspopup="true" aria-expanded="false">My searches</button>
-        <div class="tripsdrop" id="tripsDrop" hidden role="menu"></div>
-      </div>
-      <button class="btn btn-sm" id="budgetTop" title="Work out how to pay for the trip (Plus)">Budget</button>
-      <button class="btn btn-sm" id="printTop" title="Save this comparison as a PDF">Save as PDF</button>
-      <a class="btn btn-sm" id="adminTop" href="/admin" hidden
-         title="Change the rates and other numbers this site prices with">Admin</a>
-      <button class="btn btn-sm" id="signoutTop" hidden>Sign out</button>
-      <button class="btn btn-sm" id="upgradeTop">Upgrade</button>
       <button class="btn btn-sm themebtn" id="themeTop" type="button" aria-label="Switch to dark mode" title="Switch to dark mode"></button>
     </div>
   </header>
@@ -1560,6 +1587,13 @@ body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
     <div>
       <h2 id="resTitle">Six Resorts, Cheapest First</h2>
       <p class="res-sub" id="resSub"></p>
+      <label class="sortby">Sort by
+        <select id="sortBy">
+          <option value="price">Cheapest first</option>
+          <option value="quiet">Quietest first</option>
+          <option value="parks">Most parks</option>
+          <option value="near">Closest to home</option>
+        </select></label>
     </div>
     <div class="legend">
       <span class="lg"><i class="ci ci-flight"></i>Flights</span>
@@ -1580,6 +1614,7 @@ body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
            resort's detail card. -->
       <button class="btn btn-sm" id="saveSearchBtn" hidden>Save this search</button>
       <button class="btn btn-sm" id="budgetBtn" hidden>Plan how to pay</button>
+      <button class="btn btn-sm" id="printTop" hidden title="Save this comparison as a PDF">Save as PDF</button>
     </div>
   </div>
 
@@ -1786,6 +1821,7 @@ body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
     </div>
 
     <div class="mfoot">
+      <a class="btn" id="acctAdmin" href="/admin" hidden>Admin</a>
       <button class="btn" id="acctUpgradeBtn" hidden>Get Plus</button>
       <button class="btn" id="signoutBtn" hidden>Sign out</button>
       <button class="btn" id="closeAuth">Close</button>
@@ -2851,13 +2887,54 @@ function renderBoard(){
       <div class="rmeta">Try "All" instead.</div></div>`;
     return;
   }
-  // Trip cards (owner, 2026-10-29): one card per resort, cheapest first,
-  // each with its own "View trip" that opens the trip's own page.
-  board.innerHTML = `<ol class="tripcards">${list.map((e, k) => tripCardHtml(e.item, e.i, k + 1)).join("")}</ol>`;
+  // Trip cards (owner, 2026-10-29): one card per resort, each with its own
+  // "View trip" that opens the trip's own page. `list` is in price order,
+  // so a card keeps its PRICE rank whatever the sort.
+  const priceRank = new Map(list.map((e, k) => [e.i, k + 1]));
+  const sorted = sortTrips(list, sortBy);
+  $("#resTitle").textContent = SORT_TITLES[sortBy] || SORT_TITLES.price;
+  board.innerHTML = `<ol class="tripcards">${sorted.map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
+}
+
+/* Sort by (owner, 2026-10-29: "We could organize by price obviously. Maybe
+   biggest parks?"). Every sort breaks ties on price, and a resort with no
+   price goes last. Nothing here is a rating: we hold no sourced one. */
+const SORT_TITLES = {
+  price: "Six Resorts, Cheapest First",
+  quiet: "Six Resorts, Quietest First",
+  parks: "Six Resorts, Most Parks First",
+  near: "Six Resorts, Closest to Home First",
+};
+let sortBy = "price";
+try { const v = localStorage.getItem("pf_sort"); if(v && SORT_TITLES[v]) sortBy = v; } catch {}
+function milesBetween(a, b){
+  const rad = d => d * Math.PI / 180;
+  const dLat = rad(b.lat - a.lat), dLon = rad(b.lon - a.lon);
+  const h = Math.sin(dLat/2)**2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon/2)**2;
+  return 3959 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+function sortHome(){
+  if(params && params.originPoint && params.originPoint.lat != null) return params.originPoint;
+  const o = ORIGINS.concat(PLUS_ORIGINS).find(o => o.iata === (params && params.origin));
+  return o && o.lat != null ? o : null;
+}
+function sortTrips(list, how){
+  const home = sortHome();
+  const key = ({item}) => {
+    if(how === "quiet") return item.crowd ? item.crowd.rank : 9;
+    if(how === "parks") return -(item.resort.parks || 0);
+    if(how === "near"){
+      const pk = RM_PARKS[item.resortId];
+      return home && pk ? milesBetween(home, pk) : 0;
+    }
+    return 0;
+  };
+  return list.slice().sort((a, b) =>
+    (b.item.ok - a.item.ok) || (key(a) - key(b)) || 0);   // stable: price order breaks ties
 }
 
 /** One resort as a card in the results. */
-function tripCardHtml(item, i, rank){
+function tripCardHtml(item, i, rank, otherSort){
   const r = item.resort;
   if(!item.ok){
     return `<li class="tcard off" data-i="${i}">
@@ -2873,7 +2950,7 @@ function tripCardHtml(item, i, rank){
   return `<li class="tcard${rank === 1 ? " first" : ""}" data-i="${i}">
     <span class="tbadge">${badgeImg(item.resortId)}</span>
     <div class="tid">
-      <p class="teyebrow">${rank === 1 ? "Cheapest" : "No. " + rank}</p>
+      <p class="teyebrow">${rank === 1 ? "Cheapest" : otherSort ? "No. " + rank + " on price" : "No. " + rank}${otherSort ? sortWhy(item) : ""}</p>
       <h3><button type="button" class="tname" data-open="${i}">${esc(r.name)}</button></h3>
       <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"} · ${days} park day${days===1?"":"s"}${hasOv(r.id)?' · <span class="yourchip">Your numbers</span>':""}</p>
       ${costBar(b)}
@@ -2885,6 +2962,19 @@ function tripCardHtml(item, i, rank){
       <button type="button" class="tview" data-open="${i}">View trip &rarr;</button>
     </div>
   </li>`;
+}
+
+/** What the chosen sort is sorting on, said beside the price rank. */
+function sortWhy(item){
+  if(sortBy === "quiet") return item.crowd ? ` · ${esc(item.crowd.label)} crowds` : "";
+  if(sortBy === "parks") return ` · ${item.resort.parks} park${item.resort.parks === 1 ? "" : "s"}`;
+  if(sortBy === "near"){
+    const home = sortHome(), pk = RM_PARKS[item.resortId];
+    if(!home || !pk) return "";
+    const mi = milesBetween(home, pk);
+    return ` · about ${(mi < 100 ? Math.round(mi) : Math.round(mi / 50) * 50).toLocaleString()} miles away`;
+  }
+  return "";
 }
 
 /** The pieces of one priced resort the lead and the rest both show. */
@@ -3997,10 +4087,7 @@ function render(){
     `${partyParts({ ...p, ages: [] }).join(", ")}${kidStr} from ${p.origin} · ${p.nights} nights · ${p.parkDays ? `${p.parkDays} park days` : "park days suggested per resort"} · ${whenStr}`;
   renderParkDaysNote();
   renderBasisNote();
-  $("#planChip").textContent = session.plus ? "Plus plan" : "Free plan";
-  $("#planChip").className = "chip" + (session.plus?" plus":"");
   syncWindowUi();
-  $("#searchChip").hidden = true;
   // Only once there is something to save. A button that refuses every click
   // is the dead-handler problem in another costume. Saving is Plus; the
   // label says so before the click, not after.
@@ -4014,7 +4101,7 @@ function render(){
     bb.hidden = !results.some(r=>r.ok);
     bb.textContent = session.plus ? "Plan how to pay" : "Plan how to pay (Plus)";
   }
-  $("#upgradeTop").hidden = session.plus;
+  $("#printTop").hidden = !results.some(r=>r.ok);
   syncAccountUi();
   const any = results.length > 0;
   document.body.classList.toggle("has-results", any);
@@ -4148,15 +4235,13 @@ function syncAccountUi(){
   syncDealEmailsUi();
   $("#signinTop").hidden = on;
   $("#accountTop").hidden = !on;
-  // Sign out sits in the masthead, not only in the account panel's footer.
-  // Getting OUT should not require first finding your way IN to a dialog —
-  // same reasoning as the buried override controls: a control you have to
-  // hunt for is one people conclude isn't there.
-  $("#signoutTop").hidden = !on;
+  // Sign out lives in the account panel (owner, 2026-10-29: a streamlined
+  // top bar); the account button that opens it is always in the bar.
   // The admin page is no use if the only way to reach it is knowing the URL —
   // the same lesson as the buried sign-out. Shown only to the owner, and only
   // because the server said so; the page and its routes check again anyway.
   $("#adminTop").hidden = !session.owner;
+  $("#acctAdmin").hidden = !session.owner;   // phones: the bar has no room, so it's here too
   if(on){
     $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
     $("#acctEmail").textContent = session.email || "";
@@ -4469,7 +4554,6 @@ function openPw(){
 }
 function closePw(){ $("#paywall").classList.remove("on"); }
 $("#closePw").addEventListener("click", closePw);
-$("#upgradeTop").addEventListener("click", openPw);
 $("#paywall").addEventListener("click", e=>{ if(e.target.id==="paywall") $("#paywall").classList.remove("on"); });
 document.addEventListener("keydown", e=>{
   if(e.key !== "Escape") return;
@@ -4620,7 +4704,6 @@ async function doSignOut(){
   await loadSavedTrips();
 }
 $("#signoutBtn").addEventListener("click", doSignOut);
-$("#signoutTop").addEventListener("click", doSignOut);
 
 /** Kept at module scope purely so the account panel can report it without
  *  firing another request every time the dialog opens. */
@@ -4949,7 +5032,8 @@ function closeTripsDrop(){
 }
 function renderTripsMenu(){
   $("#tripsMenu").hidden = !session.email;
-  $("#tripsTop").textContent = savedTrips.length ? `My searches (${savedTrips.length})` : "My searches";
+  const nSaved = savedTrips.length ? ` (${savedTrips.length})` : "";
+  $("#tripsTop").innerHTML = `<span class="wide">My searches${nSaved}</span><span class="narrow">Saved${nSaved}</span>`;
   $("#tripsDrop").innerHTML = savedTrips.length
     ? savedTrips.map((t,i)=>{
         const r = RESORT_BY_ID.get(t.resortId);
@@ -5639,6 +5723,12 @@ function openPdfPicker(){
 function closePdfPicker(){ $("#pdfPicker").classList.remove("on"); }
 
 $("#printTop").addEventListener("click", openPdfPicker);
+$("#sortBy").value = sortBy;
+$("#sortBy").addEventListener("change", e => {
+  sortBy = SORT_TITLES[e.target.value] ? e.target.value : "price";
+  try { localStorage.setItem("pf_sort", sortBy); } catch {}
+  renderBoard();
+});
 $("#pdfPickCancel").addEventListener("click", closePdfPicker);
 $("#pdfPicker").addEventListener("click", e => { if(e.target.id === "pdfPicker") closePdfPicker(); });
 
@@ -6108,7 +6198,6 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
-$("#budgetTop").addEventListener("click", openBudget);
 $("#budgetBtn").addEventListener("click", ()=>{
   const sel = results[selected];
   if(sel && sel.ok) budgetTripId = sel.resortId;
