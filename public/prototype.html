@@ -1545,6 +1545,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         </select>
       </div>
     </div>
+    <p class="hint" id="cheapestLodgingNote" hidden style="margin:-4px 0 12px">The cheapest trip picks the cheapest place to stay at each resort, on or off property, parking included.</p>
     <div class="fields" id="parkingFields" hidden>
       <div class="f">
         <label for="cars">Cars you're bringing</label>
@@ -1652,8 +1653,8 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         budget-airline seat to Orlando, say. This board isn't built to find the cheapest possible trip.
         It's built to help you decide when and where to go, not to give you a quote you can book sight unseen.</p>
       <p>Want the lowest we've found? <button type="button" class="linkbtn" id="whyCheapest">Price the
-        cheapest trip</button>: the cheapest flight on the cheapest day, a budget hotel off property,
-        and groceries instead of restaurants.</p>
+        cheapest trip</button>: the cheapest flight on the cheapest day, the cheapest place to stay
+        (on or off property, parking included), and groceries instead of restaurants.</p>
     </div>
   </details>
 
@@ -2394,7 +2395,7 @@ function tripQuery(){
   if(params.parkDays) q.parkDays = params.parkDays;
   if(params.hopper) q.hopper = "1";
   if(params.seniors > 0) q.seniors = params.seniors;
-  if(params.stay === "off"){
+  if(params.stay === "off" || params.priceBasis === "cheapest"){
     if(params.cars !== 1) q.cars = params.cars;
     if(params.freeParking) q.freeParking = "1";
   }
@@ -3582,7 +3583,12 @@ async function renderDetail(){
         <div class="p">${usd(regularRooms)}</div></div>${roomDealRows}`
     : `<div class="li"><div class="l"><b>${hp.name}</b><small>${hp.descriptor} · ${local(r,regularNightly)} / night${roomDeal ? " regular rate" : ""}${roomsNote}</small></div>
         <div class="p">${usd(regularRooms)}</div></div>${roomDealRows}`;
-  const hotelRows = hotelPickRow
+  // The cheapest trip chose where to stay itself (pricing.ts cheapestLodging).
+  const lc = x.lodgingChoice;
+  const lodgingNote = lc ? `<div class="li"><div class="l"><b>Why this hotel</b><small>The cheapest place to stay for these dates, ${lc.onProperty ? "on property" : "off property"}${lc.otherSide
+      ? `: ${usd(lc.otherSide.usd - lc.usd)} less than the cheapest ${lc.otherSide.onProperty ? "Disney hotel" : "hotel off property"}, parking and transfers included`
+      : ""}.</small></div><div class="p"></div></div>` : "";
+  const hotelRows = lodgingNote + hotelPickRow
     + (x.transport ? `<div class="li"><div class="l"><b>Parking &amp; transfers</b>
         <small>${usd(stayNow ? r.transport.on : r.transport.off)} per day${stayNow?"":` per car × ${p.cars} car${p.cars===1?"":"s"}`}</small></div>
         <div class="p">${usd(x.transport)}</div></div>` : "")
@@ -4059,7 +4065,7 @@ async function renderDetail(){
  * suggestion, since otherwise every resort carries the number you picked. */
 /* "The cheapest trip we can find" (owner, 2026-10-29: "switch all of their
  * variables automatically to the cheapest"): picking it also moves the form
- * to a budget hotel off property and groceries and turns Park Hopper off, so the
+ * to groceries and turns Park Hopper off (the server picks the cheapest place to stay), so the
  * form shows what was priced. The server already prices food as groceries
  * and the flight as the cheapest one on this basis. Going back to a typical
  * trip puts the traveler's own choices back. */
@@ -4067,17 +4073,28 @@ let beforeCheapest = null;
 function setPriceBasis(basis){
   const sel = $("#priceBasis");
   if(basis === "cheapest"){
-    // Off property too (owner, 2026-10-29: "There is usually no way Disney
-    // is ever cheaper than a hotel"). Parking and transfers still count.
-    if(!beforeCheapest) beforeCheapest = { stay: $("#stay").value, tier: $("#tier").value, food: $("#food").value, hopper: $("#hopper").value };
-    $("#stay").value = "off"; $("#tier").value = "0"; $("#food").value = "grocery"; $("#hopper").value = "0";
+    // Where to stay is picked per resort by the server (owner, 2026-10-29:
+    // "we can price the lowest lodging option"): the cheapest hotel on or
+    // off property, parking included. So the two boxes are locked and say so.
+    if(!beforeCheapest) beforeCheapest = { food: $("#food").value, hopper: $("#hopper").value };
+    $("#food").value = "grocery"; $("#hopper").value = "0";
   } else if(beforeCheapest){
-    $("#stay").value = beforeCheapest.stay; $("#tier").value = beforeCheapest.tier; $("#food").value = beforeCheapest.food; $("#hopper").value = beforeCheapest.hopper;
+    $("#food").value = beforeCheapest.food; $("#hopper").value = beforeCheapest.hopper;
     beforeCheapest = null;
   }
-  if(typeof syncParkingUi === "function") syncParkingUi();
+  syncCheapestLock(basis === "cheapest");
   sel.value = basis;
   if(typeof syncMoreDetails === "function" && $("#moreToggle")) syncMoreDetails();
+}
+
+function syncCheapestLock(on){
+  for(const id of ["stay", "tier"]){ const el = $("#" + id); if(el) el.disabled = on; }
+  const n = $("#cheapestLodgingNote");
+  if(n) n.hidden = !on;
+  // Parking fields matter whenever the cheapest stay might be off property.
+  const pf = $("#parkingFields");
+  if(pf && on) pf.hidden = false;
+  else if(typeof syncParkingUi === "function") syncParkingUi();
 }
 
 /* Which trip the board priced, and the one-click switch to the other
@@ -4089,7 +4106,7 @@ function renderBasisNote(){
   if(!el || !params) return;
   const cheap = params.priceBasis === "cheapest";
   el.querySelector("dd").innerHTML = (cheap
-    ? `<b>The cheapest trip we can find:</b> the cheapest flight on the cheapest day, a budget hotel off property and groceries. `
+    ? `<b>The cheapest trip we can find:</b> the cheapest flight on the cheapest day, the cheapest hotel (on or off property) and groceries. `
     : `<b>A typical day and a typical flight.</b> `)
     + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest trip we can find"}</button>`;
   el.hidden = false;
@@ -4988,6 +5005,7 @@ async function openSavedTrip(trip){
   $("#rooms").value = String(Math.max(1, +q.rooms || 1));
   $("#crowdCare").value = q.crowdCare || "some";
   $("#priceBasis").value = q.basis === "cheapest" ? "cheapest" : "typical";
+  if(typeof syncCheapestLock === "function") syncCheapestLock(q.basis === "cheapest");
   // Passes and points come back too — reopening a saved trip that priced
   // itself against four Incredi-Passes and then quietly dropping them would
   // show a different, much larger total under the same trip's name.

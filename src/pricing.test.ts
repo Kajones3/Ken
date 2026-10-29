@@ -1361,3 +1361,24 @@ test("the cheapest trip eats from the grocery store, whatever style was picked",
   const typed = priceTrip(book, wdw, { ...base, priceBasis: "cheapest" }, { wdw: { foodPerDayUsd: 250 } }, START);
   assert.ok(typed.ok && Math.round(typed.price.food) === Math.round(250 * (base.nights + 0.4)));
 });
+
+test("the cheapest trip stays wherever is cheapest, parking included", () => {
+  // Owner, 2026-10-29: "we can price the lowest lodging option." A $150
+  // Value room beats a $120 motel once off property's parking is counted;
+  // with free parking the motel wins.
+  const wdw = resortById("wdw");
+  const book = fullBook("wdw", "MCO");
+  const p = { ...base, stay: "off" as const, tier: 2 as const, priceBasis: "cheapest" as const };
+  const cheap = priceTrip(book, wdw, p, {}, START);
+  assert.ok(cheap.ok); if (!cheap.ok) return;
+  assert.equal(cheap.price.hotelPick.hotelId, "v", "on-property Value, though the search said off property, Deluxe");
+  assert.equal(cheap.price.lodgingChoice?.onProperty, true);
+  assert.ok(cheap.price.lodgingChoice!.otherSide && cheap.price.lodgingChoice!.otherSide.usd > cheap.price.lodgingChoice!.usd);
+  const free = priceTrip(book, wdw, { ...p, freeParking: true }, {}, START);
+  assert.ok(free.ok && free.price.hotelPick.hotelId === "b" && free.price.lodgingChoice?.onProperty === false);
+  // Each side costed the way the total is: the winner's figure is rooms + parking.
+  assert.ok(Math.abs(cheap.price.lodgingChoice!.usd - (cheap.price.rooms + cheap.price.transport)) < 0.01);
+  // A typical trip still honours the search's own stay and category.
+  const typical = priceTrip(book, wdw, { ...p, priceBasis: "typical" }, {}, START);
+  assert.ok(typical.ok && typical.price.hotelPick.hotelId === "b" && !typical.price.lodgingChoice);
+});

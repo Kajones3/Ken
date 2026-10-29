@@ -528,6 +528,12 @@ export interface TripPrice {
     | { hotelId: "custom"; name: string; nightly: number; onProperty: boolean }
     | { hotelId: "none"; name: "No hotel"; nightly: 0; onProperty: false };
   hotelTier: { requested: TierIndex; actual: TierIndex; swapped: boolean; custom: boolean };
+  /** "The cheapest trip" picks the cheapest place to stay itself, on or off
+   *  property, parking and transfers included (owner, 2026-10-29: "we can
+   *  price the lowest lodging option"). Set only when it did: `otherSide` is
+   *  the cheapest stay on the side NOT picked, so the card can say by how
+   *  much it won. */
+  lodgingChoice?: { onProperty: boolean; usd: number; otherSide: { onProperty: boolean; usd: number } | null };
   foodPlan: { label: string; adult: number; child: number } | null;
   /** How the food line was built when it was estimated from meals (no plan,
    *  no typed daily total): one adult's day, meal by meal, all in. */
@@ -776,6 +782,39 @@ function withMileageOverride(book: PriceBook, r: MileageRateLookup, dateISO: str
   const half = Number(dateISO.slice(5, 7)) <= 6 ? "h1" : "h2";
   const override = book.setting?.(`mileage.${r.rateYear}.${half}`);
   return override === undefined ? r : { ...r, ratePerMile: override };
+}
+
+/**
+ * The cheapest place to stay for these nights: every category on and off
+ * property, each costed as rooms (one room's worth) plus parking and
+ * transfers for the trip, the same way priceTrip costs them. Returns the
+ * winner and the best of the other side. Before deals: a Disney room deal
+ * can still come off afterwards, which only widens an on-property win.
+ */
+export function cheapestLodging(
+  book: PriceBook, resort: Resort, start: ISODate, params: TripParams,
+): { pick: NonNullable<ReturnType<typeof cheapestStay>>; usd: number; otherSide: { onProperty: boolean; usd: number } | null } | null {
+  const carCount = Math.max(0, Math.min(4, Math.round(params.cars ?? 1)));
+  const rc = roomCountOf(params);
+  const parking = (on: boolean) =>
+    (on ? transportPerDay(book, resort, true)
+      : params.freeParking ? 0 : transportPerDay(book, resort, false) * carCount) * (params.nights + 1);
+  const bestOf = (side: "on" | "off") => {
+    let best: { pick: NonNullable<ReturnType<typeof cheapestStay>>; usd: number } | null = null;
+    for (const t of [0, 1, 2] as TierIndex[]) {
+      const pick = cheapestStay(book, resort.id, start, params.nights, side, t);
+      if (!pick || pick.hotel.onProperty !== (side === "on")) continue;
+      const usd = pick.rooms * rc + parking(side === "on");
+      if (!best || usd < best.usd) best = { pick, usd };
+    }
+    return best;
+  };
+  const on = bestOf("on"), off = bestOf("off");
+  const win = !on ? off : !off ? on : (off.usd <= on.usd ? off : on);
+  if (!win) return null;
+  const other = win === on ? off : on;
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return { pick: win.pick, usd: round(win.usd), otherSide: other ? { onProperty: other === on, usd: round(other.usd) } : null };
 }
 
 /** Parking and transfers per day, owner override first. */
@@ -1169,6 +1208,7 @@ export function priceTrip(
   let rooms: number;
   let hotelPick: TripPrice["hotelPick"];
   let hotelTier: TripPrice["hotelTier"];
+  let lodgingChoice: TripPrice["lodgingChoice"];
 
   if (stay === "none") {
     // No hotel wanted at all — not "off property," genuinely $0, no pick.
@@ -1180,6 +1220,18 @@ export function priceTrip(
     rooms = ov.nightly * params.nights * roomCountOf(params);
     hotelPick = { hotelId: "custom", name: "Your rate", nightly: ov.nightly, onProperty: stay !== "off" };
     hotelTier = { requested: params.tier, actual: params.tier, swapped: false, custom: true };
+  } else if (params.priceBasis === "cheapest") {
+    // The cheapest trip stays wherever is cheapest: every category on and
+    // off property, rooms plus parking/transfers, since off property's
+    // parking is exactly what makes it dearer than it looks.
+    const firstNight = book.hotelNights(resort.id, start);
+    if (!firstNight.length) return { ok: false, reason: `no cached hotel rates for ${resort.id} on ${start}` };
+    const best = cheapestLodging(book, resort, start, params);
+    if (!best) return { ok: false, reason: `no hotel has every night for ${resort.id} from ${start}` };
+    rooms = best.pick.rooms * roomCountOf(params);
+    hotelPick = best.pick.hotel;
+    hotelTier = { requested: params.tier, actual: best.pick.actual, swapped: best.pick.actual !== params.tier, custom: false };
+    lodgingChoice = { onProperty: best.pick.hotel.onProperty, usd: best.usd, otherSide: best.otherSide };
   } else {
     const firstNight = book.hotelNights(resort.id, start);
     if (!firstNight.length) return { ok: false, reason: `no cached hotel rates for ${resort.id} on ${start}` };
@@ -1366,7 +1418,7 @@ export function priceTrip(
     price: {
       start, destination, total, flights, tickets, hotel, rooms, roomCount: stay === "none" ? 0 : roomCountOf(params), transport, food,
       perSeatFare, flightPick, fareBelowFloor,
-      hotelPick, hotelTier, foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
+      hotelPick, hotelTier, ...(lodgingChoice ? { lodgingChoice } : {}), foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
       driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, ticketsFlat, checkAdjust,
       membership, parkDays: days,
