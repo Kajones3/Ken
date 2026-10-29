@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**866 tests** (all pass, 2026-10-28), and typecheck is clean. `npm run smoke` runs the pipeline.
+**867 tests** (all pass, 2026-10-29), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -410,6 +410,13 @@ this section).
     reader handles its layout: single-letter headings S M T W T F S
     (`singleLetterHeads()`, best evenly-spaced fit, S/T appear twice), and the
     green "$" badge on cheap days read as "0154" -> $154, marked `check`.
+    **2026-10-29, owner: "It still doesn't read the green ones"** (live on
+    e52df0d). Claude's OCR read "0154" at every size, so the owner's device
+    reads the circle differently: any 3-digit price with no "$", alone or
+    after one look-alike (0 5 6 8 S O, or a symbol cleanWord strips: @ ©)
+    now counts as a badge price (test pins 8 readings). And `/public/*` files
+    (the reader) are now served `no-cache`: they had no cache header, so a
+    browser or Cloudflare could keep the OLD reader after a redeploy.
     `resortGuess` ("dlr" = letter headings and no "N-Day Ticket") picks the
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).

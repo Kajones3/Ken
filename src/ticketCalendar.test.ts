@@ -203,6 +203,18 @@ test("ticket calendar: Disneyland's 1-day calendar, letter headings and \"$\" ba
   assert.deepEqual(cal.prices.filter((p) => p.check).map((p) => p.date), ["2026-12-01", "2026-12-02"]);
 });
 
+test("ticket calendar: the green \"$\" badge is read however the reader sees the circle", () => {
+  const dec = JSON.parse(readFileSync(new URL("./testdata/dlr-ticket-calendar-2026-12.words.json", import.meta.url), "utf8")) as Array<[string, number, number, number, number]>;
+  for (const seen of ["0154", "@154", "\u00a9154", "154", "S154", "8154", "6154", "(S154"]) {
+    const words = dec.map(([text, x0, y0, x1, y1]) => ({ text: text === "0154" ? seen : text, x0, y0, x1, y1 }));
+    const cal = readTicketCalendar(words);
+    assert.equal(cal.prices.length, 31, seen);
+    const first = cal.prices.find((p) => p.date === "2026-12-01");
+    assert.equal(first?.perDay, 154, seen);
+    assert.equal(first?.check, true, seen);
+  }
+});
+
 test("Disneyland 2+ day tickets are one price for any date; the 1-day still follows the season", async () => {
   const { priceTrip } = await import("./pricing.js");
   const { bookFrom } = await import("./book.js");
