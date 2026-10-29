@@ -1055,6 +1055,59 @@ body.has-results .searchside #run{width:100%}
   .tripside{position:static; order:-1}
   .thbadge img{width:76px; height:76px}
 }
+
+/* ---------- landing: the Expedia-style search bar over the map ---------- */
+.hero .herohead{flex:1 1 100%; text-align:center}
+.hero h2{margin-left:auto; margin-right:auto}
+.herosub{margin:14px auto 0; max-width:36em; font-size:clamp(16px,1.7vw,19px); line-height:1.5; color:var(--ink-2)}
+.searchbar{position:relative}
+.partypop{z-index:30}
+#run2{display:none}
+body:not(.has-results) .panel-lab{display:none}
+body:not(.has-results) #searchMain, body:not(.has-results) .jumprow{display:none}
+body:not(.has-results) .hero h2{font-size:clamp(40px,5.6vw,72px)}
+body:not(.has-results) .herofig{margin-top:10px}
+body:not(.has-results) #tripPanel{position:relative; z-index:5; max-width:1080px; margin:-150px auto 0; padding:18px 20px 8px}
+body:not(.has-results) .searchbar{display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1.2fr) auto;
+  align-items:center; border:2px solid var(--frame); border-radius:999px; padding:6px 6px 6px 8px; background:var(--surface)}
+body:not(.has-results) .searchbar > .f{padding:6px 18px; border-left:1px solid var(--rule-strong); min-width:0}
+body:not(.has-results) .searchbar > .f:first-child{border-left:0}
+body:not(.has-results) .searchbar > .f:focus-within{background:var(--surface-2); border-radius:14px}
+body:not(.has-results) #tripPanel{background:none; border:0}
+body:not(.has-results) .searchbar > .f > label{font-size:12.5px}
+body:not(.has-results) .searchbar > .f > select,
+body:not(.has-results) .sb-btn{border:0; background:transparent; padding:2px 0; min-height:30px; width:100%;
+  font:inherit; font-size:17px; font-weight:600; color:var(--ink); text-align:left; cursor:pointer}
+body:not(.has-results) .sb-go{min-height:56px; padding:0 34px; justify-content:center}
+body:not(.has-results) .partypop{position:absolute; top:calc(100% + 14px); left:0; width:min(400px, calc(100vw - 40px));
+  background:var(--surface); border:2px solid var(--frame); border-radius:16px; padding:16px}
+body:not(.has-results) .sb-window{max-width:340px; margin-top:12px}
+body:not(.has-results) .moretoggle{margin:12px 0 4px; border-bottom:0}
+.sb-btn{display:block; text-align:left}
+.partypop .party{grid-template-columns:minmax(0,1fr); gap:10px; margin-bottom:10px}
+.partypop .party > .f{display:grid; grid-template-columns:minmax(0,1fr) 120px; align-items:center; gap:12px}
+.partypop .party > .f > label, .partypop .party > .f > .labrow{margin:0}
+.partypop #partyDone{margin-top:10px}
+#intro{max-width:1080px; margin:28px auto 0}
+#intro p{margin:0; max-width:46em; font-size:15px; line-height:1.6; color:var(--ink-2)}
+#intro .herosign{margin-top:10px; font-family:var(--f-head); font-weight:700; font-size:17px; letter-spacing:-.01em; color:var(--ink)}
+body.has-results #intro, body.ontrip #intro{display:none}
+@media (max-width:820px){
+  body:not(.has-results) #tripPanel{margin-top:-40px}
+  body:not(.has-results) .searchbar{grid-template-columns:minmax(0,1fr); border-radius:18px; padding:4px 14px 14px}
+  body:not(.has-results) .searchbar > .f{border-left:0; border-bottom:1px solid var(--rule); padding:10px 4px}
+  body:not(.has-results) .sb-go{width:100%; margin-top:12px}
+  body:not(.has-results) .partypop{position:static; width:auto; margin-top:10px; border-width:1px}
+}
+
+/* In the side panel the bar is a plain stack, and Update prices sits last. */
+body.has-results .searchbar{display:flex; flex-direction:column; gap:14px}
+body.has-results .sb-go{display:none}
+body.has-results #run2{display:inline-flex; width:100%; justify-content:center}
+body.has-results .sb-btn{width:100%; min-height:44px; padding:10px 12px; border:1.5px solid var(--rule-strong); border-radius:10px;
+  background:var(--surface-2); color:var(--ink); font:inherit; font-size:16px; cursor:pointer}
+body.has-results .partypop{margin-top:10px; padding:12px; border:1px solid var(--rule-strong); border-radius:12px}
+body.has-results .partypop .party{grid-template-columns:minmax(0,1fr)}
 </style>
 
 <div class="wrap">
@@ -1221,27 +1274,12 @@ body.has-results .searchside #run{width:100%}
   <section class="hero" id="hero">
     <div class="herotop">
       <div class="herohead">
-        <p class="eyebrow"><svg class="sparkle" viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0 -10L2.4 -2.4L10 0L2.4 2.4L0 10L-2.4 2.4L-10 0L-2.4 -2.4Z" fill="#E8B23E"/></svg>Every Disney Resort in the World</p>
         <h2><span>Six Disney Trips.</span><span>One Search.</span></h2>
-      </div>
-      <div class="heroside">
-        <p>Compare the whole trip &mdash; flights, hotel, tickets and food &mdash; at every Disney resort in the world, and see where the magic can take you.</p>
-        <div class="heroicons" aria-hidden="true">
-          <span><i class="ci lg ci-flight"></i>Flights</span>
-          <span><i class="ci lg ci-hotel"></i>Hotel</span>
-          <span><i class="ci lg ci-ticket"></i>Tickets</span>
-          <span><i class="ci lg ci-food"></i>Food</span>
-        </div>
+        <p class="herosub">The whole trip, flights, hotel, tickets and food, priced at every Disney resort in the world.</p>
       </div>
     </div>
     <figure class="herofig bleed">
       <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
-      <figcaption class="herostory bleed-in" id="intro">
-        <p>It started with one question: could we go to Shanghai instead of renewing our Annual Passes? Answering it meant
-        pricing flights, hotels, tickets, groceries and visas for every Disney resort in the world. This is that work, built
-        so you don't have to do it yourself.</p>
-        <p class="herosign">We make the budget. You take the trip.</p>
-      </figcaption>
     </figure>
   </section>
 
@@ -1253,7 +1291,7 @@ body.has-results .searchside #run{width:100%}
   <div class="searchlayout" id="searchLayout">
   <div class="searchside" id="searchSide">
   <section class="panel" id="tripPanel">
-    <p class="panel-lab">Trip parameters</p>
+    <p class="panel-lab">Your trip</p>
     <!-- Shown INSTEAD of the form when you arrive from a saved trip. Opening
          a trip you already built is a different act from building one: you
          came to look at a number, not to fill in nine fields again, and
@@ -1274,6 +1312,16 @@ body.has-results .searchside #run{width:100%}
         <button class="btn btn-sm" id="expAdd">Add</button>
       </div>
     </div>
+
+
+    <!-- One search bar, Expedia-style (owner, 2026-10-29): who's going,
+         when, from where, Compare. Who's going opens a small panel with the
+         party and the children's ages. -->
+    <div class="searchbar">
+      <div class="f sb-who">
+        <label for="partyBtn">Who's going</label>
+        <button type="button" class="sb-btn" id="partyBtn" aria-expanded="false" aria-controls="partyPop"><span id="partyBtnText">2 adults</span></button>
+        <div class="partypop" id="partyPop" hidden>
     <div class="party">
       <div class="f">
         <label for="adults">Adults (18-59)</label>
@@ -1293,8 +1341,9 @@ body.has-results .searchside #run{width:100%}
     <p class="helpnote" id="seniorsHelp" hidden>Hong Kong and Shanghai sell seniors the cheaper child ticket; everywhere else they pay the adult price.</p>
     <p class="helpnote" id="kidsHelp" hidden>At Disney World and Disneyland, the child ticket is for kids 3 to 9; from 10 they pay the adult price. Tokyo also sells a cheaper junior ticket for ages 12 to 17. Paris, Hong Kong and Shanghai charge the child price up to age 11. Add each child's age and every resort applies its own rule.</p>
     <div class="ages" id="ages" hidden><span class="cap">Ages at travel</span></div>
-
-    <div class="fields whenwhere">
+          <button type="button" class="btn btn-sm" id="partyDone">Done</button>
+        </div>
+      </div>
       <div class="f" id="monthField">
         <label for="month">Arriving</label>
         <select id="month"></select>
@@ -1304,12 +1353,14 @@ body.has-results .searchside #run{width:100%}
         <label for="origin">Departing from</label>
         <select id="origin"></select>
       </div>
-      <div class="f" id="windowField" hidden>
+      <button class="btn-primary sb-go" id="run"><span id="runLabel">Compare</span></button>
+    </div>
+      <div class="f sb-window" id="windowField" hidden>
         <label for="window">Which week</label>
         <select id="window"></select>
         <small id="windowHint" style="color:var(--muted)"></small>
       </div>
-    </div>
+
     <div class="notices">
       <p id="gettingThereNote" class="notice" hidden></p>
       <p id="originNote" class="notice warn" hidden></p>
@@ -1496,7 +1547,7 @@ body.has-results .searchside #run{width:100%}
 
     <div class="panel-foot">
       <p class="hint" id="hint">Every number is an estimate built on what people have paid during a similar time of year. You can enter your own price and make the budget specifically fit your family. Off-property totals include park parking and transfers. Age bands differ by resort — an 11-year-old is an adult in Orlando but a child in Paris, and a 15-year-old is a Junior in Tokyo. Park Hopper has no effect at Hong Kong Disneyland or Shanghai Disney Resort — each has only one park.</p>
-      <button class="btn-primary" id="run"><span id="runLabel">Compare six resorts</span></button>
+      <button class="btn-primary" id="run2">Update prices</button>
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
@@ -1567,6 +1618,13 @@ body.has-results .searchside #run{width:100%}
   <div class="tablewrap" id="tablewrap" hidden></div>
   </div><!-- /searchmain -->
   </div><!-- /searchlayout -->
+
+      <section class="herostory" id="intro">
+        <p>It started with one question: could we go to Shanghai instead of renewing our Annual Passes? Answering it meant
+        pricing flights, hotels, tickets, groceries and visas for every Disney resort in the world. This is that work, built
+        so you don't have to do it yourself.</p>
+        <p class="herosign">We make the budget. You take the trip.</p>
+      </section>
 
   <!-- One trip, its own page. Back returns to the same search, scrolled to
        where the traveler was. -->
@@ -2517,7 +2575,7 @@ function setSearchBusy(busy){
   const btn = $("#run"), label = $("#runLabel");
   if(!btn) return;
   btn.disabled = busy;
-  label.innerHTML = busy ? `<span class="spinner"></span>Comparing…` : "Compare six resorts";
+  label.innerHTML = busy ? `<span class="spinner"></span>Comparing…` : "Compare";
 }
 
 async function runSearch(keepId){
@@ -2783,7 +2841,7 @@ function renderBoard(){
     renderRouteMap([]);
     board.innerHTML = `<div class="boardempty">
         <div class="rname">No comparison yet</div>
-        <div class="rmeta">Set your trip details above, then click "Compare six resorts" to see prices.</div>
+        <div class="rmeta">Set your trip details above, then press "Compare" to see prices.</div>
     </div>`;
     return;
   }
@@ -2942,7 +3000,7 @@ function restRowHtml(item, i, rank){
 
 function renderTable(){
   if(!results.length){
-    $("#tablewrap").innerHTML = `<p class="hint">Set your trip details above, then click "Compare six resorts" to see prices.</p>`;
+    $("#tablewrap").innerHTML = `<p class="hint">Set your trip details above, then press "Compare" to see prices.</p>`;
     return;
   }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
@@ -3971,6 +4029,34 @@ function render(){
 /* ============================ events ============================ */
 
 $("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
+$("#run2").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
+
+/* "Who's going": one button in the bar, a small panel with the party. */
+function partySummary(){
+  const n = id => +($("#" + id).value || 0);
+  const a = n("adults"), sn = n("seniors"), k = n("kids");
+  const bits = [];
+  if(a) bits.push(`${a} adult${a===1?"":"s"}`);
+  if(sn) bits.push(`${sn} senior${sn===1?"":"s"}`);
+  if(k) bits.push(`${k} child${k===1?"":"ren"}`);
+  return bits.join(", ") || "Choose travelers";
+}
+function syncPartyBtn(){ $("#partyBtnText").textContent = partySummary(); }
+function setPartyOpen(on){
+  $("#partyPop").hidden = !on;
+  $("#partyBtn").setAttribute("aria-expanded", String(on));
+  if(on) $("#adults").focus();
+  else syncPartyBtn();
+}
+$("#partyBtn").addEventListener("click", () => setPartyOpen($("#partyPop").hidden));
+$("#partyDone").addEventListener("click", () => { setPartyOpen(false); $("#partyBtn").focus(); });
+document.addEventListener("click", e => {
+  if(!$("#partyPop").hidden && !e.target.closest(".sb-who")) setPartyOpen(false);
+});
+$("#partyPop").addEventListener("keydown", e => {
+  if(e.key === "Escape"){ setPartyOpen(false); $("#partyBtn").focus(); }
+});
+$("#partyPop").addEventListener("change", syncPartyBtn);
 
 /* A castle on the flight-path map makes that resort the board's hero (the
    shared [data-hero] handler below); this lets the keyboard press one too. */
@@ -6259,6 +6345,7 @@ function syncMoreDetails(){
   $("#moreToggle").setAttribute("aria-expanded", String(open));
   $("#moreLabel").textContent = open ? "Fewer details" : "Add more details";
   $("#moreSum").textContent = open ? "" : moreSummary();
+  syncPartyBtn();
   // The fine print goes with the details: the short form stays short.
   $("#hint").hidden = !open;
 }

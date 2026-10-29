@@ -421,6 +421,19 @@ this section).
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
     Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
+  - **Landing = one Expedia-style search bar (owner, 2026-10-29, Expedia
+    screenshot: "more streamlined like this").** Hero: centered headline +
+    one line (the eyebrow and the four icon chips are gone), the castle map,
+    then `.searchbar` overlapping the map's bottom: Who's going (`#partyBtn`
+    opens `#partyPop` with the adults/seniors/children selects and the
+    child ages; `partySummary()` writes "2 adults, 2 children") | Arriving |
+    Departing from | Compare (`#run`). Which week shows under the bar when
+    the month has one; "+ Add more details" under that. The owner's story
+    (`#intro`) moved below the search, landing only. The empty results area
+    and "Jump straight to one resort" are hidden on the landing page. After
+    a search the same bar becomes a plain stack in the side panel, Compare
+    hides and "Update prices" (`#run2`) sits at the panel's foot. Phones:
+    the bar stacks into one card, Compare full width.
   - **Search page + trip pages (owner, 2026-10-29, after Adventures by
     Disney's destination pages + Baymard's travel UX article; mock-up on the
     claude.ai Design canvas "Pricing the Magic — search & trip pages").**
