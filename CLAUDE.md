@@ -421,6 +421,33 @@ this section).
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
     Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
+  - **Search page + trip pages (owner, 2026-10-29, after Adventures by
+    Disney's destination pages + Baymard's travel UX article; mock-up on the
+    claude.ai Design canvas "Pricing the Magic — search & trip pages").**
+    Landing = the castle-map hero + the short form (unchanged). After a
+    search (`body.has-results`): `#searchLayout` is a grid, the form panel
+    (`#searchSide`) on the LEFT (340px), results (`#searchMain`) on the
+    right as TRIP CARDS (`tripCardHtml()`: castle, Cheapest / No. N, name,
+    place · nights · park days, cost bar, deal/crowd/attraction chips,
+    total, "for two · $X a person", "View trip →"). The split board
+    (`leadHtml`/`restRowHtml`, still in the file, unused) and the flight-path
+    map (`#routeFig`, kept hidden) are gone from the page; the hero map stays.
+    **"View trip" opens the trip's OWN page** (`#tripPage`, hash
+    `#trip=<resort>`, `openTripPage()` / `syncTripView()` /
+    `closeTripPage()`): "← Back to my search" (and the browser back
+    button) returns to the same scroll position; trip-to-trip ("Next
+    cheapest") replaces the hash so Back still means the search; a reload on
+    a trip hash with no results falls back to the search. The page:
+    header (castle, "Cheapest of your 6 trips", name, party/dates/nights),
+    the existing detail sections flattened (rules not boxes, one column,
+    `.trippage` CSS), and a summary aside (`renderTripChrome()`: total, bar,
+    lines, Save this trip / Download the trip PDF / Plan how to pay, all
+    Plus, wired to the existing buttons; next two cheapest). Phones (≤900px):
+    the search folds to one "2 adults · April 2027 · from ATL — Change" bar
+    (`#editSearch`, body.editing shows the panel); trips come before the
+    crowd/basis/park-day notes; on the trip page the summary comes first.
+    "Jump straight to one resort" opens that trip page. Opening a saved
+    search shows the search page, not a trip.
   - **The search form opens SHORT (owner, 2026-10-29: "start the page very
     simple ... just adults, kids, seniors, when they want to go, and their
     departing airport. Then ... I want to add more details").** Visible:
