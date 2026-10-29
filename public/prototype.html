@@ -707,20 +707,51 @@ button.mtile:hover{border-color:var(--rule-strong)}
    the masthead and the budget page steps aside. A class on <body>, not a
    list of hidden flags, so a future section can't forget to join. */
 body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
-.bhead{margin:4px 0 16px}
-.bhead h2{font-family:var(--f-head); font-size:clamp(30px,4vw,44px); font-weight:800; letter-spacing:-.02em; margin:14px 0 4px}
+/* The budget page wears the trip page's clothes: ruled sections, no boxes. */
+.budgetpage .triphead{padding-top:4px}
 .bgate b{font-family:var(--f-head); font-size:16px}
 .bgate p{font-size:13.5px; color:var(--ink-2); margin:8px 0 12px; max-width:62ch}
+.bempty p{font-size:16px; margin:0 0 12px}
+.bsec{border-top:2px solid var(--frame); padding:16px 0 0; margin:0 0 34px}
+.bsec:first-child{margin-top:0}
+.bsec h2{margin:0 0 14px; font-family:var(--f-head); font-size:24px; font-weight:800; letter-spacing:-.015em; line-height:1.15}
+.bsec .hint{margin:8px 0 14px}
+.bsec .fields + .hint{margin-top:8px}
+#bTrip{min-width:min(100%,340px)}
 .bmiles{list-style:none; margin:0; padding:0}
-.bmiles li{display:grid; grid-template-columns:110px minmax(0,1fr) auto; gap:4px 14px; align-items:baseline;
-  padding:10px 0; border-top:1px solid var(--rule)}
+.bmiles li{display:grid; grid-template-columns:120px minmax(0,1fr) auto; gap:4px 14px; align-items:baseline;
+  padding:12px 0; border-top:1px solid var(--rule)}
 .bmiles li:first-child{border-top:0}
-.bmiles .when{font-family:var(--f-head); font-weight:700; font-size:13.5px; color:var(--accent)}
-.bmiles .when small{display:block; font:500 11.5px var(--f-body); color:var(--muted)}
-.bmiles .what{font-size:13.5px}
-.bmiles .amt{font-family:var(--f-body); font-size:13px; text-align:right}
-.bmiles li.short .when{color:var(--warnfg,#f0c674)}
+.bmiles .when{font-family:var(--f-head); font-weight:700; font-size:15px; color:var(--accent)}
+.bmiles .when small{display:block; font:500 12px var(--f-body); color:var(--muted)}
+.bmiles .what{font-size:15px}
+.bmiles .amt{font-size:15px; font-weight:700; text-align:right}
+.bmiles li.late .when{color:var(--ink-2)}
+.bmiles li.short .when{color:var(--s4)}
 @media (max-width:560px){ .bmiles li{grid-template-columns:minmax(0,1fr) auto} .bmiles .what{grid-column:1 / -1} }
+.bfit, .bsave{list-style:none; margin:0; padding:0}
+.bfit li, .bsave li{display:grid; grid-template-columns:44px minmax(0,1fr) auto; gap:4px 14px; align-items:center; padding:12px 0; border-top:1px solid var(--rule)}
+.bfit li:first-child, .bsave li:first-child{border-top:0}
+.bfit .fb img{width:44px; height:44px; display:block}
+.bfit .fn, .bsave .sn{font-family:var(--f-head); font-weight:700; font-size:17px; line-height:1.2}
+.bfit .fm, .bsave .sm{display:block; font-size:13.5px; color:var(--ink-2); margin-top:2px}
+.bfit .fv{text-align:right; font-weight:700; font-size:15px; white-space:nowrap}
+.bfit .fv small{display:block; font-weight:500; font-size:12.5px; color:var(--ink-2)}
+.bfit .yes{color:var(--accent)}
+.bfit .no{color:var(--s4)}
+.bsave li{grid-template-columns:minmax(0,1fr) auto}
+.bsave .sv{text-align:right; white-space:nowrap}
+.bsave .sv b{display:block; font-family:var(--f-head); font-size:22px; font-weight:800; color:var(--accent)}
+.bsave .sv small{display:block; font-size:12.5px; color:var(--ink-2)}
+.bsave .stry{margin-top:6px; min-height:36px; padding:0 16px; border-radius:999px; border:2px solid var(--frame);
+  background:transparent; color:var(--ink); font:inherit; font-size:14px; font-weight:700; cursor:pointer}
+.bsave .stry:hover{background:var(--ink); color:var(--surface)}
+.bsave .stry:disabled{opacity:.6; cursor:default}
+@media (max-width:560px){ .bfit li{grid-template-columns:36px minmax(0,1fr)} .bfit .fb img{width:36px;height:36px} .bfit .fv{grid-column:2; text-align:left}
+  .bsave li{grid-template-columns:minmax(0,1fr)} .bsave .sv{text-align:left} }
+.bstatus{margin:12px 0 0; padding:10px 12px; border-radius:12px; font-size:14px; font-weight:600; background:var(--rule)}
+.bstatus.good{color:var(--accent)}
+.bstatus.bad{color:var(--s4)}
 .bpass{width:100%; border-collapse:collapse; font-size:13px; margin:6px 0 4px}
 .bpass th{font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2); text-align:left; padding:6px 8px 6px 0}
 .bpass td,.bpass th{text-align:left; white-space:normal}
@@ -1191,42 +1222,49 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
        is nothing here a free visitor could not work out with a calculator;
        the Plus line is the tool, not the data. The passes and DVC boxes DO
        move prices, and those stay Plus on the server (budgetFor()). -->
-  <section id="budgetPage" hidden>
-    <div class="bhead">
-      <button class="btn btn-sm" id="budgetBack">&larr; Back to the comparison</button>
-      <h2>Your Budget <span class="pluschip">Plus</span></h2>
-      <p class="hint">How to pay for the trip: what to set aside, when you'll have enough for each part, and whether a pass pays for itself.</p>
-    </div>
+  <!-- Your Budget (Plus). Laid out like a trip page since 2026-10-29: the
+       plan reads down the left in ruled sections, and the side panel keeps
+       the one number that matters in view (what to set aside each month). -->
+  <section id="budgetPage" class="budgetpage" hidden aria-label="Your budget">
+    <a href="#" class="tripback" id="budgetBack">&larr; Back</a>
+    <header class="triphead" id="budgetHead">
+      <div class="thtext">
+        <p class="teyebrow">Your Budget <span class="pluschip">Plus</span></p>
+        <h1>Paying for Your Trip</h1>
+        <p class="thsub">What to set aside, when you'll have enough for each part, what fits your budget and what would save the most.</p>
+      </div>
+    </header>
 
     <div id="budgetGate" hidden>
       <div class="panel bgate">
         <b>Plan how you'll pay for it, with Plus</b>
-        <p>Pick a trip from your comparison and see what to set aside each month or paycheck, and the month you'll have enough for each part: flights, hotel, tickets, spending money. Check whether an annual pass would pay for itself, and put the passes and DVC points you already have into every total.</p>
+        <p>Pick a trip from your comparison and see what to set aside each month or paycheck, and the month you'll have enough for each part: flights, hotel, tickets, spending money. See which trips and months fit your budget, what would save you the most, and whether an annual pass would pay for itself.</p>
         <button type="button" class="btn btn-primary btn-sm openpw">Get Plus</button>
       </div>
     </div>
 
     <div id="budgetBody">
-      <div class="panel" id="budgetEmpty" hidden>
-        <p style="margin:0 0 10px">Compare the resorts first, then come back here to plan how to pay for the one you like.</p>
-        <button class="btn btn-sm" id="budgetToSearch">Go to the comparison</button>
+      <div id="budgetEmpty" class="bempty" hidden>
+        <p>Compare the resorts first, then come back here to plan how to pay for the one you like.</p>
+        <button class="tsbtn primary" id="budgetToSearch" style="max-width:280px">Go to the comparison</button>
       </div>
 
-      <div id="budgetMain">
+      <div class="tripgrid" id="budgetMain">
+        <div class="tripmain">
         <div id="budgetPlan">
-        <section class="panel">
-          <p class="panel-lab">1 · Which trip</p>
+        <section class="bsec">
+          <h2>Which Trip</h2>
           <div class="fields">
             <div class="f">
               <label for="bTrip">Trip</label>
               <select id="bTrip"></select>
             </div>
           </div>
-          <p class="hint" id="bTripNote" style="margin:8px 0 0"></p>
+          <p class="hint" id="bTripNote"></p>
         </section>
 
-        <section class="panel">
-          <p class="panel-lab">2 · What you already have</p>
+        <section class="bsec">
+          <h2>What You Already Have</h2>
           <div class="fields">
             <div class="f">
               <label for="bSaved">Already saved for it</label>
@@ -1241,8 +1279,8 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
               <select id="bExtraMonth"></select>
             </div>
           </div>
-          <p class="hint" style="margin:8px 0 0">"Coming before the trip" is any one-off money you mean to put toward it: a tax refund, a bonus, birthday money.</p>
-          <div class="fields" style="margin-top:12px">
+          <p class="hint">"Coming before the trip" is any one-off money you mean to put toward it: a tax refund, a bonus, birthday money.</p>
+          <div class="fields">
             <div class="f">
               <label for="bGiftAmt">Paid with gift cards</label>
               <input id="bGiftAmt" type="number" min="0" step="50" placeholder="0" inputmode="numeric">
@@ -1252,37 +1290,63 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
               <input id="bGiftPct" type="number" min="0" max="30" step="0.5" placeholder="0" inputmode="decimal">
             </div>
           </div>
-          <p class="hint" style="margin:8px 0 0">If you buy Disney gift cards for less than their face value, the difference comes off what you need to save. Type your own figures; we don't check where you buy them.</p>
+          <p class="hint">If you buy Disney gift cards for less than their face value, the difference comes off what you need to save. Type your own figures; we don't check where you buy them.</p>
         </section>
 
-        <section class="panel">
-          <p class="panel-lab">3 · What you can set aside</p>
+        <section class="bsec">
+          <h2>Your Plan</h2>
           <div class="fields">
             <div class="f">
-              <label for="bMonthly">Each month</label>
+              <label for="bLead">Have it all</label>
+              <select id="bLead">
+                <option value="1">1 month before the trip</option>
+                <option value="2">2 months before the trip</option>
+                <option value="3">3 months before the trip</option>
+                <option value="4">4 months before the trip</option>
+              </select>
+            </div>
+            <div class="f">
+              <label for="bMonthly">Set aside each month</label>
               <input id="bMonthly" type="number" min="0" step="25" inputmode="numeric">
             </div>
           </div>
-          <p class="hint" id="bMonthlyNote" style="margin:8px 0 12px"></p>
-          <div class="kpi" id="bKpi"></div>
+          <p class="hint" id="bMonthlyNote"></p>
         </section>
 
-        <section class="panel">
-          <p class="panel-lab">4 · Your milestones</p>
-          <p class="hint" style="margin:0 0 10px">When the money you've put by covers each part of the trip, in the order most people book. Prices are our estimates; the price on the day you buy can be different.</p>
+        <section class="bsec">
+          <h2>Your Milestones</h2>
+          <p class="hint">When the money you've put by covers each part of the trip, in the order most people book. Prices are our estimates; the price on the day you buy can be different.</p>
           <ol class="bmiles" id="bMiles"></ol>
         </section>
 
-        <section class="panel" id="bPassCheck">
-          <p class="panel-lab">5 · Is an annual pass worth it?</p>
-          <div id="bPassBody"></div>
+        <section class="bsec" id="bFitSec">
+          <h2>What Fits My Budget?</h2>
+          <div class="fields">
+            <div class="f">
+              <label for="bBudget">Most you want to spend on the trip</label>
+              <input id="bBudget" type="number" min="0" step="100" inputmode="numeric">
+            </div>
+          </div>
+          <p class="hint" id="bFitNote"></p>
+          <ul class="bfit" id="bFit"></ul>
         </section>
 
+        <section class="bsec" id="bSaveSec">
+          <h2>What Would Save the Most?</h2>
+          <p class="hint" id="bSaveNote"></p>
+          <ul class="bsave" id="bSave"></ul>
+        </section>
+
+        <section class="bsec" id="bPassCheck">
+          <h2>Is an Annual Pass Worth It?</h2>
+          <div id="bPassBody"></div>
+        </section>
         </div>
-        <section class="panel" id="memberBlock">
-          <p class="panel-lab">6 · Passes and DVC points you already have</p>
+
+        <section class="bsec" id="memberBlock">
+          <h2>Passes and DVC Points You Already Have</h2>
           <div id="memberFields">
-        <p class="hint" style="margin-top:0">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
+        <p class="hint">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
         <div id="passFields"></div>
         <div class="fields">
           <div class="f">
@@ -1298,9 +1362,11 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px">
             <button class="btn btn-primary btn-sm" id="bRecompare">Update the totals</button>
-            <span class="hint">Re-prices all six resorts with these, then brings you back here.</span>
+            <span class="hint" style="margin:0">Re-prices all six resorts with these, then brings you back here.</span>
           </div>
         </section>
+        </div>
+        <aside class="tripside" id="budgetSide" aria-label="Your plan"></aside>
       </div>
     </div>
   </section>
@@ -6185,7 +6251,145 @@ function passCheckHtml(){
     + rows.join("");
 }
 
+/**
+ * The goal: everything put by `lead` months before the arrival month (owner,
+ * 2026-10-29: "plan to get the customer to full cost by 1 month ahead ...
+ * let them adjust it up to 4 months ahead"). `idx` counts months from this
+ * one (0 = this month) and never falls before it; `tooClose` says the trip
+ * is nearer than the lead allows.
+ */
+function budgetGoal(T, lead){ const g = T - lead; return { idx: Math.max(0, g), tooClose: g < 0 }; }
+const BUDGET_LEADS = [1, 2, 3, 4];
+const BUDGET_FIELDS = [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"],["#bMonthly","monthly"],["#bBudget","budget"]];
+const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+/* "What would save the most?" (owner, 2026-10-29). Each idea is ONE change
+ * to this search, re-priced by the same /api/compare the board uses (sample=1
+ * so these look-ups never steer tonight's paid searches), so every saving is
+ * a real difference between two of our own totals, not a rule of thumb. The
+ * month idea needs no request: the best-months tiles already priced every
+ * month. "Try it" makes the change on the search form and re-prices all six. */
+const FOOD_STEPS = ["grocery","someQs","qs","mix","ts","someCharacter","character"];
+const FOOD_WORDS = { grocery:"bring your own food", someQs:"some quick service", qs:"all quick service",
+  mix:"some quick service, some table service", ts:"all table service", someCharacter:"some character meals", character:"all character meals" };
+const TIER_WORDS = ["Value", "Moderate", "Deluxe"];
+const TIER_WORDS_OFF = ["budget", "mid-range", "upscale"];
+let savings = { key: null, loading: false, ideas: [], failed: false };
+
+function savingIdeas(item){
+  const x = item.price, p = params, rid = item.resortId, ideas = [];
+  const cheapest = p.priceBasis === "cheapest";
+  const cal = calendars[rid];
+  if(cal && Array.isArray(cal.months)){
+    const best = cal.months.filter(m => m.total !== null && m.month !== p.month && monthOpts.some(([ym]) => ym === m.month))
+      .sort((a, b) => a.total - b.total)[0];
+    if(best) ideas.push({ key:"month", label:`Go in ${ymLabel(best.month)} instead of ${ymLabel(p.month)}`,
+      why:"The cheapest month we price for this trip.", total: best.total,
+      apply: () => { $("#month").value = best.month; if($("#window")) $("#window").value = ""; if(typeof syncWindowUi === "function") syncWindowUi(); } });
+  }
+  if(!cheapest) ideas.push({ key:"basis", label:"Price the cheapest trip we can find",
+    why:"The cheapest flight we've seen, groceries, no Park Hopper and the cheapest place to stay, on or off property.",
+    q:{ basis:"cheapest", food:"grocery", hopper:undefined }, apply: () => setPriceBasis("cheapest") });
+  for(const k of [1, 2]) if(p.nights - k >= 2) ideas.push({ key:"n"+k,
+    label:`${plural(k, "fewer night")} (${p.nights - k} instead of ${p.nights})`,
+    why: k === 1 ? "One night fewer of hotel and food." : "Two nights fewer of hotel and food.",
+    q:{ nights: p.nights - k, parkDays: p.parkDays ? Math.min(p.parkDays, p.nights - k + 1) : undefined },
+    apply: () => { $("#nights").value = String(p.nights - k); } });
+  const pd = x.parkDays && x.parkDays.days;
+  if(pd > 1) ideas.push({ key:"pd", label:`One fewer park day (${pd - 1} instead of ${pd})`,
+    why:"A shorter ticket at this resort only.", ov:{ parkDays: pd - 1 },
+    apply: () => { OV[rid] = { ...ovOf(rid), parkDays: pd - 1 }; } });
+  if(p.hopper && !cheapest) ideas.push({ key:"hop", label:"Skip the Park Hopper", why:"One park a day.",
+    q:{ hopper: undefined }, apply: () => { $("#hopper").value = "0"; } });
+  const fi = FOOD_STEPS.indexOf(p.food);
+  if(!cheapest && fi > 0){
+    const one = FOOD_STEPS[fi - 1];
+    ideas.push({ key:"food1", label:`Eat a little cheaper: ${FOOD_WORDS[one]}`, why:`Instead of ${FOOD_WORDS[p.food]}.`,
+      q:{ food: one }, apply: () => { $("#food").value = one; } });
+    if(fi > 1) ideas.push({ key:"food0", label:"Bring your own food (groceries)", why:`Instead of ${FOOD_WORDS[p.food]}.`,
+      q:{ food: "grocery" }, apply: () => { $("#food").value = "grocery"; } });
+  }
+  if(!cheapest && p.stay !== "none"){
+    const words = p.stay === "on" ? TIER_WORDS : TIER_WORDS_OFF;
+    if(p.tier > 0) ideas.push({ key:"tier", label:`A ${words[p.tier - 1]} hotel instead of ${words[p.tier]}`,
+      why: p.stay === "on" ? "Still on property." : "Still off property.",
+      q:{ tier: p.tier - 1 }, apply: () => { $("#tier").value = String(p.tier - 1); } });
+    if(p.stay === "on") ideas.push({ key:"off", label:"Stay off property", why:"A hotel nearby at the same level, with parking or transfers added.",
+      q:{ stay:"off" }, apply: () => { $("#stay").value = "off"; if(typeof syncParkingUi === "function") syncParkingUi(); } });
+  }
+  return ideas;
+}
+
+async function loadSavings(item){
+  const key = JSON.stringify([compareQuery(), item.resortId]);
+  if(savings.key === key) return;
+  const ideas = savingIdeas(item);
+  savings = { key, loading: true, ideas: [], failed: false };
+  renderSavings(item);
+  const rid = item.resortId, todo = ideas.filter(i => i.total === undefined);
+  let failed = 0;
+  // Three at a time, so a free Render box isn't handed eight comparisons at once.
+  for(let i = 0; i < todo.length; i += 3){
+    await Promise.all(todo.slice(i, i + 3).map(async idea => {
+      const q = { ...compareQuery(), sample: "1" };
+      for(const [k, v] of Object.entries(idea.q || {})){ if(v === undefined) delete q[k]; else q[k] = v; }
+      if(idea.ov) q.overrides = JSON.stringify({ ...OV, [rid]: { ...ovOf(rid), ...idea.ov } });
+      try {
+        const data = await apiGet("/api/compare", q);
+        const r = data.results.find(y => y.resortId === rid);
+        idea.total = r && r.ok ? r.price.total : null;
+      } catch(e){ idea.total = null; failed++; }
+    }));
+    if(savings.key !== key) return;
+  }
+  const base = item.price.total;
+  savings = { key, loading: false, failed: failed > 0 && failed === todo.length,
+    ideas: ideas.filter(i => i.total !== null && base - i.total >= 25).map(i => ({ ...i, saving: base - i.total }))
+      .sort((a, b) => b.saving - a.saving) };
+  if(document.body.classList.contains("onbudget")) renderSavings(item);
+}
+
+function renderSavings(item){
+  const el = $("#bSave"), note = $("#bSaveNote");
+  if(savings.loading){ note.innerHTML = `<span class="spinner"></span>Working out where ${esc(item.resort.name)} could cost less…`; el.innerHTML = ""; return; }
+  if(savings.failed){ note.textContent = "We couldn't price the ideas just now. Try again in a minute."; el.innerHTML = ""; return; }
+  if(!savings.ideas.length){ note.textContent = "Nothing we can change on this search saves more than a few dollars: it's already about as cheap as this trip gets."; el.innerHTML = ""; return; }
+  note.textContent = `One change at a time to your ${esc(item.resort.name)} trip, biggest saving first, priced the same way as the board. "Try it" changes your search and re-prices all six resorts.`;
+  el.innerHTML = savings.ideas.slice(0, 6).map(i => `<li><div><span class="sn">${esc(i.label)}</span>
+      <span class="sm">${esc(i.why)} New total ${usd(i.total)}.</span></div>
+      <div class="sv"><b>&minus;${usd(i.saving)}</b><button type="button" class="stry" data-idea="${i.key}">Try it</button></div></li>`).join("");
+}
+$("#bSave").addEventListener("click", async e => {
+  const b = e.target.closest("[data-idea]");
+  if(!b) return;
+  const idea = savings.ideas.find(i => i.key === b.dataset.idea);
+  if(!idea) return;
+  b.disabled = true; b.textContent = "Updating…";
+  idea.apply();
+  if(typeof syncMoreDetails === "function" && $("#moreToggle")) syncMoreDetails();
+  await runSearch(budgetTripId);
+  renderBudget();
+});
+
 function budgetTrips(){ return results.filter(r=>r.ok).slice().sort((a,b)=>a.price.total-b.price.total); }
+
+function renderFit(trips, budget, note){
+  $("#bFitNote").textContent = note;
+  if(!(budget > 0)){ $("#bFit").innerHTML = ""; return; }
+  $("#bFit").innerHTML = trips.map(t => {
+    const x = t.price, fits = x.total <= budget;
+    const cal = calendars[t.resortId];
+    const ms = cal && Array.isArray(cal.months) ? cal.months.filter(m => m.total !== null) : [];
+    const ok = ms.filter(m => m.total <= budget);
+    const months = !ms.length ? "" : ok.length === ms.length ? "Fits every month we price."
+      : ok.length ? `Fits in ${ok.map(m => ymLabel(m.month)).join(", ")}.`
+      : `No month fits: the cheapest is ${usd(Math.min(...ms.map(m => m.total)))} (${ymLabel(ms.slice().sort((a,b)=>a.total-b.total)[0].month)}).`;
+    return `<li><span class="fb">${badgeImg(t.resortId)}</span>
+      <div><span class="fn">${esc(t.resort.name)}</span><span class="fm">${ymLabel(params.month)}: ${usd(x.total)}. ${months}</span></div>
+      <span class="fv">${fits ? `<span class="yes">Fits</span><small>${usd(budget - x.total)} to spare</small>`
+        : `<span class="no">${usd(x.total - budget)} over</span>`}</span></li>`;
+  }).join("");
+}
 
 function renderBudget(){
   $("#budgetGate").hidden = !!session.plus;
@@ -6193,7 +6397,7 @@ function renderBudget(){
   if(!session.plus) return;
   const trips = budgetTrips();
   $("#budgetEmpty").hidden = trips.length > 0;
-  $("#budgetPlan").hidden = trips.length === 0;
+  $("#budgetMain").hidden = trips.length === 0;
   if(!trips.length) return;
   if(!trips.some(t=>t.resortId===budgetTripId)){
     const sel = results[selected];
@@ -6203,45 +6407,85 @@ function renderBudget(){
   const item = trips.find(t=>t.resortId===budgetTripId), x = item.price;
   const now = ymOf(new Date()), tripYm = x.start.slice(0,7);
   const T = Math.max(0, ymDiff(now, tripYm));
-  $("#bTripNote").textContent = `Arriving ${fmtDate(x.start)} for ${params.nights} nights, ${T === 0 ? "this month" : T === 1 ? "next month" : T+" months from now"}. Every number is our estimate for that trip; type your own on its card in the comparison and it carries through here.`;
+  $("#budgetHead").innerHTML = `<span class="thbadge">${badgeImg(item.resortId)}</span>
+    <div class="thtext"><p class="teyebrow">Your Budget <span class="pluschip">Plus</span></p>
+      <h1>Paying for ${esc(item.resort.name)}</h1>
+      <p class="thsub">${usd(x.total)} for ${countWord(x.partySize)}, arriving ${fmtDate(x.start)} for ${params.nights} nights.</p></div>`;
+  $("#bTripNote").textContent = `Arriving ${T === 0 ? "this month" : T === 1 ? "next month" : T+" months from now"}. Every number is our estimate for that trip; type your own on its trip page and it carries through here.`;
 
   // Inputs, from what this visitor typed last time (this browser only).
   const num = id => Math.max(0, +$(id).value || 0);
-  for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"],["#bMonthly","monthly"]])
+  for(const [id,k] of BUDGET_FIELDS)
     if(document.activeElement !== $(id)) $(id).value = budgetPrefs[k] || "";
+  const lead = BUDGET_LEADS.includes(+budgetPrefs.lead) ? +budgetPrefs.lead : 1;
+  $("#bLead").value = String(lead);
   const extraOpts = Array.from({length:T+1}, (_,i)=>ymAdd(now,i));
   const extraYm = extraOpts.includes(budgetPrefs.extraYm) ? budgetPrefs.extraYm : now;
   $("#bExtraMonth").innerHTML = extraOpts.map(ym=>`<option value="${ym}"${ym===extraYm?" selected":""}>${ymLabel(ym)}</option>`).join("");
+  const extraAt = extraOpts.indexOf(extraYm);
 
   const saved = num("#bSaved"), extra = num("#bExtra");
   const giftAmt = Math.min(num("#bGiftAmt"), x.total);
   const giftSaving = Math.round(giftAmt * Math.min(30, num("#bGiftPct")) / 100);
-  const toFind = Math.max(0, x.total - saved - extra - giftSaving);
-  const even = evenMonthly(toFind, T);
+  const have = saved + extra;
+  const toFind = Math.max(0, x.total - have - giftSaving);
+  const goal = budgetGoal(T, lead), goalYm = ymAdd(now, goal.idx);
+  const deposits = goal.idx + 1;
+  const even = Math.ceil(toFind / deposits);
   const typed = num("#bMonthly");
   const monthly = typed > 0 ? typed : even;
   $("#bMonthly").placeholder = String(even);
-  const months = T + 1;
+  const leadWords = `${plural(lead, "month")} before the trip`;
   $("#bMonthlyNote").textContent = toFind === 0
     ? "What you have already covers the whole trip."
-    : typed > 0
-      ? `To have it all by ${ymLabel(tripYm)}, it takes ${usd(even)} a month (${months} month${months>1?"s":""}).`
-      : `Left blank, we use ${usd(even)} a month: what has it all put by in ${ymLabel(tripYm)}. Type what you can really manage and the milestones move.`;
-  $("#bKpi").innerHTML = `
-    <div class="kpitile"><span class="k">Still to find</span><span class="v">${usd(toFind)}</span>
-      <span class="s">of ${usd(x.total)}${giftSaving?`, after ${usd(giftSaving)} from gift cards`:""}</span></div>
-    <div class="kpitile total"><span class="k">Each month</span><span class="v">${usd(monthly)}</span>
-      <span class="s">${months} month${months>1?"s":""}, ${ymLabel(now)} to ${ymLabel(tripYm)}</span></div>
-    <div class="kpitile"><span class="k">Every two weeks</span><span class="v">${usd(Math.ceil(monthly*12/26))}</span>
-      <span class="s">or ${usd(Math.ceil(monthly*12/52))} a week</span></div>`;
+    : (goal.tooClose ? `Your trip is too close to have it all ${leadWords}, so we plan for this month. ` : "")
+      + (typed > 0
+        ? `To have it all by ${ymLabel(goalYm)} it takes ${usd(even)} a month (${plural(deposits, "month")}).`
+        : `Left blank, we use ${usd(even)} a month: what has it all put by in ${ymLabel(goalYm)}, ${leadWords}. Type what you can really manage and the plan moves.`);
 
-  const miles = budgetMilestones({ steps: budgetSteps(x), T, monthly, saved, extra,
-    extraAt: extraOpts.indexOf(extraYm), giftSaving });
+  const miles = budgetMilestones({ steps: budgetSteps(x), T, monthly, saved, extra, extraAt, giftSaving });
   $("#bMiles").innerHTML = miles.map(m => m.at === null
     ? `<li class="short"><span class="when">Not by the trip<small>${usd(m.short)} short at this pace</small></span>
         <span class="what">You'd still need to ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`
-    : `<li><span class="when">${m.at === 0 ? "This month" : "Month "+(m.at+1)}<small>${ymLabel(ymAdd(now,m.at))}</small></span>
+    : `<li${m.at > goal.idx ? ' class="late"' : ""}><span class="when">${m.at === 0 ? "This month" : "Month "+(m.at+1)}<small>${ymLabel(ymAdd(now,m.at))}${m.at > goal.idx ? ", after your goal" : ""}</small></span>
         <span class="what">You can ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`).join("");
+
+  // The side panel: the one number to act on, and whether it gets there.
+  const last = miles[miles.length - 1];
+  const fullAt = toFind === 0 ? 0 : last ? last.at : null;
+  let status;
+  if(toFind === 0) status = `<p class="bstatus good">What you have already covers the whole trip.</p>`;
+  else if(fullAt === null) status = `<p class="bstatus bad">At ${usd(monthly)} a month you'd be ${usd(last.short)} short when you leave. ${usd(even)} a month gets you there by ${ymLabel(goalYm)}.</p>`;
+  else if(fullAt > goal.idx) status = `<p class="bstatus bad">Fully paid in ${ymLabel(ymAdd(now, fullAt))}, ${plural(fullAt - goal.idx, "month")} after your goal. ${usd(even)} a month gets you there by ${ymLabel(goalYm)}.</p>`;
+  else status = `<p class="bstatus good">Fully paid in ${ymLabel(ymAdd(now, fullAt))}, ${T - fullAt === 0 ? "the month you go" : plural(T - fullAt, "month") + " before you go"}.</p>`;
+  const b = boardBits(item);
+  $("#budgetSide").innerHTML = `<p class="tslab">Set aside each month</p>
+    <p class="tstotal">${usd(monthly)}</p>
+    <p class="tssub">${typed > 0 ? "your figure" : `to have it all by ${ymLabel(goalYm)}`} · ${plural(deposits, "month")}</p>
+    ${costBar(b)}
+    <ul class="tslines">
+      <li><span>Trip total</span><b>${usd(x.total)}</b></li>
+      ${have ? `<li><span>You already have</span><b>&minus;${usd(have)}</b></li>` : ""}
+      ${giftSaving ? `<li><span>Gift card discount</span><b>&minus;${usd(giftSaving)}</b></li>` : ""}
+      <li><span>Still to find</span><b>${usd(toFind)}</b></li>
+      <li><span>Every two weeks</span><b>${usd(Math.ceil(monthly*12/26))}</b></li>
+      <li><span>Every week</span><b>${usd(Math.ceil(monthly*12/52))}</b></li>
+    </ul>
+    ${status}`;
+
+  // What fits: a typed budget, else what this plan puts by at the goal.
+  const typedBudget = num("#bBudget");
+  const atGoal = have + giftSaving + monthly * deposits;
+  $("#bBudget").placeholder = typed > 0 ? String(Math.round(atGoal)) : "";
+  const budget = typedBudget > 0 ? typedBudget : typed > 0 ? atGoal : 0;
+  renderFit(trips, budget, typedBudget > 0
+    ? `Every trip in your comparison against ${usd(budget)}, and the months each one fits.`
+    : typed > 0
+      ? `Left blank, we use what your plan puts by in ${ymLabel(goalYm)}: ${usd(budget)}. Every trip in your comparison against it, and the months each one fits.`
+      : "Type the most you'd spend, or what you can set aside each month above, and we'll show which trips and months fit.");
+
+  if(savings.key === JSON.stringify([compareQuery(), item.resortId])) renderSavings(item);
+  else loadSavings(item);
 
   $("#bPassBody").innerHTML = passCheckHtml();
 }
@@ -6268,11 +6512,12 @@ $("#budgetBtn").addEventListener("click", ()=>{
   if(sel && sel.ok) budgetTripId = sel.resortId;
   openBudget();
 });
-$("#budgetBack").addEventListener("click", closeBudget);
+$("#budgetBack").addEventListener("click", e => { e.preventDefault(); closeBudget(); });
 $("#budgetToSearch").addEventListener("click", closeBudget);
 $("#bTrip").addEventListener("change", e=>{ budgetTripId = e.target.value; renderBudget(); });
-for(const [id,k] of [["#bSaved","saved"],["#bExtra","extra"],["#bGiftAmt","giftAmt"],["#bGiftPct","giftPct"],["#bMonthly","monthly"]])
+for(const [id,k] of BUDGET_FIELDS)
   $(id).addEventListener("input", e=>{ budgetPrefs[k] = +e.target.value || 0; saveBudgetPrefs(); renderBudget(); });
+$("#bLead").addEventListener("change", e=>{ budgetPrefs.lead = +e.target.value; saveBudgetPrefs(); renderBudget(); });
 $("#bExtraMonth").addEventListener("change", e=>{ budgetPrefs.extraYm = e.target.value; saveBudgetPrefs(); renderBudget(); });
 $("#bRecompare").addEventListener("click", async ()=>{
   const b = $("#bRecompare"); b.disabled = true; b.textContent = "Updating…";
