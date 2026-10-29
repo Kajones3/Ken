@@ -434,6 +434,24 @@ this section).
     a search the same bar becomes a plain stack in the side panel, Compare
     hides and "Update prices" (`#run2`) sits at the panel's foot. Phones:
     the bar stacks into one card, Compare full width.
+  - **Top bar streamlined and STICKY; results get "Sort by" (owner,
+    2026-10-29: "make the top bar more streamlined. Also make it stay at the
+    top as an ability to sign in").** The masthead (`position:sticky`, the
+    page ground behind it to the window edges, z-index 45 so dialogs still
+    dim it; `html{scroll-padding-top:76px}` so nothing scrolls under it) holds
+    only: logo + name (a link home; tag line gone), My searches ("Saved" on
+    phones), Admin (owner; on phones it moves into the account panel,
+    `#acctAdmin`), Sign in or the account button (avatar only on phones), the
+    moon/sun. GONE from it: the Free plan chip, Budget, Save as PDF, Upgrade,
+    Sign out. Save as PDF (`#printTop`) now sits beside Save this search /
+    Plan how to pay in the results bar; Get Plus and Sign out are in the
+    account panel. **Sort by** (`#sortBy`, `sortTrips()`, kept in localStorage
+    `pf_sort`): Cheapest first (default), Quietest first (crowd band rank),
+    Most parks (`resort.parks`), Closest to home (great-circle miles from the
+    home airport or typed city to the park); ties fall back to price, a card
+    keeps its PRICE rank ("No. 3 on price · Low crowds") and the title
+    follows the sort. **"Highest rated" is NOT built**: we hold no sourced
+    rating; the owner was asked which survey to use.
   - **Search page + trip pages (owner, 2026-10-29, after Adventures by
     Disney's destination pages + Baymard's travel UX article; mock-up on the
     claude.ai Design canvas "Pricing the Magic — search & trip pages").**
