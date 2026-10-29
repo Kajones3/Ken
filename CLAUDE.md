@@ -135,7 +135,7 @@ after deploying", check `/health` version first, then whether X only shows
 in certain cases (it usually does; see the nearby-airport test below).
 
 Run `npm test` and `npm run typecheck` before you believe anything. There are
-**870 tests** (all pass, 2026-10-29), and typecheck is clean. `npm run smoke` runs the pipeline.
+**871 tests** (all pass, 2026-10-29), and typecheck is clean. `npm run smoke` runs the pipeline.
 
 **This session (2026-10-12 to 10-13), PRs #169-#172:** #169 the
 government's airfare indexes (BLS CPI + PPI) kept append-only, two learned
@@ -437,8 +437,14 @@ this section).
   - **"The cheapest trip we can find" + "Updating prices" (owner,
     2026-10-29).** The basis option is renamed (was "The cheapest flight on
     the cheapest day"); picking it (`setPriceBasis()`) also sets the form to
-    OFF property (owner, same day: "There is usually no way Disney is ever
-    cheaper than a hotel"), budget, groceries and no Park Hopper, and remembers the
+    groceries and no Park Hopper and LOCKS Where you stay / Resort category,
+    because the server picks the cheapest place to stay per resort
+    (`cheapestLodging()` in pricing.ts: every category on and off property,
+    rooms + parking/transfers, before deals; `TripPrice.lodgingChoice`; the
+    hotel card says "Why this hotel ... $X less than the cheapest Disney
+    hotel"). Owner first said "switch them to off property", then, told a WDW
+    Value resort can beat a motel + $35/day parking: "we can price the lowest
+    lodging option". It remembers the
     traveler's own choices so "Price a typical trip instead" puts them back.
     Server unchanged (it already prices food as groceries and the cheapest
     listed flight on this basis). It means the cheapest we HOLD now, not an
