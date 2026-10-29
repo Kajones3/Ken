@@ -437,7 +437,8 @@ this section).
   - **"The cheapest trip we can find" + "Updating prices" (owner,
     2026-10-29).** The basis option is renamed (was "The cheapest flight on
     the cheapest day"); picking it (`setPriceBasis()`) also sets the form to
-    Value / budget, groceries and no Park Hopper, and remembers the
+    OFF property (owner, same day: "There is usually no way Disney is ever
+    cheaper than a hotel"), budget, groceries and no Park Hopper, and remembers the
     traveler's own choices so "Price a typical trip instead" puts them back.
     Server unchanged (it already prices food as groceries and the cheapest
     listed flight on this basis). It means the cheapest we HOLD now, not an
