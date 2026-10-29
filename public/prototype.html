@@ -1139,6 +1139,13 @@ html{scroll-padding-top:76px}
 #tripsTop .narrow{display:none}
 @media (max-width:560px){ #tripsTop .narrow{display:inline} .acct #adminTop{display:none} }
 @media (max-width:380px){ .brand h1{font-size:16px} }
+
+/* While "Update prices" runs: the old cards dim, a line says why. */
+.updatingnote{position:sticky; top:76px; z-index:6; display:flex; align-items:center; gap:10px; margin:0 0 12px; padding:10px 14px; border-radius:12px;
+  background:var(--accent-bg); border:1.5px solid var(--accent-line); color:var(--ink); font-weight:600}
+
+.updatingnote .spinner{border-color:color-mix(in srgb, var(--ink) 25%, transparent); border-top-color:var(--accent-line)}
+body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 </style>
 
 <div class="wrap">
@@ -1481,7 +1488,7 @@ html{scroll-padding-top:76px}
         <label for="priceBasis">Which trip should we price?</label>
         <select id="priceBasis">
           <option value="typical" selected>A typical day, typical flight</option>
-          <option value="cheapest">The cheapest flight on the cheapest day</option>
+          <option value="cheapest">The cheapest trip we can find</option>
         </select>
       </div>
     </div>
@@ -1640,12 +1647,17 @@ html{scroll-padding-top:76px}
       <p>Exact dollar prices for flights and hotels adjust in real time based on how full a plane or
         hotel already is, which is closer to how a stock price moves than to a fixed rate. Nobody can
         promise what a specific flight or room will cost on a specific day, especially close to your trip.</p>
-      <p>We use thousands of data points to provide accurate estimates, so treat every number here as a
-        well-informed starting point. This board is useful for deciding when and where to go — not a
-        quote you can book against sight unseen.</p>
+      <p>We use thousands of data points to estimate what each trip really costs, so treat every number
+        here as a well-informed starting point. You'll always find options that cost more or less: a $50
+        budget-airline seat to Orlando, say. This board isn't built to find the cheapest possible trip.
+        It's built to help you decide when and where to go, not to give you a quote you can book sight unseen.</p>
+      <p>Want the lowest we've found? <button type="button" class="linkbtn" id="whyCheapest">Price the
+        cheapest trip</button>: the cheapest flight on the cheapest day, a Value / budget room, and
+        groceries instead of restaurants.</p>
     </div>
   </details>
 
+  <p class="updatingnote" id="updatingNote" hidden role="status"><span class="spinner"></span>Updating prices for your new search…</p>
   <div class="board" id="board"></div>
   <div class="tablewrap" id="tablewrap" hidden></div>
   </div><!-- /searchmain -->
@@ -2609,6 +2621,14 @@ function setSearchBusy(busy){
   if(!btn) return;
   btn.disabled = busy;
   label.innerHTML = busy ? `<span class="spinner"></span>Comparing…` : "Compare";
+  // "Update prices" and the results say it too (owner, 2026-10-29: "it
+  // looks like it isn't working"): the button spins, the cards dim and a
+  // line over them says the prices are being updated.
+  const b2 = $("#run2");
+  if(b2){ b2.disabled = busy; b2.innerHTML = busy ? `<span class="spinner"></span>Updating prices…` : "Update prices"; }
+  document.body.classList.toggle("updating", busy && document.body.classList.contains("has-results"));
+  const st = $("#updatingNote");
+  if(st) st.hidden = !(busy && document.body.classList.contains("has-results"));
 }
 
 async function runSearch(keepId){
@@ -4037,6 +4057,26 @@ async function renderDetail(){
 /* One line under the results title saying what "our suggestion" priced at
  * each resort and why. Shown only when the search left park days on the
  * suggestion, since otherwise every resort carries the number you picked. */
+/* "The cheapest trip we can find" (owner, 2026-10-29: "switch all of their
+ * variables automatically to the cheapest"): picking it also moves the form
+ * to a Value / budget room and groceries and turns Park Hopper off, so the
+ * form shows what was priced. The server already prices food as groceries
+ * and the flight as the cheapest one on this basis. Going back to a typical
+ * trip puts the traveler's own choices back. */
+let beforeCheapest = null;
+function setPriceBasis(basis){
+  const sel = $("#priceBasis");
+  if(basis === "cheapest"){
+    if(!beforeCheapest) beforeCheapest = { tier: $("#tier").value, food: $("#food").value, hopper: $("#hopper").value };
+    $("#tier").value = "0"; $("#food").value = "grocery"; $("#hopper").value = "0";
+  } else if(beforeCheapest){
+    $("#tier").value = beforeCheapest.tier; $("#food").value = beforeCheapest.food; $("#hopper").value = beforeCheapest.hopper;
+    beforeCheapest = null;
+  }
+  sel.value = basis;
+  if(typeof syncMoreDetails === "function" && $("#moreToggle")) syncMoreDetails();
+}
+
 /* Which trip the board priced, and the one-click switch to the other
  * (owner, 2026-10-15): a typical day at the middle fare Google lists, or the
  * cheapest flight on the cheapest day. Same question as the form's
@@ -4046,14 +4086,11 @@ function renderBasisNote(){
   if(!el || !params) return;
   const cheap = params.priceBasis === "cheapest";
   el.querySelector("dd").innerHTML = (cheap
-    ? `<b>The cheapest flight on the cheapest day</b> we can find each month. `
+    ? `<b>The cheapest trip we can find:</b> the cheapest flight on the cheapest day, a Value / budget room and groceries. `
     : `<b>A typical day and a typical flight.</b> `)
-    + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest flight on the cheapest day"}</button>`;
+    + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest trip we can find"}</button>`;
   el.hidden = false;
-  $("#basisSwitch").onclick = () => {
-    $("#priceBasis").value = cheap ? "typical" : "cheapest";
-    runSearch();
-  };
+  $("#basisSwitch").onclick = () => { setPriceBasis(cheap ? "typical" : "cheapest"); runSearch(); };
 }
 function renderParkDaysNote(){
   const el = $("#parkDaysNote");
@@ -4122,6 +4159,8 @@ function render(){
 
 $("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
 $("#run2").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
+$("#priceBasis").addEventListener("change", e => setPriceBasis(e.target.value));
+$("#whyCheapest").addEventListener("click", () => { setPriceBasis("cheapest"); runSearch(null); });
 
 /* "Who's going": one button in the bar, a small panel with the party. */
 function partySummary(){
@@ -6431,7 +6470,7 @@ function moreSummary(){
   if($("#needHotel").value === "no") bits.push("no hotel");
   else bits.push(`${txt("tier").split(" / ")[$("#stay").value === "off" ? 1 : 0]} ${$("#stay").value === "off" ? "off" : "on"} property`);
   bits.push(txt("food").toLowerCase());
-  if($("#priceBasis").value === "cheapest") bits.push("cheapest flight on the cheapest day");
+  if($("#priceBasis").value === "cheapest") bits.push("the cheapest trip");
   return "Pricing: " + bits.join(" · ");
 }
 function syncMoreDetails(){
