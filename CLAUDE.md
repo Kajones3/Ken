@@ -252,12 +252,20 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   `showFits()` fills the `#plusPitch` box: "Four Destinations Can Fit Your
   $4,900 Budget / ... at different times of the year (one of them in April).
   Plus shows you which ones, and when." (+ "None fit" and "All six" forms).
+  **Never names a month** (owner: "(one of them in April) ... don't say
+  this. The user can just search for April then"): only "at different
+  times of the year" when some fit outside the searched month.
   Triggered by Enter in `#sbBudget` (side panel; on the landing bar Enter
   runs Compare) or the side panel's "See which with Plus" button. Plus
   members never see it (their cards already say which).
 - **Monetization ideas beyond Google ads** were given in the conversation of
   2026-10-29 (agent referrals, ticket/tour/eSIM affiliates via
   Travelpayouts, premium ad networks later). Nothing built; owner to pick.
+- **The ONE credit card the owner would recommend: the Disney Visa**
+  (owner, 2026-10-29: "for its benefits in the parks and discounts"). This
+  narrows the older "never recommend loans, credit or insurance" rule: no
+  other card, no loans, no insurance. Not built anywhere yet; ask before
+  adding it to the budget page or a trip page.
 
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 
