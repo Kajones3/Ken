@@ -13,6 +13,7 @@
 import { randomUUID } from "node:crypto";
 import { NEWS_FEEDS, mileageRateStatus } from "../config.js";
 import { getDb, type Db } from "../db.js";
+import { loadMileageRates } from "../mileageRates.js";
 import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { parseRssItems } from "../rss.js";
@@ -81,7 +82,7 @@ export async function runNewsDigest(db: Db, opts: NewsDigestOptions = {}) {
   // IRS mileage rates are hand-entered in config.ts and the IRS publishes the
   // next year's around mid-December; without this, a year with no rate on file
   // would just quietly reuse an old one and nobody would ever find out.
-  const mileage = mileageRateStatus(opts.todayISO ?? todayISO());
+  const mileage = mileageRateStatus(opts.todayISO ?? todayISO(), 365, await loadMileageRates(db));
   const years = mileage.uncoveredYears;
 
   // Every hand-maintained thing in this project can go stale silently, and

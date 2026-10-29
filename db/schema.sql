@@ -980,3 +980,31 @@ create table if not exists owner_notes (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- 2026-10-29: the owner's own park ratings (src/parkRatings.ts), typed in
+-- /admin -> Manual work, for the "Top rated first" sort. Stars 0-5, one per
+-- park; the newest row per resort + park wins, so every change is kept
+-- (stars null = the owner cleared it). Where the stars came from is the
+-- owner's business: travelers only ever see "Top rated".
+create table if not exists park_ratings (
+  id          bigserial    primary key,
+  resort_id   text         not null,
+  park        text         not null,
+  stars       numeric(2,1) check (stars is null or (stars >= 0 and stars <= 5)),
+  entered_by  text         not null default '',
+  entered_at  timestamptz  not null default now()
+);
+create index if not exists park_ratings_lookup on park_ratings (resort_id, park, entered_at desc);
+
+-- 2026-10-29: IRS mileage rates for years the code doesn't carry yet
+-- (src/mileageRates.ts). The owner presses "Check the IRS page" in /admin ->
+-- Manual work, sees what it says, and saves; nothing is written without that
+-- press. Dollars per mile. A year here beats the code's table for that year.
+create table if not exists owner_mileage_rates (
+  year        integer      primary key check (year between 2020 and 2100),
+  jan_to_jun  numeric(5,3) not null check (jan_to_jun > 0 and jan_to_jun < 3),
+  jul_to_dec  numeric(5,3) not null check (jul_to_dec > 0 and jul_to_dec < 3),
+  source      text         not null default '',
+  updated_by  text         not null default '',
+  updated_at  timestamptz  not null default now()
+);

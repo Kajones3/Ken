@@ -203,6 +203,26 @@ select{font:inherit; font-size:16px; color:var(--ink); background:var(--surface)
   color:var(--muted); margin-bottom:3px}
 .cgrid .filled{border-color:var(--accent-line); background:var(--accent-bg)}
 .sheet h3{margin:20px 0 6px; font-size:13.5px}
+/* Manual work */
+.mlist{display:flex; flex-direction:column; gap:8px}
+.mitem{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 14px; border:1px solid var(--rule); border-radius:10px; padding:10px 12px; background:var(--surface)}
+.mitem .mt{font-weight:700; font-size:14px}
+.mitem .mw{grid-column:1 / -1; font-size:12.5px; color:var(--muted)}
+.mitem .md{font-size:13px}
+.mitem .mwhen{text-align:right; font-size:12.5px; white-space:nowrap}
+.mitem .mst{display:inline-block; font-size:10px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; border:1px solid var(--rule); border-radius:999px; padding:1px 7px; margin-left:6px}
+.mitem .mst.missing{color:var(--bad); border-color:var(--bad)}
+.mitem .mst.due{color:#C98A12; border-color:#C98A12}
+.mitem .mst.ok{color:var(--ok); border-color:var(--ok)}
+.mitem .macts{grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; align-items:center; font-size:13px}
+.rgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:10px}
+.rgrid fieldset{border:1px solid var(--rule); border-radius:10px; padding:8px 10px 10px; margin:0}
+.rgrid legend{font-weight:700; font-size:13px; padding:0 4px}
+.rgrid label{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:13px; margin-top:6px}
+.rgrid input{width:80px; font-size:16px}
+.rgrid .rwhen{font-size:11px; color:var(--muted)}
+@media (max-width:560px){ .mitem{grid-template-columns:minmax(0,1fr)} .mitem .mwhen{text-align:left} }
+
 .lbody{padding:2px 15px 14px}
 .lpark{margin:0 0 12px}
 .lpark .pn{font-weight:700; font-size:13.5px; margin-bottom:6px}
@@ -298,6 +318,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 <div class="shell">
   <nav class="adminnav" aria-label="Admin sections">
     <a href="#visitors">Visitors</a>
+    <a href="#manual">Manual work</a>
     <a href="#sees">What the user sees</a>
     <a href="#holes">Data holes</a>
     <a href="#checks">Prices you've checked</a>
@@ -895,6 +916,35 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
     <h3>All deals</h3>
     <div id="dList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="manual">
+  <section class="sheet" id="manual">
+    <h2>Manual work</h2>
+    <p>Everything you keep up by hand, most urgent first, and when you last updated it.
+      <b>Nothing on this page changes what the nightly jobs fetch</b>: flights, hotels and the government
+      surveys keep coming in on their own.</p>
+    <div class="mlist" id="manualList"><p class="count">Loading…</p></div>
+  </section>
+  <section class="sheet" id="ratingsForm">
+    <h2>Park ratings</h2>
+    <p>Give each park 0 to 5 stars from whatever you trust (or a mix). The search page's
+      <b>Top rated first</b> puts the resort with the best park first, then the next best, and travelers
+      only ever see &ldquo;Top rated&rdquo;: never the stars or where they came from. Leave a box blank for
+      &ldquo;not rated&rdquo;. Every change is kept.</p>
+    <div class="said" id="rSaid"></div>
+    <div class="rgrid" id="ratingList"></div>
+    <p style="margin-top:12px"><button type="button" class="primary" id="rSave">Save ratings</button></p>
+  </section>
+  <section class="sheet" id="mileageBox">
+    <h2>IRS mileage rate</h2>
+    <p>What a mile of driving costs on driving trips. <b>Check the IRS page</b> reads the IRS's own table and
+      shows it next to ours; nothing is saved until you press Save on a year.</p>
+    <div class="said" id="mSaid"></div>
+    <div id="mileageList"></div>
+    <p style="margin-top:12px"><button type="button" class="primary" id="mCheck">Check the IRS page</button></p>
+    <div id="mileageCheck"></div>
   </section>
   </div>
 
@@ -2042,6 +2092,78 @@ document.addEventListener("click", e => {
   const en = e.target.closest("[data-useend]"); if(en){ fill("#cEnd", en.dataset.useend); }
 });
 
+
+/* ----------------------------- manual work -----------------------------
+ * Everything kept up by hand (manualWork.ts), park ratings (parkRatings.ts)
+ * and the IRS mileage check (mileageRates.ts). Reads only, except the two
+ * Save buttons, which store what the owner typed or confirmed. */
+const mWhen = v => !v ? "Never" : new Date(v.length === 10 ? v + "T12:00:00Z" : v).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+const mStatus = { missing: "Needed", due: "Due", ok: "Up to date" };
+function renderManual(d){
+  $("#manualList").innerHTML = (d.items || []).map(i => `<div class="mitem">
+      <span class="mt">${esc(i.title)}<span class="mst ${i.status}">${mStatus[i.status]}</span></span>
+      <span class="mwhen">Last updated: <b>${esc(mWhen(i.lastUpdated))}</b>${i.everyDays ? `<br><span class="count" style="margin:0">check every ${i.everyDays >= 360 ? "year" : i.everyDays >= 180 ? "6 months" : i.everyDays >= 85 ? "3 months" : i.everyDays >= 55 ? "2 months" : i.everyDays >= 28 ? "month" : i.everyDays + " days"}</span>` : ""}</span>
+      <span class="mw">${esc(i.what)}</span>
+      <span class="macts"><span class="md">${esc(i.detail)}</span>
+        ${i.where ? `<a href="${esc(i.where.href)}"${i.where.href.startsWith("http") ? ' target="_blank" rel="noopener"' : ""}>${esc(i.where.label)} &rarr;</a>` : ""}
+        ${i.action === "mileage-check" ? `<a href="#mileageBox" data-mjump>Check the IRS page &rarr;</a>` : ""}</span>
+    </div>`).join("") || `<p class="count">Nothing to show.</p>`;
+  $("#ratingList").innerHTML = (d.ratings || []).map(r => `<fieldset><legend>${esc(r.name)}</legend>
+      ${r.parks.map(p => `<label><span>${esc(p.park)}${p.enteredAt ? `<br><span class="rwhen">${esc(mWhen(p.enteredAt))}</span>` : ""}</span>
+        <input type="number" min="0" max="5" step="0.1" inputmode="decimal" data-rresort="${esc(r.id)}" data-rpark="${esc(p.park)}" value="${p.stars ?? ""}" aria-label="${esc(p.park)} stars"></label>`).join("")}
+    </fieldset>`).join("");
+  renderMileage(d.mileage || []);
+}
+function renderMileage(list){
+  $("#mileageList").innerHTML = `<table class="ctab"><thead><tr><th>Year</th><th class="n">Jan&ndash;Jun</th><th class="n">Jul&ndash;Dec</th><th>From</th></tr></thead><tbody>
+    ${list.map(r => `<tr><td>${r.year}</td><td class="n">$${r.janToJunPerMile.toFixed(3)}</td><td class="n">$${r.julToDecPerMile.toFixed(3)}</td>
+      <td>${r.from === "yours" ? `Saved by you, ${esc(mWhen(r.updatedAt))}` : "Shipped with the site"}</td></tr>`).join("")}</tbody></table>`;
+}
+async function loadManual(){
+  const r = await fetch("/api/admin/manual");
+  if(!r.ok){ $("#manualList").innerHTML = `<p class="count">Couldn't load the list.</p>`; return; }
+  renderManual(await r.json());
+}
+$("#rSave").addEventListener("click", async () => {
+  const b = $("#rSave"); b.disabled = true;
+  const ratings = [...document.querySelectorAll("#ratingList input")].map(i => ({ resortId: i.dataset.rresort, park: i.dataset.rpark, stars: i.value }));
+  const r = await fetch("/api/admin/ratings", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ratings }) });
+  const d = await r.json().catch(() => ({}));
+  b.disabled = false;
+  if(!r.ok){ attrSay($("#rSaid"), false, d.message || "That didn't save."); return; }
+  attrSay($("#rSaid"), true, d.changed ? `Saved ${d.changed} change${d.changed === 1 ? "" : "s"}. The search page shows them within about five minutes.` : "Nothing had changed.");
+  loadManual();
+});
+$("#mCheck").addEventListener("click", async () => {
+  const b = $("#mCheck"); b.disabled = true; b.textContent = "Reading the IRS page…";
+  const r = await fetch("/api/admin/mileage-check", { method: "POST" });
+  const d = await r.json().catch(() => ({}));
+  b.disabled = false; b.textContent = "Check the IRS page";
+  if(!r.ok || !d.ok){ attrSay($("#mSaid"), false, (d && d.message) || "Couldn't read the IRS page."); $("#mileageCheck").innerHTML = ""; return; }
+  attrSay($("#mSaid"), true, d.message);
+  $("#mileageCheck").innerHTML = `<h3>What the IRS page says (<a href="${esc(d.url)}" target="_blank" rel="noopener">open it</a>)</h3>
+    <table class="ctab"><thead><tr><th>Year</th><th class="n">Jan&ndash;Jun</th><th class="n">Jul&ndash;Dec</th><th>Ours</th><th></th></tr></thead><tbody>
+    ${d.years.map(y => `<tr><td>${y.year}</td><td class="n">$${y.janToJunPerMile.toFixed(3)}</td><td class="n">$${y.julToDecPerMile.toFixed(3)}</td>
+      <td>${y.status === "same" ? "Same" : y.ours ? `Different (ours $${y.ours.janToJunPerMile.toFixed(3)} / $${y.ours.julToDecPerMile.toFixed(3)})` : "We don't have it"}</td>
+      <td>${y.status === "same" ? "" : `<button type="button" class="primary" data-msave="${y.year}" data-h1="${y.janToJunPerMile}" data-h2="${y.julToDecPerMile}">Save ${y.year}</button>`}</td></tr>`).join("")}
+    </tbody></table>`;
+});
+document.addEventListener("click", async e => {
+  const j = e.target.closest("[data-mjump]");
+  if(j){ e.preventDefault(); $("#mileageBox").scrollIntoView({ behavior: "smooth" }); return; }
+  const b = e.target.closest("[data-msave]");
+  if(!b) return;
+  b.disabled = true;
+  const r = await fetch("/api/admin/mileage", { method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ year: +b.dataset.msave, janToJunPerMile: +b.dataset.h1, julToDecPerMile: +b.dataset.h2 }) });
+  const d = await r.json().catch(() => ({}));
+  if(!r.ok){ b.disabled = false; attrSay($("#mSaid"), false, d.message || "That didn't save."); return; }
+  b.textContent = "Saved";
+  attrSay($("#mSaid"), true, `Saved ${b.dataset.msave}. Driving trips that year use it now.`);
+  renderMileage(d.mileage || []);
+  loadManual();
+});
+
 /* --------------------------- pages and menu ---------------------------
  * Each section is its own page, picked by the address (#visitors, #numbers,
  * ...), so the browser's back button works and a page can be bookmarked.
@@ -2855,6 +2977,7 @@ route();
 load();
 loadTicketCalendars();
 loadNotes();
+loadManual();
 loadGrades();
 renderAdvice();
 loadHoles();

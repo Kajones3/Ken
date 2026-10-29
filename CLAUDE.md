@@ -154,6 +154,40 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   Park Ranker covers only 4 Disney parks). Airports: the 22 Plus airports
   (OAK etc.) cost no paid searches unless someone searches them.
 
+### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
+
+- **"Top rated first" sort BUILT from the owner's own stars** (owner: "I can
+  just manually enter the stars ... it can just say 'top rated' and I can
+  combine whatever I want"; Tripadvisor's API is NOT used). /admin -> Manual
+  work -> Park ratings: 0-5 stars per park (`src/parkRatings.ts`, append-only
+  `park_ratings`, newest per resort+park wins, blank clears). A resort ranks
+  by its BEST park, then the next best (`ratingOrder()`; owner: Tokyo with
+  DisneySea first before Disney World; averages rejected as unfair).
+  `/api/meta` sends `topRated` (resort ids in order) and NOTHING else: no
+  stars, no source. Search page: "Top rated first" appears in Sort by only
+  once something is rated; unrated resorts go last; a "Top rated" chip on
+  the No. 1 resort's card under the other sorts. /api/meta is cached 5 min,
+  so a save shows within ~5 minutes (the admin message says so).
+- **/admin -> Manual work** (`src/manualWork.ts`, GET `/api/admin/manual`,
+  READ-ONLY, never touches nightly-job data): every hand-kept thing with its
+  last update and how often to check, most urgent first: park ratings, WDW
+  ticket calendars (months saved vs plannable), Disneyland 1-day calendar
+  (optional), Paris tickets (still the curve, screenshots needed), Tokyo/
+  Shanghai/HK ticket tables (code, checked 2026-09-23), IRS mileage, deals
+  (one line, live count per resort), price checks, Good to know notes,
+  attractions, pass prices, plus `REVIEWABLE` (crowd bands, price levels).
+- **IRS mileage, no code change per year** (`src/mileageRates.ts`, table
+  `owner_mileage_rates`): "Check the IRS page" (POST
+  `/api/admin/mileage-check`) READS irs.gov's "Mileage rates for all years"
+  table (`parseIrsMileageTable`, fixture
+  `src/testdata/irs-mileage-rates-2026-10-29.html`) and compares; writes
+  nothing. "Save <year>" (POST `/api/admin/mileage`) stores the year the
+  owner confirmed; `irsMileageRate()/mileageRateStatus()` take the saved
+  years (`mileageRatesWith()`), `PriceBook.mileageRates` carries them, so a
+  saved 2027 prices as 2027's own rate and the daily-email reminder clears.
+  Checked locally: the IRS page was reachable and read 2026 = $0.725/$0.76
+  (same as the code). 879 tests.
+
 ### 2026-10-29, third round (PR after #210)
 
 - **Popular-routes empty slots FIXED** (owner: "Do this"): routes are moved
@@ -167,7 +201,8 @@ Render was live on master (b320a6f) at the start. Owner asked for:
 - **Plus sales copy** (paywall list + the "what's free" line) now names What
   fits my budget?, What would save the most? and Is an annual pass worth
   it?; "Best months" says two to ten months out (was "a year ahead").
-- **"Highest rated" via Tripadvisor: owner picked Tripadvisor, sorted by
+- **"Highest rated" via Tripadvisor: SUPERSEDED in the fourth round below
+  (owner types the stars). Was: owner picked Tripadvisor, sorted by
   each resort's BEST park (not an average). NOT BUILT: Tripadvisor's API
   master terms appear to forbid it** (docs.terra.tripadvisor.com/docs/
   api-master-terms): no altering sort/ranking order (3.4.2(d)), no

@@ -29,6 +29,9 @@ import {
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
 import { withEffectiveNotes, adminNotes, listNoteRows, saveNote, type NoteSave } from "./goodToKnow.js";
+import { loadParkRatings, saveParkRatings, ratingOrder } from "./parkRatings.js";
+import { checkIrsMileage, saveMileageRate, listMileageRates } from "./mileageRates.js";
+import { loadManualWork } from "./manualWork.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
 import { quoteMonths } from "./monthView.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
@@ -750,6 +753,9 @@ const server = createServer(async (req, res) => {
       // ... and their "Good to know" notes come from the code's list
       // corrected by the owner's own (goodToKnow.ts, /admin -> Good to know).
       resorts: await withEffectiveNotes(db, await effectiveParkLists(db, RESORTS), todayISO()),
+      // "Top rated first" (owner's own park ratings, parkRatings.ts): the
+      // order only, best park first. No stars and no source leave the server.
+      topRated: ratingOrder(await loadParkRatings(db, RESORTS)),
       // Typical weather per resort per month. Its own key rather than folded
       // onto each Resort: 72 rows would bury the resort definitions, and
       // nothing that prices a trip reads it.
@@ -1784,6 +1790,41 @@ const server = createServer(async (req, res) => {
       const saved = await saveCalendar(db, v.value, owner.email);
       await seedTickets(db, [v.value.month], [v.value.resortId]);
       return send(200, { ok: true, saved, months: await calendarSummary(db) }, { cache: "no-store" });
+    }
+
+    /* Manual work: everything kept up by hand and when it was last updated
+     * (manualWork.ts). Read-only; never touches the nightly jobs' data. */
+    if (url.pathname === "/api/admin/manual" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, {
+        items: await loadManualWork(db, todayISO()),
+        ratings: await loadParkRatings(db, RESORTS),
+        mileage: await listMileageRates(db),
+      }, { cache: "no-store" });
+    }
+
+    /* Park ratings: the owner's stars per park (parkRatings.ts). */
+    if (url.pathname === "/api/admin/ratings" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req) as { ratings?: { resortId: string; park: string; stars: unknown }[] };
+      const r = await saveParkRatings(db, RESORTS, Array.isArray(body.ratings) ? body.ratings : [], owner.email);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { changed: r.changed, ratings: await loadParkRatings(db, RESORTS) }, { cache: "no-store" });
+    }
+
+    /* IRS mileage: "Check the IRS page" reads it and compares (writes
+     * nothing); Save stores the one year the owner confirmed. */
+    if (url.pathname === "/api/admin/mileage-check" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await checkIrsMileage(db), { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/mileage" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const r = await saveMileageRate(db, await readBody(req) as { year: unknown; janToJunPerMile: unknown; julToDecPerMile: unknown }, owner.email);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { mileage: await listMileageRates(db) }, { cache: "no-store" });
     }
 
     /* Good to know: each resort's notes, the code's corrected by the

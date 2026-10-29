@@ -10,7 +10,7 @@
  * { ok: false, reason } so a gap in the cache can never reach a user as NaN.
  */
 import {
-  ON_TIERS, OFF_TIERS, RESORTS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate,
+  ON_TIERS, OFF_TIERS, RESORTS, RESORT_BY_ID, ORIGIN_BY_IATA, DRIVING, bucketFor, irsMileageRate, type MileageRateRow,
   type Band, type FoodStyle, type Resort, type Stay, type Tier, type TierIndex, type HotelDef,
   type MileageRateLookup,
   SUGGESTED_PARK_DAYS, suggestedParkDaysKey, TICKET_TAX_PCT, ticketTaxKey,
@@ -492,6 +492,9 @@ export interface PriceBook {
    * those tests are for.
    */
   setting?(key: string): number | undefined;
+  /** IRS mileage rates the owner saved in /admin for years the code lacks
+   *  (src/mileageRates.ts). Absent = the code's table alone. */
+  mileageRates?: readonly MileageRateRow[];
   /** Oldest row backing this book, so the UI can say "prices as of ...". */
   oldestFetchedAt: Date | null;
 }
@@ -925,7 +928,7 @@ export function priceTrip(
       // a trip page is noise to a traveler, and the number barely moves). Once
       // the newest rate is too old to stand behind, this refuses instead, rather
       // than quietly pricing on it.
-      const rate = withMileageOverride(book, irsMileageRate(start), start);
+      const rate = withMileageOverride(book, irsMileageRate(start, book.mileageRates), start);
       if (!rate.ok) return { ok: false, reason: rate.reason };
       wearAndTearUsd = roundTripMiles * rate.ratePerMile;
       mileageRate = {

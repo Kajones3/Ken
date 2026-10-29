@@ -26,6 +26,7 @@
  * free feature is everybody's problem, a broken Plus feature is a paying
  * customer's problem, and they deserve different urgency.
  */
+import { loadMileageRates } from "./mileageRates.js";
 import { NEWS_FEEDS, RESORTS, mileageRateStatus, CROWDS_REVIEWED, CROWDS_ARE_PLACEHOLDER, CLIMATE_SOURCE } from "./config.js";
 import { EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { PRICE_LEVELS_REVIEWED } from "./priceLevels.js";
@@ -131,7 +132,7 @@ export const TICKET_STALE_DAYS = 30;
  * becomes broken while nobody is looking, which is exactly what a nightly
  * nag is for.
  */
-interface ReviewableData {
+export interface ReviewableData {
   id: string;
   title: string;
   why: string;
@@ -142,7 +143,7 @@ interface ReviewableData {
 
 const YEARLY = 365;
 
-const REVIEWABLE: ReviewableData[] = [
+export const REVIEWABLE: ReviewableData[] = [
   {
     id: "crowd-bands",
     title: "Re-check the crowd bands against the current DVC points charts",
@@ -257,7 +258,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   for (const pl of placeholders) checked({ ...pl, blocking: false });
 
   // --- 2. IRS mileage rate ----------------------------------------------
-  const mileage = mileageRateStatus(today);
+  const mileage = mileageRateStatus(today, 365, await loadMileageRates(db));
   if (mileage.uncoveredYears.length) {
     checked({
       id: "irs-mileage",
@@ -269,7 +270,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
       why: (mileage.pricingBroken
         ? "Driving trips in those years will NOT price at all — priceTrip refuses rather than guessing."
         : `Driving trips that far out are being priced on ${mileage.newestYearOnFile}'s rate, carried forward, and nothing on the site says so. It keeps working until the gap is more than a year.`)
-        + ' Look up "IRS standard mileage rates" at irs.gov, then add a row to IRS_MILEAGE_RATES in src/config.ts.',
+        + ' In /admin -> Manual work, press "Check the IRS page" and save the new year (or look up "IRS standard mileage rates" at irs.gov and add a row to IRS_MILEAGE_RATES in src/config.ts).',
       side: "free",
       blocking: mileage.pricingBroken,
     });
