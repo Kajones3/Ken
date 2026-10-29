@@ -421,6 +421,16 @@ this section).
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
     Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
+  - **"prices updated 9/6/2026" REMOVED from the detail header (2026-10-29,
+    owner: RDU->Paris June showed it, "I'm not sure I want that").** It was
+    `pricesAsOf` = `book.oldestFetchedAt`: the OLDEST row behind the whole
+    book (every resort's hotels, every date's fares and tickets, any source),
+    so one stale row (early-September hotel or fare cache rows that were
+    never re-pulled) dated the whole trip, while most of its numbers are
+    from last night. The API still returns `pricesAsOf`; nothing shows it.
+    If a freshness line is wanted again, use the last nightly refresh
+    (`fetch_runs`) or the dates of the rows that priced THAT trip, not the
+    oldest row.
   - **Lesson (2026-10-21): the reskin was pushed to the branch but never
     merged, so the owner's redeploy showed nothing.** Render deploys
     master; check `/health` version against master after merging.
