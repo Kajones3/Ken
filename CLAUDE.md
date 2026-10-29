@@ -434,6 +434,18 @@ this section).
     a search the same bar becomes a plain stack in the side panel, Compare
     hides and "Update prices" (`#run2`) sits at the panel's foot. Phones:
     the bar stacks into one card, Compare full width.
+  - **"The cheapest trip we can find" + "Updating prices" (owner,
+    2026-10-29).** The basis option is renamed (was "The cheapest flight on
+    the cheapest day"); picking it (`setPriceBasis()`) also sets the form to
+    Value / budget, groceries and no Park Hopper, and remembers the
+    traveler's own choices so "Price a typical trip instead" puts them back.
+    Server unchanged (it already prices food as groceries and the cheapest
+    listed flight on this basis). It means the cheapest we HOLD now, not an
+    all-time low. The "Why might the real price be different?" note says the
+    board isn't for the cheapest possible trip (the $50 budget seat) and has
+    a "Price the cheapest trip" button (`#whyCheapest`). While a search runs
+    after results exist, "Update prices" spins, the cards dim (`body.updating`)
+    and a sticky `#updatingNote` says the prices are updating.
   - **Light-mode hero map: darker dots (owner, 2026-10-29, picked option A
     of four).** `map-light.svg` dots #8FA3B8 (were #B2C6CE, too pale on the
     #DFEAEC page), labels navy #16204A, pins/route gold #C98A12 (gen.mjs).
