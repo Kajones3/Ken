@@ -487,7 +487,7 @@ test("the Arriving picker starts two months out and runs to ten (owner, 2026-09-
 
 test("Plus passes are one-off, in price order, with the middle one highlighted", async () => {
   const { PLUS_PASSES, PLUS_PASS_DEFAULT } = await import("./config.js");
-  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 30], [25, 183]]);
+  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 91], [25, 183]]);
   assert.equal(PLUS_PASSES[1]!.id, PLUS_PASS_DEFAULT);
 });
 

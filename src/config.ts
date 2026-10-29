@@ -1072,11 +1072,13 @@ export function plannableMonths(today: ISODate): string[] {
 export interface PlusPass { id: string; label: string; priceUsd: number; days: number; note: string }
 export const PLUS_PASSES: PlusPass[] = [
   { id: "week", label: "1 week", priceUsd: 9, days: 7, note: "A quick look while you decide." },
-  { id: "month", label: "1 month", priceUsd: 15, days: 30, note: "Enough to settle where and when." },
+  // Was "1 month" at $15 until 2026-10-29 (owner: "Change the $15/month to a
+  // 3 month subscription"). Same price, three months, still never renews.
+  { id: "threeMonths", label: "3 months", priceUsd: 15, days: 91, note: "Enough to settle where and when, and book it." },
   { id: "sixMonths", label: "6 months", priceUsd: 25, days: 183, note: "Covers a whole planning window." },
 ];
 /** The pass the paywall highlights — the middle one. */
-export const PLUS_PASS_DEFAULT = "month";
+export const PLUS_PASS_DEFAULT = "threeMonths";
 
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [

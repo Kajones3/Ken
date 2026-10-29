@@ -73,7 +73,7 @@ change what's included over time**; if we remove a major Plus feature during
 a period you've paid for, [we'll refund the unused part / you can ask for a
 refund].
 
-- **Passes:** 1 week for $9, 1 month for $15, or 6 months for $25, each
+- **Passes:** 1 week for $9, 3 months for $15, or 6 months for $25, each
   charged once, up front.
   **Plus never renews automatically.** When your pass ends it simply stops;
   we will never charge you again unless you choose to buy another pass.
