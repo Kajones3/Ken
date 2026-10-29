@@ -73,3 +73,14 @@ test("the rate limiter lets normal use through and stops a flood", () => {
   assert.ok(allow("b", 3), "another visitor is unaffected");
   assert.ok(allow("a", 2000), "and the window resets");
 });
+
+test("a retired pass keeps its picks in the stats, below the passes on sale", async () => {
+  const db = await memoryDb();
+  const ev = (o: object) => parseEvent(o)!;
+  await recordEvent(db, ev({ kind: "plus", detail: "threeMonths" }), "2026-10-29");
+  await db.query(`insert into event_counts (day, kind, resort_id, detail, n) values ('2026-10-20', 'plus', '', 'month', 3)`);
+  const s = await loadStats(db, 30, "2026-10-29");
+  assert.deepEqual(s.plusBy.map((p) => [p.pass, p.n]), [["week", 0], ["threeMonths", 1], ["sixMonths", 0], ["month", 3]]);
+  assert.match(s.plusBy[3]!.label, /no longer sold/);
+  await db.close();
+});

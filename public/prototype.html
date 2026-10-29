@@ -3198,7 +3198,7 @@ function renderBudgetTop(){
   const of = `${fit.length} of ${trips.length} trip${trips.length === 1 ? "" : "s"}`;
   if(!plus){
     $("#btSum").innerHTML = !(budget > 0)
-      ? "Type the most you'd spend. Plus shows which of these trips fit it, and the months they do."
+      ? "Type the most you'd spend and press Enter: we'll tell you how many of the six can fit it."
       : fit.length
         ? `<b>${of} fit ${usd(budget)}.</b> Plus shows which ones, how far over the rest are, and the months each one fits.`
         : `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> Plus shows the months that do, and what would save the most.`;
@@ -6159,13 +6159,49 @@ function pitchAlso(kind){
   return Object.entries(PLUS_PITCH).filter(([k]) => k !== kind)
     .map(([, v]) => `<li><span class="tick">✓</span><span>${esc(v.also)}</span></li>`).join("");
 }
-function plusPitch(kind){
+function plusPitch(kind, title, lead){
   const p = PLUS_PITCH[kind];
-  $("#ppTitle").textContent = p.title;
-  $("#ppLead").textContent = p.lead;
+  $("#ppTitle").textContent = title || p.title;
+  $("#ppLead").textContent = lead || p.lead;
   $("#ppAlso").innerHTML = pitchAlso(kind);
   $("#plusPitch").classList.add("on");
   track("paywall");
+}
+/* A free visitor's budget (owner, 2026-10-29): they may type one, and on
+   Enter or the side panel's button we say HOW MANY of the six fit it in some
+   month we price, never which (/api/fits sends counts only). */
+const COUNT_CAP = ["None","One","Two","Three","Four","Five","Six"];
+async function showFits(){
+  const budget = budgetValue();
+  if(!(budget > 0) || !results.some(r => r.ok)){ plusPitch("budget"); return; }
+  plusPitch("budget", `Checking ${usd(budget)}…`, "Pricing every month we cover at all six resorts.");
+  let d;
+  try {
+    d = await apiGet("/api/fits", { ...tripQuery(), month: params.month, budget: Math.round(budget),
+      overrides: JSON.stringify(OV) });
+  } catch(e){
+    $("#ppTitle").textContent = "See What Fits with Plus";
+    $("#ppLead").textContent = "We couldn't check your budget just now. " + PLUS_PITCH.budget.lead;
+    return;
+  }
+  const n = d.someMonth, word = COUNT_CAP[n] || String(n);
+  const now = d.thisMonth, mon = MONTHSFULL[+params.month.slice(5,7) - 1];
+  if(n === 0){
+    $("#ppTitle").textContent = `None Fit ${usd(budget)} Yet`;
+    $("#ppLead").textContent = `None of the six Disney destinations fit ${usd(budget)} in any month we price for this trip. Plus shows the cheapest month for each and the changes that would save you the most.`;
+    return;
+  }
+  if(n >= d.priced){
+    $("#ppTitle").textContent = `All ${COUNT_CAP[n] || n} Destinations Can Fit Your ${usd(budget)} Budget`;
+    $("#ppLead").textContent = `Every Disney destination we priced can fit into this budget`
+      + (now < n ? `, ${now ? `${COUNT_CAP[now].toLowerCase()} of them in ${mon}` : `though none in ${mon}`}` : ` in ${mon}`)
+      + `. Plus shows the months each one fits, and how to pay for it.`;
+    return;
+  }
+  $("#ppTitle").textContent = `${word} Destination${n === 1 ? "" : "s"} Can Fit Your ${usd(budget)} Budget`;
+  $("#ppLead").textContent = `${word} of the six Disney destinations can fit into this budget`
+    + (n > now ? ` at different times of the year${now ? ` (${COUNT_CAP[now].toLowerCase()} of them in ${mon})` : `, though none in ${mon}`}` : ` in ${mon}`)
+    + `. Plus shows you which ones, and when.`;
 }
 function closePitch(){ $("#plusPitch").classList.remove("on"); }
 $("#ppCancel").addEventListener("click", closePitch);
@@ -6761,12 +6797,18 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
+$("#sbBudget").addEventListener("keydown", e => {
+  if(e.key !== "Enter") return;
+  e.preventDefault();
+  if(!document.body.classList.contains("has-results")){ $("#run").click(); return; }
+  if(!session.plus) showFits();
+});
 $("#sbBudget").addEventListener("input", e => {
   setBudget(e.target.value);
   if(results.length){ renderBudgetTop(); renderBoard(); }
 });
 $("#sbBudget").value = budgetValue() || "";
-$("#btPlan").addEventListener("click", () => $("#budgetBtn").click());
+$("#btPlan").addEventListener("click", () => session.plus ? $("#budgetBtn").click() : showFits());
 $("#budgetBtn").addEventListener("click", ()=>{
   // Not Plus: the Plus box, not a page that only says "Plus" (2026-10-29).
   if(!session.plus){ plusPitch("budget"); return; }

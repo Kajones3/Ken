@@ -236,6 +236,29 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   days for grant-plus. Old anonymous click counts under "month" no longer
   show in /admin Visitors (they stay stored).
 
+### 2026-10-29, eighth round — free budget count, retired pass in /admin
+
+- **/admin Visitors "Plus passes picked"**: the 3 months row reads from
+  `PLUS_PASSES`; clicks recorded under the old `month` id now show as their
+  own row, "1 month (no longer sold ...)", only when it has any
+  (`RETIRED_PASSES` in siteEvents.ts). Never fold them into 3 months: they
+  were clicks on a different product.
+- **Free visitors' budget count** (owner: free users can type a number; on
+  Enter or the button "the pop up says 4 Destinations can fit into this
+  budget at different times of the year. Figure out which ones"). GET
+  `/api/fits` (free, `fits()` in server.ts): for each resort the SAME month
+  pricing as the Plus tiles (`monthsFor()`, shared with `/api/months`),
+  returns COUNTS only (`priced`, `thisMonth`, `someMonth`), never a resort.
+  `showFits()` fills the `#plusPitch` box: "Four Destinations Can Fit Your
+  $4,900 Budget / ... at different times of the year (one of them in April).
+  Plus shows you which ones, and when." (+ "None fit" and "All six" forms).
+  Triggered by Enter in `#sbBudget` (side panel; on the landing bar Enter
+  runs Compare) or the side panel's "See which with Plus" button. Plus
+  members never see it (their cards already say which).
+- **Monetization ideas beyond Google ads** were given in the conversation of
+  2026-10-29 (agent referrals, ticket/tour/eSIM affiliates via
+  Travelpayouts, premium ad networks later). Nothing built; owner to pick.
+
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 
 - **"Top rated first" sort BUILT from the owner's own stars** (owner: "I can
