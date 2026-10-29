@@ -192,12 +192,31 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
       console.warn(`popular-routes: furthest-off routes skipped: ${(e as Error).message}`);
     }
   }
+  // Main airports only (owner, 2026-10-12), and applied BEFORE the slots are
+  // counted (2026-10-29): a route aimed at an alternate (SNA, TPA, NRT) is
+  // moved to its resort's main airport first, then dropped if that is a
+  // repeat, a local hop or bought in the last few days. Moving it after the
+  // slots were handed out left 1-10 of the 24 nightly searches unspent: a
+  // moved route that duplicated another was dropped with nothing refilling
+  // its slot.
+  const kept = new Set<string>();
+  const moved: string[] = [];
+  const toMain = (list: PopularRoute[]) => list.flatMap((r) => {
+    const main = mainArrivalAirport(r.destination);
+    const m = { ...r, destination: main };
+    const key = `${m.origin}|${m.destination}|${m.departMonth}`;
+    if (kept.has(key) || !notFresh(m) || isLocalRoute(m.origin, m.destination)) return [];
+    if (main !== r.destination) moved.push(`${r.origin}->${r.destination}`);
+    kept.add(key);
+    return [m];
+  });
+  if (!opts.routes) worst = toMain(worst);
   const worstKeys = new Set(worst.map((r) => `${r.origin}|${r.destination}`));
   const rotationSlots = opts.routes ? 0
     : Math.max(0, Math.min(limit - worst.length, opts.rotationSlots ?? Number(process.env.POPULAR_ROUTES_ROTATION ?? Math.floor(limit / 3))));
   let routes = opts.routes
-    ?? [...worst, ...(await popularRoutes(db, limit * 4)).filter(notFresh)
-      .filter((r) => !worstKeys.has(`${r.origin}|${r.destination}`)).slice(0, limit - worst.length - rotationSlots)];
+    ?? [...worst, ...toMain((await popularRoutes(db, limit * 4))
+      .filter((r) => !worstKeys.has(`${r.origin}|${mainArrivalAirport(r.destination)}`))).slice(0, limit - worst.length - rotationSlots)];
 
   // Fill the rest of tonight's slots by rotation, stalest route first.
   // Demand still wins where it exists — someone actually asking about a
@@ -244,7 +263,6 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   // by hand (opts.routes) are bought as named.
   if (!opts.routes) {
     const seen = new Set<string>();
-    const moved: string[] = [];
     routes = routes.flatMap((r) => {
       const main = mainArrivalAirport(r.destination);
       if (main !== r.destination) moved.push(`${r.origin}->${r.destination}`);
