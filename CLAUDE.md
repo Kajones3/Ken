@@ -119,7 +119,45 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## START HERE — 2026-10-29, second session (newest; read first)
+## START HERE — 2026-10-29, session END (newest; read first)
+
+**Merged to master this session: PRs #213-#218** (budget box, red "over",
+budget sells Plus, side-panel budget, Plus boxes, pass vs a trip, free
+budget count, guests see two resorts, week / 3-month / 9-month passes,
+ending-soon email). Details are in the rounds below. 889 tests, typecheck
+clean. No data job changed, so governing rule #4 has nothing new beyond the
+popular-routes check below.
+
+**Waiting on the owner:**
+1. **Redeploy Render** (adds `users.plus_pass` / `plus_reminder_for` via
+   migrate). Check `/health` version against master first next session.
+2. **Set the repo VARIABLE `MAIL_POSTAL_ADDRESS`** (PO box fine). The daily
+   email nags until it is set.
+3. Legal blanks still open: contact email, county, minimum age, how long to
+   keep searched routes. **Refunds DECIDED (owner, 2026-10-29): no refunds**,
+   except the unused part of a pass if a major Plus feature is removed
+   mid-pass; written into `docs/legal/terms-of-service.md`. When Stripe is
+   built, say "No refunds" on the plan buttons and the checkout page BEFORE
+   payment (card disputes are lost otherwise). The EU allows this for
+   digital content only with the buyer's consent to immediate access; we
+   don't target the EU, so not built.
+4. Stripe (one-time Checkout payments) is the last thing before Plus sells.
+
+**Deleting an account / email (owner asked, 2026-10-29). No button yet.**
+By hand in Neon's SQL editor: `delete from users where email = '...';`.
+Every table holding a user's data (`sessions`, `saved_trips` and their
+`custom_expenses`, `price_alerts`, `user_attractions`, verify/reset tokens)
+references `users(id) on delete cascade`, so the one row takes it all.
+Anonymous counts (`event_counts`, `route_searches`, `search_days`) hold no
+user and stay. Resend keeps its own send log; deleting there is in Resend's
+dashboard. The privacy draft promises deletion within 30 days on request.
+A self-serve "Delete my account" in the account panel is NOT built; offer it
+before launch.
+
+**Scheduled:** popular-routes check-in 2026-10-30 12:30 UTC (expect 24
+written / 24 kept after the empty-slot fix; see the third round below).
+
+## START HERE — 2026-10-29, second session
 
 Render was live on master (b320a6f) at the start. Owner asked for:
 - **Accuracy grade (done, coverage run 40896504108 on this branch).** Fair

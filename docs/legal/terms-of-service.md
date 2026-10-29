@@ -70,8 +70,7 @@ Plus is a paid add-on. Right now it includes a month-by-month view of the best t
 budget page (a savings plan for the trip, and annual passes and DVC points
 counted in its totals), saving searches, the shareable PDF, and emails about new Disney deals. **We may
 change what's included over time**; if we remove a major Plus feature during
-a period you've paid for, [we'll refund the unused part / you can ask for a
-refund].
+a period you've paid for, we'll refund the unused part of your pass.
 
 - **Passes:** 1 week for $9, 3 months for $15, or 9 months for $25, each
   charged once, up front. The 1-week pass keeps up to 3 saved searches and
@@ -81,8 +80,10 @@ refund].
   earlier one.
   **Plus never renews automatically.** When your pass ends it simply stops;
   we will never charge you again unless you choose to buy another pass.
-- **Refunds:** [e.g. "If you're unhappy, email us within 14 days of buying
-  and we'll refund you in full." — your call.]
+- **No refunds.** All pass purchases are final. You can see what Plus
+  includes, and a sample PDF, before you buy. The one exception is the
+  feature removal described above. This doesn't take away any refund
+  right the law where you live gives you and that can't be waived.
 - **Payments** are processed by [Stripe]; we never see or store your full
   card number.
 - Plus is for your own personal trip planning. Please don't share your

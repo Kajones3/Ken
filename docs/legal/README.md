@@ -22,9 +22,12 @@ liability cap.
 4. **Minimum age** for an account: 16 or 18? (13 is the legal floor in the
    US; 18 avoids questions about minors making purchases.)
 5. ~~**Plus prices.**~~ **Decided 2026-09-26:** $9 for a week, $15 for 3
-   months (was 1 month until 2026-10-29), $25 for 6 months, paid once,
+   months (was 1 month until 2026-10-29), $25 for 9 months (was 6), paid once,
    **never auto-renewing**. Filled in.
-6. **Refund policy**: suggested "full refund within 14 days, no questions".
+6. ~~**Refund policy**~~ **Decided 2026-10-29: no refunds** (owner), except
+   the unused part of a pass if a major Plus feature is removed mid-pass.
+   Say "no refunds" on the plan buttons and at Stripe checkout, before
+   payment, or card disputes go against you.
 7. **How long to keep anonymous searched routes** (suggested: 2 years).
 
 ## Things the app needs before these promises are true
