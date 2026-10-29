@@ -538,10 +538,14 @@ export function readTicketCalendar(words) {
       const v = Number(m[1]);
       return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
     };
-    // Disneyland marks its cheapest days with a "$" in a green circle, which
-    // the reader sees as a "0" ("$154" comes back as "0154"; owner's December
-    // 2026 calendar, 2026-10-28).
-    const badge = /^0(\d{2,3})$/.exec(w.t);
+    // Disneyland marks its cheapest days with a "$" in a green circle. The
+    // reader sees that circle as "0", "@", "©", "S", "6", "8", or drops it
+    // ("$154" as "0154", "@154", "154"...; owner's December 2026 calendar,
+    // 2026-10-28/29). cleanWord has already taken off a leading symbol, so a
+    // 3-digit price with at most one look-alike in front is a badge price.
+    // Day numbers are never 3 digits, and a "+" calendar (Disney World)
+    // keeps only its "+" prices below, so this never adds a stray number there.
+    const badge = /\$/.test(w.text) ? null : /^[0568sSoO]?(\d{3})$/.exec(w.t);
     const b = badge && read("$" + badge[1]);
     if (b) return { ...b, check: true, badge: true };
     const p = read(w.t);

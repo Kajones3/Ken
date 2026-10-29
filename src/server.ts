@@ -706,7 +706,10 @@ const server = createServer(async (req, res) => {
         "content-type": MIME[extname(name)] ?? "application/octet-stream",
         // The illustration (tools/brand/gen.mjs) changes rarely; a day saves
         // re-sending ~120 KB of map on every visit.
-        ...(name.startsWith("brand/") ? { "cache-control": "public, max-age=86400" } : {}),
+        // Everything else (the screenshot reader above all) must be checked
+        // on each load, or a browser or Cloudflare keeps the old reader after
+        // a redeploy (owner, 2026-10-29: a fix was live and not seen).
+        "cache-control": name.startsWith("brand/") ? "public, max-age=86400" : "no-cache",
       });
       return res.end(file);
     }
