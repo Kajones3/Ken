@@ -6185,7 +6185,7 @@ async function showFits(){
     return;
   }
   const n = d.someMonth, word = COUNT_CAP[n] || String(n);
-  const now = d.thisMonth, mon = MONTHSFULL[+params.month.slice(5,7) - 1];
+  const now = d.thisMonth;
   if(n === 0){
     $("#ppTitle").textContent = `None Fit ${usd(budget)} Yet`;
     $("#ppLead").textContent = `None of the six Disney destinations fit ${usd(budget)} in any month we price for this trip. Plus shows the cheapest month for each and the changes that would save you the most.`;
@@ -6194,13 +6194,15 @@ async function showFits(){
   if(n >= d.priced){
     $("#ppTitle").textContent = `All ${COUNT_CAP[n] || n} Destinations Can Fit Your ${usd(budget)} Budget`;
     $("#ppLead").textContent = `Every Disney destination we priced can fit into this budget`
-      + (now < n ? `, ${now ? `${COUNT_CAP[now].toLowerCase()} of them in ${mon}` : `though none in ${mon}`}` : ` in ${mon}`)
+      + (now < n ? " at different times of the year" : "")
       + `. Plus shows the months each one fits, and how to pay for it.`;
     return;
   }
   $("#ppTitle").textContent = `${word} Destination${n === 1 ? "" : "s"} Can Fit Your ${usd(budget)} Budget`;
   $("#ppLead").textContent = `${word} of the six Disney destinations can fit into this budget`
-    + (n > now ? ` at different times of the year${now ? ` (${COUNT_CAP[now].toLowerCase()} of them in ${mon})` : `, though none in ${mon}`}` : ` in ${mon}`)
+    // Never which month (owner, 2026-10-29: "don't say this. The user can just
+    // search for April then"): the count is the teaser, the months are Plus.
+    + (n > now ? " at different times of the year" : "")
     + `. Plus shows you which ones, and when.`;
 }
 function closePitch(){ $("#plusPitch").classList.remove("on"); }
