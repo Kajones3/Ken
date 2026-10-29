@@ -18,7 +18,8 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parseEvent, recordEvent, loadStats, eventRateLimiter } from "./siteEvents.js";
-import { plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { isSampleTrip, lockForGuests } from "./guestView.js";
+import { passPerks, plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
@@ -286,6 +287,7 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
   // user's own account (email, plan) is what /api/session reports, not this
   // endpoint. See CLAUDE.md's Free/Plus split for what that superseded.
   const params = paramsFrom(q);
+  const guest = !user && !(q.get("sample") === "1" && isSampleTrip(params));
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
   budgetFor(user, params, overrides);
@@ -469,7 +471,10 @@ async function compare(q: URLSearchParams, user: SessionUser | null) {
     crowdRanking: crowdCare === "none" ? undefined : quietestThisMonth(RESORTS.map((r) => r.id), crowdMonth),
     crowdCare,
     priceBasis,
-    results,
+    // Signed out: two resorts in full, four without prices (src/guestView.ts).
+    // The free sample PDF's own trip is the one exception.
+    ...(guest ? { guestLocked: true } : {}),
+    results: guest ? lockForGuests(results) : results,
   };
 }
 
@@ -483,6 +488,9 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   // same N nights" comparison prices one date, and it reveals nothing the
   // board did not already show. Resolved from the session, never the client.
   if (from0 !== to0 && !(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
+  // A single day is free to anyone signed in; a guest would otherwise read
+  // the four locked resorts' prices one day at a time (src/guestView.ts).
+  if (!user) return { error: "sign_in_required" as const };
   const params = paramsFrom(q);
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
@@ -1074,6 +1082,7 @@ const server = createServer(async (req, res) => {
       const exactFare = { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) };
       return send(200, {
         authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
+        plusPass: plus ? user.plusPass : null, perks: plus ? passPerks(user.plusPass) : null,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
         dealEmails: await dealEmailsOn(db, user.id),
         // Only so the masthead can offer the link. Every admin route resolves
@@ -1178,7 +1187,7 @@ const server = createServer(async (req, res) => {
           to: owner,
           subject: `Pricing the Magic: ${user.email} wants Plus`,
           text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
-            + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.days}`,
+            + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.id}`,
         });
       }
       return send(200, { ok: true, delivered: Boolean(owner) });
@@ -1200,7 +1209,9 @@ const server = createServer(async (req, res) => {
       const user = await currentUser(db, req);
       const body = url.pathname === "/api/compare" ? await compare(url.searchParams, user) : await calendar(url.searchParams, user);
       if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
-      return send(200, body, { cache: "private, max-age=60" });
+      if ("error" in body && body.error === "sign_in_required") return send(401, body, { cache: "no-store" });
+      // A guest's locked board must never be served from cache after they sign in.
+      return send(200, body, { cache: user ? "private, max-age=60" : "no-store" });
     }
     if (url.pathname === "/api/promos") {
       return send(200, await listPromos(url.searchParams), { cache: "public, max-age=300" });
@@ -1259,6 +1270,14 @@ const server = createServer(async (req, res) => {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
       if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      // Saved searches per pass (owner, 2026-10-29): 3 on a week, 10 on three
+      // months, no limit on nine months or hand-given Plus. Every saved row
+      // counts, old ones included; deleting one makes room.
+      const cap = passPerks(user.plusPass).savedSearches;
+      if (cap !== null) {
+        const { rows: c } = await db.query(`select count(*)::int as n from saved_trips where user_id = $1`, [user.id]);
+        if (Number(c[0]?.n ?? 0) >= cap) return send(403, { error: "saved_limit", limit: cap });
+      }
       const t = await readBody(req);
       const id = randomUUID();
       const params = { ...(t.params ?? {}) };

@@ -33,3 +33,5 @@ jobs:
           # 2026-09-26). This job runs here and can't see Render's settings,
           # so without this line the digest would nag about it forever.
           REQUIRE_VERIFIED_EMAIL: "true"
+          # Only so the digest can say whether it's set (see alerts.yml).
+          MAIL_POSTAL_ADDRESS: ${{ vars.MAIL_POSTAL_ADDRESS }}

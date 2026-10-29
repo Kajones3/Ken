@@ -187,3 +187,16 @@ test("a real send is refused, and stays queued, when the unsubscribe link would 
   }
   await db.close();
 });
+
+test("deal emails go to the 3- and 9-month passes and hand-given Plus, never the one-week pass", async () => {
+  const db = await memoryDb();
+  for (const [email, pass] of [["week@example.com", "week"], ["three@example.com", "threeMonths"],
+    ["nine@example.com", "nineMonths"], ["hand@example.com", null]] as const) {
+    const id = await member(db, email);
+    await db.query(`update users set plus_pass = $2 where id = $1`, [id, pass]);
+  }
+  await promo(db, "Room discount");
+  const { candidates } = await findAlerts(db);
+  assert.deepEqual(candidates.map((x) => x.email).sort(), ["hand@example.com", "nine@example.com", "three@example.com"]);
+  await db.close();
+});

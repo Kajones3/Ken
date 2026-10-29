@@ -62,8 +62,8 @@ don't sell it, and there are no ad trackers on the Site.**
 - To run the Site: show prices, keep you signed in, save and reopen your
   searches, make your PDF.
 - To email you about your account (confirm your address, reset your
-  password) and, if you're a Plus member with a confirmed address, about
-  new Disney deals.
+  password, remind you a few days before a Plus pass ends) and, if you have
+  a 3- or 9-month Plus pass and a confirmed address, about new Disney deals.
 - To keep the Site secure.
 - To see, in total, which resorts people look at, which booking links they
   use and whether Plus is worth offering (the anonymous counts above).

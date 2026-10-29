@@ -1069,14 +1069,34 @@ export function plannableMonths(today: ISODate): string[] {
  * One home: the paywall renders these from /api/meta, and the "wants Plus"
  * email to the owner quotes the price and the exact grant-plus command.
  */
-export interface PlusPass { id: string; label: string; priceUsd: number; days: number; note: string }
+export interface PlusPass {
+  id: string; label: string; priceUsd: number; days: number; note: string;
+  /** Emails about new Disney deals (owner, 2026-10-29: "For the one week, we
+   *  don't send deal emails. 3 month and 9 month do"). */
+  dealEmails: boolean;
+  /** How many searches it may keep saved; null = no limit. */
+  savedSearches: number | null;
+}
 export const PLUS_PASSES: PlusPass[] = [
-  { id: "week", label: "1 week", priceUsd: 9, days: 7, note: "A quick look while you decide." },
+  { id: "week", label: "1 week", priceUsd: 9, days: 7, note: "A quick look while you decide.",
+    dealEmails: false, savedSearches: 3 },
   // Was "1 month" at $15 until 2026-10-29 (owner: "Change the $15/month to a
   // 3 month subscription"). Same price, three months, still never renews.
-  { id: "threeMonths", label: "3 months", priceUsd: 15, days: 91, note: "Enough to settle where and when, and book it." },
-  { id: "sixMonths", label: "6 months", priceUsd: 25, days: 183, note: "Covers a whole planning window." },
+  { id: "threeMonths", label: "3 months", priceUsd: 15, days: 91, note: "Enough to settle where and when, and book it.",
+    dealEmails: true, savedSearches: 10 },
+  // Was "6 months" until 2026-10-29 (owner: "9 months $25"): nine months
+  // covers the whole window we price, two to ten months out.
+  { id: "nineMonths", label: "9 months", priceUsd: 25, days: 274, note: "Covers the whole planning window.",
+    dealEmails: true, savedSearches: null },
 ];
+/** What a Plus account gets, by the pass it holds. An account given Plus by
+ *  hand before passes were recorded (plus_pass null) keeps everything, as it
+ *  always had (owner, 2026-10-29: leave the friends already given Plus as they
+ *  are). An unknown id is treated the same way rather than taking anything away. */
+export function passPerks(passId: string | null | undefined): { dealEmails: boolean; savedSearches: number | null } {
+  const p = PLUS_PASSES.find((x) => x.id === passId);
+  return p ? { dealEmails: p.dealEmails, savedSearches: p.savedSearches } : { dealEmails: true, savedSearches: null };
+}
 /** The pass the paywall highlights — the middle one. */
 export const PLUS_PASS_DEFAULT = "threeMonths";
 

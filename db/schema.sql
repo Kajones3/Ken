@@ -1008,3 +1008,10 @@ create table if not exists owner_mileage_rates (
   updated_by  text         not null default '',
   updated_at  timestamptz  not null default now()
 );
+
+-- Which Plus pass an account holds (owner, 2026-10-29: tiers differ in deal
+-- emails and saved searches). Null = Plus given by hand before passes were
+-- recorded, which keeps every perk. plus_reminder_for = the plus_until a
+-- "your Plus ends soon" email was already sent for, so it goes once per pass.
+alter table users add column if not exists plus_pass text;
+alter table users add column if not exists plus_reminder_for date;

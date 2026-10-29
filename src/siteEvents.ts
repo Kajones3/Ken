@@ -97,6 +97,7 @@ export interface SiteStats {
 /** Passes once sold, so their recorded picks still show in /admin. */
 export const RETIRED_PASSES = [
   { id: "month", label: "1 month (no longer sold; became 3 months on 2026-10-29)", priceUsd: 15 },
+  { id: "sixMonths", label: "6 months (no longer sold; became 9 months on 2026-10-29)", priceUsd: 25 },
 ];
 
 const per100 = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 1000) / 10 : null);
