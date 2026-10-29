@@ -1852,7 +1852,6 @@ document.addEventListener("click", e=>{
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
-let comparePricesAsOf = null;  // /api/compare's own freshness stamp — free visitors have no calendar to read it from
 let calendars = {};          // resortId -> {months:[{month,total,cheapest,level}], pricesAsOf} ("best months to go", Plus)
 let selected = 0, view = "board";
 // Whether the detail panel is expanded inline under the `selected` row.
@@ -2403,8 +2402,6 @@ async function runSearch(keepId){
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
     crowdRanking = compareData.crowdRanking || null;
-  comparePricesAsOf = compareData.pricesAsOf || null;
-    comparePricesAsOf = compareData.pricesAsOf || null;
     await Promise.all(RESORTS.map(async r => { calendars[r.id] = await fetchCalendarFor(r.id); }));
     if(token !== searchToken) return;
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
@@ -3474,7 +3471,7 @@ async function renderDetail(){
       <div>
         <h3>${r.name} — ${usd(x.total)} for ${pax}</h3>
         <p>${p.nights} nights, ${daysOf(x)} park day${daysOf(x)===1?"":"s"}, arriving ${sd.toUTCString().slice(0,16)}, ${x.transportMode==="drive" ? "driving there" : `flying into ${x.destination}`} ·
-           ${bandPhrase ? esc(bandPhrase) + " · " : ""}${esc(currencyPhrase)} · prices updated ${(cal && cal.pricesAsOf) || comparePricesAsOf ? new Date((cal && cal.pricesAsOf) || comparePricesAsOf).toLocaleDateString() : "—"}</p>
+           ${bandPhrase ? esc(bandPhrase) + " · " : ""}${esc(currencyPhrase)}</p>
         ${item.spread && item.spread.priced > 1 ? `<p class="spreadnote">
           <b>${item.priceBasis === "cheapest"
             ? `This is the cheapest ${MONTHSFULL[sd.getUTCMonth()]} trip we can find, with the cheapest flight that day, not a typical one.`
