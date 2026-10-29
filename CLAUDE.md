@@ -154,6 +154,24 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   Park Ranker covers only 4 Disney parks). Airports: the 22 Plus airports
   (OAK etc.) cost no paid searches unless someone searches them.
 
+### 2026-10-29, fifth round — budget box on the results (Plus), Compare spinner
+
+- **"Your budget" box at the top of the search results, Plus only** (owner:
+  "When someone is in Plus, I want a budget thing to be on the top of the
+  page"). `#budgetTop` / `renderBudgetTop()`: one dollar box + "N of 6 trips
+  fit $X" (or "None fit, closest is ... $Y over") + "Plan how to pay". It is
+  the SAME number as "What fits my budget?" (`budgetPrefs.budget`, this
+  browser only), so typing in either moves both. Each trip card then carries
+  `budgetChip()`: "Fits your budget · $X to spare" (gold) or "$X over your
+  budget" (amber). Typed budget only (the budget page's "what your plan puts
+  by" fallback is not used here). Hidden for free visitors and with no prices.
+- **Landing Compare spinner** was a sliver: the spinner sat inside the inline
+  `#runLabel`, so its width was ignored. `#runLabel` is inline-flex now and
+  `.spinner` is inline-block. The side panel's "Update prices" was fine.
+- Owner's story: "groceries, parking, and visas".
+- **Ideas given to the owner for making "What fits my budget" sell Plus, NOT
+  built (owner to pick):** see the conversation of 2026-10-29.
+
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 
 - **"Top rated first" sort BUILT from the owner's own stars** (owner: "I can
