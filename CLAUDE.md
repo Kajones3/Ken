@@ -204,6 +204,38 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   (the owner's "A Deal May Save You $X"). Only searches saved after this ship
   carry a budget.
 
+### 2026-10-29, seventh round — budget in the side panel, Plus boxes, pass vs a trip, 3-month pass
+
+- **The budget box moved to the LEFT side panel** (owner: "move it to the
+  left side bar but not put it under more details"). The top-of-results
+  `#budgetTop` is GONE; the landing bar's `#sbBudget` field stays visible in
+  the side panel (above "+ Add more details") with `#btSumWrap` under it:
+  "N of 6 trips fit $X" + "Plan how to pay ->" (Plus) or the dashed locked
+  teaser + "See which with Plus ->" (free). `renderBudgetTop()` keeps its name.
+- **Plus buttons open a Plus box, not a page** (owner: "Plus lets you save
+  searches ... You can also x,y,z. Subscribe."). `plusPitch(kind)` /
+  `#plusPitch` for Save this search and Plan how to pay (also the trip
+  page's buttons, and the side panel link, which all go through
+  `#budgetBtn`); the PDF keeps `#pdfSample` (it offers the sample) and gains
+  the same list. `PLUS_PITCH` holds each feature's one line; the box lists
+  every OTHER one under "Plus also lets you:"; Subscribe opens the plans
+  (`openPw()`). A signed-out visitor gets the Plus box first now (was the
+  sign-in dialog).
+- **Annual pass vs a trip** (owner: "pays for itself after 11 days vs ...
+  $1700 pays for flight and lodging in Tokyo"). The pass table leads with
+  "About N park days" (trips a year under it) and a new "Or spend it on"
+  column, `passAlternative()`: one person's share of each OTHER priced resort
+  in booking order (flight/gas, hotel, tickets, food), the one covering the
+  most lines wins ("Your flight and hotel at Disneyland Paris, $1,749 of a
+  $2,580 trip a person", or "A whole trip to ..."). Our own numbers only.
+- **Paywall copy:** "Your budget" line deleted; "What fits my budget?" and
+  "Is an annual pass worth it?" in the owner's words.
+- **$15 is now 3 MONTHS** (owner: "Change the $15/month to a 3 month
+  subscription"): `PLUS_PASSES` id `threeMonths`, 91 days, still the
+  highlighted middle pass, never renews. The "wants Plus" email quotes 91
+  days for grant-plus. Old anonymous click counts under "month" no longer
+  show in /admin Visitors (they stay stored).
+
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 
 - **"Top rated first" sort BUILT from the owner's own stars** (owner: "I can

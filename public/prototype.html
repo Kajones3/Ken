@@ -767,6 +767,7 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .bpass td.n{font-family:var(--f-body); white-space:nowrap}
 .bpass small{display:block; color:var(--muted); font-size:11px}
 .bpass .good{color:var(--accent); font-weight:700}
+.bpass .muted{color:var(--muted)}
 .bpasswrap{overflow-x:auto}
 
 /* line items */
@@ -901,8 +902,12 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .feat{list-style:none; margin:0; padding:0 22px 6px; display:grid; gap:7px}
 .feat li{display:flex; gap:9px; font-size:13px; align-items:flex-start; color:var(--ink-2)}
 .feat li b{color:var(--ink); font-weight:600}
+.ppalso{margin:14px 22px 8px; font-size:13px; font-weight:700; color:var(--ink)}
+#plusPitch .feat, #pdfSample .feat{padding-bottom:16px}
 .feat .tick{color:var(--accent); font-weight:800; flex:none}
 .mfoot{padding:16px 22px 20px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; border-top:1px solid var(--rule); margin-top:12px}
+.mfoot .stub:empty{flex:1; min-width:0}
+#pdfSample .mfoot .btn-primary, #plusPitch .mfoot .btn-primary{white-space:nowrap}
 .stub{font-size:11.5px; color:var(--muted); flex:1; min-width:180px}
 
 /* ---------- tooltip ---------- */
@@ -1040,21 +1045,19 @@ body.has-results .searchside #run{width:100%}
 .tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
 .tcard .bar{height:10px; margin-bottom:0}
 .tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
-.budgettop{display:flex; align-items:center; justify-content:space-between; gap:14px 20px; flex-wrap:wrap; border:2px solid var(--frame, var(--ink)); border-radius:16px; padding:14px 18px; margin:0 0 18px; background:var(--surface)}
-.bt-in{display:flex; align-items:center; gap:10px 20px; flex-wrap:wrap; flex:1 1 360px}
-.bt-in label{display:flex; align-items:center; gap:12px; margin:0}
-.bt-k{font-family:var(--f-head); font-weight:800; font-size:19px; letter-spacing:-.01em; white-space:nowrap}
-.bt-field{display:inline-flex; align-items:center; border:1.5px solid var(--ink); border-radius:999px; padding:0 14px; background:var(--surface-2)}
 .bt-cur{font-weight:700; color:var(--ink-2)}
-.bt-field input{border:0; background:transparent; font:inherit; font-size:16px; font-weight:700; width:150px; padding:9px 4px; color:var(--ink); outline:none}
-.bt-sum{margin:0; font-size:14.5px; color:var(--ink-2); flex:1 1 240px}
+.bt-sum{margin:0; font-size:14px; line-height:1.45; color:var(--ink-2)}
 .bt-sum b{color:var(--ink)}
 .budgetc{display:inline-flex; align-items:center; font-size:12.5px; font-weight:700; border-radius:999px; padding:2px 10px; border:1.5px solid currentColor}
 .budgetc.fits{color:var(--accent)}
 .budgetc.over{color:var(--over)}
 .bt-sum .over{color:var(--over); font-weight:700}
-.budgettop.locked{border-style:dashed}
-.budgettop.locked #btPlan{background:var(--ink); color:var(--on-ink); border-color:var(--ink)}
+.sbb-sum{margin-top:8px}
+.sbb-sum #btPlan{margin-top:4px; font-weight:700; font-size:14px}
+.sbb-sum.locked{border:1.5px dashed var(--rule-strong); border-radius:10px; padding:8px 10px}
+body:not(.has-results) .sbb-sum{display:none}
+body.has-results .sb-budget .sbb-in{min-height:44px; padding:0 12px; border:1.5px solid var(--rule-strong); border-radius:10px; background:var(--surface-2)}
+body.has-results .sb-budget input{border:0; background:transparent; font:inherit; font-size:16px; color:var(--ink); width:100%; padding:10px 4px; outline:none}
 .bfitm{display:block; margin-top:4px; font-size:13px; color:var(--ink-2)}
 .tripbudget{margin:10px 0 0; font-size:14.5px}
 .pwlead{margin:0 22px 14px; padding:16px 18px; border:2px solid var(--frame); border-radius:14px; background:var(--surface-2)}
@@ -1069,8 +1072,6 @@ body.has-results .searchside #run{width:100%}
 .sb-budget .bt-cur{margin-right:2px}
 body:not(.has-results) .sb-budget input{border:0; background:transparent; padding:2px 0; min-height:30px; width:100%; font:inherit; font-size:17px; font-weight:600; color:var(--ink); outline:none}
 .sb-budget .sbb-in{display:flex; align-items:center}
-body.has-results .sb-budget{display:none}
-@media (max-width:600px){ .bt-in label{flex-wrap:wrap} .bt-field{flex:1} .bt-field input{width:100%} #btPlan{width:100%; justify-content:center} }
 .toprated{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:var(--accent); border:1.5px solid var(--accent); border-radius:999px; padding:2px 10px}
 .toprated .ci{width:14px; height:14px}
 .ttot{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right}
@@ -1499,6 +1500,13 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <div class="f sb-budget" id="sbBudgetField">
         <label for="sbBudget">Budget <span class="sbb-opt">(optional)</span></label>
         <span class="sbb-in"><span class="bt-cur">$</span><input id="sbBudget" type="number" min="0" step="100" inputmode="numeric" placeholder="Any"></span>
+        <!-- After a search this field sits in the side panel, above "Add more
+             details" (owner, 2026-10-29: move the budget box there, "but not
+             under more details"), with what fits under it. -->
+        <div class="sbb-sum" id="btSumWrap" hidden>
+          <p class="bt-sum" id="btSum"></p>
+          <button type="button" class="linkbtn" id="btPlan">Plan how to pay &rarr;</button>
+        </div>
       </div>
       <button class="btn-primary sb-go" id="run"><span id="runLabel">Compare</span></button>
     </div>
@@ -1704,19 +1712,6 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
   <button type="button" class="editsearch" id="editSearch" aria-controls="searchSide" aria-expanded="false">
     <span class="es-what" id="editSearchWhat"></span><span class="es-go">Change</span></button>
 
-  <!-- Your budget, at the top of the results (Plus, owner 2026-10-29:
-       "When someone is in Plus, I want a budget thing to be on the top of
-       the page"). The same number as "What fits my budget?" on the budget
-       page (budgetPrefs.budget); each trip card then says Fits or $X over. -->
-  <section class="budgettop" id="budgetTop" hidden aria-label="Your budget">
-    <div class="bt-in">
-      <label for="btBudget"><span class="bt-k">Your budget <span class="pluschip">Plus</span></span>
-        <span class="bt-field"><span class="bt-cur">$</span><input id="btBudget" type="number" min="0" step="100" inputmode="numeric" placeholder="The most you'd spend"></span></label>
-      <p class="bt-sum" id="btSum"></p>
-    </div>
-    <button type="button" class="btn btn-sm" id="btPlan">Plan how to pay &rarr;</button>
-  </section>
-
   <div class="res-head">
     <div>
       <h2 id="resTitle">Six Resorts, Cheapest First</h2>
@@ -1832,17 +1827,40 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 <!-- Free visitors: their own trip's PDF is Plus, but they can open a real
      sample (owner, 2026-10-08: "I want the free user to get a sample PDF
      still"). Priced live, from one fixed scenario, so the numbers are today's. -->
+<!-- What a Plus button does, said in place (owner, 2026-10-29: the three
+     buttons "should bring up a specific plus box ... 'Plus lets you save
+     searches for you to return. You can also x,y,z. Subscribe.'"). Filled
+     by plusPitch(); the PDF keeps its own box below because it offers a
+     sample. -->
+<div class="back" id="plusPitch" role="dialog" aria-modal="true" aria-labelledby="ppTitle">
+  <div class="modal" style="max-width:520px">
+    <div class="mhead">
+      <h3 id="ppTitle"></h3>
+      <p id="ppLead"></p>
+    </div>
+    <p class="ppalso">Plus also lets you:</p>
+    <ul class="feat" id="ppAlso"></ul>
+    <div class="mfoot">
+      <span class="stub"></span>
+      <button class="btn" id="ppCancel">Not now</button>
+      <button class="btn-primary" id="ppGo">Subscribe</button>
+    </div>
+  </div>
+</div>
+
 <div class="back" id="pdfSample" role="dialog" aria-modal="true" aria-labelledby="pdfSampleTitle">
   <div class="modal" style="max-width:520px">
     <div class="mhead">
       <h3 id="pdfSampleTitle">The PDF of your own trip is part of Plus</h3>
       <p id="pdfSampleText"></p>
     </div>
+    <p class="ppalso">Plus also lets you:</p>
+    <ul class="feat" id="pdfSampleAlso"></ul>
     <div class="mfoot">
       <span class="stub" id="pdfSampleMsg"></span>
       <button class="btn" id="pdfSampleCancel">Cancel</button>
       <button class="btn" id="pdfSampleGo">See a sample PDF</button>
-      <button class="btn-primary openpw" id="pdfSamplePlus">Get Plus</button>
+      <button class="btn-primary openpw" id="pdfSamplePlus">Subscribe</button>
     </div>
   </div>
 </div>
@@ -1989,11 +2007,10 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     <!-- Filled from /api/meta's plusPasses, so the prices have one home. -->
     <div class="plans" id="plusPlans"></div>
     <ul class="feat">
-      <li><span class="tick">✓</span><span><b>What fits my budget?</b> — type the most you'd spend and every trip says whether it fits, how far over it is, and the month it would fit</span></li>
+      <li><span class="tick">✓</span><span><b>What fits my budget?</b> — type the most you'd spend and see which resorts fit, and in which months. Plus a calendar to help plan savings goals with booking time windows</span></li>
       <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two to ten months out, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>Your budget</b> — what to set aside each month or paycheck to have it all paid a month before you go, and when you'll have enough for flights, hotel and tickets</span></li>
       <li><span class="tick">✓</span><span><b>What would save the most?</b> — the changes that cut your trip the most (a cheaper month, fewer nights, a different hotel, cheaper food), each one priced, and one click to try it</span></li>
-      <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself</span></li>
+      <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself, and where that same amount could take you</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -3145,7 +3162,7 @@ function topBudget(){ return session.plus ? budgetValue() : 0; }
 function setBudget(v){
   budgetPrefs.budget = v;
   saveBudgetPrefs();
-  for(const id of ["#btBudget", "#sbBudget"]){
+  for(const id of ["#sbBudget"]){
     const el = $(id);
     if(el && document.activeElement !== el) el.value = budgetValue() || "";
   }
@@ -3168,14 +3185,14 @@ function budgetChip(item){
 /** The budget box at the top of the results. Plus: one sentence on what
  *  fits, and each card says Fits or $X over. Free: a locked teaser. */
 function renderBudgetTop(){
-  const box = $("#budgetTop");
+  const box = $("#btSumWrap");
   if(!box) return;
   const trips = results.filter(r => r.ok);
   box.hidden = !trips.length;
   if(box.hidden) return;
-  const plus = !!session.plus, budget = budgetValue(), inp = $("#btBudget");
+  const plus = !!session.plus, budget = budgetValue(), inp = $("#sbBudget");
   box.classList.toggle("locked", !plus);
-  $("#btPlan").innerHTML = plus ? "Plan how to pay &rarr;" : budget > 0 ? "See which with Plus" : "See what fits with Plus";
+  $("#btPlan").innerHTML = plus ? "Plan how to pay &rarr;" : budget > 0 ? "See which with Plus &rarr;" : "See what fits with Plus &rarr;";
   if(document.activeElement !== inp) inp.value = budget || "";
   const fit = trips.filter(t => t.price.total <= budget).sort((a, b) => a.price.total - b.price.total);
   const of = `${fit.length} of ${trips.length} trip${trips.length === 1 ? "" : "s"}`;
@@ -3188,14 +3205,14 @@ function renderBudgetTop(){
     return;
   }
   if(!(budget > 0)){
-    $("#btSum").innerHTML = "Type the most you'd spend and every trip below says whether it fits.";
+    $("#btSum").innerHTML = "Type the most you'd spend and every trip says whether it fits.";
     return;
   }
   if(fit.length){
     $("#btSum").innerHTML = `<b>${of} fit ${usd(budget)}.</b> ${fit.length === trips.length ? "Every one of them." : "The rest say how far over they are."}`;
   } else {
     const c = trips.slice().sort((a, b) => a.price.total - b.price.total)[0];
-    $("#btSum").innerHTML = `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> The closest is ${esc(c.resort.name)}, <span class="over">${usd(c.price.total - budget)} over</span>. The budget page shows which months fit and what would save the most.`;
+    $("#btSum").innerHTML = `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> The closest is ${esc(c.resort.name)}, <span class="over">${usd(c.price.total - budget)} over</span>. See which months fit on the budget page.`;
   }
 }
 /** "Fits my budget first" in Sort by: Plus, with a budget typed. */
@@ -4889,7 +4906,7 @@ async function requestPlus(plan){
     : "Couldn't send that request right now — try again in a moment.";
 }
 
-let PLUS_PASSES = [], PLUS_PASS_DEFAULT = "month";
+let PLUS_PASSES = [], PLUS_PASS_DEFAULT = "threeMonths";
 function renderPlusPlans(){
   $("#plusPlans").innerHTML = PLUS_PASSES.map(p => `
     <button class="plan" data-plan="${esc(p.id)}" aria-pressed="${p.id === PLUS_PASS_DEFAULT}">
@@ -5090,11 +5107,11 @@ document.addEventListener("click", async e=>{
 document.addEventListener("click", async e=>{
   const s2 = e.target.closest("#saveSearchBtn, #saveTripBtn");
   if(!s2) return;
+  // Saving is Plus (owner's call, 2026-09-25). Say so in a box about saving,
+  // not a dialog that would only be refused on save; the server checks too
+  // (402), so this is only the courteous half.
+  if(!session.plus){ plusPitch("save"); return; }
   if(!session.email){ openAuth("signin"); return; }
-  // Saving is Plus (owner's call, 2026-09-25). Say so by opening the paywall
-  // rather than a dialog that would only be refused on save — the server
-  // checks too (402), so this is only the courteous half.
-  if(!session.plus){ openPw(); return; }
   if(!results.some(r=>r.ok)) return;
   // A detail card's button preselects the resort you were looking at; the
   // board's button preselects whichever came out cheapest.
@@ -6121,8 +6138,39 @@ function openPdfSample(){
     + `Here's what one looks like: ${SAMPLE_TRIP.who || "a trip from " + city}, ${MONTHSFULL[+ym.slice(5,7)-1]} ${ym.slice(0,4)}, `
     + `${SAMPLE_TRIP.nights} nights, priced today at all six resorts.`;
   $("#pdfSampleMsg").textContent = "";
+  $("#pdfSampleAlso").innerHTML = pitchAlso("pdf");
   $("#pdfSample").classList.add("on");
 }
+/* The Plus box for one button. Each feature says itself once; the list is
+   everything else Plus does. */
+const PLUS_PITCH = {
+  save: { title: "Save This Search with Plus",
+    lead: "Plus keeps this whole six-resort comparison, with every number you typed, so you can come back to it any time from My searches, or send it to whoever you're traveling with.",
+    also: "Save your searches and come back to them" },
+  budget: { title: "Plan How to Pay with Plus",
+    lead: "Plus shows which of these trips fit your budget and in which months, what to set aside each month to have it paid before you go, and the changes that would save you the most.",
+    also: "See which trips fit your budget, and in which months" },
+  pdf: { also: "Download a written plan of your trip as a PDF" },
+  months: { also: "See the best months to go, with the whole trip's cost for each" },
+  pass: { also: "Check whether an annual pass is worth it, and where that money could take you instead" },
+  deals: { also: "Get an email when Disney posts a new deal" },
+};
+function pitchAlso(kind){
+  return Object.entries(PLUS_PITCH).filter(([k]) => k !== kind)
+    .map(([, v]) => `<li><span class="tick">✓</span><span>${esc(v.also)}</span></li>`).join("");
+}
+function plusPitch(kind){
+  const p = PLUS_PITCH[kind];
+  $("#ppTitle").textContent = p.title;
+  $("#ppLead").textContent = p.lead;
+  $("#ppAlso").innerHTML = pitchAlso(kind);
+  $("#plusPitch").classList.add("on");
+  track("paywall");
+}
+function closePitch(){ $("#plusPitch").classList.remove("on"); }
+$("#ppCancel").addEventListener("click", closePitch);
+$("#ppGo").addEventListener("click", () => { closePitch(); openPw(); });
+$("#plusPitch").addEventListener("click", e => { if(e.target.id === "plusPitch") closePitch(); });
 function closePdfSample(){ $("#pdfSample").classList.remove("on"); }
 $("#pdfSampleCancel").addEventListener("click", closePdfSample);
 $("#pdfSamplePlus").addEventListener("click", closePdfSample);
@@ -6404,6 +6452,34 @@ function passBreakEven(item){
   return { perPerson, days, perDay: perPerson / days };
 }
 
+/**
+ * The same money spent on a trip instead (owner, 2026-10-29: compare the
+ * pass "vs using that money for a trip (e.g. $1700 pays for flight and
+ * lodging in Tokyo)"). One person's share of each OTHER priced resort, line
+ * by line in booking order (getting there, hotel, park tickets, food); the
+ * resort where the money covers the most lines wins, the nearer to whole on
+ * a tie. All our own numbers from this comparison; nothing new is priced.
+ */
+function passAlternative(price, passResortId){
+  let best = null;
+  for(const item of results){
+    if(!item.ok || item.resortId === passResortId) continue;
+    const x = item.price, pax = x.partySize || 1;
+    const steps = [[x.transportMode === "drive" ? "gas" : "flight", (x.flights + x.driving) / pax],
+      ["hotel", x.hotel / pax], ["park tickets", x.tickets / pax], ["food", x.food / pax]];
+    let sum = 0, n = 0;
+    for(const [, v] of steps){ if(sum + v > price) break; sum += v; n++; }
+    const share = x.total / pax;
+    if(!best || n > best.n || (n === best.n && sum > best.sum)) best = { item, steps, n, sum, share };
+  }
+  if(!best || !best.n) return null;
+  const words = best.steps.slice(0, best.n).map(s => s[0]);
+  const name = best.item.resort.name;
+  if(best.n === best.steps.length && best.share <= price)
+    return `A whole trip to ${esc(name)}<small>${usd(best.share)} a person, all in</small>`;
+  const list = words.length === 1 ? words[0] : words.slice(0, -1).join(", ") + " and " + words[words.length - 1];
+  return `Your ${list} at ${esc(name)}<small>${usd(best.sum)} of a ${usd(best.share)} trip a person</small>`;
+}
 function passCheckHtml(){
   const rows = [];
   for(const prog of PASS_PROGRAMS){
@@ -6412,18 +6488,19 @@ function passCheckHtml(){
     if(!be) continue;
     rows.push(`<p style="margin:12px 0 4px"><b>${esc(item.resort.name)}</b> — ${esc(prog.label)}.
       One person's park tickets for this trip come to about <b>${usd(be.perPerson)}</b> (${be.days} park day${be.days>1?"s":""}, about ${usd(be.perDay)} a day).</p>
-      <div class="bpasswrap"><table class="bpass"><thead><tr><th>Pass</th><th>Price a year</th><th>Pays for itself after</th></tr></thead><tbody>
+      <div class="bpasswrap"><table class="bpass"><thead><tr><th>Pass</th><th>Price a year</th><th>Pays for itself after</th><th>Or spend it on</th></tr></thead><tbody>
       ${prog.tiers.map(t => {
         const trips = t.priceUsd / be.perPerson, dayCount = Math.ceil(t.priceUsd / be.perDay);
         const verdict = trips <= 1
-          ? `<span class="good">This trip alone</span>`
-          : `${trips < 10 ? trips.toFixed(1) : Math.round(trips)} trips like this a year`;
+          ? `<span class="good">This trip alone</span><small>${dayCount} park day${dayCount === 1 ? "" : "s"} at this trip's daily price</small>`
+          : `About ${dayCount} park days<small>${trips < 10 ? trips.toFixed(1) : Math.round(trips)} trips like this a year</small>`;
+        const alt = passAlternative(t.priceUsd, prog.resortId);
         return `<tr><td>${esc(t.label)}<small>${esc(t.eligibility)}</small></td><td class="n">${usd(t.priceUsd)}</td>
-          <td>${verdict}<small>about ${dayCount} park days at this trip's daily price</small></td></tr>`;
+          <td>${verdict}</td><td>${alt || `<span class="muted">Not a flight anywhere else we compared</span>`}</td></tr>`;
       }).join("")}</tbody></table></div>`);
   }
   if(!rows.length) return `<p class="hint" style="margin:0">Only Walt Disney World and Disneyland sell passes we can price. Compare with one of them on the board to see the break-even.</p>`;
-  return `<p class="hint" style="margin:0">Per person, before tax. A pass also covers theme park parking (all of it or half, depending on the pass), which this doesn't count, so passes come out a little better than shown. Cheaper passes block out busy dates, so check yours covers when you'd go.</p>`
+  return `<p class="hint" style="margin:0">Per person, before tax. "Or spend it on" is one person's share of another trip in this comparison, the same month and party. A pass also covers theme park parking (all of it or half, depending on the pass), which this doesn't count, so passes come out a little better than shown. Cheaper passes block out busy dates, so check yours covers when you'd go.</p>`
     + rows.join("");
 }
 
@@ -6684,15 +6761,15 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
-$("#btBudget").addEventListener("input", e => {
+$("#sbBudget").addEventListener("input", e => {
   setBudget(e.target.value);
-  renderBudgetTop();
-  renderBoard();
+  if(results.length){ renderBudgetTop(); renderBoard(); }
 });
-$("#sbBudget").addEventListener("input", e => setBudget(e.target.value));
 $("#sbBudget").value = budgetValue() || "";
-$("#btPlan").addEventListener("click", () => session.plus ? $("#budgetBtn").click() : openPw());
+$("#btPlan").addEventListener("click", () => $("#budgetBtn").click());
 $("#budgetBtn").addEventListener("click", ()=>{
+  // Not Plus: the Plus box, not a page that only says "Plus" (2026-10-29).
+  if(!session.plus){ plusPitch("budget"); return; }
   const sel = results[selected];
   if(sel && sel.ok) budgetTripId = sel.resortId;
   openBudget();

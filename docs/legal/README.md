@@ -21,8 +21,9 @@ liability cap.
    county's courts.
 4. **Minimum age** for an account: 16 or 18? (13 is the legal floor in the
    US; 18 avoids questions about minors making purchases.)
-5. ~~**Plus prices.**~~ **Decided 2026-09-26:** $9 for a week, $15 for a
-   month, $25 for 6 months, paid once, **never auto-renewing**. Filled in.
+5. ~~**Plus prices.**~~ **Decided 2026-09-26:** $9 for a week, $15 for 3
+   months (was 1 month until 2026-10-29), $25 for 6 months, paid once,
+   **never auto-renewing**. Filled in.
 6. **Refund policy**: suggested "full refund within 14 days, no questions".
 7. **How long to keep anonymous searched routes** (suggested: 2 years).
 

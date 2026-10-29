@@ -7,7 +7,7 @@ test("only the named actions, resorts and details are accepted", () => {
   assert.deepEqual(parseEvent({ kind: "book", resort: "tdr", detail: "flights" }),
     { kind: "book", resort: "tdr", detail: "flights" });
   assert.deepEqual(parseEvent({ kind: "compare" }), { kind: "compare", resort: "", detail: "" });
-  assert.deepEqual(parseEvent({ kind: "plus", detail: "month" }), { kind: "plus", resort: "", detail: "month" });
+  assert.deepEqual(parseEvent({ kind: "plus", detail: "threeMonths" }), { kind: "plus", resort: "", detail: "threeMonths" });
   // Unknown kind, unknown resort, free text, a missing resort: all refused.
   assert.equal(parseEvent({ kind: "pageview" }), null);
   assert.equal(parseEvent({ kind: "detail", resort: "epcot" }), null);
@@ -39,7 +39,7 @@ test("counts add up per day and roll into the stats", async () => {
   await recordEvent(db, ev({ kind: "detail", resort: "wdw" }), "2026-10-02");
   await recordEvent(db, ev({ kind: "detail", resort: "wdw" }), "2026-10-02");
   await recordEvent(db, ev({ kind: "book", resort: "tdr", detail: "flights" }), "2026-10-02");
-  await recordEvent(db, ev({ kind: "plus", detail: "month" }), "2026-10-02");
+  await recordEvent(db, ev({ kind: "plus", detail: "threeMonths" }), "2026-10-02");
   // Outside a 7-day window ending 2026-10-02.
   await recordEvent(db, ev({ kind: "compare" }), "2026-09-20");
 
@@ -52,7 +52,7 @@ test("counts add up per day and roll into the stats", async () => {
   assert.equal(s.byResort[0]!.resort, "tdr", "ties go alphabetically by name; both have 2 views");
   assert.equal(s.byResort.find((r) => r.resort === "tdr")!.book, 1);
   assert.equal(s.bookBy.find((b) => b.detail === "flights")!.n, 1);
-  assert.equal(s.plusBy.find((p) => p.pass === "month")!.n, 1);
+  assert.equal(s.plusBy.find((p) => p.pass === "threeMonths")!.n, 1);
   assert.equal(s.daily.length, 7);
   assert.equal(s.daily[0]!.day, "2026-10-02");
   assert.equal(s.daily[0]!.detail, 3);
