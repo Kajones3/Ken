@@ -434,6 +434,15 @@ this section).
     a search the same bar becomes a plain stack in the side panel, Compare
     hides and "Update prices" (`#run2`) sits at the panel's foot. Phones:
     the bar stacks into one card, Compare full width.
+  - **WDW tickets were NOT off on 2026-10-29; the tile was.** Owner compared
+    our January card (4 adults + 1 child 3-9 + 1 under 3, $3,887, "Per
+    person $648") with Disney's cart (4 adults + TWO children 3-9, $730.57 /
+    $711.47 before tax, $4,627.68). Same people: our adult $3,131 / 4 =
+    $782.75 vs Disney $730.57 x 1.065 = $778.06 (+0.6%); child $756 vs
+    $757.72. The gap was a different party, and "Per person" divided the bill
+    by everyone, free baby included. The ticket card now shows "Adult ticket"
+    (one adult ticket, with tax), "Buying N tickets, + N free (under 3)",
+    and each line says "$X each with tax".
   - **Top bar streamlined and STICKY; results get "Sort by" (owner,
     2026-10-29: "make the top bar more streamlined. Also make it stay at the
     top as an ability to sign in").** The masthead (`position:sticky`, the

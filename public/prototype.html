@@ -3510,6 +3510,14 @@ async function renderDetail(){
   // per-traveler prices (x.ticketLines). The card used to re-split the total
   // here by age band, which put seniors in with the adults — so a senior
   // ticket never showed, even where it was priced (owner, 2026-09-27).
+  // The tiles say what Disney's cart says: the price of ONE adult ticket and
+  // how many tickets you buy. "Per person" divided the bill by everyone,
+  // free babies included, so it matched nothing Disney shows (owner,
+  // 2026-10-29: $648 "per person" against Disney's $730.57 adult ticket).
+  const tkLines = x.ticketLines || [];
+  const tkAdult = tkLines.find(l => l.group === "adult" && l.count > 0);
+  const tkPaid = tkLines.filter(l => l.group !== "infant" && l.group !== "pass").reduce((t, l) => t + l.count, 0);
+  const tkFree = tkLines.filter(l => l.group === "infant").reduce((t, l) => t + l.count, 0);
   const ticketRowsHtml = (x.ticketLines || []).map(l=>{
     const n = l.count;
     const who = l.group === "adult" ? `Adult (${r.bands.adult}+)`
@@ -3523,7 +3531,7 @@ async function renderDetail(){
       : l.group === "senior" ? (l.seniorPrice
           ? `Senior ticket, the child price here · ${daysOf(x)}-day ticket × ${n}`
           : `${esc(r.name)} sells no senior ticket, so adult price · ${daysOf(x)}-day ticket × ${n}`)
-      : `${daysOf(x)}-day ticket × ${n}`;
+      : `${daysOf(x)}-day ticket · ${usd(l.totalUsd / n)} each${x.ticketTaxPct ? " with tax" : ""}`;
     return `<div class="li"><div class="l"><b>${who} × ${n}</b><small>${detail}</small></div>
       <div class="p">${l.group==="infant"?"Free":usd(l.totalUsd)}</div></div>`;
   }).join("")
@@ -3860,10 +3868,10 @@ async function renderDetail(){
           <p class="sub">${r.parks} park${r.parks>1?"s":""} · ${daysOf(x)}-day ticket</p>
           ${ticketDaysCtl}
           <div class="kpi">
-            <div class="kpitile"><div class="k">Per person</div>
-              <div class="v">${usd(x.tickets / Math.max(1, pax))}</div><div class="s">${x.ticketsFromCalendar ? "Disney's calendar" : x.ticketsFlat ? "Disney's price" : "estimate"}</div></div>
-            <div class="kpitile"><div class="k">Party</div>
-              <div class="v">${pax}</div><div class="s">${pax===1?"person":"people"}</div></div>
+            <div class="kpitile"><div class="k">${tkAdult ? "Adult ticket" : "Per ticket"}</div>
+              <div class="v">${usd(tkAdult ? tkAdult.totalUsd / tkAdult.count : x.tickets / Math.max(1, tkPaid))}</div><div class="s">${x.ticketsFromCalendar ? "Disney's calendar" : x.ticketsFlat ? "Disney's price" : "estimate"}${x.ticketTaxPct ? ", with tax" : ""}</div></div>
+            <div class="kpitile"><div class="k">Buying</div>
+              <div class="v">${tkPaid}</div><div class="s">${tkPaid===1?"ticket":"tickets"}${tkFree ? `, + ${tkFree} free (under ${r.bands.freeUnder})` : ""}</div></div>
             <div class="kpitile total"><div class="k">Tickets</div>
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
