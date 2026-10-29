@@ -956,6 +956,105 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
 .kpitile .k{font-size:12px; letter-spacing:.1em}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+
+/* ---------- search layout: panel on the side once there are results ---------- */
+.searchlayout{display:block}
+body.has-results .searchlayout{display:grid; grid-template-columns:minmax(0,340px) minmax(0,1fr); gap:36px; align-items:start}
+body.has-results .searchside .panel{margin-bottom:0}
+body.has-results .searchside .fields,
+body.has-results .searchside .whenwhere{grid-template-columns:minmax(0,1fr)}
+body.has-results .searchside .party{grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px}
+body.has-results .searchside .jumprow{display:none}
+body.has-results .searchside #run{width:100%}
+.searchmain{min-width:0}
+.editsearch{display:none}
+@media (max-width:900px){
+  body.has-results .searchlayout{display:block}
+  body.has-results .searchside{display:none; margin-bottom:18px}
+  body.has-results.editing .searchside{display:block}
+  body.has-results .editsearch{display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%;
+    margin:0 0 16px; padding:14px 16px; min-height:48px; background:var(--surface); color:var(--ink); border:2px solid var(--frame);
+    border-radius:14px; font:inherit; font-size:15px; text-align:left; cursor:pointer}
+  .editsearch .es-what{min-width:0}
+  .editsearch .es-go{font-weight:700; color:var(--accent); white-space:nowrap}
+}
+@media (max-width:460px){ body.has-results .searchside .party{grid-template-columns:minmax(0,1fr)} }
+/* On a phone the trips come first; the notes about them follow. */
+@media (max-width:900px){
+  .searchmain{display:flex; flex-direction:column}
+  .searchmain > *{order:0}
+  .searchmain #board, .searchmain #tablewrap{order:1}
+  .searchmain #resBrief, .searchmain #volatilityNote{order:2; margin-top:18px}
+}
+
+/* ---------- trip cards ---------- */
+.tripcards{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px}
+.tcard{display:grid; grid-template-columns:76px minmax(0,1fr) auto; gap:4px 20px; align-items:center;
+  background:var(--surface); border:2px solid var(--frame); border-radius:16px; padding:18px 20px}
+.tcard.off{opacity:.7}
+.tbadge img{width:76px; height:76px; display:block}
+.teyebrow{margin:0; font-size:13px; font-weight:700; color:var(--accent)}
+.tid h3{margin:1px 0 2px; font-family:var(--f-head); font-size:24px; font-weight:800; letter-spacing:-.015em; line-height:1.15}
+.tname{all:unset; cursor:pointer}
+.tname:hover{text-decoration:underline; text-underline-offset:3px}
+.tname:focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:4px}
+.tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
+.tcard .bar{height:10px; margin-bottom:0}
+.tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.ttot{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right}
+.tnum{font-family:var(--f-head); font-size:34px; font-weight:800; letter-spacing:-.02em; line-height:1}
+.tsub{font-size:13.5px; color:var(--ink-2)}
+.tview{margin-top:10px; min-height:44px; padding:0 20px; border-radius:999px; border:2px solid var(--frame);
+  background:transparent; color:var(--ink); font:inherit; font-weight:700; cursor:pointer; white-space:nowrap}
+.tcard.first .tview{background:var(--ink); color:var(--surface)}
+.tview:hover{background:var(--ink); color:var(--surface)}
+@media (max-width:640px){
+  .tcard{grid-template-columns:56px minmax(0,1fr); padding:16px}
+  .tbadge img{width:56px; height:56px}
+  .ttot{grid-column:1 / -1; flex-direction:row; flex-wrap:wrap; align-items:baseline; justify-content:space-between; text-align:left; margin-top:10px}
+  .tnum{font-size:30px}
+  .tview{width:100%; margin-top:8px}
+}
+
+/* ---------- the trip page ---------- */
+.trippage{display:block}
+.tripback{display:inline-flex; align-items:center; min-height:44px; font-weight:700; color:var(--ink); text-decoration:none}
+.tripback:hover{text-decoration:underline; text-underline-offset:3px}
+.triphead{display:flex; flex-wrap:wrap; gap:16px 26px; align-items:center; padding:8px 0 26px; border-bottom:2px solid var(--frame); margin-bottom:28px}
+.thbadge img{width:112px; height:112px; display:block}
+.thtext{flex:1 1 420px; min-width:0}
+.triphead h1{margin:2px 0 8px; font-family:var(--f-head); font-size:clamp(36px,5.4vw,58px); font-weight:800; letter-spacing:-.035em; line-height:1}
+.thsub{margin:0; font-size:16px; color:var(--ink-2)}
+.tripgrid{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,340px); gap:36px; align-items:start}
+.tripmain{min-width:0}
+.tripside{background:var(--surface); border:2px solid var(--frame); border-radius:16px; padding:22px; position:sticky; top:16px}
+.tslab{margin:0; font-size:13.5px; font-weight:700; color:var(--ink-2)}
+.tstotal{margin:4px 0 2px; font-family:var(--f-head); font-size:52px; font-weight:800; letter-spacing:-.03em; line-height:1}
+.tssub{margin:0 0 14px; font-size:14px; color:var(--ink-2)}
+.tslines{list-style:none; margin:14px 0 18px; padding:0; display:flex; flex-direction:column; gap:6px; font-size:15px}
+.tslines li{display:flex; justify-content:space-between; gap:12px}
+.tsbtn{display:block; width:100%; min-height:48px; margin-top:10px; border-radius:999px; border:2px solid var(--frame);
+  background:transparent; color:var(--ink); font:inherit; font-weight:700; cursor:pointer}
+.tsbtn.primary{background:var(--ink); color:var(--surface)}
+.tsbtn.link{border:0; min-height:44px; text-decoration:underline; text-underline-offset:3px}
+.tsnext{margin-top:16px; padding-top:14px; border-top:1px solid var(--rule)}
+.tsnextrow{all:unset; box-sizing:border-box; display:flex; justify-content:space-between; gap:12px; width:100%; min-height:40px; align-items:center; cursor:pointer; font-size:15px}
+.tsnextrow:hover span:first-child{text-decoration:underline}
+.tsnextrow:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+/* The trip's sections, flattened: rules, not boxes in a box. */
+.trippage .detail{margin-top:0; background:none; border:0; border-radius:0; overflow:visible}
+.trippage .dhead{padding:0 0 18px; border-bottom:0}
+.trippage .dhead h3, .trippage .dhead .legend{display:none}
+.trippage .dhead p{font-size:15px}
+.trippage .cols{grid-template-columns:minmax(0,1fr); gap:30px; margin-top:24px}
+.trippage .card{background:none; border:0; border-top:2px solid var(--frame); border-radius:0; padding:16px 0 0}
+.trippage .card h5{font-size:24px}
+.trippage .demo{margin-left:0; margin-right:0}
+@media (max-width:900px){
+  .tripgrid{grid-template-columns:minmax(0,1fr)}
+  .tripside{position:static; order:-1}
+  .thbadge img{width:76px; height:76px}
+}
 </style>
 
 <div class="wrap">
@@ -1147,6 +1246,12 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
   </section>
 
 
+  <!-- The search (owner, 2026-10-29, after the Adventures by Disney look):
+       before a search, the short form under the map; after one, the form is
+       a panel on the side and the trips are cards beside it. A trip opens on
+       its own page (#tripPage, "#trip=<resort>"), with Back to my search. -->
+  <div class="searchlayout" id="searchLayout">
+  <div class="searchside" id="searchSide">
   <section class="panel" id="tripPanel">
     <p class="panel-lab">Trip parameters</p>
     <!-- Shown INSTEAD of the form when you arrive from a saved trip. Opening
@@ -1395,6 +1500,10 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
     </div>
     <div class="jumprow" id="jumprow"><span class="cap">Or jump straight to one resort</span></div>
   </section>
+  </div><!-- /searchside -->
+  <div class="searchmain" id="searchMain">
+  <button type="button" class="editsearch" id="editSearch" aria-controls="searchSide" aria-expanded="false">
+    <span class="es-what" id="editSearchWhat"></span><span class="es-go">Change</span></button>
 
   <div class="res-head">
     <div>
@@ -1456,6 +1565,19 @@ footer h4{font-family:var(--f-head); font-size:12px; font-weight:700; letter-spa
 
   <div class="board" id="board"></div>
   <div class="tablewrap" id="tablewrap" hidden></div>
+  </div><!-- /searchmain -->
+  </div><!-- /searchlayout -->
+
+  <!-- One trip, its own page. Back returns to the same search, scrolled to
+       where the traveler was. -->
+  <section class="trippage" id="tripPage" hidden aria-label="Trip">
+    <a href="#" class="tripback" id="tripBack">&larr; Back to my search</a>
+    <header class="triphead" id="tripHead"></header>
+    <div class="tripgrid">
+      <div class="tripmain"><div class="detail" id="detail"></div></div>
+      <aside class="tripside" id="tripSide" aria-label="Trip total"></aside>
+    </div>
+  </section>
 
 </div>
 
@@ -2418,7 +2540,8 @@ async function runSearch(keepId){
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
     selected = idx < 0 ? 0 : idx;
     render();
-    $("#hero").hidden = true;
+    // The map stays as the hero (owner, 2026-10-29); the results come into view.
+    if(!detailOpen) $("#searchLayout").scrollIntoView({ behavior:"smooth", block:"start" });
   } catch(e){
     console.error(e);
     $("#board").innerHTML = `<div class="boardempty"><div class="rname">Could not load prices</div>
@@ -2665,29 +2788,45 @@ function renderBoard(){
     return;
   }
   const list = results.map((item,i)=>({item,i})).filter(({item})=>matchesRegion(item));
-  renderRouteMap(list);
   if(!list.length){
     board.innerHTML = `<div class="boardempty"><div class="rname">No resorts in this filter</div>
       <div class="rmeta">Try "All" instead.</div></div>`;
     return;
   }
-  // The owner's layout (2026-10-21, from the "Editorial" skin): one resort
-  // large on the left with its whole bill (the "hero"), the others ranked on
-  // the right with their cost bars. The hero starts as the cheapest; clicking
-  // another makes it the hero, keeping its own rank ("3 Disneyland Resort").
-  // The hero is `selected`, so the details always describe the hero.
-  const hero = list.find(e => e.i === selected) || list[0];
-  selected = hero.i;
-  const rankOf = e => list.indexOf(e) + 1;
-  const rest = list.filter(e => e !== hero);
-  board.innerHTML = `<div class="split${rest.length ? "" : " alone"}">
-      ${leadHtml(hero, rankOf(hero), list.length)}
-      ${rest.length ? `<div class="restcol">
-        <div class="collab">${rankOf(hero) === 1 ? "And the rest, in order" : "The others, in order"}</div>
-        <ol class="rest">${rest.map(e=>restRowHtml(e.item, e.i, rankOf(e))).join("")}</ol>
-      </div>` : ""}
+  // Trip cards (owner, 2026-10-29): one card per resort, cheapest first,
+  // each with its own "View trip" that opens the trip's own page.
+  board.innerHTML = `<ol class="tripcards">${list.map((e, k) => tripCardHtml(e.item, e.i, k + 1)).join("")}</ol>`;
+}
+
+/** One resort as a card in the results. */
+function tripCardHtml(item, i, rank){
+  const r = item.resort;
+  if(!item.ok){
+    return `<li class="tcard off" data-i="${i}">
+      <span class="tbadge">${badgeImg(item.resortId)}</span>
+      <div class="tid"><p class="teyebrow">No. ${rank}</p><h3>${esc(item.name)}</h3>
+        <p class="tmeta">No price for these dates yet.</p></div>
+      <div class="ttot"><span class="tnum">&mdash;</span></div>
+    </li>`;
+  }
+  const b = boardBits(item), x = b.x;
+  const days = daysOf(x);
+  const notes = [dealChip(item), crowdChip(item), attractionChip(item)].filter(Boolean).join("");
+  return `<li class="tcard${rank === 1 ? " first" : ""}" data-i="${i}">
+    <span class="tbadge">${badgeImg(item.resortId)}</span>
+    <div class="tid">
+      <p class="teyebrow">${rank === 1 ? "Cheapest" : "No. " + rank}</p>
+      <h3><button type="button" class="tname" data-open="${i}">${esc(r.name)}</button></h3>
+      <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"} · ${days} park day${days===1?"":"s"}${hasOv(r.id)?' · <span class="yourchip">Your numbers</span>':""}</p>
+      ${costBar(b)}
+      ${notes ? `<div class="tnotes">${notes}</div>` : ""}
     </div>
-    ${detailOpen ? `<div class="detail" id="detail"></div>` : ""}`;
+    <div class="ttot">
+      <span class="tnum">${usd(x.total)}${b.tilde}</span>
+      <span class="tsub">for ${countWord(b.pax)} · ${usd(x.total/b.pax)} a person</span>
+      <button type="button" class="tview" data-open="${i}">View trip &rarr;</button>
+    </div>
+  </li>`;
 }
 
 /** The pieces of one priced resort the lead and the rest both show. */
@@ -3117,10 +3256,10 @@ function tripLinks(item, p){
 async function renderDetail(){
   const token = ++detailToken;
   const box = $("#detail");
-  // Nothing is open right now: renderBoard() only creates #detail (under
-  // the board) when detailOpen is true, so this is the normal state.
-  if(!box) return;
+  // The trip page is closed: nothing to draw.
+  if(!box || !detailOpen) return;
   const item = results[selected];
+  renderTripChrome(item);
   if(!item){ box.innerHTML = ""; return; }
   if(!item.ok){
     box.innerHTML = `<div class="dhead"><div><h3>${item.name}</h3>
@@ -3819,6 +3958,10 @@ function render(){
   }
   $("#upgradeTop").hidden = session.plus;
   syncAccountUi();
+  const any = results.length > 0;
+  document.body.classList.toggle("has-results", any);
+  $("#editSearch").hidden = !any;
+  $("#editSearchWhat").textContent = `${partyParts({ ...p, ages: [] }).join(", ")}${p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""}` : ""} · ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]} · from ${p.origin}`;
   renderBoard(); renderTable(); renderDetail();
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
@@ -3855,23 +3998,7 @@ document.addEventListener("click", e=>{
   if(o){
     const i = +o.dataset.open;
     if(!unlocked(i)){ openPw(); return; }
-    // Table's "View" also opens the same inline detail, which only ever
-    // renders inside a board row — jump to Board so it's actually visible.
-    view = "board"; syncView();
-    if(selected === i && detailOpen){
-      detailOpen = false;
-      renderBoard();
-    } else {
-      selected = i; detailOpen = true;
-      if(results[i]) track("detail", results[i].resortId);
-      // renderBoard() first: it's what creates the empty #detail slot
-      // inside this row. renderDetail() then fills it — the other order
-      // would have nothing to fill, or get overwritten by the next
-      // renderBoard() call.
-      renderBoard();
-      renderDetail();
-      $("#detail")?.scrollIntoView({behavior:"smooth", block:"start"});
-    }
+    openTripPage(i);
     return;
   }
   if(e.target.closest(".openpw") || e.target.closest(".lockover")){ openPw(); }
@@ -3911,12 +4038,10 @@ document.addEventListener("click", async e=>{
   // board it was null, the handler threw, and the button did visibly nothing
   // while re-running the identical six-resort search. Open the row first.
   view = "board";
-  detailOpen = true;
   track("compare");
-  track("detail", j.dataset.jump);
+  detailOpen = false;
   await runSearch(j.dataset.jump);
-  const box = $("#detail");
-  if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
+  openTripPage(selected);
 });
 
 /* ================================ account ================================
@@ -4689,10 +4814,9 @@ async function openSavedTrip(trip){
   openTrip = trip;
   collapseTripPanel(trip);
   await renderTripExtras();
-  view = "board"; detailOpen = true;
+  view = "board";
+  if(detailOpen) closeTripPage();
   await runSearch(trip.params && trip.params.highlightResortId || trip.resortId);
-  const box = $("#detail");
-  if(box) box.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 /**
@@ -6011,8 +6135,109 @@ async function boot(){
   syncBudgetView();
   preloadBrandArt();
   initMoreDetails();
+  syncTripView();
   await loadSavedTrips();
 }
+
+/* ============================ the trip page ============================
+ * One resort's whole trip on its own page, "#trip=<resort>" (owner,
+ * 2026-10-29: "clicking on a trip takes you to a new page. And then you
+ * have to press Back to my Search"). The browser's own back button works
+ * too, and Back returns to the same scroll position on the search. */
+let tripPushed = false, searchScrollY = 0;
+function tripHashId(){ const m = /^#trip=([a-z]+)$/.exec(location.hash); return m ? m[1] : null; }
+function openTripPage(i){
+  const item = results[i];
+  if(!item) return;
+  if(!detailOpen) searchScrollY = window.scrollY;
+  selected = i;
+  track("detail", item.resortId);
+  if(tripHashId() === item.resortId) return syncTripView();
+  // From one trip to another: replace, so Back still means the search.
+  if(detailOpen){
+    history.replaceState(null, "", location.pathname + location.search + "#trip=" + item.resortId);
+    syncTripView(); window.scrollTo(0, 0); return;
+  }
+  tripPushed = true;
+  location.hash = "trip=" + item.resortId;
+}
+function closeTripPage(){
+  if(tripPushed){ tripPushed = false; history.back(); return; }
+  history.replaceState(null, "", location.pathname + location.search);
+  syncTripView();
+}
+function syncTripView(){
+  const id = tripHashId();
+  const idx = id ? results.findIndex(r => r.resortId === id) : -1;
+  // A trip link with no search behind it (a reload): back to the search.
+  if(id && idx < 0) history.replaceState(null, "", location.pathname + location.search);
+  const on = idx >= 0;
+  const was = detailOpen;
+  document.body.classList.toggle("ontrip", on);
+  $("#tripPage").hidden = !on;
+  $("#searchLayout").hidden = on;
+  $("#hero").hidden = on;
+  if(on){
+    selected = idx; detailOpen = true;
+    renderDetail();
+    if(!was) window.scrollTo(0, 0);
+  } else {
+    detailOpen = false;
+    if(was){ renderBoard(); requestAnimationFrame(() => window.scrollTo(0, searchScrollY)); }
+  }
+}
+window.addEventListener("hashchange", syncTripView);
+$("#tripBack").addEventListener("click", e => { e.preventDefault(); closeTripPage(); });
+
+/** The trip page's header and its summary panel. */
+function renderTripChrome(item){
+  const head = $("#tripHead"), side = $("#tripSide");
+  if(!item || !item.ok){ head.innerHTML = item ? `<h1>${esc(item.name)}</h1>` : ""; side.innerHTML = ""; return; }
+  const r = item.resort, b = boardBits(item), x = b.x, p = params;
+  const ok = results.filter(y => y.ok);
+  const rank = ok.indexOf(item) + 1;
+  const home = ORIGINS.concat(PLUS_ORIGINS).find(o => o.iata === p.origin);
+  const from = p.originPoint && p.originPoint.label ? p.originPoint.label.split(",")[0] : home ? home.name : p.origin;
+  const sd = new Date(x.start + "T00:00:00Z"), ed = new Date(sd.getTime() + p.nights * 864e5);
+  const fmt = d => d.toLocaleDateString("en-US", { weekday:"short", month:"short", day:"numeric", timeZone:"UTC" });
+  const days = daysOf(x);
+  head.innerHTML = `<span class="thbadge">${badgeImg(item.resortId)}</span>
+    <div class="thtext">
+      <p class="teyebrow">${rank === 1 ? `Cheapest of your ${ok.length} trips` : `No. ${rank} of your ${ok.length} trips`}</p>
+      <h1>${esc(r.name)}</h1>
+      <p class="thsub">${esc(partyParts(p).join(", "))} from ${esc(from)} · ${fmt(sd)} to ${fmt(ed)}, ${sd.getUTCFullYear()} · ${p.nights} night${p.nights===1?"":"s"}, ${days} park day${days===1?"":"s"}</p>
+    </div>`;
+  const lines = [
+    [b.drive ? "Driving there and back" : "Flights", b.getThere],
+    [x.hotel ? "Hotel" : "Hotel", x.hotel],
+    ["Park tickets", x.tickets],
+    ["Food", x.food],
+  ];
+  const other = x.total - lines.reduce((a, l) => a + l[1], 0);
+  if(Math.abs(other) >= 1) lines.push([other < 0 ? "Deals and credits" : "Parking, transfers and extras", other]);
+  const next = ok.filter(y => y !== item).slice(0, 2);
+  side.innerHTML = `<p class="tslab">Your trip total</p>
+    <p class="tstotal">${usd(x.total)}${b.tilde}</p>
+    <p class="tssub">for ${countWord(b.pax)} · ${usd(x.total/b.pax)} a person</p>
+    ${costBar(b)}
+    <ul class="tslines">${lines.map(([lab, v]) => `<li><span>${lab}</span><b>${v < 0 ? "&minus;" + usd(-v) : usd(v)}</b></li>`).join("")}</ul>
+    <button type="button" class="tsbtn primary" id="tsSave">${session.plus ? "Save this trip" : "Save this trip (Plus)"}</button>
+    <button type="button" class="tsbtn" id="tsPdf">${session.plus ? "Download the trip PDF" : "Download the trip PDF (Plus)"}</button>
+    <button type="button" class="tsbtn link" id="tsBudget">Plan how to pay${session.plus ? "" : " (Plus)"}</button>
+    ${next.length ? `<div class="tsnext"><p class="tslab">Next cheapest</p>${next.map(y =>
+      `<button type="button" class="tsnextrow" data-open="${results.indexOf(y)}"><span>${esc(y.resort.name)}</span><span>${usd(y.price.total)} &rarr;</span></button>`).join("")}</div>` : ""}`;
+  $("#tsSave").addEventListener("click", () => { const sb = $("#saveTripBtn"); if(sb) sb.click(); });
+  $("#tsPdf").addEventListener("click", () => $("#printTop").click());
+  $("#tsBudget").addEventListener("click", () => $("#budgetBtn").click());
+}
+
+/* On a phone, once there are results, the search folds to one line. */
+$("#editSearch").addEventListener("click", () => {
+  const on = !document.body.classList.contains("editing");
+  document.body.classList.toggle("editing", on);
+  $("#editSearch").setAttribute("aria-expanded", String(on));
+  if(on) $("#searchSide").scrollIntoView({ behavior:"smooth", block:"start" });
+});
 
 /* The form opens short: party, when and from where. "Add more details"
  * opens the rest; while it's closed a one-line summary says what the rest
