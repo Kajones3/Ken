@@ -1652,8 +1652,8 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         budget-airline seat to Orlando, say. This board isn't built to find the cheapest possible trip.
         It's built to help you decide when and where to go, not to give you a quote you can book sight unseen.</p>
       <p>Want the lowest we've found? <button type="button" class="linkbtn" id="whyCheapest">Price the
-        cheapest trip</button>: the cheapest flight on the cheapest day, a Value / budget room, and
-        groceries instead of restaurants.</p>
+        cheapest trip</button>: the cheapest flight on the cheapest day, a budget hotel off property,
+        and groceries instead of restaurants.</p>
     </div>
   </details>
 
@@ -4059,7 +4059,7 @@ async function renderDetail(){
  * suggestion, since otherwise every resort carries the number you picked. */
 /* "The cheapest trip we can find" (owner, 2026-10-29: "switch all of their
  * variables automatically to the cheapest"): picking it also moves the form
- * to a Value / budget room and groceries and turns Park Hopper off, so the
+ * to a budget hotel off property and groceries and turns Park Hopper off, so the
  * form shows what was priced. The server already prices food as groceries
  * and the flight as the cheapest one on this basis. Going back to a typical
  * trip puts the traveler's own choices back. */
@@ -4067,12 +4067,15 @@ let beforeCheapest = null;
 function setPriceBasis(basis){
   const sel = $("#priceBasis");
   if(basis === "cheapest"){
-    if(!beforeCheapest) beforeCheapest = { tier: $("#tier").value, food: $("#food").value, hopper: $("#hopper").value };
-    $("#tier").value = "0"; $("#food").value = "grocery"; $("#hopper").value = "0";
+    // Off property too (owner, 2026-10-29: "There is usually no way Disney
+    // is ever cheaper than a hotel"). Parking and transfers still count.
+    if(!beforeCheapest) beforeCheapest = { stay: $("#stay").value, tier: $("#tier").value, food: $("#food").value, hopper: $("#hopper").value };
+    $("#stay").value = "off"; $("#tier").value = "0"; $("#food").value = "grocery"; $("#hopper").value = "0";
   } else if(beforeCheapest){
-    $("#tier").value = beforeCheapest.tier; $("#food").value = beforeCheapest.food; $("#hopper").value = beforeCheapest.hopper;
+    $("#stay").value = beforeCheapest.stay; $("#tier").value = beforeCheapest.tier; $("#food").value = beforeCheapest.food; $("#hopper").value = beforeCheapest.hopper;
     beforeCheapest = null;
   }
+  if(typeof syncParkingUi === "function") syncParkingUi();
   sel.value = basis;
   if(typeof syncMoreDetails === "function" && $("#moreToggle")) syncMoreDetails();
 }
@@ -4086,7 +4089,7 @@ function renderBasisNote(){
   if(!el || !params) return;
   const cheap = params.priceBasis === "cheapest";
   el.querySelector("dd").innerHTML = (cheap
-    ? `<b>The cheapest trip we can find:</b> the cheapest flight on the cheapest day, a Value / budget room and groceries. `
+    ? `<b>The cheapest trip we can find:</b> the cheapest flight on the cheapest day, a budget hotel off property and groceries. `
     : `<b>A typical day and a typical flight.</b> `)
     + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest trip we can find"}</button>`;
   el.hidden = false;
