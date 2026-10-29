@@ -528,12 +528,40 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
  */
 async function months(q: URLSearchParams, user: SessionUser | null) {
   if (!(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
+  return monthsFor(q, user, q.get("resort") ?? "wdw");
+}
+
+/**
+ * How many of the six fit a budget, in the search month and in any month we
+ * price, as COUNTS only (owner, 2026-10-29: a free visitor who types a budget
+ * is told "4 destinations can fit into this budget at different times of the
+ * year", and Plus shows which). Same month pricing as the Plus tiles, so the
+ * count and what Plus then shows can't disagree. No resort is named here.
+ */
+async function fits(q: URLSearchParams, user: SessionUser | null) {
+  const budget = Math.round(Number(q.get("budget")));
+  if (!Number.isFinite(budget) || budget <= 0 || budget > 1_000_000) return { error: "budget" as const };
+  const month = q.get("month") ?? "";
+  let priced = 0, thisMonth = 0, someMonth = 0;
+  for (const r of RESORTS) {
+    const m = await monthsFor(q, user, r.id);
+    if ("error" in m) continue;
+    const ms = m.months.filter((x) => x.total !== null);
+    if (!ms.length) continue;
+    priced++;
+    if (ms.some((x) => x.total! <= budget)) someMonth++;
+    if (ms.some((x) => x.month === month && x.total! <= budget)) thisMonth++;
+  }
+  return { budget, month, priced, thisMonth, someMonth };
+}
+
+async function monthsFor(q: URLSearchParams, user: SessionUser | null, resortId: string) {
   const params = paramsFrom(q);
   params.origin = resolveOrigin(params.origin).origin;
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
   budgetFor(user, params, overrides);
-  const resort = RESORT_BY_ID.get(q.get("resort") ?? "wdw");
+  const resort = RESORT_BY_ID.get(resortId);
   if (!resort) return { error: "unknown resort" };
   const mode = resortTransportMode(gettingThere, resort, params.origin);
   const destination = resolveDestination(resort, q.get("destination"));
@@ -1163,6 +1191,10 @@ const server = createServer(async (req, res) => {
       const body = await months(url.searchParams, user);
       if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
       return send(200, body, { cache: "private, max-age=60" });
+    }
+    if (url.pathname === "/api/fits") {
+      const body = await fits(url.searchParams, await currentUser(db, req));
+      return send("error" in body ? 400 : 200, body, { cache: "private, max-age=60" });
     }
     if (url.pathname === "/api/compare" || url.pathname === "/api/calendar") {
       const user = await currentUser(db, req);

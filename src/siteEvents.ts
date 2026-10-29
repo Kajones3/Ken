@@ -94,6 +94,11 @@ export interface SiteStats {
   daily: ({ day: string } & Record<EventKind, number>)[];
 }
 
+/** Passes once sold, so their recorded picks still show in /admin. */
+export const RETIRED_PASSES = [
+  { id: "month", label: "1 month (no longer sold; became 3 months on 2026-10-29)", priceUsd: 15 },
+];
+
 const per100 = (n: number, of: number) => (of > 0 ? Math.round((n / of) * 1000) / 10 : null);
 
 /** Everything the Visitors page in /admin shows, for the last `days` days. */
@@ -153,7 +158,13 @@ export async function loadStats(db: Db, days: number, today = new Date().toISOSt
       book: resorts.get(r.id)?.book ?? 0,
     })).sort((a, b) => b.details - a.details || a.name.localeCompare(b.name)),
     bookBy: EVENT_KINDS.book.details.map((detail) => ({ detail, n: book.get(detail) ?? 0 })),
-    plusBy: PLUS_PASSES.map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: plus.get(p.id) ?? 0 })),
+    plusBy: [
+      ...PLUS_PASSES.map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: plus.get(p.id) ?? 0 })),
+      // A pass we no longer sell still has its clicks; listed below the live
+      // ones, only when it has any, so "1 month" picks don't silently vanish.
+      ...RETIRED_PASSES.filter((p) => (plus.get(p.id) ?? 0) > 0)
+        .map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: plus.get(p.id) ?? 0 })),
+    ],
     daily: dailyRows,
   };
 }
