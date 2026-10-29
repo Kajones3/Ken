@@ -434,6 +434,12 @@ this section).
     a search the same bar becomes a plain stack in the side panel, Compare
     hides and "Update prices" (`#run2`) sits at the panel's foot. Phones:
     the bar stacks into one card, Compare full width.
+  - **Light-mode hero map: darker dots (owner, 2026-10-29, picked option A
+    of four).** `map-light.svg` dots #8FA3B8 (were #B2C6CE, too pale on the
+    #DFEAEC page), labels navy #16204A, pins/route gold #C98A12 (gen.mjs).
+    prototype.html loads it as `map-light.svg?v=2` because /public/brand/ is
+    cached a day; bump the `?v=` whenever the art changes. Not chosen: navy
+    dots without castle outlines, white dots, strong navy dots.
   - **WDW tickets were NOT off on 2026-10-29; the tile was.** Owner compared
     our January card (4 adults + 1 child 3-9 + 1 under 3, $3,887, "Per
     person $648") with Disney's cart (4 adults + TWO children 3-9, $730.57 /

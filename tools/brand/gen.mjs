@@ -191,7 +191,9 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
 
 // Dark is "After Dark": black, not navy (owner, 2026-10-21).
 writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null }));
-writeFileSync(`${out}/map-light.svg`, map({ dot: "#B2C6CE", label: "#4C5878", pin: "#D9A22B", route: "#D9A22BAA", line: "#16204A" }));
+// Light: darker grey dots and navy labels (owner, 2026-10-29: the pale
+// dots on the pale page had too little contrast; picked option A).
+writeFileSync(`${out}/map-light.svg`, map({ dot: "#8FA3B8", label: "#16204A", pin: "#C98A12", route: "#C98A12CC", line: "#16204A" }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
   writeFileSync(`${out}/map-cover-${r.id}.svg`, map({ dot: "#D5DFEF", label: "#3A4670", pin: "#C98A12", route: "#C98A1288", line: "#2B3A67", focus: r.id }));
