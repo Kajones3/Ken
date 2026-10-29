@@ -421,6 +421,16 @@ this section).
     card's new Park box; Disneyland locks the length to 1-day. Owner's December
     2026 screenshot reads 31/31 (`src/testdata/dlr-ticket-calendar-2026-12.words.json`).
     Owner said 1-day Disneyland tickets may not be needed: optional, not nagged.
+  - **The search form opens SHORT (owner, 2026-10-29: "start the page very
+    simple ... just adults, kids, seniors, when they want to go, and their
+    departing airport. Then ... I want to add more details").** Visible:
+    party (+ child ages), Arriving (+ Which week), Departing from, the two
+    notices, then a "+ Add more details" toggle (`#moreToggle`) with a
+    one-line "Pricing: 6 nights · Moderate on property · ..." summary
+    (`moreSummary()`); everything else (Getting there, miles, drive block,
+    hotel, nights, basis, park days, hopper, crowds, rooms, parking, food)
+    and the fine-print hint sit in `#moreDetails`, still applied with their
+    defaults while closed. Open/closed remembered in localStorage `pf_more`.
   - **"Good to know" notes are owner-editable (2026-10-29, owner: Paris is
     closing Indiana Jones and the Temple of Peril in January 2027, "I need to
     be able to change these").** /admin -> Good to know (`#notes`,
