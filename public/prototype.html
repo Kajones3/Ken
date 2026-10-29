@@ -200,7 +200,11 @@ a{color:var(--ink)}
 .btn-primary:hover{background:var(--ink)}
 .btn-primary:hover{opacity:.88}
 .btn-primary:disabled{opacity:.7; cursor:default}
-.spinner{width:14px; height:14px; border-radius:50%; border:2px solid color-mix(in srgb, var(--on-ink) 35%, transparent); border-top-color:var(--accent-line); animation:spin .7s linear infinite; flex:none}
+.spinner{width:14px; height:14px; border-radius:50%; border:2px solid color-mix(in srgb, var(--on-ink) 35%, transparent); border-top-color:var(--accent-line); animation:spin .7s linear infinite; flex:none; display:inline-block; box-sizing:border-box}
+/* The landing Compare button wraps its words in #runLabel, an inline span,
+   so the spinner inside it needs the label laid out like the button itself
+   (an inline spinner collapsed to a sliver, owner 2026-10-29). */
+#runLabel{display:inline-flex; align-items:center; gap:9px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .btn-sm{padding:6px 13px; font-size:12.5px; border-radius:999px}
 .themebtn{width:34px; height:32px; padding:0; display:inline-grid; place-items:center}
@@ -1032,6 +1036,19 @@ body.has-results .searchside #run{width:100%}
 .tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
 .tcard .bar{height:10px; margin-bottom:0}
 .tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.budgettop{display:flex; align-items:center; justify-content:space-between; gap:14px 20px; flex-wrap:wrap; border:2px solid var(--frame, var(--ink)); border-radius:16px; padding:14px 18px; margin:0 0 18px; background:var(--surface)}
+.bt-in{display:flex; align-items:center; gap:10px 20px; flex-wrap:wrap; flex:1 1 360px}
+.bt-in label{display:flex; align-items:center; gap:12px; margin:0}
+.bt-k{font-family:var(--f-head); font-weight:800; font-size:19px; letter-spacing:-.01em; white-space:nowrap}
+.bt-field{display:inline-flex; align-items:center; border:1.5px solid var(--ink); border-radius:999px; padding:0 14px; background:var(--surface-2)}
+.bt-cur{font-weight:700; color:var(--ink-2)}
+.bt-field input{border:0; background:transparent; font:inherit; font-size:16px; font-weight:700; width:150px; padding:9px 4px; color:var(--ink); outline:none}
+.bt-sum{margin:0; font-size:14.5px; color:var(--ink-2); flex:1 1 240px}
+.bt-sum b{color:var(--ink)}
+.budgetc{display:inline-flex; align-items:center; font-size:12.5px; font-weight:700; border-radius:999px; padding:2px 10px; border:1.5px solid currentColor}
+.budgetc.fits{color:var(--accent)}
+.budgetc.over{color:var(--warnfg)}
+@media (max-width:600px){ .bt-in label{flex-wrap:wrap} .bt-field{flex:1} .bt-field input{width:100%} #btPlan{width:100%; justify-content:center} }
 .toprated{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:var(--accent); border:1.5px solid var(--accent); border-radius:999px; padding:2px 10px}
 .toprated .ci{width:14px; height:14px}
 .ttot{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right}
@@ -1659,6 +1676,19 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
   <button type="button" class="editsearch" id="editSearch" aria-controls="searchSide" aria-expanded="false">
     <span class="es-what" id="editSearchWhat"></span><span class="es-go">Change</span></button>
 
+  <!-- Your budget, at the top of the results (Plus, owner 2026-10-29:
+       "When someone is in Plus, I want a budget thing to be on the top of
+       the page"). The same number as "What fits my budget?" on the budget
+       page (budgetPrefs.budget); each trip card then says Fits or $X over. -->
+  <section class="budgettop" id="budgetTop" hidden aria-label="Your budget">
+    <div class="bt-in">
+      <label for="btBudget"><span class="bt-k">Your budget <span class="pluschip">Plus</span></span>
+        <span class="bt-field"><span class="bt-cur">$</span><input id="btBudget" type="number" min="0" step="100" inputmode="numeric" placeholder="The most you'd spend"></span></label>
+      <p class="bt-sum" id="btSum"></p>
+    </div>
+    <button type="button" class="btn btn-sm" id="btPlan">Plan how to pay &rarr;</button>
+  </section>
+
   <div class="res-head">
     <div>
       <h2 id="resTitle">Six Resorts, Cheapest First</h2>
@@ -1734,7 +1764,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 
       <section class="herostory" id="intro">
         <p>It started with one question: could we go to Shanghai instead of renewing our Annual Passes? Answering it meant
-        pricing flights, hotels, tickets, groceries and visas for every Disney resort in the world. This is that work, built
+        pricing flights, hotels, tickets, groceries, parking, and visas for every Disney resort in the world. This is that work, built
         so you don't have to do it yourself.</p>
         <p class="herosign">We make the budget. You take the trip.</p>
       </section>
@@ -3044,7 +3074,7 @@ function tripCardHtml(item, i, rank, otherSort){
   }
   const b = boardBits(item), x = b.x;
   const days = daysOf(x);
-  const notes = [topRatedChip(item), dealChip(item), crowdChip(item), attractionChip(item)].filter(Boolean).join("");
+  const notes = [budgetChip(item), topRatedChip(item), dealChip(item), crowdChip(item), attractionChip(item)].filter(Boolean).join("");
   return `<li class="tcard${rank === 1 ? " first" : ""}" data-i="${i}">
     <span class="tbadge">${badgeImg(item.resortId)}</span>
     <div class="tid">
@@ -3060,6 +3090,40 @@ function tripCardHtml(item, i, rank, otherSort){
       <button type="button" class="tview" data-open="${i}">View trip &rarr;</button>
     </div>
   </li>`;
+}
+
+/** The traveler's own budget (Plus), from the box at the top of the results
+ *  or "What fits my budget?" on the budget page: the same number. */
+function topBudget(){ return session.plus ? Math.max(0, +budgetPrefs.budget || 0) : 0; }
+function budgetChip(item){
+  const budget = topBudget();
+  if(!(budget > 0) || !item.ok) return "";
+  const t = item.price.total;
+  return t <= budget
+    ? `<span class="budgetc fits">Fits your budget · ${usd(budget - t)} to spare</span>`
+    : `<span class="budgetc over">${usd(t - budget)} over your budget</span>`;
+}
+/** The budget box at the top of the results: shown to Plus members once
+ *  there is something priced; one sentence on what fits. */
+function renderBudgetTop(){
+  const box = $("#budgetTop");
+  if(!box) return;
+  const trips = results.filter(r => r.ok);
+  box.hidden = !(session.plus && trips.length);
+  if(box.hidden) return;
+  const budget = topBudget(), inp = $("#btBudget");
+  if(document.activeElement !== inp) inp.value = budget || "";
+  if(!(budget > 0)){
+    $("#btSum").innerHTML = "Type the most you'd spend and every trip below says whether it fits.";
+    return;
+  }
+  const fit = trips.filter(t => t.price.total <= budget).sort((a, b) => a.price.total - b.price.total);
+  if(fit.length){
+    $("#btSum").innerHTML = `<b>${fit.length} of ${trips.length} trip${trips.length === 1 ? "" : "s"} fit ${usd(budget)}.</b> ${fit.length === trips.length ? "Every one of them." : "The rest say how far over they are."}`;
+  } else {
+    const c = trips.slice().sort((a, b) => a.price.total - b.price.total)[0];
+    $("#btSum").innerHTML = `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> The closest is ${esc(c.resort.name)}, ${usd(c.price.total - budget)} over. The budget page shows which months fit and what would save the most.`;
+  }
 }
 
 /** What the chosen sort is sorting on, said beside the price rank. */
@@ -4246,6 +4310,7 @@ function render(){
   }
   $("#printTop").hidden = !results.some(r=>r.ok);
   syncAccountUi();
+  renderBudgetTop();
   const any = results.length > 0;
   document.body.classList.toggle("has-results", any);
   $("#editSearch").hidden = !any;
@@ -6510,6 +6575,7 @@ function syncBudgetView(){
   document.body.classList.toggle("onbudget", on);
   $("#budgetPage").hidden = !on;
   if(on){ renderBudget(); window.scrollTo(0,0); }
+  else { renderBudgetTop(); renderBoard(); }   // a budget typed there shows here too
 }
 function openBudget(){
   if(location.hash === "#budget") return syncBudgetView();
@@ -6522,6 +6588,13 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
+$("#btBudget").addEventListener("input", e => {
+  budgetPrefs.budget = e.target.value;
+  saveBudgetPrefs();
+  renderBudgetTop();
+  renderBoard();
+});
+$("#btPlan").addEventListener("click", () => $("#budgetBtn").click());
 $("#budgetBtn").addEventListener("click", ()=>{
   const sel = results[selected];
   if(sel && sel.ok) budgetTripId = sel.resortId;
