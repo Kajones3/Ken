@@ -340,3 +340,23 @@ test("paid searches never go further ahead than airlines sell (2026-10-13: 6 emp
   assert.equal(r.tooFar, 1);
   await db.close();
 });
+
+test("a route moved to the main airport that duplicates another doesn't leave its slot empty (2026-10-17: 7 of 24 unspent)", async () => {
+  const db = await memoryDb();
+  // Four demand rows that collapse to two once moved: SNA -> LAX, NRT -> HND.
+  for (const d of ["SNA", "LAX", "NRT", "HND"]) for (let i = 0; i < 3; i++) await recordSearch(db, "ATL", [d], "2027-03");
+  const bought: string[] = [];
+  const stub = {
+    callsSpent: 0, budgetRemaining: 99,
+    async quote(origin: string, destination: string, departDate: string, tripLength: number) {
+      bought.push(`${origin}-${destination}`);
+      return { origin, destination, departDate, tripLength, priceUsd: 500, stops: 0, deepLink: "x" };
+    },
+  };
+  await runPopularRoutes(db, { limit: 4, datesPerMonth: 1, worstSlots: 0, rotationSlots: 0, provider: stub as never });
+  assert.equal(bought.length, 4, `all four slots spent: ${bought.join(", ")}`);
+  assert.equal(new Set(bought).size, 4, "no route bought twice");
+  assert.ok(bought.includes("ATL-LAX") && bought.includes("ATL-HND"));
+  assert.ok(!bought.some((b) => /-(SNA|TPA|NRT)$/.test(b)), `bought an alternate: ${bought.join(", ")}`);
+  await db.close();
+});

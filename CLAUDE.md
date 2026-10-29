@@ -154,6 +154,33 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   Park Ranker covers only 4 Disney parks). Airports: the 22 Plus airports
   (OAK etc.) cost no paid searches unless someone searches them.
 
+### 2026-10-29, third round (PR after #210)
+
+- **Popular-routes empty slots FIXED** (owner: "Do this"): routes are moved
+  to the main airport (and dropped if a repeat, local or bought in the last
+  10 days) BEFORE the worst/demand/rotation slots are counted (`toMain()`
+  in popularRoutes.ts), so rotation fills what's left. Test: 4 demand rows
+  collapsing to 2 now buy 4 (old code: 2). **Governing rule #4: NOT yet
+  proven on live data.** Check the next popular-routes run: expect
+  "24 written / 24 kept, 24 forecasts kept" (or "N too far ahead"), vs
+  14-23 a night Oct 14-29. A check-in is scheduled for 2026-10-30 12:30 UTC.
+- **Plus sales copy** (paywall list + the "what's free" line) now names What
+  fits my budget?, What would save the most? and Is an annual pass worth
+  it?; "Best months" says two to ten months out (was "a year ahead").
+- **"Highest rated" via Tripadvisor: owner picked Tripadvisor, sorted by
+  each resort's BEST park (not an average). NOT BUILT: Tripadvisor's API
+  master terms appear to forbid it** (docs.terra.tripadvisor.com/docs/
+  api-master-terms): no altering sort/ranking order (3.4.2(d)), no
+  combining or aggregating into a new rating (3.4.2(f)), not near a third
+  party's booking function (3.4.2(i), our Kayak/Booking links), displays
+  non-indexable (3.4.3(c)), and no displaying similar content from others
+  (3.4.5). Legacy Content API retired 2026-08-31; Terra is current (X-API-KEY,
+  GET /locations/{id}, first 1,000 calls free). Owner was told; next step
+  is the owner's call: ask Tripadvisor in writing, or Google Places
+  (official; rating display needs the Google logo; ratings can't be stored
+  beyond the allowed exceptions, so live calls), or ratings on trip pages
+  only. Not a lawyer's reading; said so.
+
 ## START HERE — session of 2026-10-29 ended here (newest; read first)
 
 **Render needs a redeploy.** Everything below was merged to master
