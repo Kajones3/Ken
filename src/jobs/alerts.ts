@@ -23,7 +23,7 @@ import type { EmailSender } from "../email/types.js";
 import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
 import { unsubscribeToken, unsubscribeUrl } from "../dealEmails.js";
-import { dealSaving, tripFromSaved } from "../dealSavings.js";
+import { budgetLine, dealSaving, tripFromSaved } from "../dealSavings.js";
 
 export interface Candidate {
   userId: string; email: string; resortId: string | null;
@@ -133,6 +133,8 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
       ];
       if (saving) {
         const at = RESORT_BY_ID.get(saving.resortId)?.name ?? saving.resortId;
+        const bl = budgetLine(savedParams?.budget, saving, at);
+        if (bl) lines.unshift(bl, "");
         lines.push("",
           `How we got $${saving.saving.toLocaleString("en-US")}: ${saving.basis} at ${at}, arriving ${fmtLong(saving.date)}. `
           + `$${saving.without.toLocaleString("en-US")} without the deal, $${saving.withDeal.toLocaleString("en-US")} with it `

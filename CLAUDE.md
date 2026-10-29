@@ -169,8 +169,40 @@ Render was live on master (b320a6f) at the start. Owner asked for:
   `#runLabel`, so its width was ignored. `#runLabel` is inline-flex now and
   `.spinner` is inline-block. The side panel's "Update prices" was fine.
 - Owner's story: "groceries, parking, and visas".
-- **Ideas given to the owner for making "What fits my budget" sell Plus, NOT
-  built (owner to pick):** see the conversation of 2026-10-29.
+- **Ideas 1-7 for making "What fits my budget" sell Plus: BUILT in round six
+  below** (owner: "I like 1,2,3. I like 4,5,6,7 but maybe don't let free users
+  see it").
+
+### 2026-10-29, sixth round — the budget sells Plus
+
+- **"Over" is RED** (owner: "Why Amber? Can it be red?"): `--over` #B3261E
+  light / #FF8A7A dark, on card chips, the budget box, the trip page and the
+  budget page's "What fits" list.
+- **One budget number everywhere** (`budgetPrefs.budget`, this browser;
+  `setBudget()` / `budgetValue()`): the landing bar's new **Budget
+  (optional)** field (`#sbBudget`, hidden once results show), the box on the
+  results (`#btBudget`) and the budget page (`#bBudget`). Anyone may type it.
+- **Free visitors** see the results box LOCKED (dashed, `.locked`): "2 of 6
+  trips fit $5,000. Plus shows which ones ..." and "See which with Plus" opens
+  the Plus offer. They never see WHICH trips fit (no chips, no sort, no trip
+  page line, no months).
+- **The Plus offer leads with the budget** (`.pwlead`): "Tell us your budget.
+  We'll tell you which Disney trip fits, and when.", a picture of the two
+  chips, and the visitor's own count when they typed one (`#pwBudgetYours`);
+  "What fits my budget?" is first in the feature list.
+- **Plus only:** Sort by "Fits my budget first" (`syncFitsSort()`, appears
+  once a budget is typed); each over-budget card says the cheapest month it
+  fits ("Fits in Jan 2027 ($4,064)", `fitMonthOf()` from the best-months
+  tiles); the trip page says Fits / $X over beside the total with "What would
+  save the most?" (opens the budget page on that trip, `tripBudgetHtml()`).
+- **Deal email budget line:** a saved search now keeps `params.budget`
+  (sanitized in POST /api/trips). `dealSaving()` also prices the same trip
+  WITH flights (`withFlights`, null when no fare) and `budgetLine()` opens the
+  email body: "This deal brings Disneyland Paris under your $5,000 budget:
+  $5,210 without it, $4,880 with it (flights included)." (or "already fits
+  ... to spare" / "still $X over ... $Y closer"). The subject is unchanged
+  (the owner's "A Deal May Save You $X"). Only searches saved after this ship
+  carry a budget.
 
 ### 2026-10-29, fourth round — park ratings, the Manual work tab, IRS mileage button
 

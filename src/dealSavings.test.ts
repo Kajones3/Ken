@@ -6,7 +6,7 @@ import { reseedOnProperty } from "./reseed.js";
 import { seedTickets } from "./jobs/refresh.js";
 import { firstPlannableMonth } from "./config.js";
 import { addDaysISO, todayISO } from "./dates.js";
-import { dealSaving, tripFromSaved, describeTrip, STANDARD_TRIP } from "./dealSavings.js";
+import { dealSaving, tripFromSaved, describeTrip, STANDARD_TRIP, budgetLine, type DealSaving } from "./dealSavings.js";
 import { buildAlertEmail } from "./email/message.js";
 
 const today = todayISO();
@@ -99,4 +99,18 @@ test("a free dining deal already saved with 'Kids' in its name becomes kids-only
   assert.equal(rows.find((r) => r.id === id)!.effect_kind, "kids_free_dining");
   assert.equal(rows.find((r) => r.id === other)!.effect_kind, "free_dining", "an everyone deal is left alone");
   await db.close();
+});
+
+test("budgetLine: under, already fits, still over, and nothing without a budget or a fare", () => {
+  const s = (without: number, withDeal: number): DealSaving => ({
+    resortId: "dlp", date: "2027-01-10", without: 0, withDeal: 0, saving: 0, basis: "",
+    withFlights: { without, withDeal },
+  });
+  assert.equal(budgetLine(5000, s(5210, 4880), "Disneyland Paris"),
+    "This deal brings Disneyland Paris under your $5,000 budget: $5,210 without it, $4,880 with it (flights included).");
+  assert.match(budgetLine(5000, s(4800, 4500), "Paris")!, /already fits your \$5,000 budget; with this deal you'd have \$500 to spare/);
+  assert.match(budgetLine(5000, s(5600, 5300), "Paris")!, /\$300 over your \$5,000 budget .* \$300 closer than before/);
+  assert.equal(budgetLine(undefined, s(5210, 4880), "Paris"), null);
+  assert.equal(budgetLine(0, s(5210, 4880), "Paris"), null);
+  assert.equal(budgetLine(5000, { ...s(1, 1), withFlights: null }, "Paris"), null);
 });
