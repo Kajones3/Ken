@@ -1154,9 +1154,19 @@ export type MileageRateLookup =
     }
   | { ok: false; tripYear: number; newestYearOnFile: number; reason: string };
 
-/** The most recent year IRS_MILEAGE_RATES has a published rate for. */
-export function newestMileageRateYear(): number {
-  return Math.max(...IRS_MILEAGE_RATES.map((r) => r.year));
+export type MileageRateRow = (typeof IRS_MILEAGE_RATES)[number];
+
+/** The code's rates plus any the owner saved in /admin (owner_mileage_rates,
+ *  src/mileageRates.ts); a saved year beats the code's figure for that year. */
+export function mileageRatesWith(extra: readonly MileageRateRow[] = []): MileageRateRow[] {
+  const byYear = new Map<number, MileageRateRow>(IRS_MILEAGE_RATES.map((r) => [r.year, r]));
+  for (const r of extra) byYear.set(r.year, r);
+  return [...byYear.values()].sort((a, b) => a.year - b.year);
+}
+
+/** The most recent year with a published rate (the code's or the owner's). */
+export function newestMileageRateYear(extra: readonly MileageRateRow[] = []): number {
+  return Math.max(...mileageRatesWith(extra).map((r) => r.year));
 }
 
 /**
@@ -1172,14 +1182,15 @@ export function newestMileageRateYear(): number {
  * shown to end users; see mileageRateStatus below and MileageRateUsed in
  * pricing.ts.
  */
-export function irsMileageRate(dateISO: string): MileageRateLookup {
+export function irsMileageRate(dateISO: string, extra: readonly MileageRateRow[] = []): MileageRateLookup {
   const tripYear = Number(dateISO.slice(0, 4));
   const month = Number(dateISO.slice(5, 7));
-  const newestYearOnFile = newestMileageRateYear();
+  const rates = mileageRatesWith(extra);
+  const newestYearOnFile = newestMileageRateYear(extra);
   if (!Number.isFinite(tripYear) || !Number.isFinite(month)) {
     return { ok: false, tripYear, newestYearOnFile, reason: `not a real date: ${dateISO}` };
   }
-  const exact = IRS_MILEAGE_RATES.find((r) => r.year === tripYear);
+  const exact = rates.find((r) => r.year === tripYear);
   const half = (r: { janToJunPerMile: number; julToDecPerMile: number }) =>
     (month <= 6 ? r.janToJunPerMile : r.julToDecPerMile);
   if (exact) {
@@ -1188,7 +1199,7 @@ export function irsMileageRate(dateISO: string): MileageRateLookup {
   // A trip in a year we have no figure for yet. Carry the newest one forward
   // if it's recent enough to still be defensible, otherwise refuse — pricing
   // must never quietly guess (see the {ok:false} contract in pricing.ts).
-  const newest = IRS_MILEAGE_RATES.find((r) => r.year === newestYearOnFile)!;
+  const newest = rates.find((r) => r.year === newestYearOnFile)!;
   const gap = tripYear - newestYearOnFile;
   if (gap > 0 && gap <= MILEAGE_RATE_CARRY_FORWARD_YEARS) {
     return { ok: true, ratePerMile: half(newest), rateYear: newestYearOnFile, tripYear, carriedForward: true };
@@ -1197,7 +1208,7 @@ export function irsMileageRate(dateISO: string): MileageRateLookup {
     ok: false, tripYear, newestYearOnFile,
     reason: gap > 0
       ? `no IRS mileage rate on file for ${tripYear} — the newest one we have is ${newestYearOnFile}`
-      : `no IRS mileage rate on file for ${tripYear} — rates only go back to ${Math.min(...IRS_MILEAGE_RATES.map((r) => r.year))}`,
+      : `no IRS mileage rate on file for ${tripYear} — rates only go back to ${Math.min(...rates.map((r) => r.year))}`,
   };
 }
 
@@ -1206,20 +1217,21 @@ export function irsMileageRate(dateISO: string): MileageRateLookup {
  * owner-facing warning. `horizonDays` is the booking window the app actually
  * offers (365 days — see calendar() in server.ts).
  */
-export function mileageRateStatus(todayISO: string, horizonDays = 365): {
+export function mileageRateStatus(todayISO: string, horizonDays = 365, extra: readonly MileageRateRow[] = []): {
   newestYearOnFile: number;
   /** Years inside the booking window with no published rate. Empty when covered. */
   uncoveredYears: number[];
   /** True when some bookable date is beyond the carry-forward window, so driving trips there won't price at all. */
   pricingBroken: boolean;
 } {
-  const newestYearOnFile = newestMileageRateYear();
+  const newestYearOnFile = newestMileageRateYear(extra);
+  const rates = mileageRatesWith(extra);
   const start = new Date(`${todayISO}T00:00:00Z`);
   const end = new Date(start.getTime() + horizonDays * 86_400_000);
   const uncoveredYears: number[] = [];
   let pricingBroken = false;
   for (let y = start.getUTCFullYear(); y <= end.getUTCFullYear(); y++) {
-    if (IRS_MILEAGE_RATES.some((r) => r.year === y)) continue;
+    if (rates.some((r) => r.year === y)) continue;
     uncoveredYears.push(y);
     if (y - newestYearOnFile > MILEAGE_RATE_CARRY_FORWARD_YEARS || y < newestYearOnFile) pricingBroken = true;
   }

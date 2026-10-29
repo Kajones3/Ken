@@ -1032,6 +1032,8 @@ body.has-results .searchside #run{width:100%}
 .tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
 .tcard .bar{height:10px; margin-bottom:0}
 .tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.toprated{display:inline-flex; align-items:center; gap:5px; font-size:12.5px; font-weight:700; color:var(--accent); border:1.5px solid var(--accent); border-radius:999px; padding:2px 10px}
+.toprated .ci{width:14px; height:14px}
 .ttot{display:flex; flex-direction:column; align-items:flex-end; gap:2px; text-align:right}
 .tnum{font-family:var(--f-head); font-size:34px; font-weight:800; letter-spacing:-.02em; line-height:1}
 .tsub{font-size:13.5px; color:var(--ink-2)}
@@ -2777,6 +2779,10 @@ function gatedMonthsHtml(){
  * Nothing renders at all without picks, so a user with none sees no teaser
  * and no empty space. Server-side, a signed-out request never carries
  * matches in the first place — picking attractions needs an account. */
+/** "Top rated" on the resort whose best park the owner rates highest. */
+function topRatedChip(item){
+  return TOP_RATED[0] === item.resortId && sortBy !== "rated" ? `<span class="toprated"><i class="ci ci-star"></i>Top rated</span>` : "";
+}
 function attractionChip(item){
   const a = item.attractions;
   if(!a || !a.summary) return "";
@@ -2985,8 +2991,12 @@ function renderBoard(){
 
 /* Sort by (owner, 2026-10-29: "We could organize by price obviously. Maybe
    biggest parks?"). Every sort breaks ties on price, and a resort with no
-   price goes last. Nothing here is a rating: we hold no sourced one. */
+   price goes last. "Top rated first" (2026-10-29) uses the owner's own park
+   ratings from /admin -> Manual work: a resort ranks by its best park, then
+   its next best. The server sends only the order (topRated), never stars. */
+let TOP_RATED = [];
 const SORT_TITLES = {
+  rated: "Six Resorts, Top Rated First",
   price: "Six Resorts, Cheapest First",
   quiet: "Six Resorts, Quietest First",
   parks: "Six Resorts, Most Parks First",
@@ -3010,6 +3020,7 @@ function sortTrips(list, how){
   const key = ({item}) => {
     if(how === "quiet") return item.crowd ? item.crowd.rank : 9;
     if(how === "parks") return -(item.resort.parks || 0);
+    if(how === "rated"){ const k = TOP_RATED.indexOf(item.resortId); return k < 0 ? 99 : k; }
     if(how === "near"){
       const pk = RM_PARKS[item.resortId];
       return home && pk ? milesBetween(home, pk) : 0;
@@ -3033,7 +3044,7 @@ function tripCardHtml(item, i, rank, otherSort){
   }
   const b = boardBits(item), x = b.x;
   const days = daysOf(x);
-  const notes = [dealChip(item), crowdChip(item), attractionChip(item)].filter(Boolean).join("");
+  const notes = [topRatedChip(item), dealChip(item), crowdChip(item), attractionChip(item)].filter(Boolean).join("");
   return `<li class="tcard${rank === 1 ? " first" : ""}" data-i="${i}">
     <span class="tbadge">${badgeImg(item.resortId)}</span>
     <div class="tid">
@@ -3055,6 +3066,7 @@ function tripCardHtml(item, i, rank, otherSort){
 function sortWhy(item){
   if(sortBy === "quiet") return item.crowd ? ` · ${esc(item.crowd.label)} crowds` : "";
   if(sortBy === "parks") return ` · ${item.resort.parks} park${item.resort.parks === 1 ? "" : "s"}`;
+  if(sortBy === "rated"){ const k = TOP_RATED.indexOf(item.resortId); return k === 0 ? " · Top rated" : k > 0 ? ` · No. ${k + 1} rated` : ""; }
   if(sortBy === "near"){
     const home = sortHome(), pk = RM_PARKS[item.resortId];
     if(!home || !pk) return "";
@@ -6571,6 +6583,14 @@ async function boot(){
   }
   VACATION_RENTALS = meta.vacationRentals || {};
   PASS_PROGRAMS = meta.passPrograms || [];
+  TOP_RATED = Array.isArray(meta.topRated) ? meta.topRated : [];
+  // Offer the sort only once the owner has rated something.
+  if(TOP_RATED.length && !$("#sortBy").querySelector('option[value="rated"]')){
+    const o = document.createElement("option"); o.value = "rated"; o.textContent = "Top rated first";
+    $("#sortBy").insertBefore(o, $("#sortBy").children[1]);
+  }
+  if(sortBy === "rated" && !TOP_RATED.length) sortBy = "price";
+  $("#sortBy").value = sortBy;
   HOLIDAY_WINDOWS = meta.holidayWindows || {};
   if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);
   PLUS_PASSES = meta.plusPasses || [];

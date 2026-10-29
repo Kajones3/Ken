@@ -21,6 +21,7 @@ import { asEvidence, cachedGoogleDisneyRates } from "./disneyEvidence.js";
 import { loadFareModel } from "./fareModelDb.js";
 import { loadCheapestListed, type CheapestListed } from "./cheapestFlights.js";
 import { USE_CANDIDATE_KEY, type FareModel } from "./fareModel.js";
+import { loadMileageRates } from "./mileageRates.js";
 
 /** Every on-property hotel's shipped base, for rescaling hotel checks. */
 const HOTEL_BASE = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
@@ -640,8 +641,11 @@ export async function loadBook(
     console.warn(`cheapest-flight data unavailable: ${(e as Error).message}`);
   }
 
+  const mileageRates = await loadMileageRates(db);
+
   return {
     setting: (key) => settings.get(key),
+    mileageRates,
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),
     cheapestListed: (origin, dest, date, nights) => cheapestListed?.exact(origin, dest, date, nights),
     cheapestRatio: (dest) => cheapestListed?.ratio(dest)?.ratio,
