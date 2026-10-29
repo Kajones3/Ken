@@ -1917,8 +1917,11 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     <!-- Filled from /api/meta's plusPasses, so the prices have one home. -->
     <div class="plans" id="plusPlans"></div>
     <ul class="feat">
-      <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two months out to a year ahead, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>Your budget</b> — a page that works out what to set aside each month or paycheck and when you'll have enough for flights, hotel and tickets, plus whether an annual pass would pay for itself</span></li>
+      <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two to ten months out, so you can see when to go</span></li>
+      <li><span class="tick">✓</span><span><b>Your budget</b> — what to set aside each month or paycheck to have it all paid a month before you go, and when you'll have enough for flights, hotel and tickets</span></li>
+      <li><span class="tick">✓</span><span><b>What fits my budget?</b> — type the most you'd spend and see which resorts fit, and in which months</span></li>
+      <li><span class="tick">✓</span><span><b>What would save the most?</b> — the changes that cut your trip the most (a cheaper month, fewer nights, a different hotel, cheaper food), each one priced, and one click to try it</span></li>
+      <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself</span></li>
       <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
       <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
       <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up</span></li>
@@ -4445,7 +4448,7 @@ function openAuth(mode){
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
       ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, a budget page (how to pay for it, plus your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
+      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, a budget page (how to pay for it, what fits your budget, what would save the most, and your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
