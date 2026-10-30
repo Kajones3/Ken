@@ -138,6 +138,14 @@ formula is, 2 = newer fares count more).
   `leaveOneOut`, deepDive and errorBudget pass one precomputed tuning
   (`plainTuningOf`) to their many refits (`ModelInputs.tune`; `false` = old
   settings).
+- **The replay also picks the PIECES** (`factorSets`): US and international
+  each try dest + month vs dest + month + home airport + route. Live pick
+  (coverage run 41120803776): BOTH groups take home airport + route; US
+  caution 0.5, intl caution 1, no half-life won anywhere (recency did not
+  help yet). **Before-buying grade (section 7), same fares, earlier fares
+  only: international 37% within ±10% / 13.8% off -> 51% / 10.0%** (254
+  fares); US unchanged 38% / 14.4% (149). Replay: US 17.0% -> 14.8%, intl
+  15.3% -> 10.8%. Changes what travelers see after a Render redeploy.
 
 ## 2026-10-31 — Paris ticket screenshots, map road miles, learned holiday bump, groceries line, discounts on the budget page
 
