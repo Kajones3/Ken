@@ -49,8 +49,9 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth } from "./ticketCalendar.js";
-import { seedTickets } from "./jobs/refresh.js";
+import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
+import { seedTickets, allTierMonths } from "./jobs/refresh.js";
+import { ensureRoadMiles, osrmMiles, roadMilesLive } from "./roadMiles.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
 import { cheapestIn, typicalIn, priceTrip, MAX_HOTEL_ROOMS, type Overrides, type TripParams } from "./pricing.js";
@@ -317,6 +318,17 @@ async function compare(q0: URLSearchParams, user: SessionUser | null) {
   // list), so picking an alternate for one resort can't leak into another's.
   const destinationReqs = destinationsFrom(q);
   const destinationByResort = new Map(RESORTS.map((r) => [r.id, resolveDestination(r, destinationReqs[r.id] ?? null)]));
+  // A typed starting city: ask the map for its road miles the first time
+  // (roadMiles.ts), waiting at most a few seconds; else the estimate prices it.
+  const typed = driveBase.originPoint;
+  if (typed && roadMilesLive()) {
+    const wants = RESORTS.filter((r) => r.region === "dom")
+      .map((r) => ({ from: { lat: typed.lat, lon: typed.lon }, to: { lat: r.lat, lon: r.lon }, resortId: r.id }));
+    await Promise.race([
+      ensureRoadMiles(db, wants, osrmMiles, { straightMiles: (w) => haversineMiles(w.from.lat, w.from.lon, w.to.lat, w.to.lon) }).catch(() => 0),
+      new Promise((r) => setTimeout(r, 5000)),
+    ]);
+  }
   const book = await loadBook(db, {
     origin: params.origin,
     destinations: [...destinationByResort.values()],
@@ -1941,8 +1953,9 @@ const server = createServer(async (req, res) => {
       }
       return send(200, {
         resorts: CALENDAR_RESORTS.map((id) => ({ id, name: RESORT_BY_ID.get(id)!.name,
-          oneDayOnly: !!RESORT_BY_ID.get(id)!.ticket.flatMultiDay })),
+          oneDayOnly: !!RESORT_BY_ID.get(id)!.ticket.flatMultiDay, currency: DEFAULT_TICKET_CURRENCY[id] ?? "USD" })),
         months: await calendarSummary(db), planMonths: plannableMonths(todayISO()),
+        undated: Object.fromEntries(await latestUndated(db)),
       }, { cache: "no-store" });
     }
     if (url.pathname === "/api/admin/ticket-calendar" && req.method === "POST") {
@@ -1953,6 +1966,18 @@ const server = createServer(async (req, res) => {
       const saved = await saveCalendar(db, v.value, owner.email);
       await seedTickets(db, [v.value.month], [v.value.resortId]);
       return send(200, { ok: true, saved, months: await calendarSummary(db) }, { cache: "no-store" });
+    }
+    /* Disney's undated tickets (Paris): one price for any day. Saving
+     * re-seeds every plannable month for that resort, since an undated price
+     * prices every date that has no calendar. */
+    if (url.pathname === "/api/admin/ticket-undated" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const v = validateUndated(await readBody(req));
+      if (!v.ok) return send(400, { error: "rejected", message: v.reason });
+      await saveUndated(db, v.value, owner.email);
+      await seedTickets(db, allTierMonths(), [v.value.resortId]);
+      return send(200, { ok: true, value: v.value, undated: Object.fromEntries(await latestUndated(db)) }, { cache: "no-store" });
     }
 
     /* Manual work: everything kept up by hand and when it was last updated

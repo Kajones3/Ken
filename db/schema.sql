@@ -965,6 +965,34 @@ create index if not exists ticket_calendar_lookup on ticket_calendar (resort_id,
 -- owner's older price checks don't nudge a real Disney price a second time.
 alter table ticket_prices add column if not exists from_calendar boolean not null default false;
 
+-- 2026-10-31: Paris prices its tickets in pounds on the UK site the owner
+-- uses. A calendar price keeps what Disney showed (currency + amount) beside
+-- the dollars it was converted to on the day it was saved.
+alter table ticket_calendar add column if not exists currency text not null default 'USD';
+alter table ticket_calendar add column if not exists per_day_local numeric(10,2);
+
+-- 2026-10-31: Disney's UNDATED tickets (Paris: "Undated Ticket 1 Day/1 Park",
+-- good any day for a year). One price for any date, adult and child, read
+-- from the owner's screenshot of the cart. Append-only; newest per resort +
+-- length + parks wins. A date with no dated calendar is priced from it
+-- instead of the curve (seedTickets).
+create table if not exists ticket_undated (
+  id           bigserial    primary key,
+  resort_id    text         not null,
+  ticket_days  integer      not null check (ticket_days between 1 and 10),
+  parks        integer      not null default 1 check (parks between 1 and 2),
+  currency     text         not null default 'USD',
+  adult_local  numeric(10,2) not null check (adult_local > 0),
+  child_local  numeric(10,2) check (child_local > 0),
+  adult_usd    numeric(10,2) not null check (adult_usd > 0),
+  child_usd    numeric(10,2) check (child_usd > 0),
+  source       text         not null default 'owner_screenshot',
+  entered_by   text,
+  observed_at  timestamptz  not null default now()
+);
+create index if not exists ticket_undated_lookup on ticket_undated (resort_id, ticket_days, parks, observed_at desc);
+alter table ticket_prices add column if not exists from_undated boolean not null default false;
+
 -- 2026-10-29: the owner's "Good to know" notes (src/goodToKnow.ts). Overlays
 -- each resort's goodToKnow in config.ts: a row edits or hides a shipped note
 -- (key = hash of its words) or is a note of the owner's own (own = true).
@@ -1038,3 +1066,16 @@ insert into event_counts (day, kind, resort_id, detail, n)
   select day, 'pro', resort_id, detail, n from event_counts where kind = 'plus'
   on conflict (day, kind, resort_id, detail) do update set n = event_counts.n + excluded.n;
 delete from event_counts where kind = 'plus';
+
+-- 2026-10-31: road miles from a map (src/roadMiles.ts). One row per start
+-- point (rounded to 2 decimals) and resort, asked once of OpenStreetMap's
+-- routing service and kept. Driving trips read it; a missing route falls
+-- back to the straight-line estimate.
+create table if not exists drive_routes (
+  from_key    text         not null,
+  resort_id   text         not null,
+  miles       numeric(8,1) not null check (miles > 0),
+  source      text         not null default 'osrm',
+  fetched_at  timestamptz  not null default now(),
+  primary key (from_key, resort_id)
+);

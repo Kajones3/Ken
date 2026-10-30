@@ -1468,7 +1468,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         </div>
 
         <section class="bsec" id="memberBlock">
-          <h2>Passes and DVC Points You Already Have</h2>
+          <h2>Passes, DVC Points and Your Own Discounts</h2>
           <div id="memberFields">
         <p class="hint">A pass you already hold takes its holder off the ticket line here. The pass's own yearly price is shown beside your trip, not added to it — so you can see what these days would have cost without it.</p>
         <div id="passFields"></div>
@@ -1484,6 +1484,14 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         </div>
         <p class="hint">What you <b>receive</b>, not what the renter pays — a broker keeps the difference. Renters were paying roughly $19&ndash;21 a point and members taking home roughly $18&ndash;20 when this was last checked, so type your own figure if you know it.</p>
       </div>
+          <h3 style="margin-top:16px">Your own discount on this trip</h3>
+          <p class="hint">Passholder, DVC, military, Florida resident, or a code of your own. Your claim; we don't check it. It comes off the trip you picked above.</p>
+          <div class="fields">
+            <div class="f"><label for="ppKind">Discount</label><select id="ppKind"></select></div>
+            <div class="f"><label for="ppValue">Amount</label><input type="number" id="ppValue" min="0" step="1" placeholder="0" inputmode="decimal"></div>
+          </div>
+          <p class="hint" id="ppNow"></p>
+          <div id="bMemberEffect"></div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:12px">
             <button class="btn btn-primary btn-sm" id="bRecompare">Update the totals</button>
             <span class="hint" style="margin:0">Re-prices all six resorts with these, then brings you back here.</span>
@@ -3700,16 +3708,6 @@ function promosCard(item, x, promoList){
       <div class="p"><button class="btn btn-sm" data-applypromo="${applied?"none":promo.id}" data-resort="${item.resortId}">${applied?"Remove":"Apply"}</button></div></div>`;
   }).join("") || `<div class="li"><div class="l"><b>No known promos for these dates</b><small>Check back closer to when you'd go</small></div><div class="p">—</div></div>`;
 
-  const personalForm = `
-    <div class="li"><div class="l" style="width:100%">
-      <b>Have your own discount?</b>
-      <small>Annual Passholder, DVC, military, Florida resident, or your own code — your claim, not verified</small>
-      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
-        <select id="ppKind">${PERSONAL_PROMO_OPTIONS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("")}</select>
-        <input type="number" id="ppValue" min="0" step="1" placeholder="amount" style="width:76px">
-        <button class="btn btn-sm" id="ppApply" data-resort="${item.resortId}">Apply</button>
-      </div>
-    </div></div>`;
 
   const appliedNote = x.appliedPromos.length
     ? x.appliedPromos.filter(a=>!a.skipped).map(a=>`${esc(a.label)}: ${usd(a.amountUsd)} off${a.auto?" (applied for your dates)":""}${a.historical?" (historical, not confirmed)":""}`).join(" · ")
@@ -3717,10 +3715,10 @@ function promosCard(item, x, promoList){
 
   return `<div class="card">
     <h5><i class="ci ci-star"></i>Promos &amp; Discounts</h5>
-    <p class="sub">Disney's own offers for these dates, plus your own codes. A deal is taken off on its own when your arrival date is inside its dates.</p>
+    <p class="sub">Disney's own offers for these dates. A deal is taken off on its own when your arrival date is inside its dates. Your own discounts (passholder, DVC, military, a code) go on your budget page.</p>
     ${dealsOff?`<div class="li"><div class="l"><b>Deals are off for ${esc(item.resort.name)}</b><small>You turned them off, so no deal is in this total.</small></div>
       <div class="p"><button class="btn btn-sm" data-applypromo="" data-resort="${item.resortId}">Turn back on</button></div></div>`:""}
-    ${rows}${personalForm}
+    ${rows}
     ${appliedNote?`<p class="sub" style="margin:10px 0 0; color:var(--accent)">Applied: ${appliedNote}</p>`:""}
     ${x.appliedPromos.filter(a=>a.skipped).map(a=>`<p class="sub" style="margin:6px 0 0">Not applied: ${esc(a.label)} (${esc(a.skipped)}).</p>`).join("")}
   </div>`;
@@ -4331,7 +4329,7 @@ async function renderDetail(){
           <div class="kpi">
             <div class="kpitile"><div class="k">Round trip</div>
               <div class="v">${x.drivingPick ? Math.round(x.drivingPick.roundTripMiles).toLocaleString() : "—"}</div>
-              <div class="s">miles</div></div>
+              <div class="s">${x.drivingPick && x.drivingPick.milesFromMap ? "road miles, by map (© OpenStreetMap)" : "miles, estimated"}</div></div>
             <div class="kpitile"><div class="k">Gas</div>
               <div class="v">${usd(x.drivingPick ? x.drivingPick.gasPricePerGallonUsd : 0)}</div>
               <div class="s">per gallon</div></div>
@@ -4375,21 +4373,21 @@ async function renderDetail(){
           ${ticketDaysCtl}
           <div class="kpi">
             <div class="kpitile"><div class="k">${tkAdult ? "Adult ticket" : "Per ticket"}</div>
-              <div class="v">${usd(tkAdult ? tkAdult.totalUsd / tkAdult.count : x.tickets / Math.max(1, tkPaid))}</div><div class="s">${x.ticketsFromCalendar ? "Disney's calendar" : x.ticketsFlat ? "Disney's price" : "estimate"}${x.ticketTaxPct ? ", with tax" : ""}</div></div>
+              <div class="v">${usd(tkAdult ? tkAdult.totalUsd / tkAdult.count : x.tickets / Math.max(1, tkPaid))}</div><div class="s">${x.ticketsFromCalendar ? "Disney's calendar" : x.ticketsFlat || x.ticketsUndated ? "Disney's price" : "estimate"}${x.ticketTaxPct ? ", with tax" : ""}</div></div>
             <div class="kpitile"><div class="k">Buying</div>
               <div class="v">${tkPaid}</div><div class="s">${tkPaid===1?"ticket":"tickets"}${tkFree ? `, + ${tkFree} free (under ${r.bands.freeUnder})` : ""}</div></div>
             <div class="kpitile total"><div class="k">Tickets</div>
               <div class="v">${usd(x.tickets)}</div><div class="s">all in</div></div>
           </div>
           ${ticketRowsHtml}
-          ${x.ticketsFromCalendar || x.ticketsFlat || x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">${x.ticketsFlat ? `${esc(r.name)}'s multi-day tickets cost the same on any date. ` : ""}${x.ticketsFromCalendar ? (x.ticketCalendarDays && x.ticketCalendarDays !== x.parkDays?.days
+          ${x.ticketsFromCalendar || x.ticketsFlat || x.ticketsUndated || x.ticketTaxPct ? `<p class="sub" style="margin:10px 0 0">${x.ticketsFlat ? `${esc(r.name)}'s multi-day tickets cost the same on any date. ` : ""}${x.ticketsUndated ? `${esc(r.name)}'s undated ticket: one price, good any day. A dated ticket for your exact day is often cheaper. ` : ""}${x.ticketsFromCalendar ? (x.ticketCalendarDays && x.ticketCalendarDays !== x.parkDays?.days
               ? `From Disney's own ${x.ticketCalendarDays}-day ticket calendar for this start date, adjusted to ${x.parkDays?.days} days. `
               : "From Disney's own ticket calendar for these dates. ") : ""}${x.ticketTaxPct ? `Includes ${x.ticketTaxPct}% sales tax, which Disney adds at checkout.` : ""}</p>` : ""}
           <div class="foot">
             <a class="book" href="${r.ticketUrl}" target="_blank" rel="noopener" data-track="tickets">Official ticket page →</a>
           </div>
         </div>
-        ${membershipCard(x, p)}
+        ${x.membership && (x.membership.pass || x.membership.dvc) ? `<p class="sub" style="margin:0 0 4px">Your ${[x.membership.pass ? "passes" : "", x.membership.dvc ? "DVC points" : ""].filter(Boolean).join(" and ")} are in this total. <a href="#" data-openbudget="${item.resortId}">See what they save on your budget page →</a></p>` : ""}
         <div class="card">
           <h5><i class="ci ci-hotel"></i>Hotel · ${p.nights} nights${roomCount > 1 ? ` · ${roomCount} rooms` : ""}</h5>
           <p class="sub">${TIER_LABEL[(stayNow?ON_TIERS:OFF_TIERS)[x.hotelTier.actual]]} · ${stayNow?"on property":"off property"}</p>
@@ -6245,7 +6243,7 @@ function priceLevelHtml(r, withSource){
   const inLocal = r.currency !== "USD" && FX_RATES[r.currency] ? ` (${esc(local(r, here))})` : "";
   const city = PRICE_LEVEL_CITY[r.id];
   return `<b>Prices compared with Orlando.</b> Eating out in ${esc(l.place)} costs ${esc(l.eatingOutPhrase)} in Orlando:
-    a dinner that's $50 in Orlando is about $${here}${inLocal} here. Groceries cost ${esc(l.groceriesPhrase)} in Orlando.
+    a dinner that's $50 in Orlando is about $${here}${inLocal} here.
     That's the world outside the gates; food inside the parks is Disney's own price, and the food line covers it.${
     city ? ` These figures are for ${esc(l.place)} as a whole, and ${city} itself usually runs a little higher.` : ""}${
     withSource ? ` Source: ${esc(PRICE_LEVELS.source)}.` : ""}${
@@ -6685,7 +6683,7 @@ function setPersonalPromo(id, kind, value, label){
   const o = OV[id] || (OV[id] = {});
   if(value > 0) o.personalPromo = { kind, value, label }; else delete o.personalPromo;
   if(ovEmpty(o)) delete OV[id];
-  recompute(id);
+  return recompute(id);
 }
 
 document.addEventListener("input", e=>{
@@ -6741,12 +6739,6 @@ document.addEventListener("click", e=>{
   if(ap){
     setPromoId(ap.dataset.resort, ap.dataset.applypromo || null);
     return;
-  }
-  if(e.target.id === "ppApply"){
-    const resortId = e.target.dataset.resort;
-    const [kind, label] = $("#ppKind").value.split("|");
-    const value = Math.max(0, +$("#ppValue").value) || 0;
-    if(value > 0) setPersonalPromo(resortId, kind, value, label);
   }
 });
 
@@ -7062,6 +7054,18 @@ function renderBudget(){
       <h1>Paying for ${esc(item.resort.name)}</h1>
       <p class="thsub">${usd(x.total)} for ${countWord(x.partySize)}, arriving ${fmtDate(x.start)} for ${params.nights} nights.</p></div>`;
   $("#bTripNote").textContent = `Arriving ${T === 0 ? "this month" : T === 1 ? "next month" : T+" months from now"}. Every number is our estimate for that trip; type your own on its trip page and it carries through here.`;
+  // Your own discount and what your passes/points do, for THIS trip (moved
+  // here from the trip page, owner 2026-10-31).
+  const pp = (OV[item.resortId] || {}).personalPromo;
+  if(!$("#ppKind").options.length) $("#ppKind").innerHTML = PERSONAL_PROMO_OPTIONS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+  if(document.activeElement !== $("#ppKind") && document.activeElement !== $("#ppValue")){
+    const match = pp ? PERSONAL_PROMO_OPTIONS.find(([v]) => v === `${pp.kind}|${pp.label}`) : null;
+    if(match) $("#ppKind").value = match[0];
+    $("#ppValue").value = pp ? pp.value : "";
+  }
+  const ppApplied = (x.appliedPromos || []).find(a => a.source === "personal" && !a.skipped);
+  $("#ppNow").textContent = pp ? (ppApplied ? `Taking ${usd(ppApplied.amountUsd)} off ${item.resort.name}.` : `Saved for ${item.resort.name}.`) : "";
+  $("#bMemberEffect").innerHTML = membershipCard(x, params);
 
   // Inputs, from what this visitor typed last time (this browser only).
   const num = id => Math.max(0, +$(id).value || 0);
@@ -7227,6 +7231,24 @@ for(const [id,k] of BUDGET_FIELDS)
   $(id).addEventListener("input", e=>{ budgetPrefs[k] = +e.target.value || 0; saveBudgetPrefs(); renderBudget(); });
 $("#bLead").addEventListener("change", e=>{ budgetPrefs.lead = +e.target.value; saveBudgetPrefs(); renderBudget(); });
 $("#bExtraMonth").addEventListener("change", e=>{ budgetPrefs.extraYm = e.target.value; saveBudgetPrefs(); renderBudget(); });
+// Your own discount: applied to the budget page's trip as you type it.
+async function applyOwnDiscount(){
+  if(!budgetTripId) return;
+  const [kind, label] = $("#ppKind").value.split("|");
+  const value = Math.max(0, +$("#ppValue").value) || 0;
+  $("#ppNow").textContent = "Updating the total…";
+  await setPersonalPromo(budgetTripId, kind, value, label);
+  renderBudget();
+}
+$("#ppKind").addEventListener("change", applyOwnDiscount);
+$("#ppValue").addEventListener("change", applyOwnDiscount);
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-openbudget]");
+  if(!a) return;
+  e.preventDefault();
+  budgetTripId = a.dataset.openbudget;
+  $("#budgetBtn").click();
+});
 $("#bRecompare").addEventListener("click", async ()=>{
   const b = $("#bRecompare"); b.disabled = true; b.textContent = "Updating…";
   try { await runSearch(budgetTripId); } finally { b.disabled = false; b.textContent = "Update the totals"; }

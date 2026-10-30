@@ -84,22 +84,32 @@ export async function loadManualWork(db: Db, today: string): Promise<ManualItem[
         ? "Screenshots of Disney's own N-day ticket calendar, one month each. Disney's prices move by date, so each month you add prices that month exactly."
         : "Disneyland's 2-5 day tickets are one price any date (already right). Only 1-day trips use this calendar.",
       lastUpdated: last, everyDays: resortId === "wdw" ? 60 : null,
-      status: resortId === "dlr" ? "ok" : missing.length ? (last ? "due" : "missing") : statusOf(last, 60, today),
+      // Disney only publishes so many months ahead (owner, 2026-10-31: "I've
+      // given the max of what I can give"), so months not on sale yet are not
+      // a job: a recent import is up to date.
+      status: resortId === "dlr" ? "ok" : !last ? "missing" : statusOf(last, 60, today),
       detail: `${months.length - missing.length} of ${months.length} plannable months saved${missing.length ? `; missing ${missing.slice(0, 6).join(", ")}${missing.length > 6 ? "..." : ""}` : ""}`,
       where: { label: "Ticket calendars", href: "#tickets" },
     });
   }
 
-  // Disneyland Paris tickets: still our estimate, not Disney's table.
-  const parisChecks = await one<{ n: string; last: string | null }>(db,
-    `select count(*) as n, max(checked_on)::text as last from price_checks where resort_id = 'dlp' and category = 'ticket'`);
-  items.push({
-    id: "paris-tickets", title: "Disneyland Paris ticket prices", everyDays: null,
-    what: "Paris tickets are still our own estimate and read about 43% low. Screenshots of the 1-5 day prices (adult 12+ and child 3-11) for one arrival date from tickets.disneylandparis.com would give us Disney's real table, like Walt Disney World's.",
-    lastUpdated: parisChecks?.last ?? null, status: "missing",
-    detail: `${Number(parisChecks?.n ?? 0)} Paris ticket price check(s) saved; the 1-5 day table is still needed`,
-    where: { label: "Disneyland Paris tickets", href: "https://tickets.disneylandparis.com/" },
-  });
+  // Disneyland Paris tickets (2026-10-31): dated calendars and undated
+  // tickets, both read from screenshots on the Ticket calendars page.
+  {
+    const cal = await one<{ last: Date | null; months: string }>(db,
+      `select max(observed_at) as last, count(distinct to_char(park_date, 'YYYY-MM'))::text as months from ticket_calendar where resort_id = 'dlp'`);
+    const und = await one<{ last: Date | null; n: string }>(db,
+      `select max(observed_at) as last, count(*)::text as n from ticket_undated where resort_id = 'dlp'`);
+    const last = [iso(cal?.last), iso(und?.last)].filter(Boolean).sort().pop() ?? null;
+    const undN = Number(und?.n ?? 0), calN = Number(cal?.months ?? 0);
+    items.push({
+      id: "paris-tickets", title: "Disneyland Paris ticket prices", everyDays: 60,
+      what: "Screenshots from tickets.disneylandparis.com: the cart for an undated 1-day ticket (one price for any day, adult and child), and the dated calendars month by month. Without either, Paris tickets are our own estimate, which read about 43% low.",
+      lastUpdated: last, status: undN || calN ? statusOf(last, 60, today) : "missing",
+      detail: `${undN ? "Undated ticket saved" : "No undated ticket saved"}; dated calendars for ${calN} month${calN === 1 ? "" : "s"}`,
+      where: { label: "Ticket calendars", href: "#tickets" },
+    });
+  }
 
   // Tickets checked by hand in the code (Tokyo, Shanghai, Hong Kong; WDW/DLR tables).
   items.push({

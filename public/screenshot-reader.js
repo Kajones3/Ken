@@ -179,6 +179,27 @@ export function readTicketPage(text, resortCurrency = "") {
   return { adult, child, days, perPerson: /per\s+person|par\s+personne/i.test(text) };
 }
 
+/**
+ * Disney's UNDATED ticket in the cart (Paris, owner 2026-10-31: "Undated
+ * Ticket 1 Day/1 Park ... Adult (12+) 1x £114.27, Child (3-11) 1x £106.30").
+ * One price for any day. Null when the page doesn't say "Undated".
+ * Returns { days, parks, adult, child, currency } (amounts as shown).
+ */
+export function readUndatedTicket(text) {
+  if (!/\bundated\b/i.test(text || "")) return null;
+  const page = readTicketPage(text, "");
+  if (!page || !page.adult) return null;
+  const pk = /(\d)\s*parks?\b/i.exec(text);
+  const cur = page.adult.currency || (page.child && page.child.currency) || null;
+  return {
+    days: page.days || 1,
+    parks: pk && (pk[1] === "1" || pk[1] === "2") ? Number(pk[1]) : 1,
+    adult: page.adult.amount,
+    child: page.child ? page.child.amount : null,
+    currency: cur === "GBP" || cur === "EUR" || cur === "USD" ? cur : null,
+  };
+}
+
 /* ---------------------------------------------------- what it is about */
 
 export function guessCategory(text) {
@@ -510,13 +531,26 @@ export function readTicketCalendar(words) {
   const ages = /Ages?\s*(\d{1,2})\s*\+/i.exec(text);
   const adultAges = ages ? `${ages[1]}+` : null;
 
-  // The weekday headings, the top of the grid.
-  const heads = W.filter(w => CAL_WEEKDAYS.includes(w.t.slice(0, 3).toLowerCase()) && w.t.length <= 9
+  // The money it is priced in: Paris's UK site shows "£94", Disney's US
+  // sites "$153+". Whichever sign the cells use most.
+  const signs = { USD: 0, GBP: 0, EUR: 0 };
+  for (const w of W) { if (/£/.test(w.text)) signs.GBP++; else if (/€/.test(w.text)) signs.EUR++; else if (/\$/.test(w.text)) signs.USD++; }
+  const currency = Object.entries(signs).sort((a, b) => b[1] - a[1])[0][1] ? Object.entries(signs).sort((a, b) => b[1] - a[1])[0][0] : null;
+
+  // The weekday headings, the top of the grid: "Sun", "Monday", or Paris's
+  // two-letter "Mo Tu We Th Fr Sa Su".
+  const dayIdx = t => {
+    const l = t.toLowerCase();
+    if (l.length >= 3) return CAL_WEEKDAYS.indexOf(l.slice(0, 3));
+    if (l.length === 2) return CAL_WEEKDAYS.findIndex(d => d.startsWith(l));
+    return -1;
+  };
+  const heads = W.filter(w => dayIdx(w.t) >= 0 && w.t.length <= 9
     && /^[A-Za-z]+$/.test(w.t) && (!heading || w.cy > heading.cy));
   // Keep one heading per weekday, the row the most of them share.
   const byDay = new Map();
   for (const h of heads) {
-    const d = CAL_WEEKDAYS.indexOf(h.t.slice(0, 3).toLowerCase());
+    const d = dayIdx(h.t);
     const prev = byDay.get(d);
     if (!prev || (heading && Math.abs(h.cy - heading.cy) < Math.abs(prev.cy - heading.cy))) byDay.set(d, h);
   }
@@ -525,15 +559,24 @@ export function readTicketCalendar(words) {
   // the reading of the letters that best fits evenly spaced columns.
   let letterHeads = false;
   if (byDay.size < 2) for (const [d, h] of singleLetterHeads(W, heading)) { byDay.set(d, h); letterHeads = true; }
+  // Europe starts the week on Monday (Paris: Mo..Su). Sunday then sits at
+  // the RIGHT end, so it counts as column 7, not 0.
+  const sun = byDay.get(0), mon = byDay.get(1);
+  const others = [...byDay.entries()].filter(([d]) => d !== 0).map(([, h]) => h.cx);
+  const mondayFirst = sun ? (mon ? sun.cx > mon.cx : others.length > 0 && sun.cx > Math.max(...others))
+    : (currency === "GBP" || currency === "EUR");
+  if (mondayFirst && sun) { byDay.delete(0); byDay.set(7, sun); }
   // Disney World's calendar always names its ticket ("5-Day Ticket") under
-  // Sun..Sat headings; Disneyland's 1-day calendar names none, under letters.
-  const resortGuess = letterHeads && !ticketDays ? "dlr" : ticketDays ? "wdw" : null;
+  // Sun..Sat headings; Disneyland's 1-day calendar names none, under letters;
+  // Paris prices in pounds or euros.
+  const resortGuess = currency === "GBP" || currency === "EUR" ? "dlp"
+    : letterHeads && !ticketDays ? "dlr" : ticketDays ? "wdw" : null;
   const headRowY = byDay.size ? [...byDay.values()].map(h => h.cy).sort((a, b) => a - b)[Math.floor(byDay.size / 2)] : null;
 
   // The prices: "$153+" (or "153+"); a lone "$153" only if no "+" prices were read.
   const priceOf = w => {
     const read = t => {
-      const m = /^\$?(\d{2,4}(?:\.\d{1,2})?)([+t*])?$/.exec(t.replace(/,/g, ""));
+      const m = /^[$£€]?(\d{2,4}(?:\.\d{1,2})?)([+t*])?$/.exec(t.replace(/,/g, ""));
       if (!m) return null;
       const v = Number(m[1]);
       return v >= 20 && v <= 1000 ? { v, plus: !!m[2] || /\+$/.test(w.text) } : null;
@@ -545,7 +588,7 @@ export function readTicketCalendar(words) {
     // 3-digit price with at most one look-alike in front is a badge price.
     // Day numbers are never 3 digits, and a "+" calendar (Disney World)
     // keeps only its "+" prices below, so this never adds a stray number there.
-    const badge = /\$/.test(w.text) ? null : /^[0568sSoO]?(\d{3})$/.exec(w.t);
+    const badge = /[$£€]/.test(w.text) ? null : /^[0568sSoO]?(\d{3})$/.exec(w.t);
     const b = badge && read("$" + badge[1]);
     if (b) return { ...b, check: true, badge: true };
     const p = read(w.t);
@@ -557,26 +600,28 @@ export function readTicketCalendar(words) {
     const fixed = read(digitLookalikes(w.t));
     return fixed ? { ...fixed, check: true } : null;
   };
-  let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && (x.p.badge || /\$|\+/.test(x.w.text)))
+  let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && (x.p.badge || /[$£€+]/.test(x.w.text)))
     .filter(x => headRowY === null || x.w.cy > headRowY);
   const plus = cands.filter(x => x.p.plus);
   if (plus.length >= 7) cands = plus;
   const prices = cands.map(x => ({ ...x.w, v: x.p.v, check: !!x.p.check }));
-  if (!month) return { month: null, ticketDays, adultAges, resortGuess, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
-  if (!prices.length) return { month, ticketDays, adultAges, resortGuess, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
+  if (!month) return { month: null, ticketDays, adultAges, resortGuess, currency, prices: [], missing: [], warnings: ["Couldn't find the month (like \"October 2027\") in the picture."] };
+  if (!prices.length) return { month, ticketDays, adultAges, resortGuess, currency, prices: [], missing: [], warnings: ["Couldn't find the prices in the calendar."] };
 
   // Columns: from the headings when at least two were read, else from the prices' spread.
+  // Column numbers are weekdays: Sun 0..Sat 6, or Mon 1..Sun 7 when Monday comes first.
+  const c0 = mondayFirst ? 1 : 0, c6 = c0 + 6;
   let colOf;
   const hs = [...byDay.entries()];
   if (hs.length >= 2) {
     const n = hs.length, sx = hs.reduce((a, [d]) => a + d, 0), sy = hs.reduce((a, [, h]) => a + h.cx, 0);
     const sxx = hs.reduce((a, [d]) => a + d * d, 0), sxy = hs.reduce((a, [d, h]) => a + d * h.cx, 0);
     const b = (n * sxy - sx * sy) / (n * sxx - sx * sx), a = (sy - b * sx) / n;
-    colOf = cx => Math.max(0, Math.min(6, Math.round((cx - a) / b)));
+    colOf = cx => Math.max(c0, Math.min(c6, Math.round((cx - a) / b)));
   } else {
     const xs = prices.map(p => p.cx), lo = Math.min(...xs), hi = Math.max(...xs);
-    colOf = cx => hi > lo ? Math.max(0, Math.min(6, Math.round((cx - lo) / (hi - lo) * 6))) : 0;
-    warnings.push("Couldn't read the Sun–Sat headings; worked out the columns from the prices.");
+    colOf = cx => c0 + (hi > lo ? Math.max(0, Math.min(6, Math.round((cx - lo) / (hi - lo) * 6))) : 0);
+    warnings.push(`Couldn't read the ${mondayFirst ? "Mon–Sun" : "Sun–Sat"} headings; worked out the columns from the prices.`);
   }
 
   // Weeks: prices sorted top to bottom, a new week when the height jumps.
@@ -588,7 +633,8 @@ export function readTicketCalendar(words) {
     if (row && p.cy - row.y < hMed * 2) row.items.push(p); else rows.push({ y: p.cy, items: [p] });
   }
   const [yy, mm] = month.split("-").map(Number);
-  const firstDow = new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay();
+  const dow1 = new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay();
+  const firstDow = mondayFirst && dow1 === 0 ? 7 : dow1;
   const daysIn = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
   const placed = [];
   rows.forEach((row, r) => row.items.forEach(p => placed.push({ p, day: r * 7 + colOf(p.cx) - firstDow + 1 })));
@@ -616,16 +662,17 @@ export function readTicketCalendar(words) {
     warnings.push("The calendar's own day numbers moved the weeks; check the first and last week.");
   }
 
+  const sym = currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$";
   const out = new Map();
   for (const x of placed) {
-    if (x.day < 1 || x.day > daysIn) { warnings.push(`A price ($${x.p.v}) didn't fall on a day of the month and was left out.`); continue; }
+    if (x.day < 1 || x.day > daysIn) { warnings.push(`A price (${sym}${x.p.v}) didn't fall on a day of the month and was left out.`); continue; }
     const date = `${month}-${String(x.day).padStart(2, "0")}`;
-    if (out.has(date)) { warnings.push(`Two prices landed on ${date}; kept $${out.get(date).v}. Check that day.`); continue; }
+    if (out.has(date)) { warnings.push(`Two prices landed on ${date}; kept ${sym}${out.get(date).v}. Check that day.`); continue; }
     out.set(date, { v: x.p.v, check: x.p.check });
   }
   const all = Array.from({ length: daysIn }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`);
   return {
-    month, ticketDays, adultAges, resortGuess,
+    month, ticketDays, adultAges, resortGuess, currency,
     prices: all.filter(d => out.has(d)).map(d => ({ date: d, perDay: out.get(d).v, ...(out.get(d).check ? { check: true } : {}) })),
     missing: all.filter(d => !out.has(d)),
     warnings,
@@ -676,7 +723,10 @@ export async function readImage(image, { langs = "eng", onProgress, columns = fa
  * sits (the ticket calendar). Small screenshots are doubled first, which
  * reads small calendar digits far more reliably; boxes are in that scale.
  */
-export async function readWords(image, { onProgress } = {}) {
+/** Darker than this (0-255) is ink when reading with `ink`. Coloured
+ *  calendar cells sit around 150-230; Disney's navy digits well under 100. */
+export const INK_CUTOFF = 110;
+export async function readWords(image, { onProgress, ink = false } = {}) {
   const T = await loadTesseract();
   const worker = await T.createWorker("eng", 1, {
     logger: (m) => { if (onProgress && typeof m.progress === "number") onProgress(m.progress, m.status || ""); },
@@ -693,6 +743,19 @@ export async function readWords(image, { onProgress } = {}) {
       const g = c.getContext("2d");
       g.imageSmoothingQuality = "high";
       g.drawImage(bmp, 0, 0, c.width, c.height);
+      // ink: keep only dark text, every coloured background turned white.
+      // Paris colours each calendar day by price band (light blue, orange,
+      // purple...) and the reader loses dark digits on them (owner's
+      // December 2026 screenshot, 2026-10-31: 4 of 31 read).
+      if (ink) {
+        const img = g.getImageData(0, 0, c.width, c.height), px = img.data;
+        for (let i = 0; i < px.length; i += 4) {
+          const lum = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+          const v = lum < INK_CUTOFF ? 0 : 255;
+          px[i] = px[i + 1] = px[i + 2] = v;
+        }
+        g.putImageData(img, 0, 0);
+      }
       src = c;
     } catch { /* read it as it is */ }
     const { data } = await worker.recognize(src, {}, { blocks: true, text: true });

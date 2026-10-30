@@ -119,6 +119,62 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-31 — Paris ticket screenshots, map road miles, learned holiday bump, groceries line, discounts on the budget page (newest)
+
+- **Paris tickets, read from screenshots** (owner's UK-site screenshots, pounds).
+  /admin -> Ticket calendars takes `dlp` (`CALENDAR_RESORTS`): (1) the DATED
+  calendar, week starting Monday, "£94" cells (reader: two-letter Mo..Su
+  headings, Sunday as column 7, £/€ prices, `currency` returned); Paris
+  colours each cell, so a short read is retried "ink only" (`readWords(...,
+  {ink:true})`, `INK_CUTOFF` 110): the owner's December 2026 screenshot read
+  4/31 plain, 31/31 ink (`src/testdata/dlp-ticket-calendar-2026-12.words.json`).
+  (2) The cart for an UNDATED ticket (`readUndatedTicket`: "Undated Ticket 1
+  Day/1 Park", Adult (12+) £114.27, Child (3-11) £106.30): new append-only
+  `ticket_undated`, POST `/api/admin/ticket-undated`, re-seeds all months.
+  Pounds are converted at the ECB rate on save (`toUsd`); `ticket_calendar`
+  keeps `currency` + `per_day_local` (a saved month reopens in pounds).
+  Pricing: a dated calendar date wins; any other date uses the undated 1-day
+  price (`ticket_prices.from_undated`, never nudged by price checks; card
+  "Disney's price ... undated ticket"); a trip of N days uses an undated
+  N-day ticket when saved (`TicketRow.undated`, `TripPrice.ticketsUndated`),
+  else 1-day x the length shape. `dlp` child share 0.93 (Disney's own).
+  SAVED LOCALLY in the dev database only: the owner must drop the two
+  screenshots again on the live /admin. Owner: WDW/Disneyland calendars are
+  "the max of what I can give", so a month not saved is no longer "due" in
+  Manual work (Disney only sells so far ahead).
+- **Road miles from a map** (`src/roadMiles.ts`, table `drive_routes`): OSRM
+  (router.project-osrm.org, free, no key, 1 request/second, credited on the
+  card "© OpenStreetMap"), asked ONCE per start point (2 decimals) + resort.
+  The nightly refresh fills all 41 home airports x WDW/Disneyland once; a
+  typed city is asked on its first search (5 s cap, else the estimate).
+  Live where DATABASE_URL is set unless ROAD_MILES_LIVE=false. Map vs the old
+  straight-line x 1.25: ATL->WDW 441 vs 506, PHX->DLR 366 vs 422 (old ran
+  5-15% long). `drivingPick.milesFromMap`. A map answer under the straight
+  line or over 2.5x it is not kept.
+- **Holiday bump learned** (`src/holidayLearning.ts`): holiday-week dates vs
+  the same route's ordinary dates that month (Thanksgiving: rest of Nov;
+  Christmas: Dec 1-20) from `flight_observations` (mostly the free feed),
+  median over routes, shrunk toward the study's +55/+58 by n/(n+8) routes,
+  held 0.8-2.5x. `PriceBook.holidayPremiumPct`; an owner setting still wins.
+  Shown in /admin Rates & settings "What the formulas learned". Paid fares
+  never land in those weeks (bought 8th-22nd). Not yet read on live data.
+- **Groceries sentence removed** from "Prices compared with Orlando" (owner:
+  "Fix it"): eating out only. The priced grocery day sits inside travel
+  guides' ranges (Tokyo ¥2,120 vs ¥1,500-2,500; Shanghai ¥77 vs ¥40-110;
+  Hong Kong HK$127 vs HK$100-300); Paris €11 may be low.
+- **Passes, DVC and "Your own discount" live on the budget page only**
+  (owner: "If they get a discount they should know it"). The trip page's
+  Promos card is Disney's deals only; the passes card became one line linking
+  to the budget page (`data-openbudget`). Budget page: `#ppKind`/`#ppValue`
+  apply to the budget's trip (`applyOwnDiscount`, re-prices then redraws),
+  `#bMemberEffect` shows `membershipCard()`. Checked in Chromium: $5,525 ->
+  $5,425 with $100 off.
+- Answered, not built: Paris hotel rate calendars (package price per person
+  per night incl. a 2-day ticket), Tokyo's hotel calendar (only available
+  days priced), and a better way for the flight formula to learn
+  (conversation of 2026-10-31).
+- 907 tests, typecheck clean.
+
 ## 2026-10-30, final — "What Fits My Budget?" leads the budget page
 
 Owner asked before redeploying. `#bFitSec` is now the FIRST section of

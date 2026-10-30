@@ -46,6 +46,13 @@
  * Bank has Tokyo 12% ABOVE Orlando and Numbeo 24% below. The World Bank
  * prices the same product everywhere, and a Western grocery basket is dear
  * in Japan; Numbeo's is what locals buy. Flagged to the owner 2026-09-27.
+ * 2026-10-31, owner: "Fix it." Travelers no longer see a groceries
+ * comparison (prototype.html priceLevelHtml says eating out only). The
+ * grocery level still sets the price of a day of groceries (meals.ts), and
+ * that day lands inside what travel guides report for a konbini/supermarket
+ * day: Tokyo ¥2,120 vs ¥1,500-2,500, Shanghai ¥77 vs ¥40-110, Hong Kong
+ * HK$127 vs HK$100-300. Paris €11 may be low (one traveler's ~€20); the
+ * owner can change any grocery day in /admin.
  *
  * WHY NOT NUMBEO. It has city-level figures (Tokyo, not Japan) and would be
  * the better source, but its terms forbid showing its data on a commercial

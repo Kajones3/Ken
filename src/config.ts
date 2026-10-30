@@ -379,7 +379,11 @@ export const RESORTS: Resort[] = [
     // hopperAdultUsd/hopperChildUsd are an unresearched guess (roughly 20% of
     // base) — weaker confidence than WDW/Disneyland's, which came from an
     // actual 2026 price check. Refine before relying on this one.
-    ticket: { base: 78, child: 0.84, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
+    // child 0.93: Disney's own UK prices, undated 1-day ticket Adult (12+)
+    // £114.27, Child (3-11) £106.30 (owner's screenshot 2026-10-31); a 3-day
+    // was £285 / £268 (0.94, 2026-10-11). base/slope are the curve used only
+    // for dates with no dated calendar and no undated price saved in /admin.
+    ticket: { base: 78, child: 0.93, slope: 0.07, floor: 0.55, hopperAdultUsd: 45, hopperChildUsd: 38 },
     foodExamples: {
       qs: [{ name: "Cowboy Cookout Barbecue", tier: "$" }, { name: "Colonel Hathi's Pizza Outpost", tier: "$" }],
       ts: [{ name: "Auberge de Cendrillon", tier: "$$$$" }, { name: "Walt's — an American Restaurant", tier: "$$$" }],
