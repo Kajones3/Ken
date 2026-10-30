@@ -1376,6 +1376,18 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <div class="tripgrid" id="budgetMain">
         <div class="tripmain">
         <div id="budgetPlan">
+        <section class="bsec" id="bFitSec">
+          <h2>What Fits My Budget?</h2>
+          <div class="fields">
+            <div class="f">
+              <label for="bBudget">Most you want to spend on the trip</label>
+              <input id="bBudget" type="number" min="0" step="100" inputmode="numeric">
+            </div>
+          </div>
+          <p class="hint" id="bFitNote"></p>
+          <ul class="bfit" id="bFit"></ul>
+        </section>
+
         <section class="bsec">
           <h2>Which Trip</h2>
           <div class="fields">
@@ -1441,18 +1453,6 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
           <h2>Your Milestones</h2>
           <p class="hint">When the money you've put by covers each part of the trip, in the order most people book. Prices are our estimates; the price on the day you buy can be different.</p>
           <ol class="bmiles" id="bMiles"></ol>
-        </section>
-
-        <section class="bsec" id="bFitSec">
-          <h2>What Fits My Budget?</h2>
-          <div class="fields">
-            <div class="f">
-              <label for="bBudget">Most you want to spend on the trip</label>
-              <input id="bBudget" type="number" min="0" step="100" inputmode="numeric">
-            </div>
-          </div>
-          <p class="hint" id="bFitNote"></p>
-          <ul class="bfit" id="bFit"></ul>
         </section>
 
         <section class="bsec" id="bSaveSec">

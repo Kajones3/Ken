@@ -119,6 +119,13 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-30, final — "What Fits My Budget?" leads the budget page
+
+Owner asked before redeploying. `#bFitSec` is now the FIRST section of
+`#budgetPlan` (above Which Trip, What You Already Have, Your Plan,
+Milestones). Markup move only; nothing in the code relied on the order.
+Checked in Chromium as a Planner Pro account.
+
 ## 2026-10-30, very last — "not affiliated with Disney" line; Delete my account (newest)
 
 - **Disclaimer** (`DISNEY_DISCLAIMER` in config.ts, one wording): page footer
