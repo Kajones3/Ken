@@ -21,7 +21,7 @@ import type { Db } from "../db.js";
 import { unzipBody } from "../rawResponses.js";
 import { pricedPool } from "../cheapestFlights.js";
 import { loadModelInputs } from "../fareModelDb.js";
-import { fitFareModel, fitLeverModel, leaveOneOut, groupOf, isInternational, fitAdditive, predictAdditive,
+import { fitFareModel, fitLeverModel, leaveOneOut, plainTuningOf, groupOf, isInternational, fitAdditive, predictAdditive,
   type ModelInputs, type Obs, type Additive } from "../fareModel.js";
 import { dateStr } from "../book.js";
 
@@ -78,6 +78,9 @@ const asDate = (v: unknown) => (v instanceof Date ? v : new Date(String(v)));
 export async function errorBudget(db: Db): Promise<string[]> {
   const out: string[] = ["## ERROR BUDGET: why the guesses aren't getting better (read-only, every bought fare in the last 90 days)"];
   const inputs = await loadModelInputs(db, 90);
+  // The caution/recency the replay picks today, handed to every refit below
+  // (re-running the replay per refit would take hours).
+  const tuneOnce = plainTuningOf(inputs);
   const tl = (await db.query<{ origin: string; destination: string; depart_date: unknown; observed_at: unknown; trip_length: number }>(
     `select origin, destination, depart_date, observed_at, trip_length from flight_observations
       where source = 'serpapi_flights' and observed_at > now() - interval '90 days'`)).rows;
@@ -191,7 +194,7 @@ export async function errorBudget(db: Db): Promise<string[]> {
   out.push(`    test: ${test.length} fares bought ${test[0]?.at.toISOString().slice(0, 10)} to ${test[test.length - 1]?.at.toISOString().slice(0, 10)}; only ${test.filter((r) => seenRoutes.has(r.route)).length} are on a route bought before`);
   for (const share of [0.25, 0.5, 0.75, 1]) {
     const train = older.slice(0, Math.max(10, Math.floor(older.length * share)));
-    const cm = fitFareModel({ ...inputs, fares: train.map((r) => inputs.fares[r.i]!) } as ModelInputs);
+    const cm = fitFareModel({ ...inputs, tune: tuneOnce, fares: train.map((r) => inputs.fares[r.i]!) } as ModelInputs);
     const parts: string[] = [];
     for (const intl of [false, true]) {
       const tr = train.filter((r) => r.intl === intl), te = test.filter((r) => r.intl === intl);
@@ -255,7 +258,7 @@ export async function errorBudget(db: Db): Promise<string[]> {
         const wp = tr.filter((r) => r.prior);
         fits.set(`${intl}|c`, fitAdditive(obs(wp, { prior: true }), ["all", "dest", "month", "origin"]));
       }
-      const tin = { ...inputs, fares: earlier.map((r) => inputs.fares[r.i]!) } as ModelInputs;
+      const tin = { ...inputs, tune: tuneOnce, fares: earlier.map((r) => inputs.fares[r.i]!) } as ModelInputs;
       const cm = earlier.length >= 20 ? fitFareModel(tin) : null;
       const lm = earlier.length >= 20 ? fitLeverModel(tin) : null;
       fitCache.set(hour, { fits, cm, lm });

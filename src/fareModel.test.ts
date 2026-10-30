@@ -315,3 +315,37 @@ test("plain: grading leaves each fare and its re-buys out of its own fit", () =>
   const v = loo.get(fares.length - 1)!;
   assert.ok(Math.abs(v / 300 - 1) < 0.03, `without its own two buys RDU sits at the typical fare: ${v}`);
 });
+
+/* 2026-10-31 (owner: "Do 1 and 2"): the plain formula's caution and recency
+ * are picked by replaying the last weeks before buying. */
+import { tunePlain, recencyWeight, fitAdditive as fitAdd, PLAIN_SHRINK_K as OLD_K, TUNE_MIN_FARES } from "./fareModel.js";
+
+test("fitAdditive: a fare's weight counts, so newer fares can pull harder", () => {
+  const rows = [
+    { y: Math.log(100), keys: { d: "A" }, w: 1 },
+    { y: Math.log(300), keys: { d: "A" }, w: 3 },
+  ];
+  const m = fitAdd(rows, ["d"], 0);
+  assert.ok(Math.abs(m.mu - (Math.log(100) + 3 * Math.log(300)) / 4) < 1e-9);
+  assert.equal(recencyWeight(30, 30), 0.5);
+  assert.equal(recencyWeight(90, null), 1);
+});
+
+test("tunePlain: when fares jumped lately, it learns to trust newer fares; with too few graded it keeps the old settings", () => {
+  const DAY = 86_400_000, t0 = Date.parse("2026-09-01");
+  const rows: { y: number; keys: Record<string, string>; t: number }[] = [];
+  const dests = ["MCO", "LAX", "CDG"];
+  for (let day = 0; day < 60; day++) {
+    for (const [i, d] of dests.entries()) {
+      const level = (day < 40 ? 300 : 450) * (1 + i);
+      rows.push({ y: Math.log(level * (1 + ((day * 7 + i) % 5 - 2) / 100)), keys: { dest: d, month: "03" }, t: t0 + day * DAY });
+    }
+  }
+  const t = tunePlain(rows, ["dest", "month"]);
+  assert.ok(t.testFares >= TUNE_MIN_FARES);
+  assert.notEqual(t.halfLifeDays, null, "newer fares should count more after a jump");
+  assert.ok(t.typicalOff! < t.oldTypicalOff!, `${t.typicalOff} vs ${t.oldTypicalOff}`);
+  const few = tunePlain(rows.slice(0, 25), ["dest", "month"]);
+  assert.equal(few.k, OLD_K);
+  assert.equal(few.halfLifeDays, null);
+});

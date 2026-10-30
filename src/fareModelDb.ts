@@ -8,7 +8,7 @@ import type { Db } from "./db.js";
 import { dateStr, MONTHLY_MIN_TICKETS } from "./book.js";
 import { settingsMap } from "./settings.js";
 import { loadIndexSeries } from "./airfareIndex.js";
-import { fitFareModel, type FareModel, type ModelBaseline, type ModelFare, type ModelInputs, type ModelMonthly } from "./fareModel.js";
+import { fitFareModel, plainTuningOf, type FareModel, type ModelBaseline, type ModelFare, type ModelInputs, type ModelMonthly } from "./fareModel.js";
 
 /** How far back the candidate learns from. Route evidence is narrower (45 days). */
 export const MODEL_TRAIN_DAYS = 90;
@@ -97,10 +97,17 @@ export async function loadModelInputs(db: Db, days = MODEL_TRAIN_DAYS): Promise<
 // Fitting reads a few thousand rows, so the live site keeps one fitted
 // model per database for ten minutes rather than refitting per search.
 const cache = new WeakMap<Db, { at: number; model: Promise<FareModel> }>();
+const tuneCache = new Map<Db, { day: string; tune: ReturnType<typeof plainTuningOf> }>();
 export function loadFareModel(db: Db): Promise<FareModel> {
   const hit = cache.get(db);
   if (hit && Date.now() - hit.at < 10 * 60_000) return hit.model;
-  const model = loadModelInputs(db).then(fitFareModel);
+  // The caution/recency replay (tunePlain) runs once a day, not every refit.
+  const model = loadModelInputs(db).then((inputs) => {
+    const day = new Date().toISOString().slice(0, 10);
+    let t = tuneCache.get(db);
+    if (!t || t.day !== day) { t = { day, tune: plainTuningOf(inputs) }; tuneCache.set(db, t); }
+    return fitFareModel({ ...inputs, tune: t.tune });
+  });
   cache.set(db, { at: Date.now(), model });
   model.catch(() => cache.delete(db));
   return model;

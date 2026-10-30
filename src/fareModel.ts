@@ -169,6 +169,9 @@ export interface ModelInputs {
   index?: { cpiSa?: IndexSeries; ppiIntl?: IndexSeries };
   premiumPct: (key: string, fallback: number) => number;
   now: Date;
+  /** false: skip the before-buying replay and use the old settings (tests,
+   *  and graders that refit hundreds of times). Or a tuning already picked. */
+  tune?: false | { dom?: PlainTuning; intl?: PlainTuning };
 }
 export interface Prediction {
   /** Without the holiday premium (pricing.ts adds it, as for every estimate). */
@@ -554,11 +557,20 @@ export function holidayMultiplier(date: ISODate, premiumPct: ModelInputs["premiu
  * date is left out with it), so it never grades its own homework.
  * Returns the prediction (holiday premium included) per fare index.
  */
+/** The caution and recency the replay picks on these inputs, to hand to
+ *  graders that refit many times (the replay is too costly per refit). */
+export function plainTuningOf(inp: ModelInputs): { dom?: PlainTuning; intl?: PlainTuning } {
+  if (inp.tune !== undefined && inp.tune !== false) return inp.tune;
+  const p = fitPlainModel(inp).plain;
+  return { dom: p?.dom?.tuning, intl: p?.intl?.tuning };
+}
+
 export function leaveOneOut(inp: ModelInputs, testIdx: number[], fit: (inp: ModelInputs) => FareModel = fitFareModel): Map<number, number> {
   const out = new Map<number, number>();
+  const tune = inp.tune === false ? false : plainTuningOf(inp);
   for (const i of testIdx) {
     const f = inp.fares[i]!;
-    const model = fit({ ...inp, fares: inp.fares.filter((g) =>
+    const model = fit({ ...inp, tune, fares: inp.fares.filter((g) =>
       !(g.origin === f.origin && g.destination === f.destination && g.departDate === f.departDate)) });
     const p = model.predict(f.origin, f.destination, f.departDate);
     if (p) out.set(i, p.value * holidayMultiplier(f.departDate, inp.premiumPct));
@@ -587,31 +599,111 @@ export function leaveOneOut(inp: ModelInputs, testIdx: number[], fit: (inp: Mode
  * than PLAIN_MIN_FARES.
  * ======================================================================== */
 
-export interface Obs { y: number; keys: Record<string, string>; offset?: number }
+/** `w` is how much a fare counts (default 1); newer fares count more when
+ *  the plain formula's tuning picks a half-life (2026-10-31). */
+export interface Obs { y: number; keys: Record<string, string>; offset?: number; w?: number }
 export interface Additive { mu: number; effects: Map<string, Map<string, number>>; factors: string[] }
 
 /** log(fare) = mu + sum of one effect per factor, each shrunk toward 0 by
  *  `k` pseudo-fares. Fitted by backfitting. */
 export function fitAdditive(rows: Obs[], factors: string[], k = 2, iters = 20): Additive {
   const effects = new Map(factors.map((f) => [f, new Map<string, number>()]));
-  const off = (r: Obs) => r.offset ?? 0;
-  const eff = (r: Obs, skip?: string) => factors.reduce((s, f) => (f === skip ? s : s + (effects.get(f)!.get(r.keys[f]!) ?? 0)), 0);
-  let mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r), 0) / rows.length : 0;
+  const n = rows.length;
+  const y = rows.map((r) => r.y - (r.offset ?? 0));
+  const w = rows.map((r) => r.w ?? 1);
+  const W = w.reduce((s, x) => s + x, 0);
+  // Each row's current effect per factor, and their sum, kept up to date so a
+  // sweep is rows x factors (not rows x factors x factors).
+  const cur = factors.map(() => new Float64Array(n));
+  const tot = new Float64Array(n);
+  let mu = W > 0 ? y.reduce((s, v, i) => s + w[i]! * v, 0) / W : 0;
   for (let it = 0; it < iters; it++) {
-    for (const f of factors) {
-      const sum = new Map<string, number>(), n = new Map<string, number>();
-      for (const r of rows) {
-        const lv = r.keys[f]!;
-        sum.set(lv, (sum.get(lv) ?? 0) + (r.y - off(r) - mu - eff(r, f)));
-        n.set(lv, (n.get(lv) ?? 0) + 1);
+    factors.forEach((f, fi) => {
+      const sum = new Map<string, number>(), cnt = new Map<string, number>();
+      for (let i = 0; i < n; i++) {
+        const lv = rows[i]!.keys[f]!;
+        sum.set(lv, (sum.get(lv) ?? 0) + w[i]! * (y[i]! - mu - (tot[i]! - cur[fi]![i]!)));
+        cnt.set(lv, (cnt.get(lv) ?? 0) + w[i]!);
       }
       const m = effects.get(f)!;
       m.clear();
-      for (const [lv, sm] of sum) m.set(lv, sm / (n.get(lv)! + k));
-    }
-    mu = rows.length ? rows.reduce((s, r) => s + r.y - off(r) - eff(r), 0) / rows.length : 0;
+      for (const [lv, sm] of sum) m.set(lv, sm / (cnt.get(lv)! + k));
+      for (let i = 0; i < n; i++) {
+        const e = m.get(rows[i]!.keys[f]!) ?? 0;
+        tot[i] = tot[i]! - cur[fi]![i]! + e;
+        cur[fi]![i] = e;
+      }
+    });
+    mu = W > 0 ? y.reduce((s, v, i) => s + w[i]! * (v - tot[i]!), 0) / W : 0;
   }
   return { mu, effects, factors };
+}
+
+/* ---- How the plain formula learns, chosen by the data (owner, 2026-10-31:
+ * "Do 1 and 2"). Two dials that used to be Claude's hand-picked numbers:
+ *  1. caution: how many pseudo-fares each learned piece is shrunk by (was 2);
+ *  2. recency: fares lose half their weight every `halfLifeDays` (was none).
+ * Each nightly fit replays the last TUNE_DAYS: for every day, the formula is
+ * fitted ONLY on fares bought before that day and graded on that day's fares
+ * (the before-buying rule, governing rule 2), for every pair of settings.
+ * The pair with the lowest "typically off" (median miss) wins, but only if it
+ * beats the old settings by TUNE_MARGIN; with fewer than TUNE_MIN_FARES
+ * graded the old settings stand. */
+export const TUNE_K = [0.5, 1, 2, 4, 8] as const;
+/** null = every fare counts the same (the old way). */
+export const TUNE_HALF_LIFE = [null, 120, 60, 30] as const;
+export const TUNE_DAYS = 21;
+export const TUNE_MIN_FARES = 30;
+/** In "typically off" points (log-percent): a change must win by this much. */
+export const TUNE_MARGIN = 0.5;
+export interface PlainTuning {
+  k: number; halfLifeDays: number | null;
+  /** Fares graded before buying, and how far off each setting was on them (%). */
+  testFares: number; typicalOff: number | null; oldTypicalOff: number | null;
+}
+const DAY_MS = 86_400_000;
+export function recencyWeight(ageDays: number, halfLife: number | null): number {
+  return halfLife === null ? 1 : Math.pow(0.5, Math.max(0, ageDays) / halfLife);
+}
+/** Pure: pick caution and recency for one group of rows (each with its time). */
+export function tunePlain(rows: (Obs & { t: number })[], factors: string[]): PlainTuning {
+  const old = { k: PLAIN_SHRINK_K, halfLifeDays: null as number | null };
+  if (!rows.length) return { ...old, testFares: 0, typicalOff: null, oldTypicalOff: null };
+  const dayOf = (t: number) => Math.floor(t / DAY_MS);
+  const last = Math.max(...rows.map((r) => dayOf(r.t)));
+  const testDays = [...new Set(rows.map((r) => dayOf(r.t)))].filter((d) => d > last - TUNE_DAYS).sort((a, b) => a - b);
+  const misses = new Map<string, number[]>();
+  const keyOf = (k: number, h: number | null) => `${k}|${h}`;
+  let tested = 0;
+  for (const day of testDays) {
+    const train = rows.filter((r) => dayOf(r.t) < day), test = rows.filter((r) => dayOf(r.t) === day);
+    if (train.length < PLAIN_MIN_FARES) continue;
+    tested += test.length;
+    const seen = (f: string, lv: string) => train.some((r) => r.keys[f] === lv);
+    for (const h of TUNE_HALF_LIFE) {
+      const tr = train.map((r) => ({ ...r, w: recencyWeight((day * DAY_MS - r.t) / DAY_MS, h) }));
+      for (const k of TUNE_K) {
+        const m = fitAdditive(tr, factors, k, 10);
+        const list = misses.get(keyOf(k, h)) ?? [];
+        // A destination we'd never bought is priced by the fallback formula,
+        // not this one: grade only what this formula would really price.
+        for (const r of test) if (seen("dest", r.keys.dest!)) list.push(Math.abs(r.y - predictAdditive(m, r)));
+        misses.set(keyOf(k, h), list);
+      }
+    }
+  }
+  const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)]! : NaN; };
+  const pctOff = (xs: number[]) => xs.length ? Math.round((Math.exp(med(xs)) - 1) * 1000) / 10 : null;
+  const oldList = misses.get(keyOf(old.k, old.halfLifeDays)) ?? [];
+  const oldOff = pctOff(oldList);
+  if (oldList.length < TUNE_MIN_FARES || oldOff === null) return { ...old, testFares: oldList.length, typicalOff: oldOff, oldTypicalOff: oldOff };
+  let best = { ...old, off: oldOff };
+  for (const h of TUNE_HALF_LIFE) for (const k of TUNE_K) {
+    const off = pctOff(misses.get(keyOf(k, h)) ?? []);
+    if (off !== null && off < best.off - (best.k === old.k && best.halfLifeDays === old.halfLifeDays ? TUNE_MARGIN : 0)) best = { k, halfLifeDays: h, off };
+  }
+  void tested;
+  return { k: best.k, halfLifeDays: best.halfLifeDays, testFares: oldList.length, typicalOff: best.off, oldTypicalOff: oldOff };
 }
 export const predictAdditive = (m: Additive, r: Obs) =>
   (r.offset ?? 0) + m.mu + m.factors.reduce((s, f) => s + (m.effects.get(f)!.get(r.keys[f]!) ?? 0), 0);
@@ -634,6 +726,8 @@ export interface PlainFit {
   fareAge: { weight: number; fares: number };
   /** Middle half of what the fit leaves over, as ratios around the estimate. */
   lowRatio: number; highRatio: number;
+  /** The caution and recency the before-buying replay picked (tunePlain). */
+  tuning: PlainTuning;
 }
 
 export function fitPlainModel(inp: ModelInputs): FareModel {
@@ -653,9 +747,18 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
     const fs = inp.fares.filter((f) => isInternational(f.destination) === intl && f.price > 0);
     if (fs.length < PLAIN_MIN_FARES) return undefined;
     const factors = [...(intl ? PLAIN_FACTORS.intl : PLAIN_FACTORS.dom)];
-    const base: (Obs & { c: number })[] = fs.map((f) => ({
-      y: Math.log(f.price / hol(f.departDate)), keys: keysOf(f.origin, f.destination, f.departDate), c: Math.log(carryOf(f)) }));
-    let m = fitAdditive(base, factors, PLAIN_SHRINK_K);
+    const raw: (Obs & { c: number; t: number })[] = fs.map((f) => ({
+      y: Math.log(f.price / hol(f.departDate)), keys: keysOf(f.origin, f.destination, f.departDate),
+      c: Math.log(carryOf(f)), t: f.observedAt.getTime() }));
+    // Caution and recency, picked by the before-buying replay (tunePlain).
+    const given = inp.tune === false ? undefined : inp.tune?.[intl ? "intl" : "dom"];
+    const tuning: PlainTuning = inp.tune === false
+      ? { k: PLAIN_SHRINK_K, halfLifeDays: null, testFares: 0, typicalOff: null, oldTypicalOff: null }
+      : given ?? tunePlain(raw, factors);
+    const now = Math.max(...raw.map((r) => r.t));
+    const base = raw.map((r) => ({ ...r, w: recencyWeight((now - r.t) / DAY_MS, tuning.halfLifeDays) }));
+    const K = tuning.k;
+    let m = fitAdditive(base, factors, K);
     // Fare age: the slope of what is left on log(index change), shrunk.
     let w = 0;
     const withIdx = base.filter((r) => Math.abs(r.c) > 1e-9);
@@ -665,7 +768,7 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
       const sxx = pts.reduce((a, p) => a + (p.x - mx) ** 2, 0), sxy = pts.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0);
       if (sxx > 1e-4) w = clamp(sxy / sxx, 0, INDEX_W_MAX) * (pts.length / (pts.length + INDEX_SHRINK_K));
       // Each fare brought to today's level, then the pieces refitted on that.
-      if (w > 0) m = fitAdditive(base.map((r) => ({ ...r, offset: -w * r.c })), factors, PLAIN_SHRINK_K);
+      if (w > 0) m = fitAdditive(base.map((r) => ({ ...r, offset: -w * r.c })), factors, K);
     }
     const resid = base.map((r) => r.y + w * r.c - predictAdditive(m, r)).sort((a, b) => a - b);
     const q = (p: number) => resid[Math.min(resid.length - 1, Math.max(0, Math.round(p * (resid.length - 1))))]!;
@@ -684,6 +787,7 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
       ...(intl ? {} : { origin: levels("origin"), route: levels("route") }),
       fareAge: { weight: w, fares: inp.index && (intl ? inp.index.ppiIntl : inp.index.cpiSa) ? fs.length : 0 },
       lowRatio: clamp(Math.exp(q(0.25)), 0.6, 1), highRatio: clamp(Math.exp(q(0.75)), 1, 1.6),
+      tuning,
     };
     return { m, fit, destFares: counts("dest") };
   };
