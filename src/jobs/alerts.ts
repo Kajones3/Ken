@@ -245,7 +245,7 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
 
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,
-    [runId, final.length, (reason || `${checked} Plus members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`)
+    [runId, final.length, (reason || `${checked} Planner Pro members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`)
       + `; ${reminders.sent}/${reminders.due} ending-soon reminders`],
   );
   return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final, reminders };
@@ -254,6 +254,6 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const db = await getDb();
   const r = await runAlerts(db);
-  console.log(`deal alerts: ${r.fired} fired for ${r.checked} Plus members (${r.sent} sent, ${r.retriedSent}/${r.retried} retried) ${r.suppressed}`);
+  console.log(`deal alerts: ${r.fired} fired for ${r.checked} Planner Pro members (${r.sent} sent, ${r.retriedSent}/${r.retried} retried) ${r.suppressed}`);
   await db.close();
 }

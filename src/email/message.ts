@@ -30,7 +30,7 @@ export function buildAlertEmail(a: AlertContent, to: string, unsubscribeLink: st
     "",
     "— Pricing the Magic",
     "",
-    "You get these because you're a Pricing the Magic Planner.",
+    "You get these because you have Pricing the Magic Planner Pro.",
     `Stop these emails: ${unsubscribeLink}`,
     // CAN-SPAM: a commercial email names a valid postal address (a PO box
     // registered with the post office is fine). Set MAIL_POSTAL_ADDRESS.

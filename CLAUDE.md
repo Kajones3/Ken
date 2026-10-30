@@ -119,7 +119,7 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## 2026-10-30, later — sign-in box closes; phone chips; one plans table; Plus is now Planner
+## 2026-10-30, later — sign-in box closes; phone chips; one plans table; Planner (free) and Planner Pro (paid)
 
 - **Sign-in box stayed open on desktop** (owner screenshot: signed in, Admin
   showing, box still up). Two causes: (1) the box closed only AFTER
@@ -139,12 +139,15 @@ fallback for a destination we have never bought.
   the server allows. The sign-in box links to it ("What do a free account and
   Plus include?"). 3 months is marked "Our pick" (never "most picked": no
   sales yet).
-- **"Plus" is now "Planner" in everything a visitor or email reader sees**
-  (owner, 2026-10-30: "become a planner ... be a paid planner"). Buttons say
-  "Become a Planner"; members are "Planners"; passes are "Planner · 3 months"
-  passes; emails say "Planner pass". Code names stay (`plus_until`, `isPlus`,
-  `PLUS_PASSES`, `plus_required`, CSS `.pluschip`): renaming them buys
-  nothing and risks the database. Never write "Plus" in new visible text.
+- **Names (owner, 2026-10-30): the FREE account is "Planner", the PAID tier
+  is "Planner Pro"** ("become a planner ... be a paid planner", then "make the
+  paid planner become Planner Pro", "rename everything"). Sign-up buttons say
+  "Become a Planner, free"; paid buttons say "Get Planner Pro"; passes are
+  "Planner Pro · 3 months"; tags "(Pro)"; emails say "Planner Pro pass";
+  /admin and the owner's daily list say Planner Pro ([FREE+PRO]). Code names
+  stay (`plus_until`, `isPlus`, `PLUS_PASSES`, `plus_required`, `.pluschip`,
+  event action `plus`): renaming them changes nothing anyone sees and risks
+  the database and saved counts. Never write "Plus" in new visible text.
   Avoid Disney's own words (FastPass, Genie, Lightning Lane, Pixie Dust,
   Incredi-Pass, Magic Key).
 - **Results buttons are "Save Search", "Plan Budget", "Save PDF"** (`.resbtns`),

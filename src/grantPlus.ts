@@ -46,6 +46,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   const db = await getDb();
   const result = await grantPlus(db, email, args.days, args.pass);
-  console.log(`${result.email} is Plus until ${result.plusUntil}${result.pass ? ` (${result.pass} pass)` : ""}`);
+  console.log(`${result.email} is Planner Pro until ${result.plusUntil}${result.pass ? ` (${result.pass} pass)` : ""}`);
   await db.close();
 }

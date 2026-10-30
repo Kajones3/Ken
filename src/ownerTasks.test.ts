@@ -168,10 +168,10 @@ test("the rendered list labels each job free, Plus or both", async () => {
   const db = await memoryDb();
   const text = renderOwnerTasks(await ownerTasks(db, { env: {} as NodeJS.ProcessEnv, today: SETTLED }));
   assert.match(text, /Your manual jobs \(\d+\)/);
-  assert.match(text, /\[FREE\+PLUS\] \[BLOCKING\]/);
+  assert.match(text, /\[FREE\+PRO\] \[BLOCKING\]/);
   // No task is Plus-only any more (2026-09-24 — Plus buys only the PDF), so
   // a bare [PLUS] label should never appear, only [FREE] and [FREE+PLUS].
-  assert.doesNotMatch(text, /\[PLUS\]/);
+  assert.doesNotMatch(text, /\[PRO\]/);
   assert.match(text, /\[FREE\]/);
   assert.match(text, /checked against real state just now/);
   assert.match(text, /always shown until marked done/);
