@@ -18,7 +18,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parseEvent, recordEvent, loadStats, eventRateLimiter } from "./siteEvents.js";
-import { isSampleTrip, lockForGuests } from "./guestView.js";
+import { guestQuery, isSampleTrip, lockForGuests } from "./guestView.js";
 import { passPerks, plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
@@ -281,13 +281,16 @@ async function readForm(req: IncomingMessage): Promise<Record<string, string>> {
   return out;
 }
 
-async function compare(q: URLSearchParams, user: SessionUser | null) {
+async function compare(q0: URLSearchParams, user: SessionUser | null) {
   // Launch decision 2026-09-24: the only Plus feature is the shareable PDF.
   // Nothing in this function gates behavior on plan any more — a signed-in
   // user's own account (email, plan) is what /api/session reports, not this
   // endpoint. See CLAUDE.md's Free/Plus split for what that superseded.
+  // A guest may change only the month, the party and the home airport
+  // (guestQuery); the sample PDF's own trip is ours to give away in full.
+  const guest = !user && !(q0.get("sample") === "1" && isSampleTrip(paramsFrom(q0)));
+  const q = guest ? guestQuery(q0) : q0;
   const params = paramsFrom(q);
-  const guest = !user && !(q.get("sample") === "1" && isSampleTrip(params));
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
   budgetFor(user, params, overrides);
@@ -546,7 +549,10 @@ async function months(q: URLSearchParams, user: SessionUser | null) {
  * year", and Plus shows which). Same month pricing as the Plus tiles, so the
  * count and what Plus then shows can't disagree. No resort is named here.
  */
-async function fits(q: URLSearchParams, user: SessionUser | null) {
+async function fits(q0: URLSearchParams, user: SessionUser | null) {
+  // Same limit as the board: a guest's count is for the default trip.
+  const q = user ? q0 : guestQuery(q0);
+  if (!user && q0.get("budget") !== null) q.set("budget", q0.get("budget")!);
   const budget = Math.round(Number(q.get("budget")));
   if (!Number.isFinite(budget) || budget <= 0 || budget > 1_000_000) return { error: "budget" as const };
   const month = q.get("month") ?? "";

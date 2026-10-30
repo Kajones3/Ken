@@ -2623,7 +2623,9 @@ function compareQuery(){
  */
 function syncWindowUi(){
   const month = $("#month").value;
-  const options = HOLIDAY_WINDOWS[month] || [];
+  // A guest prices the whole month (owner, 2026-10-30: guests change the
+  // month, the party and the home airport, nothing else).
+  const options = isGuest() ? [] : (HOLIDAY_WINDOWS[month] || []);
   const field = $("#windowField");
   if(!options.length){
     field.hidden = true;
@@ -4395,7 +4397,7 @@ function renderBasisNote(){
     : `<b>A typical day and a typical flight.</b> `)
     + `<button type="button" class="linkbtn" id="basisSwitch">${cheap ? "Price a typical trip instead" : "See the cheapest trip we can find"}</button>`;
   el.hidden = false;
-  $("#basisSwitch").onclick = () => { setPriceBasis(cheap ? "typical" : "cheapest"); runSearch(); };
+  $("#basisSwitch").onclick = () => { if(needsAccount()) return; setPriceBasis(cheap ? "typical" : "cheapest"); runSearch(); };
 }
 function renderParkDaysNote(){
   const el = $("#parkDaysNote");
@@ -4466,7 +4468,7 @@ function render(){
 $("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
 $("#run2").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
 $("#priceBasis").addEventListener("change", e => setPriceBasis(e.target.value));
-$("#whyCheapest").addEventListener("click", () => { setPriceBasis("cheapest"); runSearch(null); });
+$("#whyCheapest").addEventListener("click", () => { if(needsAccount()) return; setPriceBasis("cheapest"); runSearch(null); });
 
 /* "Who's going": one button in the bar, a small panel with the party. */
 function partySummary(){
@@ -4583,6 +4585,10 @@ function syncAccountUi(){
   if(pt) pt.textContent = session.plus ? "Save as PDF" : "Save as PDF (Plus)";
   const on = session.authenticated;
   syncDealEmailsUi();
+  // Guests change only the month, the party and the airport; signing in
+  // opens "Which week" and "Add more details" again.
+  if(moreReady) syncMoreDetails();
+  if($("#windowField") && $("#month") && $("#month").options.length) syncWindowUi();
   $("#signinTop").hidden = on;
   $("#accountTop").hidden = !on;
   // Sign out lives in the account panel (owner, 2026-10-29: a streamlined
@@ -5052,14 +5058,10 @@ $("#forgotBtn").addEventListener("click", async ()=>{
 
 async function doSignOut(){
   await fetch("/api/auth/signout", { method:"POST" });
-  await refreshSession();
-  closeAuth();
-  syncAccountUi();
-  // Plus is resolved server-side per request, so the results on screen were
-  // priced for someone who is no longer signed in. Re-run rather than
-  // re-render, for the same reason signing IN does.
-  await runSearch(results[selected] && results[selected].resortId);
-  await loadSavedTrips();
+  // A guest may change only the month, the party and the home airport, so
+  // start over from the default form rather than keep choices a guest can't
+  // make (and the server would ignore).
+  location.href = location.pathname;
 }
 $("#signoutBtn").addEventListener("click", doSignOut);
 
@@ -6355,6 +6357,7 @@ function ovEmpty(o){
 }
 
 function setOv(id, key, val){
+  if(needsAccount()) return;
   const o = OV[id] || (OV[id] = {});
   if(val) o[key] = val; else delete o[key];
   if(ovEmpty(o)) delete OV[id];
@@ -6365,6 +6368,7 @@ function setOv(id, key, val){
  *  whatever rate/fare you'd typed for that same line. kind is "excludeHotel"
  *  or "excludeFlights". */
 function setExclude(id, kind, checked){
+  if(needsAccount()) return;
   const o = OV[id] || (OV[id] = {});
   if(checked){
     o[kind] = true;
@@ -6376,12 +6380,14 @@ function setExclude(id, kind, checked){
   recompute(id);
 }
 function setPromoId(id, promoId){
+  if(needsAccount()) return;
   const o = OV[id] || (OV[id] = {});
   if(promoId) o.promoId = promoId; else delete o.promoId;
   if(ovEmpty(o)) delete OV[id];
   recompute(id);
 }
 function setPersonalPromo(id, kind, value, label){
+  if(needsAccount()) return;
   const o = OV[id] || (OV[id] = {});
   if(value > 0) o.personalPromo = { kind, value, label }; else delete o.personalPromo;
   if(ovEmpty(o)) delete OV[id];
@@ -6844,6 +6850,32 @@ function closeBudget(){
   syncBudgetView();
 }
 window.addEventListener("hashchange", syncBudgetView);
+/* What a visitor who isn't signed in may change (owner, 2026-10-30): the
+ * month, the party and the home airport. Anything else asks for a free
+ * account. The server ignores the rest of a guest's request anyway
+ * (guestQuery in src/guestView.ts); this is the half people see. */
+function isGuest(){ return !session.email; }
+function needsAccount(){
+  if(!isGuest()) return false;
+  openAuth("signup");
+  $("#authIntro").textContent = "Without an account you can change the month, who's going and where you fly from. "
+    + "A free account unlocks the rest: nights, hotel, food, park days, the cheapest trip, your own numbers and all six trips.";
+  return true;
+}
+const GUEST_FREE = "#month, #origin, #adults, #seniors, #kids, #ages *, #partyPop *, #partyBtn";
+const GUEST_LOCKED = "#moreDetails, #windowField, #sbBudgetField, #detail, #tripPage";
+function guestGuard(e){
+  if(!isGuest()) return;
+  const el = e.target.closest && e.target.closest("input, select, textarea");
+  if(!el || el.matches(GUEST_FREE) || !el.closest(GUEST_LOCKED)) return;
+  e.preventDefault();
+  el.blur();
+  needsAccount();
+}
+document.addEventListener("mousedown", guestGuard, true);
+document.addEventListener("focusin", guestGuard, true);
+document.addEventListener("keydown", guestGuard, true);
+
 // "Create a free account" from a locked card, the banner or a guest note.
 document.addEventListener("click", e => {
   const up = e.target.closest("[data-signup]"), inn = e.target.closest("[data-signin]");
@@ -6861,7 +6893,7 @@ $("#sbBudget").addEventListener("input", e => {
   if(results.length){ renderBudgetTop(); renderBoard(); }
 });
 $("#sbBudget").value = budgetValue() || "";
-$("#btPlan").addEventListener("click", () => session.plus ? $("#budgetBtn").click() : showFits());
+$("#btPlan").addEventListener("click", () => needsAccount() ? null : session.plus ? $("#budgetBtn").click() : showFits());
 $("#budgetBtn").addEventListener("click", ()=>{
   // Not Plus: the Plus box, not a page that only says "Plus" (2026-10-29).
   if(!session.plus){ plusPitch("budget"); return; }
@@ -7120,20 +7152,25 @@ function moreSummary(){
   return "Pricing: " + bits.join(" · ");
 }
 function syncMoreDetails(){
+  if(isGuest()) $("#moreDetails").hidden = true;
   const open = !$("#moreDetails").hidden;
   $("#moreToggle").setAttribute("aria-expanded", String(open));
   $("#moreLabel").textContent = open ? "Fewer details" : "Add more details";
-  $("#moreSum").textContent = open ? "" : moreSummary();
+  $("#moreSum").textContent = open ? "" : isGuest()
+    ? "Nights, hotel, food and more need a free account" : moreSummary();
   syncPartyBtn();
   // The fine print goes with the details: the short form stays short.
   $("#hint").hidden = !open;
 }
+let moreReady = false;
 function initMoreDetails(){
+  moreReady = true;
   let open = false;
   try{ open = localStorage.getItem("pf_more") === "1"; }catch{}
   $("#moreDetails").hidden = !open;
   syncMoreDetails();
   $("#moreToggle").addEventListener("click", () => {
+    if(needsAccount()) return;
     $("#moreDetails").hidden = !$("#moreDetails").hidden;
     try{ localStorage.setItem("pf_more", $("#moreDetails").hidden ? "0" : "1"); }catch{}
     syncMoreDetails();

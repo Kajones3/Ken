@@ -119,6 +119,26 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-30 — guests change only month, party, home airport (newest)
+
+Owner: "let them change months, party size and home airport but that's it.
+The rest they should have to sign in for. I was gaming the system a bit."
+- **Server:** `guestQuery()` (src/guestView.ts) keeps only `month`,
+  `origin`, `adults`, `seniors`, `childAges` (+ `sample`) from a signed-out
+  request; `compare()` and `fits()` price from that, so nights, hotel, food,
+  park days, hopper, cheapest-trip basis, holiday week, overrides and budget
+  extras sent by a guest are ignored (test pins it). The sample PDF's own
+  trip is still priced in full.
+- **Page:** `isGuest()` / `needsAccount()` in prototype.html. "Add more
+  details" and "Which week" are closed to guests (sign-up box explains what
+  an account unlocks); any input/select in the trip page, the budget field
+  or more details opens sign-up instead (`guestGuard`, capture listeners);
+  the override setters and the cheapest-trip switches refuse guests.
+  Signing out reloads the page so a guest starts from the default form.
+- **Open, owner thinking:** how to show totals when they are far apart
+  (WDW $3k vs Paris $9k reads as "the tool is wrong"). Options given in the
+  conversation of 2026-10-30; nothing built.
+
 ## START HERE — 2026-10-29, session END (newest; read first)
 
 **Merged to master this session: PRs #213-#218** (budget box, red "over",

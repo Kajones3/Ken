@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { isSampleTrip, lockForGuests } from "./guestView.js";
+import { guestQuery, isSampleTrip, lockForGuests } from "./guestView.js";
 
 const row = (resortId: string, total: number | null) => total === null
   ? { resortId, name: resortId, iata: "X", ok: false }
@@ -43,4 +43,15 @@ test("grant-plus takes a pass name or plain days, and a new pass starts fresh", 
   const r = await grantPlus(db, "f@example.com", 7, "week");
   assert.deepEqual(r, { email: "f@example.com", plusUntil: addDaysISO(todayISO(), 7), pass: "week" });
   await db.close();
+});
+
+test("a guest's query keeps only the month, the party and the home airport", () => {
+  const q = new URLSearchParams({
+    month: "2027-03", origin: "RDU", adults: "2", seniors: "1", childAges: "4,9",
+    nights: "3", stay: "off", tier: "0", food: "grocery", basis: "cheapest", parkDays: "1",
+    window: "thanksgiving", rooms: "2", hopper: "1", overrides: JSON.stringify({ wdw: { nightly: 50 } }),
+    passes: "wdw:pixie:2", dvcPoints: "200", gettingThere: "flyMiles", milesPct: "100",
+  });
+  assert.deepEqual(Object.fromEntries(guestQuery(q)),
+    { month: "2027-03", origin: "RDU", adults: "2", seniors: "1", childAges: "4,9" });
 });
