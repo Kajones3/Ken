@@ -25,16 +25,16 @@ export function buildPlusReminder(to: string, passId: string | null, plusUntil: 
   env: NodeJS.ProcessEnv = process.env): EmailMessage {
   const p = PLUS_PASSES.find((x) => x.id === passId);
   const base = (env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
-  const what = p ? `Your ${p.label} Plus pass` : "Your Pricing the Magic Plus";
+  const what = p ? `Your ${p.label} Planner Pro pass` : "Your Pricing the Magic Planner Pro pass";
   return {
     to,
-    subject: `Your Pricing the Magic Plus ends on ${longDate(plusUntil)}`,
+    subject: `Your Pricing the Magic Planner Pro pass ends on ${longDate(plusUntil)}`,
     text: [
       `${what} ends on ${longDate(plusUntil)}.`,
       "",
       "Nothing renews and you won't be charged. After it ends you can still sign in, compare all six resorts and read the searches you saved.",
       "",
-      `To keep saving searches and planning with Plus, pick a new pass at ${base || "pricingthemagic.com"}.`,
+      `To keep saving searches and planning with Planner Pro, pick a new pass at ${base || "pricingthemagic.com"}.`,
       "",
       "Pricing the Magic",
     ].join("\n"),

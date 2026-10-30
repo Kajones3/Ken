@@ -914,6 +914,31 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .mhead h3{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em}
 .mhead p{margin:6px 0 0; color:var(--ink-2); font-size:13.5px}
 .plans{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 22px}
+#paywall .modal{max-width:880px}
+.plantable{padding:14px 22px 8px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+.plans-t{border-collapse:separate; border-spacing:0; width:100%; min-width:640px; font-size:13px}
+.plans-t th, .plans-t td{padding:9px 8px; border:0; border-bottom:1px solid var(--rule); text-align:center; vertical-align:middle;
+  font-family:var(--f-body); text-transform:none; letter-spacing:normal; white-space:normal; font-size:13px; line-height:1.35}
+.plans-t tbody th{text-align:left; font-weight:600; color:var(--ink); min-width:150px; max-width:220px}
+.plans-t thead th{vertical-align:bottom; padding-top:16px; position:relative}
+.plans-t thead th:first-child, .plans-t tbody th{position:sticky; left:0; background:var(--surface); z-index:1}
+.plans-t .pn{display:block; font-family:var(--f-label); font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
+.plans-t .psub{display:block; font-weight:700; color:var(--ink); margin-top:2px}
+.plans-t .pp{display:block; font-family:var(--f-head); font-weight:800; font-size:22px; margin-top:2px}
+.plans-t .pp small{font-size:12px; font-weight:600; color:var(--ink-2)}
+.plans-t td{color:var(--ink-2)}
+.plans-t td.yes .tick{font-size:16px}
+.plans-t td.no{color:var(--muted)}
+.plans-t .best{background:color-mix(in srgb, var(--gold, #E8B23E) 12%, transparent)}
+.plans-t .planbest{position:absolute; top:0; left:0; right:0; font-size:11px; font-weight:700; color:var(--accent)}
+.plans-t .here{background:color-mix(in srgb, var(--ink) 6%, transparent)}
+.plans-t .planyou{font-weight:700; color:var(--ink)}
+.plans-t tfoot td, .plans-t tfoot th{border-bottom:0; padding-top:12px}
+.plans-t tfoot .btn-sm{white-space:nowrap}
+.planswipe{display:none; margin:0 0 6px; font-size:12.5px; color:var(--ink-2)}
+@media (max-width:700px){ .planswipe{display:block} }
+.plannote{margin:6px 0 0; font-size:12.5px; color:var(--ink-2)}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
 .plan{border:1.5px solid var(--rule-strong); border-radius:14px; padding:15px; text-align:left; background:var(--surface-2)}
 .plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
 .plan .pn{font-size:11px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2)}
@@ -1040,9 +1065,29 @@ body.has-results .searchside #run{width:100%}
   body.has-results .editsearch{display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%;
     margin:0 0 16px; padding:14px 16px; min-height:48px; background:var(--surface); color:var(--ink); border:2px solid var(--frame);
     border-radius:14px; font:inherit; font-size:15px; text-align:left; cursor:pointer}
-  .editsearch .es-what{min-width:0}
-  .editsearch .es-go{font-weight:700; color:var(--accent); white-space:nowrap}
+  .editsearch .es-what{min-width:0; display:flex; flex-direction:column; gap:2px}
+  .editsearch .es-what b{font-family:var(--f-head); font-size:17px}
+  .editsearch .es-what span{color:var(--ink-2); font-size:14px}
+  .editsearch .es-go{color:var(--ink); display:flex}
+  /* Expedia-style: one row of chips you swipe sideways, each opening the
+     search panel at that one setting (owner, 2026-10-30). */
+  /* Stays under the sticky top bar as the trips scroll by (owner,
+     2026-10-30). --mast-h is the bar's height, measured in boot. */
+  body.has-results .chiprow{display:flex; gap:8px; overflow-x:auto; margin:-4px -16px 18px; padding:8px 16px 10px;
+    position:sticky; top:var(--mast-h, 64px); z-index:40; background:var(--plane);
+    scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .chiprow::-webkit-scrollbar{display:none}
+  .chip{flex:none; display:flex; align-items:center; gap:6px; min-height:40px; padding:0 14px; border-radius:999px;
+    border:1.5px solid var(--frame); background:var(--surface); color:var(--ink); font:500 14px/1 var(--f-body); text-transform:none; letter-spacing:normal; white-space:nowrap; cursor:pointer}
+  .chip .k{color:var(--ink-2)}
+  .chip svg{flex:none}
+  .chip.locked{border-style:dashed; color:var(--ink-2)}
 }
+.chiprow{display:none}
+.resbtns{display:inline-flex; flex-wrap:wrap; gap:8px; justify-content:center}
+.resbtns .btn-sm{white-space:nowrap}
+@media (max-width:900px){ .resbtns{display:flex; width:100%} }
+.fieldflash{outline:3px solid var(--gold, #E8B23E); outline-offset:4px; border-radius:10px; transition:outline-color .6s}
 @media (max-width:460px){ body.has-results .searchside .party{grid-template-columns:minmax(0,1fr)} }
 /* On a phone the trips come first; the notes about them follow. */
 @media (max-width:900px){
@@ -1256,7 +1301,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
        Also make it stay at the top as an ability to sign in"): the name,
        saved searches, sign in or your account, Admin for the owner, the
        moon/sun. Budget and the PDF live beside the results and on the trip
-       page; Get Plus and Sign out live in the account panel. -->
+       page; Become a Planner and Sign out live in the account panel. -->
   <header class="masthead">
     <a class="brand" href="/" aria-label="Pricing the Magic, start over">
       <img class="mark" src="/public/brand/tab-icon.svg" alt="">
@@ -1292,8 +1337,8 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 
        All arithmetic on the totals the comparison already showed, so there
        is nothing here a free visitor could not work out with a calculator;
-       the Plus line is the tool, not the data. The passes and DVC boxes DO
-       move prices, and those stay Plus on the server (budgetFor()). -->
+       the Planner line is the tool, not the data. The passes and DVC boxes DO
+       move prices, and those stay Planner on the server (budgetFor()). -->
   <!-- Your Budget (Plus). Laid out like a trip page since 2026-10-29: the
        plan reads down the left in ruled sections, and the side panel keeps
        the one number that matters in view (what to set aside each month). -->
@@ -1301,7 +1346,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     <a href="#" class="tripback" id="budgetBack">&larr; Back</a>
     <header class="triphead" id="budgetHead">
       <div class="thtext">
-        <p class="teyebrow">Your Budget <span class="pluschip">Plus</span></p>
+        <p class="teyebrow">Your Budget <span class="pluschip">Pro</span></p>
         <h1>Paying for Your Trip</h1>
         <p class="thsub">What to set aside, when you'll have enough for each part, what fits your budget and what would save the most.</p>
       </div>
@@ -1309,9 +1354,9 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 
     <div id="budgetGate" hidden>
       <div class="panel bgate">
-        <b>Plan how you'll pay for it, with Plus</b>
+        <b>Plan how you'll pay for it with Planner Pro</b>
         <p>Pick a trip from your comparison and see what to set aside each month or paycheck, and the month you'll have enough for each part: flights, hotel, tickets, spending money. See which trips and months fit your budget, what would save you the most, and whether an annual pass would pay for itself.</p>
-        <button type="button" class="btn btn-primary btn-sm openpw">Get Plus</button>
+        <button type="button" class="btn btn-primary btn-sm openpw">Get Planner Pro</button>
       </div>
     </div>
 
@@ -1526,7 +1571,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         <select id="origin"></select>
       </div>
       <!-- Budget, optional, for everyone (owner, 2026-10-29). Plus sees which
-           trips fit; a free visitor sees how many, and what Plus would show. -->
+           trips fit; a free visitor sees how many, and what Planner would show. -->
       <div class="f sb-budget" id="sbBudgetField">
         <label for="sbBudget">Budget <span class="sbb-opt">(optional)</span></label>
         <span class="sbb-in"><span class="bt-cur">$</span><input id="sbBudget" type="number" min="0" step="100" inputmode="numeric" placeholder="Any"></span>
@@ -1740,7 +1785,9 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
   </div><!-- /searchside -->
   <div class="searchmain" id="searchMain">
   <button type="button" class="editsearch" id="editSearch" aria-controls="searchSide" aria-expanded="false">
-    <span class="es-what" id="editSearchWhat"></span><span class="es-go">Change</span></button>
+    <span class="es-what"><b id="editSearchWhen"></b><span id="editSearchWhat"></span></span>
+    <span class="es-go" aria-label="Change the search"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></button>
+  <div class="chiprow" id="chipRow" role="toolbar" aria-label="Change one thing about the search"></div>
 
   <div class="res-head">
     <div>
@@ -1771,9 +1818,13 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <!-- Saving is an act on the WHOLE comparison now, so the control
            belongs beside the whole comparison rather than buried in one
            resort's detail card. -->
-      <button class="btn btn-sm" id="saveSearchBtn" hidden>Save this search</button>
-      <button class="btn btn-sm" id="budgetBtn" hidden>Plan how to pay</button>
-      <button class="btn btn-sm" id="printTop" hidden title="Save this comparison as a PDF">Save as PDF</button>
+      <!-- Short labels so the three fit one line on a phone; centered if
+           they ever wrap (owner, 2026-10-30). -->
+      <span class="resbtns">
+      <button class="btn btn-sm" id="saveSearchBtn" hidden>Save Search</button>
+      <button class="btn btn-sm" id="budgetBtn" hidden>Plan Budget</button>
+      <button class="btn btn-sm" id="printTop" hidden title="Save this comparison as a PDF">Save PDF</button>
+      </span>
     </div>
   </div>
 
@@ -1868,12 +1919,12 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <h3 id="ppTitle"></h3>
       <p id="ppLead"></p>
     </div>
-    <p class="ppalso">Plus also lets you:</p>
+    <p class="ppalso">Planner Pro also lets you:</p>
     <ul class="feat" id="ppAlso"></ul>
     <div class="mfoot">
       <span class="stub"></span>
       <button class="btn" id="ppCancel">Not now</button>
-      <button class="btn-primary" id="ppGo">Subscribe</button>
+      <button class="btn-primary" id="ppGo">Get Planner Pro</button>
     </div>
   </div>
 </div>
@@ -1881,16 +1932,16 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 <div class="back" id="pdfSample" role="dialog" aria-modal="true" aria-labelledby="pdfSampleTitle">
   <div class="modal" style="max-width:520px">
     <div class="mhead">
-      <h3 id="pdfSampleTitle">The PDF of your own trip is part of Plus</h3>
+      <h3 id="pdfSampleTitle">The PDF of your own trip is part of Planner Pro</h3>
       <p id="pdfSampleText"></p>
     </div>
-    <p class="ppalso">Plus also lets you:</p>
+    <p class="ppalso">Planner Pro also lets you:</p>
     <ul class="feat" id="pdfSampleAlso"></ul>
     <div class="mfoot">
       <span class="stub" id="pdfSampleMsg"></span>
       <button class="btn" id="pdfSampleCancel">Cancel</button>
       <button class="btn" id="pdfSampleGo">See a sample PDF</button>
-      <button class="btn-primary openpw" id="pdfSamplePlus">Subscribe</button>
+      <button class="btn-primary openpw" id="pdfSamplePlus">Get Planner Pro</button>
     </div>
   </div>
 </div>
@@ -1955,13 +2006,16 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
           <input type="password" id="signinPassword" placeholder="At least 8 characters" autocomplete="current-password">
         </div>
         <div class="authrow">
-          <button class="btn btn-primary" id="signinBtn">Create account</button>
-          <small style="color:var(--muted); font-size:12px">Accounts are free. Plus is comped by the owner.</small>
+          <button class="btn btn-primary" id="signinBtn">Become a Planner</button>
+          <small style="color:var(--muted); font-size:12px">Accounts are free.</small>
         </div>
         <small id="signinError" class="downgrade" hidden></small>
         <p style="margin:14px 0 0; font-size:13px; color:var(--ink-2)">
           <span id="authSwapText">Already have an account?</span>
           <button type="button" id="authSwap" class="linkbtn">Sign in</button>
+        </p>
+        <p style="margin:6px 0 0; font-size:13px; color:var(--ink-2)">
+          <button type="button" id="authCompare" class="linkbtn">What do Planner and Planner Pro include?</button>
         </p>
         <p style="margin:6px 0 0; font-size:13px; color:var(--ink-2)">
           <button type="button" id="forgotBtn" class="linkbtn">Forgot your password?</button>
@@ -1972,7 +2026,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <div id="authAccount" hidden>
         <div class="acctline"><span class="k">Signed in as</span><span class="v" id="emailChip"></span></div>
         <div class="acctline"><span class="k">Plan</span><span class="v" id="acctPlanRow"></span></div>
-        <div class="acctline" id="acctExpiryRow" hidden><span class="k">Plus until</span><span class="v" id="acctExpiry"></span></div>
+        <div class="acctline" id="acctExpiryRow" hidden><span class="k">Planner Pro until</span><span class="v" id="acctExpiry"></span></div>
         <div class="acctline"><span class="k">Email</span><span class="v" id="acctVerified"></span></div>
         <div class="acctline"><span class="k">Saved trips</span><span class="v" id="acctTrips">—</span></div>
         <small id="verifyRow" class="downgrade" hidden>
@@ -1983,13 +2037,13 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         <div class="authfield" id="dealEmailsRow" style="margin:16px 0 4px" hidden>
           <label class="ovexclude" style="margin:0"><input type="checkbox" id="dealEmailsCk">
             <span>Email me when Disney announces a new deal</span></label>
-          <small style="color:var(--muted); font-size:12px">Part of Plus. Every deal email also has a link to stop them.</small>
+          <small style="color:var(--muted); font-size:12px">Part of Planner Pro. Every deal email also has a link to stop them.</small>
           <small id="dealEmailsSaved" class="downgrade" hidden></small>
         </div>
         <div class="authfield" style="margin:16px 0 4px">
           <label for="homeAirport">Home airport</label>
           <select id="homeAirport"></select>
-          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Pricing the Magic. Free — it's a remembered field, not a Plus feature.</small>
+          <small style="color:var(--muted); font-size:12px">Pre-selects your departure airport every time you open Pricing the Magic. Free — it's a remembered field, not a Planner Pro feature.</small>
           <small id="homeAirportLapsed" class="downgrade" hidden></small>
           <small id="homeAirportSaved" class="downgrade" hidden></small>
         </div>
@@ -2006,7 +2060,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 
     <div class="mfoot">
       <a class="btn" id="acctAdmin" href="/admin" hidden>Admin</a>
-      <button class="btn" id="acctUpgradeBtn" hidden>Get Plus</button>
+      <button class="btn" id="acctUpgradeBtn" hidden>Get Planner Pro</button>
       <button class="btn" id="signoutBtn" hidden>Sign out</button>
       <button class="btn" id="closeAuth">Close</button>
     </div>
@@ -2016,10 +2070,10 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 <div class="back" id="paywall" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
   <div class="modal">
     <div class="mhead">
-      <h3 id="pwTitle">Get Pricing the Magic Plus</h3>
+      <h3 id="pwTitle">Get Planner Pro</h3>
       <p>Comparing all six resorts, typing in your own numbers, picking your attractions and
       applying Disney deals are free, and always will be — you should never have to pay to see what a trip costs.
-      Plus is for when you're getting serious about one.</p>
+      Planner Pro is for when you're getting serious about one.</p>
       <p style="margin-top:6px"><b>Pay once. Nothing renews</b> — your pass simply ends.</p>
     </div>
     <!-- Plus leads with the budget (owner, 2026-10-29: "make it more
@@ -2034,23 +2088,16 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       </div>
       <p class="pwlead-you" id="pwBudgetYours" hidden></p>
     </div>
-    <!-- Filled from /api/meta's plusPasses, so the prices have one home. -->
-    <div class="plans" id="plusPlans"></div>
-    <ul class="feat">
-      <li><span class="tick">✓</span><span><b>What fits my budget?</b> — type the most you'd spend and see which resorts fit, and in which months. Plus a calendar to help plan savings goals with booking time windows</span></li>
-      <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two to ten months out, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>What would save the most?</b> — the changes that cut your trip the most (a cheaper month, fewer nights, a different hotel, cheaper food), each one priced, and one click to try it</span></li>
-      <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself, and where that same amount could take you</span></li>
-      <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
-      <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
-      <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up (3- and 9-month passes)</span></li>
-    </ul>
+    <!-- Every offering on one sheet (owner, 2026-10-30: "one of those
+         comparison tables ... all our sign up offerings"). Prices come from
+         /api/meta's plusPasses, so they have one home. -->
+    <div class="plantable" id="plusPlans"></div>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
          it failed in total silence, which is exactly what the owner saw.
          It now hands off to the real dialog. -->
     <div id="pwSignupBox" style="padding:0 22px 6px" hidden>
-      <button class="btn btn-primary" id="pwSignupBtn">Create an account</button>
+      <button class="btn btn-primary" id="pwSignupBtn">Become a Planner, free</button>
       <p style="margin:10px 0 0; font-size:13px; color:var(--ink-2)">
         Already have an account?
         <button type="button" id="pwSigninBtn" class="linkbtn">Sign in</button>
@@ -2276,7 +2323,7 @@ document.addEventListener("click", e=>{
 let session = { authenticated:false, email:null, plus:false, plusUntil:null, homeAirport:null, emailVerified:false, owner:false };
 let params = null;
 let results = [];            // [{resortId, name, iata, ok, price|reason, resort}]
-let calendars = {};          // resortId -> {months:[{month,total,cheapest,level}], pricesAsOf} ("best months to go", Plus)
+let calendars = {};          // resortId -> {months:[{month,total,cheapest,level}], pricesAsOf} ("best months to go", Planner)
 let selected = 0, view = "board";
 // Whether the detail panel is expanded inline under the `selected` row.
 // Lives here rather than inside renderBoard/renderDetail so a re-render for
@@ -2793,7 +2840,7 @@ function yearGridHtml(currentId, g){
   if(!session.email){
     return `<div class="calgate"><div class="mgrid" aria-hidden="true">${gatedMonthsHtml()}</div>
       ${lockedBox("See the Best Time to Go", "Every month you can plan, at all six resorts, side by side.",
-        '<button type="button" class="btn btn-primary btn-sm" data-signup>Create a free account</button>').replace("yglock-cta","calgate-cta")}</div>`;
+        '<button type="button" class="btn btn-primary btn-sm" data-signup>Become a Planner, free</button>').replace("yglock-cta","calgate-cta")}</div>`;
   }
   if(!g || !Array.isArray(g.resorts)) return `<p class="sub">We couldn't load the months just now.</p>`;
   const ms = g.months || [];
@@ -2829,8 +2876,8 @@ function yearGridHtml(currentId, g){
     const res = RESORT_BY_ID.get(r.resortId);
     return `<div class="ygrow" aria-hidden="true"><div class="ygname">${esc(res.name)}</div>${ms.map((ym, k) =>
       `<div class="ygcell" style="background:${["#EEF2F7","#DDE4EF","#E8EDF4"][k % 3]}"><span class="ygt">$8,888</span></div>`).join("")}</div>`;
-  }).join("")}${lockedBox("See Every Month at All Six", "Plus shows the whole year for every resort, so you can see when each one is cheaper and quieter.",
-    '<button type="button" class="btn btn-primary btn-sm openpw">See Plus plans</button>')}</div>` : "";
+  }).join("")}${lockedBox("See Every Month at All Six", "Planner Pro shows the whole year for every resort, so you can see when each one is cheaper and quieter.",
+    '<button type="button" class="btn btn-primary btn-sm openpw">Get Planner Pro</button>')}</div>` : "";
   return `<div class="ygwrap"><div class="ygrid" style="--yg-n:${ms.length}">${head}${shown.map(rowHtml).join("")}${lockedHtml}</div></div>
     <div class="yglegend">${YG_SHADES.map(([bg], k) => `<span><span class="sw" style="background:${bg}"></span>${k === 0 ? "Under " + edge(1) : k === 4 ? edge(4) + " and up" : edge(k) + "–" + edge(k + 1)}</span>`).join("")}
       <span>Dots: how busy each month is compared with that resort's own year (1 = its quietest month, 5 = its busiest). One dot means quiet for that resort, not quieter than the others.</span>
@@ -2942,7 +2989,7 @@ async function recompute(changedResortId){
 
 /* ============================ render: board ============================ */
 
-function unlocked(){ return true; }   // every board row is open; Plus is best months to go, your budget, saving, the PDF and deal emails
+function unlocked(){ return true; }   // every board row is open; Planner is best months to go, your budget, saving, the PDF and deal emails
 
 /** A free visitor's stand-in for "best months to go": eleven month tiles with
  *  made-up shades, blurred under a Plus prompt. Deterministic so it doesn't
@@ -3181,8 +3228,8 @@ function renderBoard(){
   const shown = sorted.filter(e => !e.item.locked), locked = sorted.filter(e => e.item.locked);
   const guest = locked.length
     ? `<div class="guestnote"><p><b>You're seeing ${shown.filter(e=>e.item.ok).length} of ${shown.length + locked.length} trips:</b> the cheapest in the US and the cheapest abroad.
-        Create a free account to see all six, side by side.</p>
-        <button type="button" class="btn-primary" data-signup>Create a free account</button>
+        Become a Planner, free, to see all six side by side.</p>
+        <button type="button" class="btn-primary" data-signup>Become a Planner, free</button>
         <button type="button" class="linkbtn" data-signin>Sign in</button></div>` : "";
   board.innerHTML = guest + `<ol class="tripcards">${shown.concat(locked).map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
 }
@@ -3254,7 +3301,7 @@ function bestMonthLine(item){
   const searched = MONTHSFULL[+params.month.slice(5,7) - 1];
   if(b.already) return `<p class="tbest">${searched} is already one of the cheapest times to go.</p>`;
   if(!b.month) return `<p class="tbest"><b>Up to ${usd(b.saving)} less at another time of year.</b>
-    <button type="button" class="linkbtn" data-signup>Create a free account to see when</button></p>`;
+    <button type="button" class="linkbtn" data-signup>Become a Planner (free) to see when</button></p>`;
   const [y, m] = b.month.split("-").map(Number);
   return `<p class="tbest"><button type="button" class="linkbtn" data-bestmonth="${esc(b.month)}">Cheapest in ${MONTHSFULL[m-1]} ${y}: ${usd(b.total)}</button>
     (${usd(b.saving)}+ less)</p>`;
@@ -3267,7 +3314,7 @@ function tripCardHtml(item, i, rank, otherSort){
   if(item.locked){
     return `<li class="tcard locked" data-i="${i}">
       <span class="tbadge">${badgeImg(item.resortId)}</span>
-      <div class="tid"><p class="teyebrow">Free account</p><h3>${esc(item.name)}</h3>
+      <div class="tid"><p class="teyebrow">Free for Planners</p><h3>${esc(item.name)}</h3>
         <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"}</p>
         <div class="bar lockbar" aria-hidden="true"><div class="seg f1" style="width:34%"></div><div class="seg f3" style="width:30%"></div><div class="seg f2" style="width:18%"></div><div class="seg f4" style="width:18%"></div></div></div>
       <div class="ttot"><span class="tnum lockblur" aria-hidden="true">$8,888</span>
@@ -3347,7 +3394,7 @@ function renderBudgetTop(){
   if(box.hidden) return;
   const plus = !!session.plus, budget = budgetValue(), inp = $("#sbBudget");
   box.classList.toggle("locked", !plus);
-  $("#btPlan").innerHTML = plus ? "Plan how to pay &rarr;" : budget > 0 ? "See which with Plus &rarr;" : "See what fits with Plus &rarr;";
+  $("#btPlan").innerHTML = plus ? "Plan how to pay &rarr;" : budget > 0 ? "See which with Planner Pro &rarr;" : "See what fits with Planner Pro &rarr;";
   if(document.activeElement !== inp) inp.value = budget || "";
   const fit = trips.filter(t => t.price.total <= budget).sort((a, b) => a.price.total - b.price.total);
   const of = `${fit.length} of ${trips.length} trip${trips.length === 1 ? "" : "s"}`;
@@ -3355,8 +3402,8 @@ function renderBudgetTop(){
     $("#btSum").innerHTML = !(budget > 0)
       ? "Type the most you'd spend and press Enter: we'll tell you how many of the six can fit it."
       : fit.length
-        ? `<b>${of} fit ${usd(budget)}.</b> Plus shows which ones, how far over the rest are, and the months each one fits.`
-        : `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> Plus shows the months that do, and what would save the most.`;
+        ? `<b>${of} fit ${usd(budget)}.</b> Planner Pro shows which ones, how far over the rest are, and the months each one fits.`
+        : `<b>None fit ${usd(budget)} in ${ymLabel(params.month)}.</b> Planner Pro shows the months that do, and what would save the most.`;
     return;
   }
   if(!(budget > 0)){
@@ -3521,7 +3568,7 @@ function renderTable(){
   const rows = list.map(({item,i},pos)=>{
     const r = item.resort, open = unlocked(i);
     if(!item.ok){
-      return `<tr><td>${pos+1}. ${item.name}<br><small style="color:var(--muted)">${item.locked ? "Create a free account to see this trip" : "No cached price"}</small></td>
+      return `<tr><td>${pos+1}. ${item.name}<br><small style="color:var(--muted)">${item.locked ? "Become a Planner (free) to see this trip" : "No cached price"}</small></td>
         <td class="n">${item.iata}</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>
         <td class="n">—</td><td class="n">—</td><td>${item.reason}</td></tr>`;
     }
@@ -4013,7 +4060,7 @@ async function renderDetail(){
    * sorted low to high and labeled by rank, not by a guessed category name,
    * so the card can never show a "Budget" number above a "Mid-range" one. */
   const tierCompare = noHotel ? "" : !session.email
-    ? `<p class="sub" style="margin:6px 0 0"><button type="button" class="linkbtn" data-signup>Create a free account</button> to compare every hotel category.</p>`
+    ? `<p class="sub" style="margin:6px 0 0"><button type="button" class="linkbtn" data-signup>Become a Planner, free,</button> to compare every hotel category.</p>`
     : (() => {
     const rows = [0,1,2].map(t => ({ t, ...tierRows[t] }));
     if (stayNow) {
@@ -4232,7 +4279,7 @@ async function renderDetail(){
           Promos applied: ${x.appliedPromos.filter(a=>!a.skipped && !a.auto).map(a=>`${esc(a.label)} (−${usd(a.amountUsd)})`).join(" · ")}</p>` : ""}
       </div>
       <div class="legend">
-        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Save this search (Plus)"}</button>
+        <button class="btn btn-sm" id="saveTripBtn" data-resort="${item.resortId}">${session.plus ? "Save this search, leading with " + esc(item.resort.name) : "Save this search (Pro)"}</button>
       </div>
     </div>
     ${r.dataConfidence ? `<div class="demo lowconfnote"><span class="dot"></span>
@@ -4429,8 +4476,8 @@ async function renderDetail(){
         // No "save & watch" any more: price-drop monitoring was removed
         // (2026-09-25). The calendar is how you watch a trip now, and it is Plus.
         if(!session.plus) return `<div class="upsell"><div><b>Is there a cheaper time to go?</b>
-          <span>Plus shows the whole trip's typical cost — flights, hotel, tickets and food — for every month you can plan, so you can see the best time to go.</span></div>
-          <button class="btn btn-sm openpw">See the best months with Plus</button></div>`;
+          <span>Planner Pro shows the whole trip's typical cost — flights, hotel, tickets and food — for every month you can plan, so you can see the best time to go.</span></div>
+          <button class="btn btn-sm openpw">See the best months with Planner Pro</button></div>`;
         if(!bestMonth) return "";
         const mine = mrows.find(m=>m.month===curYm);
         const save = mine && mine.total !== null ? mine.total - bestMonth.total : 0;
@@ -4455,7 +4502,7 @@ async function renderDetail(){
           // Signed out: these four came without a price (src/guestView.ts),
           // so a blurred stand-in and the way in, never "no cached price".
           : y.locked
-          ? `<tr><td>${y.name}</td><td class="n">${y.iata}</td><td class="n"><span class="lockblur" aria-hidden="true">$8,888</span></td><td class="n"><button type="button" class="linkbtn" data-signup>Sign up for a free account</button></td></tr>`
+          ? `<tr><td>${y.name}</td><td class="n">${y.iata}</td><td class="n"><span class="lockblur" aria-hidden="true">$8,888</span></td><td class="n"><button type="button" class="linkbtn" data-signup>Become a Planner, free</button></td></tr>`
           : `<tr><td>${y.name}</td><td class="n">${y.iata}</td><td class="n" colspan="2">No cached price</td></tr>`
         ).join("")}</tbody>
       </table></div>
@@ -4563,12 +4610,12 @@ function render(){
   const sv = $("#saveSearchBtn");
   if(sv){
     sv.hidden = !results.some(r=>r.ok);
-    sv.textContent = session.plus ? "Save this search" : "Save this search (Plus)";
+    sv.textContent = "Save Search";
   }
   const bb = $("#budgetBtn");
   if(bb){
     bb.hidden = !results.some(r=>r.ok);
-    bb.textContent = session.plus ? "Plan how to pay" : "Plan how to pay (Plus)";
+    bb.textContent = "Plan Budget";
   }
   $("#printTop").hidden = !results.some(r=>r.ok);
   syncAccountUi();
@@ -4576,7 +4623,9 @@ function render(){
   const any = results.length > 0;
   document.body.classList.toggle("has-results", any);
   $("#editSearch").hidden = !any;
-  $("#editSearchWhat").textContent = `${partyParts({ ...p, ages: [] }).join(", ")}${p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""}` : ""} · ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]} · from ${p.origin}`;
+  $("#editSearchWhen").textContent = `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]} · from ${p.origin}`;
+  $("#editSearchWhat").textContent = `${partyParts({ ...p, ages: [] }).join(", ")}${p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""}` : ""}`;
+  renderChips();
   renderBoard(); renderTable(); renderDetail();
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
@@ -4702,7 +4751,7 @@ document.addEventListener("click", async e=>{
  * this is only the part that tells you about it. */
 function syncAccountUi(){
   const pt = $("#printTop");
-  if(pt) pt.textContent = session.plus ? "Save as PDF" : "Save as PDF (Plus)";
+  if(pt) pt.textContent = "Save PDF";
   const on = session.authenticated;
   syncDealEmailsUi();
   // Guests change only the month, the party and the airport; signing in
@@ -4721,7 +4770,7 @@ function syncAccountUi(){
   if(on){
     $("#acctInitial").textContent = (session.email || "?").trim().charAt(0) || "?";
     $("#acctEmail").textContent = session.email || "";
-    $("#acctPlan").textContent = session.plus ? "Plus" : "Free plan";
+    $("#acctPlan").textContent = session.plus ? "Planner Pro" : "Planner";
     $("#acctPlan").className = "acctplan" + (session.plus ? " plus" : "");
     $("#accountTop").title = "Signed in as " + session.email;
   } else {
@@ -4750,11 +4799,11 @@ let authMode = "signup";
 
 function syncAuthMode(){
   const up = authMode === "signup";
-  $("#authTitle").textContent = up ? "Create Your Account" : "Sign In";
+  $("#authTitle").textContent = up ? "Become a Planner" : "Sign In";
   $("#authIntro").textContent = up
-    ? "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read."
+    ? "An account is free and takes two fields. It's what Planner Pro attaches to, so use an address you actually read."
     : "Welcome back. Every account needs a password now — if yours predates that, create the account again with the same email to set one.";
-  $("#signinBtn").textContent = up ? "Create account" : "Sign in";
+  $("#signinBtn").textContent = up ? "Become a Planner" : "Sign in";
   $("#signinPassword").setAttribute("autocomplete", up ? "new-password" : "current-password");
   $("#signinPassword").placeholder = up ? "At least 8 characters" : "Your password";
   $("#authSwapText").textContent = up ? "Already have an account?" : "Need an account?";
@@ -4777,12 +4826,12 @@ function openAuth(mode){
   $("#acctUpgradeBtn").hidden = !on || session.plus;
   $("#authTitle").textContent = on ? "Your Account" : "Sign In";
   $("#authIntro").textContent = on
-    ? "Everything below is tied to this account — saved searches and Plus follow the email, not this browser."
-    : "An account is free and takes two fields. It's what Plus attaches to, so use an address you actually read.";
+    ? "Everything below is tied to this account — saved searches and Planner Pro follow the email, not this browser."
+    : "An account is free and takes two fields. It's what Planner Pro attaches to, so use an address you actually read.";
   if(on){
     $("#emailChip").textContent = session.email;
     const passLabel = (PLUS_PASSES.find(x => x.id === session.plusPass) || {}).label;
-    $("#acctPlanRow").textContent = session.plus ? (passLabel ? `Plus · ${passLabel} pass` : "Plus") : "Free";
+    $("#acctPlanRow").textContent = session.plus ? (passLabel ? `Planner Pro · ${passLabel} pass` : "Planner Pro") : "Planner (free)";
     const until = fmtPlusUntil(session.plusUntil);
     $("#acctExpiryRow").hidden = !(session.plus && until);
     if(until) $("#acctExpiry").textContent = until;
@@ -4791,8 +4840,8 @@ function openAuth(mode){
     $("#resendMsg").textContent = "";
     $("#acctTrips").textContent = String(savedTripCount);
     $("#acctHint").textContent = session.plus
-      ? "Plus is comped by the owner while this is a demo — there's no payment and nothing renews."
-      : "Comparing all six resorts and live fare checks are free. Plus adds the best months to go, a budget page (how to pay for it, what fits your budget, what would save the most, and your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
+      ? "Your Planner Pro pass is given by the owner while this is a demo — there's no payment and nothing renews."
+      : "Comparing all six resorts and live fare checks are free. Planner Pro adds the best months to go, a budget page (how to pay for it, what fits your budget, what would save the most, and your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
     loadAttractions().then(renderAttractionPicker);
@@ -4801,7 +4850,9 @@ function openAuth(mode){
     $("#signinPassword").value = "";
   }
   $("#authModal").classList.add("on");
-  if(!on) setTimeout(()=> $("#signinEmail").focus(), 30);
+  // Only if nothing in the form has focus yet: a fast typist or a password
+  // manager already in the password box had their keys sent to Email.
+  if(!on) setTimeout(()=>{ if(!$("#authForm").contains(document.activeElement)) $("#signinEmail").focus(); }, 30);
 }
 function closeAuth(){ $("#authModal").classList.remove("on"); }
 
@@ -4809,6 +4860,7 @@ $("#signinTop").addEventListener("click", ()=>openAuth("signin"));
 $("#accountTop").addEventListener("click", ()=>openAuth());
 $("#closeAuth").addEventListener("click", closeAuth);
 $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
+$("#authCompare").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
@@ -5022,15 +5074,16 @@ function applyHomeAirport(){
 let originPickedByUser = false;
 
 function openPw(){
+  renderPlusPlans();
   const msg = $("#pwFootMsg");
   $("#pwSignupBox").hidden = session.authenticated;
-  if(!session.authenticated) msg.textContent = "Create an account first — then pick a plan and we'll let the owner know.";
-  else if(session.plus) msg.textContent = "You already have Plus on this account — thanks!";
+  if(!session.authenticated) msg.textContent = "Become a Planner (free) first — then pick a pass and we'll let the owner know.";
+  else if(session.plus) msg.textContent = "You already have Planner Pro on this account — thanks!";
   else msg.textContent = `Signed in as ${session.email}. Pick a plan below — there's no payment yet, just a demo, so it lets the owner know you want in.`;
   const yours = $("#pwBudgetYours"), ok = results.filter(r => r.ok), bu = budgetValue();
   const nFit = ok.filter(r => r.price.total <= bu).length;
   yours.hidden = !(bu > 0 && ok.length && !session.plus);
-  if(!yours.hidden) yours.innerHTML = `With your ${usd(bu)} budget, <b>${nFit} of your ${ok.length} trips fit</b>. Plus shows you which.`;
+  if(!yours.hidden) yours.innerHTML = `With your ${usd(bu)} budget, <b>${nFit} of your ${ok.length} trips fit</b>. Planner Pro shows which.`;
   $("#paywall").classList.add("on");
   track("paywall");
 }
@@ -5055,33 +5108,79 @@ async function requestPlus(plan){
   // Both of these used to `return` with no word to the user, so picking a
   // plan while signed out looked identical to picking one successfully.
   if(!session.authenticated){
-    msg.textContent = "Create an account first — then pick a plan and we'll pass the request on.";
+    msg.textContent = "Become a Planner (free) first — then pick a pass and we'll pass the request on.";
     return;
   }
   if(session.plus){
-    msg.textContent = "You already have Plus on this account — nothing to request.";
+    msg.textContent = "You already have Planner Pro on this account — nothing to request.";
     return;
   }
   const res = await fetch("/api/plus/request", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({plan}) });
   msg.textContent = res.ok
-    ? "Request sent — the owner will reach out to enable Plus for your account."
+    ? "Request sent — the owner will reach out to turn on Planner Pro for you."
     : "Couldn't send that request right now — try again in a moment.";
 }
 
 let PLUS_PASSES = [], PLUS_PASS_DEFAULT = "threeMonths";
+/* One row per thing we offer; a cell is true (included), false (not) or a
+ * few words. Columns: no account, free account, then each pass. Keep the
+ * words in step with what the server actually allows (guestView.ts,
+ * /api/yeargrid, /api/fits, passPerks). */
+function planRows(){
+  const pass = id => PLUS_PASSES.find(p => p.id === id) || {};
+  const saved = id => pass(id).savedSearches == null ? "Unlimited" : `Up to ${pass(id).savedSearches}`;
+  const perPass = f => PLUS_PASSES.map(p => f(p));
+  const plus = v => PLUS_PASSES.map(() => v);
+  return [
+    ["Total trip cost at every Disney resort", "Cheapest 2 of 6", "All 6", ...plus(true)],
+    ["Change the month, who's going and your airport", true, true, ...plus(true)],
+    ["Change nights, hotel, food and park days, and type your own prices", false, true, ...plus(true)],
+    ["The cheapest trip we can find", false, true, ...plus(true)],
+    ["Best time to go for each trip", "How much you'd save", "The month and its total", ...plus(true)],
+    ["Best months to go, every resort side by side", false, "2 of 6", ...plus("All 6")],
+    ["What fits my budget?", false, "How many fit", ...plus("Which ones, and when")],
+    ["What would save the most?", false, false, ...plus(true)],
+    ["Is an annual pass worth it?", false, false, ...plus(true)],
+    ["Saved searches", false, false, ...perPass(p => saved(p.id))],
+    ["The trip PDF to share", "A sample", "A sample", ...plus(true)],
+    ["Email when Disney posts a new deal", false, false, ...perPass(p => !!p.dealEmails)],
+  ];
+}
+function planCell(v, extra){
+  const c = (k) => { const all = [k, extra].filter(Boolean).join(" "); return all ? ` class="${all}"` : ""; };
+  if(v === true) return `<td${c("yes")}><span class="tick" aria-label="Included">✓</span></td>`;
+  if(v === false) return `<td${c("no")}><span aria-label="Not included">—</span></td>`;
+  return `<td${c("")}>${esc(v)}</td>`;
+}
 function renderPlusPlans(){
-  $("#plusPlans").innerHTML = PLUS_PASSES.map(p => `
-    <button class="plan" data-plan="${esc(p.id)}" aria-pressed="${p.id === PLUS_PASS_DEFAULT}">
-      <div class="pn">${esc(p.label)}</div>
-      <div class="pp">$${p.priceUsd}<small> once</small></div>
-      <div class="ps">${esc(p.note)}</div>
-      <div class="ps pperks">${p.savedSearches == null ? "Unlimited saved searches" : `Up to ${p.savedSearches} saved searches`}<br>${p.dealEmails ? "Disney deal emails" : "No deal emails"}</div>
-    </button>`).join("");
+  const here = !session.authenticated ? 0 : !session.plus ? 1
+    : 2 + Math.max(0, PLUS_PASSES.findIndex(p => p.id === session.plusPass));
+  const heads = [
+    { name:"No account", price:"Free", note:"" },
+    { name:"Planner", price:"Free", note:"" },
+    ...PLUS_PASSES.map(p => ({ name:"Planner Pro", sub:p.label, price:`$${p.priceUsd}`, note:"once", id:p.id })),
+  ];
+  const cls = i => [i === here ? "here" : "", heads[i].id === PLUS_PASS_DEFAULT ? "best" : ""].join(" ").trim();
+  const foot = heads.map((h, i) => {
+    if(i === here) return `<td class="${cls(i)}"><span class="planyou">You have this</span></td>`;
+    if(i === 0) return `<td></td>`;
+    if(i === 1) return session.authenticated ? `<td></td>` : `<td><button type="button" class="btn btn-sm" data-signup>Become a Planner, free</button></td>`;
+    return `<td class="${cls(i)}"><button type="button" class="${h.id === PLUS_PASS_DEFAULT ? "btn-primary" : "btn"} btn-sm" data-plan="${esc(h.id)}">Get ${esc(PLUS_PASSES[i-2].label)}</button></td>`;
+  }).join("");
+  $("#plusPlans").innerHTML = `<p class="planswipe">Swipe sideways to see the Planner Pro passes &rarr;</p><table class="plans-t">
+    <thead><tr><th scope="col"><span class="sr">What you get</span></th>${heads.map((h, i) =>
+      `<th scope="col" class="${cls(i)}">${h.id === PLUS_PASS_DEFAULT ? `<span class="planbest">Our pick</span>` : ""}<span class="pn">${esc(h.name)}</span>`
+      + (h.sub ? `<span class="psub">${esc(h.sub)}</span>` : "")
+      + `<span class="pp">${esc(h.price)}${h.note ? `<small> ${esc(h.note)}</small>` : ""}</span></th>`).join("")}</tr></thead>
+    <tbody>${planRows().map(([label, ...cells]) =>
+      `<tr><th scope="row">${esc(label)}</th>${cells.map((c, i) => planCell(c, cls(i))).join("")}</tr>`).join("")}</tbody>
+    <tfoot><tr><th></th>${foot}</tr></tfoot>
+  </table>
+  <p class="plannote">Every Planner Pro pass is paid once and never renews. It simply ends.</p>`;
 }
 $("#plusPlans").addEventListener("click", e=>{
   const b = e.target.closest("[data-plan]");
   if(!b) return;
-  $("#plusPlans").querySelectorAll("[data-plan]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
   // Counted whether or not they're signed in: picking a pass is the
   // interest the owner wants to measure, even if sign-up stops them.
   track("plus", null, b.dataset.plan);
@@ -5115,7 +5214,12 @@ async function refreshSession(){
   }
 }
 
+let signingIn = false;
 $("#signinBtn").addEventListener("click", async ()=>{
+  // One submission at a time. A second Enter or click while the first is
+  // still on its way used to find the password already cleared, print
+  // "Enter your email and password." and leave the dialog up (2026-10-30).
+  if(signingIn) return;
   const email = $("#signinEmail").value.trim();
   const password = $("#signinPassword").value;
   const err = $("#signinError");
@@ -5128,7 +5232,19 @@ $("#signinBtn").addEventListener("click", async ()=>{
     return;
   }
   const route = authMode === "signup" ? "/api/auth/signup" : "/api/auth/signin";
-  const res = await fetch(route, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  signingIn = true;
+  $("#signinBtn").disabled = true;
+  let res;
+  try {
+    res = await fetch(route, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  } catch {
+    err.textContent = "Couldn't reach the server. Try again in a moment.";
+    err.hidden = false;
+    return;
+  } finally {
+    signingIn = false;
+    $("#signinBtn").disabled = false;
+  }
   if(!res.ok){
     const body = await res.json().catch(()=>({}));
     err.textContent = body.message || body.error || "Could not sign in.";
@@ -5140,10 +5256,12 @@ $("#signinBtn").addEventListener("click", async ()=>{
     return;
   }
   $("#signinPassword").value = "";
-  await refreshSession();
-  // Straight back to the board, signed in — the dialog has done its job and
-  // the account button in the masthead now carries the state.
+  // Straight back to the board, signed in — the dialog has done its job.
+  // Close it BEFORE refreshing: refreshSession also fetches a Plus member's
+  // withheld calendars, which on the live site can be slow or fail, and the
+  // dialog used to sit there signed in (owner, 2026-10-30, desktop).
   closeAuth();
+  try { await refreshSession(); } catch(e){ console.error(e); }
   syncAccountUi();
   // Signing in changes what the server will resolve (attraction picks, a
   // saved home airport), so the already-fetched results are stale — re-run
@@ -6158,9 +6276,9 @@ function buildPrintDoc(){
   if(!session.plus && !sampleMode){
     doc.innerHTML = `<section class="pcover">
       <p class="pbrand"><img src="/public/brand/tab-icon.svg" alt="">Pricing the Magic</p>
-      <h1>The trip PDF is part of Plus</h1>
-      <p>With Plus, this page becomes a written plan for your trip: a cover for the resort you pick, what every
-      part costs, the booking links, and how the other resorts compare. Get Plus at pricingthemagic.com.</p>
+      <h1>The trip PDF is part of Planner Pro</h1>
+      <p>With Planner Pro, this page becomes a written plan for your trip: a cover for the resort you pick, what every
+      part costs, the booking links, and how the other resorts compare. Get Planner Pro at pricingthemagic.com.</p>
     </section>`;
     return;
   }
@@ -6216,6 +6334,7 @@ function closePdfPicker(){ $("#pdfPicker").classList.remove("on"); }
 $("#printTop").addEventListener("click", openPdfPicker);
 $("#sortBy").value = sortBy;
 $("#sortBy").addEventListener("change", e => {
+  setTimeout(renderChips);
   sortBy = SORT_TITLES[e.target.value] ? e.target.value : "price";
   try { localStorage.setItem("pf_sort", sortBy); } catch {}
   renderBoard();
@@ -6301,7 +6420,7 @@ function sampleMonth(){
 function openPdfSample(){
   const city = (ORIGINS.concat(PLUS_ORIGINS).find(o=>o.iata===SAMPLE_TRIP.origin) || {}).name || SAMPLE_TRIP.origin;
   const ym = sampleMonth();
-  $("#pdfSampleText").textContent = `With Plus, you get a written plan of the trip you just priced, to save or send to whoever you're going with. `
+  $("#pdfSampleText").textContent = `With Planner Pro, you get a written plan of the trip you just priced, to save or send to whoever you're going with. `
     + `Here's what one looks like: ${SAMPLE_TRIP.who || "a trip from " + city}, ${MONTHSFULL[+ym.slice(5,7)-1]} ${ym.slice(0,4)}, `
     + `${SAMPLE_TRIP.nights} nights, priced today at all six resorts.`;
   $("#pdfSampleMsg").textContent = "";
@@ -6309,13 +6428,13 @@ function openPdfSample(){
   $("#pdfSample").classList.add("on");
 }
 /* The Plus box for one button. Each feature says itself once; the list is
-   everything else Plus does. */
+   everything else Planner does. */
 const PLUS_PITCH = {
-  save: { title: "Save This Search with Plus",
-    lead: "Plus keeps this whole six-resort comparison, with every number you typed, so you can come back to it any time from My searches, or send it to whoever you're traveling with.",
+  save: { title: "Save This Search with Planner Pro",
+    lead: "Planner Pro keeps this whole six-resort comparison, with every number you typed, so you can come back to it any time from My searches, or send it to whoever you're traveling with.",
     also: "Save your searches and come back to them" },
-  budget: { title: "Plan How to Pay with Plus",
-    lead: "Plus shows which of these trips fit your budget and in which months, what to set aside each month to have it paid before you go, and the changes that would save you the most.",
+  budget: { title: "Plan Your Budget with Planner Pro",
+    lead: "Planner Pro shows which of these trips fit your budget and in which months, what to set aside each month to have it paid before you go, and the changes that would save you the most.",
     also: "See which trips fit your budget, and in which months" },
   pdf: { also: "Download a written plan of your trip as a PDF" },
   months: { also: "See the best months to go, with the whole trip's cost for each" },
@@ -6347,7 +6466,7 @@ async function showFits(){
     d = await apiGet("/api/fits", { ...tripQuery(), month: params.month, budget: Math.round(budget),
       overrides: JSON.stringify(OV) });
   } catch(e){
-    $("#ppTitle").textContent = "See What Fits with Plus";
+    $("#ppTitle").textContent = "See What Fits with Planner Pro";
     $("#ppLead").textContent = "We couldn't check your budget just now. " + PLUS_PITCH.budget.lead;
     return;
   }
@@ -6355,14 +6474,14 @@ async function showFits(){
   const now = d.thisMonth;
   if(n === 0){
     $("#ppTitle").textContent = `None Fit ${usd(budget)} Yet`;
-    $("#ppLead").textContent = `None of the six Disney destinations fit ${usd(budget)} in any month we price for this trip. Plus shows the cheapest month for each and the changes that would save you the most.`;
+    $("#ppLead").textContent = `None of the six Disney destinations fit ${usd(budget)} in any month we price for this trip. Planner Pro shows the cheapest month for each and the changes that would save you the most.`;
     return;
   }
   if(n >= d.priced){
     $("#ppTitle").textContent = `All ${COUNT_CAP[n] || n} Destinations Can Fit Your ${usd(budget)} Budget`;
     $("#ppLead").textContent = `Every Disney destination we priced can fit into this budget`
       + (now < n ? " at different times of the year" : "")
-      + `. Plus shows the months each one fits, and how to pay for it.`;
+      + `. Planner Pro shows the months each one fits, and how to pay for it.`;
     return;
   }
   $("#ppTitle").textContent = `${word} Destination${n === 1 ? "" : "s"} Can Fit Your ${usd(budget)} Budget`;
@@ -6370,7 +6489,7 @@ async function showFits(){
     // Never which month (owner, 2026-10-29: "don't say this. The user can just
     // search for April then"): the count is the teaser, the months are Plus.
     + (n > now ? " at different times of the year" : "")
-    + `. Plus shows you which ones, and when.`;
+    + `. Planner Pro shows which ones, and when.`;
 }
 function closePitch(){ $("#plusPitch").classList.remove("on"); }
 $("#ppCancel").addEventListener("click", closePitch);
@@ -6884,7 +7003,7 @@ function renderBudget(){
   const now = ymOf(new Date()), tripYm = x.start.slice(0,7);
   const T = Math.max(0, ymDiff(now, tripYm));
   $("#budgetHead").innerHTML = `<span class="thbadge">${badgeImg(item.resortId)}</span>
-    <div class="thtext"><p class="teyebrow">Your Budget <span class="pluschip">Plus</span></p>
+    <div class="thtext"><p class="teyebrow">Your Budget <span class="pluschip">Pro</span></p>
       <h1>Paying for ${esc(item.resort.name)}</h1>
       <p class="thsub">${usd(x.total)} for ${countWord(x.partySize)}, arriving ${fmtDate(x.start)} for ${params.nights} nights.</p></div>`;
   $("#bTripNote").textContent = `Arriving ${T === 0 ? "this month" : T === 1 ? "next month" : T+" months from now"}. Every number is our estimate for that trip; type your own on its trip page and it carries through here.`;
@@ -6993,7 +7112,7 @@ function needsAccount(){
   if(!isGuest()) return false;
   openAuth("signup");
   $("#authIntro").textContent = "Without an account you can change the month, who's going and where you fly from. "
-    + "A free account unlocks the rest: nights, hotel, food, park days, the cheapest trip, your own numbers and all six trips.";
+    + "Becoming a Planner is free and unlocks the rest: nights, hotel, food, park days, the cheapest trip, your own numbers and all six trips.";
   return true;
 }
 const GUEST_FREE = "#month, #origin, #adults, #seniors, #kids, #ages *, #partyPop *, #partyBtn";
@@ -7023,6 +7142,7 @@ document.addEventListener("click", e => {
 // "Create a free account" from a locked card, the banner or a guest note.
 document.addEventListener("click", e => {
   const up = e.target.closest("[data-signup]"), inn = e.target.closest("[data-signin]");
+  if(up || inn) closePw();
   if(up){ e.preventDefault(); openAuth("signup"); }
   else if(inn){ e.preventDefault(); openAuth("signin"); }
 });
@@ -7034,7 +7154,7 @@ $("#sbBudget").addEventListener("keydown", e => {
 });
 $("#sbBudget").addEventListener("input", e => {
   setBudget(e.target.value);
-  if(results.length){ renderBudgetTop(); renderBoard(); }
+  if(results.length){ renderBudgetTop(); renderBoard(); renderChips(); }
 });
 $("#sbBudget").value = budgetValue() || "";
 $("#btPlan").addEventListener("click", () => needsAccount() ? null : session.plus ? $("#budgetBtn").click() : showFits());
@@ -7249,9 +7369,9 @@ function renderTripChrome(item){
     ${tripBudgetHtml(item)}
     ${costBar(b)}
     <ul class="tslines">${lines.map(([lab, v]) => `<li><span>${lab}</span><b>${v < 0 ? "&minus;" + usd(-v) : usd(v)}</b></li>`).join("")}</ul>
-    <button type="button" class="tsbtn primary" id="tsSave">${session.plus ? "Save this trip" : "Save this trip (Plus)"}</button>
-    <button type="button" class="tsbtn" id="tsPdf">${session.plus ? "Download the trip PDF" : "Download the trip PDF (Plus)"}</button>
-    <button type="button" class="tsbtn link" id="tsBudget">Plan how to pay${session.plus ? "" : " (Plus)"}</button>
+    <button type="button" class="tsbtn primary" id="tsSave">${session.plus ? "Save this trip" : "Save this trip (Pro)"}</button>
+    <button type="button" class="tsbtn" id="tsPdf">${session.plus ? "Download the trip PDF" : "Download the trip PDF (Pro)"}</button>
+    <button type="button" class="tsbtn link" id="tsBudget">Plan how to pay${session.plus ? "" : " (Pro)"}</button>
     ${next.length ? `<div class="tsnext"><p class="tslab">Next cheapest</p>${next.map(y =>
       `<button type="button" class="tsnextrow" data-open="${results.indexOf(y)}"><span>${esc(y.resort.name)}</span><span>${usd(y.price.total)} &rarr;</span></button>`).join("")}</div>` : ""}`;
   $("#tsSave").addEventListener("click", () => { const sb = $("#saveTripBtn"); if(sb) sb.click(); });
@@ -7280,6 +7400,47 @@ $("#editSearch").addEventListener("click", () => {
   if(on) $("#searchSide").scrollIntoView({ behavior:"smooth", block:"start" });
 });
 
+/* The chip row on phones: each chip names one setting and opens the search
+ * panel right at it. Guests get the sign-up box for the locked ones. */
+const CHIP_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+function chipText(id){ const el = $("#" + id); return el && el.selectedOptions && el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : ""; }
+function chipDefs(){
+  const hotel = $("#needHotel").value === "no" ? "No hotel"
+    : `${chipText("tier").split(" / ")[$("#stay").value === "off" ? 1 : 0]}, ${$("#stay").value === "off" ? "off" : "on"} property`;
+  const budget = budgetValue();
+  return [
+    { field:"nights", k:"", v:`${$("#nights").value} nights` },
+    { field:"stay", k:"Hotel", v: hotel },
+    { field:"food", k:"Food", v: chipText("food") },
+    { field:"parkdays", k:"Park days", v: chipText("parkdays") },
+    { field:"gettingThere", k:"", v: chipText("gettingThere") },
+    { field:"priceBasis", k:"", v: $("#priceBasis").value === "cheapest" ? "Cheapest trip" : "Typical trip" },
+    { field:"sbBudget", k:"Budget", v: budget ? usd(+budget) : "Any" },
+    { field:"sortBy", k:"Sort", v: chipText("sortBy"), free:true },
+  ];
+}
+function renderChips(){
+  const row = $("#chipRow"); if(!row) return;
+  row.innerHTML = chipDefs().map(c => `<button type="button" class="chip${!c.free && isGuest() ? " locked" : ""}" data-chip="${c.field}">`
+    + `${c.k ? `<span class="k">${esc(c.k)}</span> ` : ""}<span>${esc(c.v)}</span>${CHIP_DOWN}</button>`).join("");
+}
+function openField(id){
+  const el = $("#" + id); if(!el) return;
+  if(id === "sortBy"){ el.scrollIntoView({ behavior:"smooth", block:"center" }); el.focus(); return; }
+  if(id !== "partyBtn" && needsAccount()) return;
+  document.body.classList.add("editing");
+  $("#editSearch").setAttribute("aria-expanded", "true");
+  if($("#moreDetails").contains(el) && $("#moreDetails").hidden){ $("#moreDetails").hidden = false; syncMoreDetails(); }
+  const box = el.closest(".f, .authfield, .sb-who, .sbb") || el;
+  box.scrollIntoView({ behavior:"smooth", block:"center" });
+  box.classList.add("fieldflash"); setTimeout(() => box.classList.remove("fieldflash"), 1400);
+  el.focus({ preventScroll:true });
+  if(id === "partyBtn") el.click();
+}
+{ const mh = () => document.documentElement.style.setProperty("--mast-h", $(".masthead").offsetHeight + "px");
+  mh(); if(window.ResizeObserver) new ResizeObserver(mh).observe($(".masthead")); }
+$("#chipRow").addEventListener("click", e => { const c = e.target.closest("[data-chip]"); if(c) openField(c.dataset.chip); });
+
 /* The form opens short: party, when and from where. "Add more details"
  * opens the rest; while it's closed a one-line summary says what the rest
  * is set to, so nobody prices a trip without knowing what it assumed. */
@@ -7301,10 +7462,11 @@ function syncMoreDetails(){
   $("#moreToggle").setAttribute("aria-expanded", String(open));
   $("#moreLabel").textContent = open ? "Fewer details" : "Add more details";
   $("#moreSum").textContent = open ? "" : isGuest()
-    ? "Nights, hotel, food and more need a free account" : moreSummary();
+    ? "Nights, hotel, food and more need a free Planner account" : moreSummary();
   syncPartyBtn();
   // The fine print goes with the details: the short form stays short.
   $("#hint").hidden = !open;
+  if(results.length) renderChips();
 }
 let moreReady = false;
 function initMoreDetails(){

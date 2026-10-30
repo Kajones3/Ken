@@ -134,7 +134,7 @@ export async function loadManualWork(db: Db, today: string): Promise<ManualItem[
   const none = deals.filter((d) => !d.live).map((d) => d.name);
   items.push({
     id: "deals", title: "Deals", everyDays: 14,
-    what: "Official offers from each resort's own offers page. A new one emails Plus members and comes off matching trips.",
+    what: "Official offers from each resort's own offers page. A new one emails Planner Pro members and comes off matching trips.",
     lastUpdated: lastDeal, status: !lastDeal ? "missing" : statusOf(lastDeal, 14, today),
     detail: deals.map((d) => `${d.name.replace(/ (Resort|Disneyland|Disney Resort)$/, "")} ${d.live}`).join(" · ")
       + (none.length ? ` (none live at ${none.length})` : ""),

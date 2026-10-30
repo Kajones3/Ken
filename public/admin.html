@@ -349,7 +349,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <div class="tiles" id="stTiles"><p class="count">Loading…</p></div>
 
       <h3>Out of every 100 times someone opened a resort's details</h3>
-      <p>The number that matters for Plus is the last one: of every 100 people looking closely at a trip,
+      <p>The number that matters for Planner Pro is the last one: of every 100 people looking closely at a trip,
         how many pick a pass. Keep one price for a few hundred detail views before judging it.</p>
       <div class="tiles" id="stRates"></div>
 
@@ -359,7 +359,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <h3>Where booking clicks went</h3>
       <div id="stBook"></div>
 
-      <h3>Plus passes picked</h3>
+      <h3>Planner Pro passes picked</h3>
       <div id="stPlus"></div>
 
       <h3>Day by day</h3>
@@ -869,7 +869,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <section class="sheet" id="deals">
     <h2>Deals</h2>
     <p>Disney's own offers, like &ldquo;Save up to 25% on rooms&rdquo;. A live deal shows on that resort's card, where
-      a traveler can apply it to their total. <b>Adding a deal also emails it to Plus members</b> the next
+      a traveler can apply it to their total. <b>Adding a deal also emails it to Planner Pro members</b> the next
       morning (only those with a confirmed email who haven't turned deal emails off).</p>
 
     <h3>Read a screenshot of the offer</h3>
@@ -2351,7 +2351,7 @@ $("#dSave").addEventListener("click", async () => {
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ attrSay($("#dSaid"), false, d.message || "That wasn't saved."); return; }
   rememberDealResort(body.resortId);
-  attrSay($("#dSaid"), true, dealEditing ? `Updated "${body.label}".` : `Saved "${body.label}". Travelers can apply it on the resort's card, and Plus members hear about it tomorrow morning.`);
+  attrSay($("#dSaid"), true, dealEditing ? `Updated "${body.label}".` : `Saved "${body.label}". Travelers can apply it on the resort's card, and Planner Pro members hear about it tomorrow morning.`);
   clearDealForm();
   renderDeals(d);
   if((window.__offers || []).length) renderOffers();
@@ -2726,12 +2726,12 @@ async function loadStats(){
   $("#stTiles").innerHTML = tile("Comparisons run", num(t.compare))
     + tile("Resort details opened", num(t.detail))
     + tile("Booking links clicked", num(t.book))
-    + tile("Plus window shown", num(t.paywall))
-    + tile("Plus passes picked", num(t.plus));
+    + tile("Planner Pro window shown", num(t.paywall))
+    + tile("Planner Pro passes picked", num(t.plus));
   $("#stRates").innerHTML = t.detail
     ? tile("Clicked a booking link", rate(p.book), "per 100 detail views")
-      + tile("Saw the Plus window", rate(p.paywall), "per 100 detail views")
-      + tile("Picked a Plus pass", rate(p.plus), "per 100 detail views")
+      + tile("Saw the Planner Pro window", rate(p.paywall), "per 100 detail views")
+      + tile("Picked a Planner Pro pass", rate(p.plus), "per 100 detail views")
     : `<p class="count">No resort details opened in this period yet.</p>`;
   $("#stResorts").innerHTML = barTable(d.byResort.map(x => ({ ...x, _bar: x.details })), [
     { h: "Resort", f: x => esc(x.name) },
@@ -2750,7 +2750,7 @@ async function loadStats(){
   const busy = d.daily.filter(x => x.compare || x.detail || x.book || x.paywall || x.plus);
   $("#stDaily").innerHTML = busy.length
     ? `<table class="ctab"><thead><tr><th>Day</th><th class="n">Comparisons</th>
-        <th class="n">Details</th><th class="n">Bookings</th><th class="n">Plus window</th><th class="n">Plus picked</th></tr></thead>
+        <th class="n">Details</th><th class="n">Bookings</th><th class="n">Planner Pro window</th><th class="n">Planner Pro picked</th></tr></thead>
       <tbody>${busy.map(x => `<tr><td>${esc(fmtD(x.day))}</td><td class="n">${num(x.compare)}</td>
         <td class="n">${num(x.detail)}</td><td class="n">${num(x.book)}</td><td class="n">${num(x.paywall)}</td>
         <td class="n">${num(x.plus)}</td></tr>`).join("")}</tbody></table>

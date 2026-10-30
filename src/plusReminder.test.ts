@@ -13,8 +13,8 @@ const capture = (): EmailSender & { sent: EmailMessage[] } => {
 
 test("the reminder says the date, that nothing renews, and what stays", () => {
   const m = buildPlusReminder("a@example.com", "threeMonths", "2027-01-31", { PUBLIC_BASE_URL: "https://x.test" } as never);
-  assert.equal(m.subject, "Your Pricing the Magic Plus ends on January 31, 2027");
-  assert.match(m.text, /Your 3 months Plus pass ends on January 31, 2027/);
+  assert.equal(m.subject, "Your Pricing the Magic Planner Pro pass ends on January 31, 2027");
+  assert.match(m.text, /Your 3 months Planner Pro pass ends on January 31, 2027/);
   assert.match(m.text, /won't be charged/);
   assert.match(m.text, /https:\/\/x\.test/);
 });

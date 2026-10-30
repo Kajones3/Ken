@@ -45,7 +45,7 @@ try {
       "If you're reading this, Pricing the Magic can send email.",
       "",
       "That turns on four things that were built and reaching nobody:",
-      "  - price-drop and deal alerts for Plus users",
+      "  - price-drop and deal alerts for Planner Pro users",
       "  - the nightly Disney news digest and your manual job list",
       "  - the daily real-pulls digest",
       "  - sign-up confirmation links",

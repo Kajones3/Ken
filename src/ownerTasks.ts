@@ -437,7 +437,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
 export function renderOwnerTasks(tasks: OwnerTask[]): string {
   if (!tasks.length) return "Manual jobs: none outstanding. Nothing needs you right now.";
   const label = (t: OwnerTask) =>
-    `[${t.side === "both" ? "FREE+PLUS" : t.side.toUpperCase()}]${t.blocking ? " [BLOCKING]" : ""}`;
+    `[${t.side === "both" ? "FREE+PRO" : t.side === "plus" ? "PRO" : t.side.toUpperCase()}]${t.blocking ? " [BLOCKING]" : ""}`;
   const lines = tasks.map((t, i) =>
     `${i + 1}. ${label(t)} ${t.title}\n   ${t.why}\n   (${t.source === "checked" ? "checked against real state just now" : "always shown until marked done in src/ownerTasks.ts"})`);
   return [

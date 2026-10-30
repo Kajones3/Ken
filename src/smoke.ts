@@ -75,7 +75,7 @@ await db.query(
   // Inside the month the smoke trip prices, so the email can measure a saving.
   [randomUUID(), top.resort.id, `${MONTH}-01`]);
 const alertResult = await runAlerts(db);
-console.log(`   ${alertResult.checked} Plus member checked, ${alertResult.fired} deal alert(s), ${alertResult.sent} emailed, 0 provider calls`);
+console.log(`   ${alertResult.checked} Planner Pro member checked, ${alertResult.fired} deal alert(s), ${alertResult.sent} emailed, 0 provider calls`);
 for (const c of alertResult.candidates) console.log(`   -> [${c.kind}] ${c.detail}`);
 
 const runs = await db.query(`select job, calls, rows_written, errors from fetch_runs order by started_at`);
