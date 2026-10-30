@@ -1114,7 +1114,7 @@ const server = createServer(async (req, res) => {
 
       if (req.method === "GET") {
         return page("Stop deal emails?",
-          "<p>You'll stop getting Pricing the Magic's emails about new Disney deals. Your account, your Plus and your "
+          "<p>You'll stop getting Pricing the Magic's emails about new Disney deals. Your account, your Planner pass and your "
           + "saved searches aren't affected, and emails about your account (like password resets) still come.</p>"
           + button("Stop deal emails", "stop"));
       }
@@ -1258,7 +1258,7 @@ const server = createServer(async (req, res) => {
       if (owner) {
         await pickEmailSender().send({
           to: owner,
-          subject: `Pricing the Magic: ${user.email} wants Plus`,
+          subject: `Pricing the Magic: ${user.email} wants to be a Planner`,
           text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
             + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.id}`,
         });

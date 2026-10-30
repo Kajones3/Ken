@@ -119,7 +119,7 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## 2026-10-30, later — sign-in box closes; phone chips; one plans table
+## 2026-10-30, later — sign-in box closes; phone chips; one plans table; Plus is now Planner
 
 - **Sign-in box stayed open on desktop** (owner screenshot: signed in, Admin
   showing, box still up). Two causes: (1) the box closed only AFTER
@@ -139,9 +139,18 @@ fallback for a destination we have never bought.
   the server allows. The sign-in box links to it ("What do a free account and
   Plus include?"). 3 months is marked "Our pick" (never "most picked": no
   sales yet).
-- **Name for "Plus": owner thinking.** Options given in the conversation of
-  2026-10-30. Avoid Disney's own words (FastPass, Genie, Lightning Lane, Pixie
-  Dust, Incredi-Pass, Magic Key).
+- **"Plus" is now "Planner" in everything a visitor or email reader sees**
+  (owner, 2026-10-30: "become a planner ... be a paid planner"). Buttons say
+  "Become a Planner"; members are "Planners"; passes are "Planner · 3 months"
+  passes; emails say "Planner pass". Code names stay (`plus_until`, `isPlus`,
+  `PLUS_PASSES`, `plus_required`, CSS `.pluschip`): renaming them buys
+  nothing and risks the database. Never write "Plus" in new visible text.
+  Avoid Disney's own words (FastPass, Genie, Lightning Lane, Pixie Dust,
+  Incredi-Pass, Magic Key).
+- **Results buttons are "Save Search", "Plan Budget", "Save PDF"** (`.resbtns`),
+  one line on a phone, centered if they ever wrap.
+- **The phone chip row is sticky** under the top bar (`--mast-h`, measured
+  from `.masthead` with a ResizeObserver).
 
 ## 2026-10-30 — guests change only month, party, home airport (newest)
 
