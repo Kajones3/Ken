@@ -268,3 +268,67 @@ test("a saved Disneyland 1-day calendar prices a 1-day trip and never moves its 
   assert.equal(three.ticketsFlat, true);
   assert.ok(Math.abs(three.tickets - 425) < 0.01, String(three.tickets));
 });
+
+/* Paris (owner, 2026-10-31): its UK ticket site prices in pounds, with a
+ * dated calendar and undated tickets ("Undated Ticket 1 Day/1 Park": Adult
+ * (12+) £114.27, Child (3-11) £106.30, good any day for a year). */
+test("Paris: a calendar in pounds is kept as shown and priced in dollars", async () => {
+  const { toUsd } = await import("./ticketCalendar.js");
+  const db = await memoryDb();
+  const month = "2099-12";
+  const prices = Array.from({ length: 31 }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, perDay: 94 + i }));
+  const v = validateCalendar({ resortId: "dlp", ticketDays: 1, month, prices, currency: "GBP" }, "2026-10-31");
+  assert.ok(v.ok, v.ok ? "" : v.reason);
+  if (!v.ok) return;
+  assert.equal(v.value.prices[0]!.perDay, toUsd(94, "GBP"));
+  assert.ok(v.value.prices[0]!.perDay > 120 && v.value.prices[0]!.perDay < 130, "£94 is about $124");
+  await saveCalendar(db, v.value, "owner@example.com");
+  const row = (await db.query(`select per_day_usd, per_day_local, currency from ticket_calendar where park_date = '${month}-01'`)).rows[0] as Record<string, unknown>;
+  assert.equal(String(row.currency), "GBP");
+  assert.equal(Number(row.per_day_local), 94, "what Disney showed is kept");
+  const { calendarMonth } = await import("./ticketCalendar.js");
+  const back = await calendarMonth(db, "dlp", month, 1);
+  assert.equal(back[0]!.perDay, 94, "opened again in pounds, to correct in pounds");
+  assert.equal(back[0]!.currency, "GBP");
+  assert.equal(validateCalendar({ resortId: "dlp", ticketDays: 1, month, prices, currency: "JPY" }, "2026-10-31").ok, false);
+});
+
+test("Paris: an undated ticket prices every date without a calendar, and a calendar date still wins", async () => {
+  const { validateUndated, saveUndated, toUsd } = await import("./ticketCalendar.js");
+  const { loadBook } = await import("./book.js");
+  const { priceTrip } = await import("./pricing.js");
+  const db = await memoryDb();
+  const dlp = RESORT_BY_ID.get("dlp")!;
+  assert.equal(validateUndated({ resortId: "dlp", ticketDays: 1, parks: 1, currency: "GBP", adult: 106.3, child: 114.27 }).ok, false, "child above adult: swapped");
+  const u = validateUndated({ resortId: "dlp", ticketDays: 1, parks: 1, currency: "GBP", adult: 114.27, child: 106.3 });
+  assert.ok(u.ok);
+  if (!u.ok) return;
+  await saveUndated(db, u.value, "owner@example.com");
+  // A dated calendar for the 10th only (cheaper than undated, as Disney's usually are).
+  const month = "2099-12";
+  const cal = validateCalendar({ resortId: "dlp", ticketDays: 1, month, currency: "GBP",
+    prices: Array.from({ length: 7 }, (_, i) => ({ date: `${month}-${String(i + 10).padStart(2, "0")}`, perDay: 94 })) }, "2026-10-31");
+  assert.ok(cal.ok);
+  if (cal.ok) await saveCalendar(db, cal.value, "owner@example.com");
+  await seedTickets(db, [month], ["dlp"]);
+  const rows = (await db.query(`select park_date, adult_usd, child_usd, from_calendar, from_undated from ticket_prices where resort_id = 'dlp' and park_date in ('${month}-02','${month}-10') order by park_date`)).rows as Array<Record<string, unknown>>;
+  assert.equal(rows[0]!.from_undated, true);
+  assert.equal(Number(rows[0]!.adult_usd), toUsd(114.27, "GBP"));
+  assert.equal(Number(rows[0]!.child_usd), toUsd(106.3, "GBP"));
+  assert.equal(rows[1]!.from_calendar, true, "Disney's dated price wins on its own date");
+  assert.equal(rows[1]!.from_undated, false);
+  const book = await loadBook(db, { origin: "ATL", destinations: ["CDG"], resortIds: ["dlp"], from: `${month}-01`, to: `${month}-31`, tripLength: 7 });
+  const one = priceTrip(book, dlp, { origin: "ATL", adults: 1, childAges: [8], nights: 1, parkDays: 1, stay: "none", tier: 1, food: "grocery" }, { dlp: { farePerSeat: 800 } }, `${month}-02`);
+  assert.ok(one.ok, one.ok ? "" : one.reason);
+  if (!one.ok) return;
+  assert.equal(one.price.ticketsUndated, true);
+  assert.ok(Math.abs(one.price.tickets - toUsd(114.27, "GBP") - toUsd(106.3, "GBP")) < 0.05, String(one.price.tickets));
+  // An undated ticket of the trip's own length is priced whole.
+  const u3 = validateUndated({ resortId: "dlp", ticketDays: 3, parks: 2, currency: "GBP", adult: 285, child: 268 });
+  assert.ok(u3.ok);
+  if (u3.ok) await saveUndated(db, u3.value, "owner@example.com");
+  const book2 = await loadBook(db, { origin: "ATL", destinations: ["CDG"], resortIds: ["dlp"], from: `${month}-01`, to: `${month}-31`, tripLength: 7 });
+  const three = priceTrip(book2, dlp, { origin: "ATL", adults: 1, childAges: [], nights: 4, parkDays: 3, stay: "none", tier: 1, food: "grocery" }, { dlp: { farePerSeat: 800 } }, `${month}-02`);
+  assert.ok(three.ok);
+  if (three.ok) assert.ok(Math.abs(three.price.tickets - toUsd(285, "GBP")) < 0.05, String(three.price.tickets));
+});

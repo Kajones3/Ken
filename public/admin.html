@@ -747,6 +747,12 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p class="count"><b>Disneyland: 1-day calendars only.</b> Its 2-5 day tickets cost one price for any
       date, so the board already prices them at Disneyland's own figures. Its 1-day calendar is welcome
       but optional; it prices 1-day Disneyland trips.</p>
+    <p class="count"><b>Disneyland Paris: dated calendars and undated tickets, in pounds.</b> Its dated
+      calendar (week starting Monday, &ldquo;£94&rdquo; under each day) reads like Disney World's; pick the
+      ticket length on the card. Its cart for an <b>undated</b> ticket (&ldquo;Undated Ticket 1 Day/1
+      Park&rdquo;, adult and child) reads too: that is one price for any day, so every Paris date without a
+      dated calendar is priced from it instead of our estimate. Pounds are converted to dollars at the
+      day's rate; what you saw is kept as well.</p>
     <p>Disney's own ticket prices, date by date. On Disney's ticket page pick a ticket length (say
       <b>5 days</b>), and screenshot the calendar that shows <b>a price under every day</b>, one month per
       screenshot. Drop them here, several at once if you like. Each month opens as a little calendar to check:
@@ -2818,11 +2824,17 @@ function renderTicketList(){
   // A month counts as held once ANY length is in; trips of other lengths then
   // use the nearest length held.
   const held = new Set(rows.map(x => x.resortId + "|" + x.month));
+  const sym = c => c === "GBP" ? "£" : c === "EUR" ? "€" : "$";
   const needed = tMeta.resorts.map(r => {
     if(r.oneDayOnly) return `<p class="count"><b>${esc(r.name)}</b>: optional. Its calendar is the 1-day ticket only (2-5 day tickets cost the same on any date).</p>`;
+    const und = ((tMeta.undated || {})[r.id] || []);
+    const und1 = und.find(u => u.ticketDays === 1 && u.parks === 1);
+    const undLine = und.length ? ` Undated tickets saved: ${und.map(u => `${u.ticketDays}-day ${u.parks}-park ${sym(u.currency)}${u.adultLocal}${u.childLocal ? "/" + sym(u.currency) + u.childLocal : ""}`).join("; ")}.` : "";
     const miss = (tMeta.planMonths || []).filter(m => !held.has(r.id + "|" + m));
-    return miss.length ? `<p class="count"><b>${esc(r.name)}</b> still needs: ${miss.map(ymName).join(", ")}.</p>`
-      : `<p class="count"><b>${esc(r.name)}</b>: every month a traveler can pick is from Disney's calendar.</p>`;
+    // Disney only sells so many months ahead: a month not saved is often a
+    // month not on sale yet, not a job left undone.
+    return miss.length ? `<p class="count"><b>${esc(r.name)}</b>: no calendar saved for ${miss.map(ymName).join(", ")}. ${und1 ? "Those dates use the undated 1-day price." : "Those dates use our estimate"}${und1 ? "" : " until Disney puts them on sale and you add them."}${undLine}</p>`
+      : `<p class="count"><b>${esc(r.name)}</b>: every month a traveler can pick is from Disney's calendar.${undLine}</p>`;
   }).join("");
   const name = id => (tMeta.resorts.find(r => r.id === id) || {}).name || id;
   $("#tList").innerHTML = needed + (rows.length ? `<table class="ctab"><thead><tr><th>Resort</th><th>Month</th>
@@ -2845,9 +2857,20 @@ async function readCalendarShots(files){
     $("#tCards").prepend(card);
     let cal;
     try {
-      const { words } = await R.readWords(file, { onProgress: (pr, st) => {
+      const { words, text } = await R.readWords(file, { onProgress: (pr, st) => {
         const c = card.querySelector(".count"); if(c) c.textContent = /recogniz/i.test(st) ? `Reading… ${Math.round(pr * 100)}%` : "Getting the reader ready…"; } });
+      // Paris's cart for an UNDATED ticket (one price for any day) is not a calendar.
+      const und = R.readUndatedTicket(text || words.map(w => w.text).join(" "));
+      if(und){ renderUndatedCard(card, und, URL.createObjectURL(file)); continue; }
       cal = R.readTicketCalendar(words);
+      // Paris colours each day's cell, and the reader loses dark digits on
+      // colour: when a month comes back short, read it again as ink only and
+      // keep whichever found more days.
+      if((cal.prices || []).length < 28){
+        const c = card.querySelector(".count"); if(c) c.textContent = "Reading again in black and white…";
+        const again = R.readTicketCalendar((await R.readWords(file, { ink: true })).words);
+        if((again.prices || []).length > (cal.prices || []).length) cal = again;
+      }
     } catch(err){
       card.innerHTML = `<p class="calwarn">Couldn't read that picture: ${esc(err.message || err)}</p>`; continue;
     }
@@ -2870,7 +2893,11 @@ function renderCalCard(card, cal, imgUrl){
   const prices = new Map((cal.prices || []).map(p => [p.date, p.perDay]));
   // Boxes read from a hard-to-read "11" (see readTicketCalendar): amber until touched.
   const unsure = new Set((cal.prices || []).filter(p => p.check).map(p => p.date));
-  const days = oneDayOnly(resortId) ? 1 : cal.ticketDays || 5;
+  const days = oneDayOnly(resortId) ? 1 : cal.ticketDays || (resortId === "dlp" ? 1 : 5);
+  // The money the screenshot shows (Paris: pounds on the UK site). Saved as
+  // shown and converted to dollars by the server.
+  const curOf = id => (tMeta.resorts.find(r => r.id === id) || {}).currency || "USD";
+  let currency = cal.currency || (cal.prices || [])[0]?.currency || curOf(resortId);
   card.innerHTML = `
     <div class="calsum" hidden><span class="calsumtext"></span>
       <span><button class="btn tcShow">Show calendar</button> <button class="btn tcClose">Close</button></span></div>
@@ -2879,6 +2906,7 @@ function renderCalCard(card, cal, imgUrl){
       <div><label>Park</label>${cal.saved ? `<span style="padding:6px 0">${esc(nameOf(resortId))}</span>`
         : `<select class="tcPark">${tMeta.resorts.map(r => `<option value="${esc(r.id)}"${r.id === resortId ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select>`}</div>
       <div><label>Month</label><input type="month" class="tcMonth" value="${esc(month)}"></div>
+      <div><label>Prices in</label><select class="tcCur">${["USD","GBP","EUR"].map(c => `<option value="${c}"${c === currency ? " selected" : ""}>${c === "USD" ? "$ dollars" : c === "GBP" ? "£ pounds" : "€ euros"}</option>`).join("")}</select></div>
       <div><label>Ticket length</label><select class="tcDays">${Array.from({length:10},(_,i)=>i+1).map(n => `<option value="${n}"${n===days?" selected":""}>${n}-day</option>`).join("")}</select></div>
       <div><span class="count tcRead"></span></div>
     </div>
@@ -2899,7 +2927,7 @@ function renderCalCard(card, cal, imgUrl){
   const draw = () => {
     // Keep what's typed when the month is changed by hand.
     if(shownYm) grid.querySelectorAll("input[data-day]").forEach(i => {
-      const v = Number(i.value.replace(/[$,+\s]/g, ""));
+      const v = Number(i.value.replace(/[$£€,+\s]/g, ""));
       prices.delete(`${shownYm}-${i.dataset.day}`);
       if(i.value.trim() && v) prices.set(`${shownYm}-${i.dataset.day}`, v);
     });
@@ -2911,8 +2939,12 @@ function renderCalCard(card, cal, imgUrl){
     }
     shownYm = ym;
     const [y, m] = ym.split("-").map(Number);
-    const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), n = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    let h = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => `<div class="wd">${d}</div>`).join("");
+    // Paris's calendar starts the week on Monday; draw it the same way so
+    // the boxes line up with the picture.
+    const monFirst = resortId === "dlp";
+    const dow1 = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(), n = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const first = monFirst ? (dow1 + 6) % 7 : dow1;
+    let h = (monFirst ? ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] : ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"]).map(d => `<div class="wd">${d}</div>`).join("");
     for(let i = 0; i < first; i++) h += `<div></div>`;
     let read = 0;
     for(let d = 1; d <= n; d++){
@@ -2937,7 +2969,9 @@ function renderCalCard(card, cal, imgUrl){
   };
   syncPark();
   const parkBox = card.querySelector(".tcPark");
-  if(parkBox) parkBox.addEventListener("change", () => { resortId = parkBox.value; syncPark(); });
+  const curBox = card.querySelector(".tcCur");
+  curBox.addEventListener("change", () => { currency = curBox.value; });
+  if(parkBox) parkBox.addEventListener("change", () => { resortId = parkBox.value; syncPark(); currency = curOf(resortId); curBox.value = currency; draw(); });
   card.querySelector(".tcMonth").addEventListener("change", draw);
   grid.addEventListener("input", e => { const c = e.target.closest(".cell"); if(c){ c.classList.toggle("miss", !e.target.value); c.classList.remove("check"); } });
   card.querySelector(".tcDrop").addEventListener("click", () => card.remove());
@@ -2958,18 +2992,64 @@ function renderCalCard(card, cal, imgUrl){
   card.querySelector(".tcSave").addEventListener("click", async () => {
     const ym = card.querySelector(".tcMonth").value;
     const list = [...grid.querySelectorAll("input[data-day]")].filter(i => i.value.trim())
-      .map(i => ({ date: `${ym}-${i.dataset.day}`, perDay: Number(i.value.replace(/[$,+\s]/g, "")) }));
+      .map(i => ({ date: `${ym}-${i.dataset.day}`, perDay: Number(i.value.replace(/[$£€,+\s]/g, "")) }));
     const said = card.querySelector(".tcSaid");
     const days = +card.querySelector(".tcDays").value;
     const r = await fetch("/api/admin/ticket-calendar", { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ resortId, ticketDays: days, month: ym, prices: list }) });
+      body: JSON.stringify({ resortId, ticketDays: days, month: ym, prices: list, currency }) });
     const d = await r.json().catch(() => ({}));
     if(!r.ok){ said.textContent = d.message || "Couldn't save that."; return; }
     said.textContent = "";
     const per = list.map(p => p.perDay), lo = Math.min(...per), hi = Math.max(...per);
     if(parkBox) parkBox.replaceWith(Object.assign(document.createElement("span"), { textContent: nameOf(resortId), style: "padding:6px 0" }));
-    collapse(`<b>Saved</b> · ${esc(nameOf(resortId))} · ${esc(ymName(ym))} · ${days}-day · ${d.saved} days, ${money(lo)}${hi !== lo ? "–" + money(hi) : ""} a day`);
+    const sym = currency === "GBP" ? "£" : currency === "EUR" ? "€" : "$";
+    const shown = v => sym + Math.round(v).toLocaleString("en-US");
+    collapse(`<b>Saved</b> · ${esc(nameOf(resortId))} · ${esc(ymName(ym))} · ${days}-day · ${d.saved} days, ${shown(lo)}${hi !== lo ? "–" + shown(hi) : ""} a day`);
     tMeta.months = d.months; renderTicketList();
+  });
+}
+
+/* Disney's UNDATED ticket (Paris's cart: "Undated Ticket 1 Day/1 Park",
+ * good any day for a year). One price for any date: dates with no dated
+ * calendar are priced from it instead of our curve. */
+function renderUndatedCard(card, und, imgUrl){
+  const curOf = id => (tMeta.resorts.find(r => r.id === id) || {}).currency || "USD";
+  let resortId = und.currency === "GBP" || und.currency === "EUR" ? "dlp" : $("#tResort").value;
+  const currency0 = und.currency || curOf(resortId);
+  card.innerHTML = `
+    <div class="calsum" hidden><span class="calsumtext"></span><span><button class="btn tcClose">Close</button></span></div>
+    <div class="calbody">
+    <p class="count"><b>Undated ticket</b>: one price for any day. Dates with no dated calendar are priced from it instead of our estimate.</p>
+    <div class="calhead">
+      <div><label>Park</label><select class="tuPark">${tMeta.resorts.map(r => `<option value="${esc(r.id)}"${r.id === resortId ? " selected" : ""}>${esc(r.name)}</option>`).join("")}</select></div>
+      <div><label>Prices in</label><select class="tuCur">${["USD","GBP","EUR"].map(c => `<option value="${c}"${c === currency0 ? " selected" : ""}>${c === "USD" ? "$ dollars" : c === "GBP" ? "£ pounds" : "€ euros"}</option>`).join("")}</select></div>
+      <div><label>Ticket length</label><select class="tuDays">${Array.from({length:10},(_,i)=>i+1).map(n => `<option value="${n}"${n === (und.days || 1) ? " selected" : ""}>${n}-day</option>`).join("")}</select></div>
+      <div><label>Parks</label><select class="tuParks"><option value="1"${und.parks !== 2 ? " selected" : ""}>1 park</option><option value="2"${und.parks === 2 ? " selected" : ""}>2 parks</option></select></div>
+    </div>
+    <div class="calhead">
+      <div><label>Adult, whole ticket</label><input class="tuAdult" inputmode="decimal" value="${und.adult ?? ""}"></div>
+      <div><label>Child, whole ticket</label><input class="tuChild" inputmode="decimal" value="${und.child ?? ""}"></div>
+    </div>
+    ${imgUrl ? `<details style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">The picture</summary>
+      <img class="shot" src="${imgUrl}" alt="The ticket being read" style="max-height:none"></details>` : ""}
+    <div class="tools" style="margin-top:10px"><button class="btn primary tuSave">Save this price</button> <button class="btn tuDrop">Discard</button></div>
+    <div class="said tuSaid"></div></div>`;
+  const q = sel => card.querySelector(sel);
+  q(".tuPark").addEventListener("change", () => { resortId = q(".tuPark").value; q(".tuCur").value = curOf(resortId); });
+  q(".tuDrop").addEventListener("click", () => card.remove());
+  q(".tcClose").addEventListener("click", () => card.remove());
+  q(".tuSave").addEventListener("click", async () => {
+    const num = v => { const x = Number(String(v).replace(/[$£€,\s]/g, "")); return String(v).trim() && Number.isFinite(x) ? x : null; };
+    const body = { resortId, currency: q(".tuCur").value, ticketDays: +q(".tuDays").value, parks: +q(".tuParks").value,
+      adult: num(q(".tuAdult").value), child: num(q(".tuChild").value) };
+    const r = await fetch("/api/admin/ticket-undated", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ q(".tuSaid").textContent = d.message || "Couldn't save that."; return; }
+    const sym = body.currency === "GBP" ? "£" : body.currency === "EUR" ? "€" : "$";
+    const name = (tMeta.resorts.find(x => x.id === resortId) || {}).name || resortId;
+    q(".calsumtext").innerHTML = `<b>Saved</b> · ${esc(name)} · undated ${body.ticketDays}-day, ${body.parks} park${body.parks > 1 ? "s" : ""} · adult ${sym}${body.adult}${body.child ? `, child ${sym}${body.child}` : ""} (${money(d.value.adultUsd)}${d.value.childUsd ? " / " + money(d.value.childUsd) : ""})`;
+    q(".calsum").hidden = false; q(".calbody").hidden = true; card.classList.add("saved");
+    tMeta.undated = d.undated; renderTicketList();
   });
 }
 

@@ -16,6 +16,7 @@
  *    against yet, said plainly rather than guessed.
  * Planner Pro what the formulas learned on their own, read-only.
  */
+import { loadHolidayPremiums } from "./holidayLearning.js";
 import type { Db } from "./db.js";
 import { settingsMap } from "./settings.js";
 import { loadScoreboard, type GroupScore } from "./fareScoreboard.js";
@@ -192,6 +193,16 @@ export async function loadRecommendations(db: Db, now: Date = new Date()): Promi
     learned.push({ name: "Candidate: government airfare index", value: `survey age ${L.index.surveyAge.weight.toFixed(2)}`,
       note: `${L.index.surveyAge.fares} fares behind it.` });
   }
+  // The holiday-week bump on fare estimates (holidayLearning.ts).
+  try {
+    const hol = await loadHolidayPremiums(db);
+    for (const h of hol.values()) {
+      learned.push({ name: `Holiday bump: ${h.label}`, value: `+${h.pct}%`,
+        note: h.routes
+          ? `Our fares on ${h.routes} route${h.routes === 1 ? "" : "s"} say +${h.ourPct}%; the study said +${h.studyPct}%. Used only where we hold no real fare for the date; a value you set under Flight estimates wins.`
+          : `No route yet has both holiday-week and ordinary dates in our fares, so the study's +${h.studyPct}% stands.` });
+    }
+  } catch { /* nothing learned to show */ }
   if (cheapest) {
     // One main airport per group is enough: the ratio is learned per group.
     const parts = ([["US", "MCO"], ["Europe", "CDG"], ["Asia", "HND"]] as const).flatMap(([name, a]) => {

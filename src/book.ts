@@ -10,7 +10,9 @@ import type { FlightRow, HotelNight, PriceBook, PromoRow, TicketRow } from "./pr
 import { RESORTS, type Tier } from "./config.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
 import { isRental } from "./rentals.js";
-import { latestCalendar } from "./ticketCalendar.js";
+import { latestCalendar, latestUndated } from "./ticketCalendar.js";
+import { loadRoadMiles, routeKey } from "./roadMiles.js";
+import { loadHolidayPremiums } from "./holidayLearning.js";
 import {
   computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT,
   GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, type CountedCheck,
@@ -222,7 +224,7 @@ export async function loadBook(
   }
 
   const t = await db.query(
-    `select resort_id, park_date, adult_usd, child_usd, junior_usd, updated_at, from_calendar
+    `select resort_id, park_date, adult_usd, child_usd, junior_usd, updated_at, from_calendar, from_undated
        from ticket_prices
       where resort_id = any($1) and park_date between $2 and $3`,
     [req.resortIds, req.from, req.to],
@@ -230,6 +232,18 @@ export async function loadBook(
   // Disney's calendar prices per ticket length, for a trip of any length
   // starting on that date (ticketCalendar.ts). Only read when a row says so.
   const calendar = t.rows.some((r) => r.from_calendar) ? await latestCalendar(db, req.from, req.to) : new Map();
+  // Disney's undated tickets per length (Paris), for rows priced from one.
+  const undatedHeld = t.rows.some((r) => r.from_undated) ? await latestUndated(db) : new Map();
+  const undatedByResort = new Map<string, Record<number, { adult: number; child: number | null }>>();
+  for (const [rid, list] of undatedHeld) {
+    const byLen: Record<number, { adult: number; child: number | null }> = {};
+    // A 1-day trip is a 1-park ticket; a longer Paris ticket covers both parks.
+    for (const u of [...list].sort((a, b) => a.parks - b.parks)) {
+      if (u.ticketDays === 1 && u.parks !== 1) continue;
+      if (!byLen[u.ticketDays] || u.ticketDays > 1) byLen[u.ticketDays] = { adult: u.adult, child: u.child };
+    }
+    undatedByResort.set(rid, byLen);
+  }
   for (const r of t.rows) {
     const date = dateStr(r.park_date);
     const key = `${r.resort_id}|${date}`;
@@ -239,6 +253,7 @@ export async function loadBook(
       junior: r.junior_usd === null || r.junior_usd === undefined ? undefined : Number(r.junior_usd),
       ...(r.from_calendar ? { fromCalendar: true } : {}),
       ...(byLength ? { calendar: byLength } : {}),
+      ...(r.from_undated ? { fromUndated: true, undated: undatedByResort.get(String(r.resort_id)) ?? {} } : {}),
     });
     seen(r.updated_at);
   }
@@ -495,7 +510,7 @@ export async function loadBook(
     }
     for (const [key, row] of tickets) {
       // Disney's own calendar price for this date: real already, never nudged.
-      if (row.fromCalendar) continue;
+      if (row.fromCalendar || row.fromUndated) continue;
       const f = factors.get(`ticket|${key.split("|")[0]}`);
       if (!f) continue;
       tickets.set(key, {
@@ -642,8 +657,14 @@ export async function loadBook(
   }
 
   const mileageRates = await loadMileageRates(db);
+  // Road miles from a map, for driving trips (roadMiles.ts).
+  const roadMiles = await loadRoadMiles(db);
+  // The holiday-week bump our own fares teach (holidayLearning.ts).
+  const holidays = await loadHolidayPremiums(db);
 
   return {
+    roadMiles: (from, resortId) => roadMiles.get(routeKey(from, resortId)),
+    holidayPremiumPct: (key) => holidays.get(key)?.pct,
     setting: (key) => settings.get(key),
     mileageRates,
     flight: (_origin, dest, date) => flights.get(`${dest}|${date}`),

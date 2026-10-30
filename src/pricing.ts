@@ -274,7 +274,7 @@ export function quotedEstimate(book: PriceBook, origin: string, dest: string, st
   const est = book.flightEstimate?.(origin, dest, start);
   if (!est) return undefined;
   const holiday = holidayFlightPremium(start);
-  const m = holiday ? 1 + (book.setting?.(holiday.settingKey) ?? holiday.defaultPct) / 100 : 1;
+  const m = holiday ? 1 + (book.setting?.(holiday.settingKey) ?? book.holidayPremiumPct?.(holiday.settingKey) ?? holiday.defaultPct) / 100 : 1;
   const resort = RESORTS.find((r) => r.iata === dest || r.altArrivalAirports.some((a) => a.iata === dest));
   const lean = est.candidate ? 50 : estimateLeanFor(book, resort ? resort.region !== "dom" : false);
   return Math.round(leanedFare({ low: est.low * m, med: est.med * m, high: est.high * m }, lean) * 100) / 100;
@@ -330,7 +330,7 @@ export function cheapestBasisFare(
 export const PAID_FLIGHT_SOURCE = "serpapi_flights";
 
 export function decideFlightFare(
-  book: Pick<PriceBook, "setting">,
+  book: Pick<PriceBook, "setting" | "holidayPremiumPct">,
   row: FlightRow | undefined,
   est: FlightEstimate | undefined,
   start: ISODate,
@@ -373,7 +373,7 @@ export function decideFlightFare(
   const holiday = !useRow ? holidayFlightPremium(start) : null;
   const estAdjusted: (FlightEstimate & { holidayPremiumPct?: number; holidayLabel?: string }) | undefined = est && holiday
     ? (() => {
-        const pct = book.setting?.(holiday.settingKey) ?? holiday.defaultPct;
+        const pct = book.setting?.(holiday.settingKey) ?? book.holidayPremiumPct?.(holiday.settingKey) ?? holiday.defaultPct;
         const mult = 1 + pct / 100;
         const r2 = (n: number) => Math.round(n * 100) / 100;
         return { ...est, low: r2(est.low * mult), med: r2(est.med * mult), high: r2(est.high * mult),
@@ -407,6 +407,11 @@ export interface TicketRow {
   /** Disney's calendar prices for a ticket STARTING this date, per length
    *  held (days -> adult per-day USD, before tax). */
   calendar?: CalendarByLength;
+  /** Priced from Disney's UNDATED ticket (good any day; Paris), not the curve. */
+  fromUndated?: boolean;
+  /** Disney's undated tickets held for this resort, per length: the WHOLE
+   *  ticket in USD before tax (adult, and child when shown). */
+  undated?: Record<number, { adult: number; child: number | null }>;
 }
 /** One date's newest calendar price per ticket length: days -> per-day USD. */
 export type CalendarByLength = Record<number, number>;
@@ -472,6 +477,12 @@ export interface PriceBook {
   cheapestListed?(origin: string, dest: string, date: ISODate, tripLength: number): number | undefined;
   cheapestRatio?(dest: string): number | undefined;
   hotelNights(resortId: string, date: ISODate): HotelNight[];
+  /** One-way driving miles from a map (roadMiles.ts) for a start point and
+   *  resort, when we hold that route. Undefined: the straight-line estimate. */
+  roadMiles?(from: { lat: number; lon: number }, resortId: string): number | undefined;
+  /** The holiday-week bump our own fares teach (holidayLearning.ts), by its
+   *  settings key. An owner value (`setting`) still wins; none = the study's. */
+  holidayPremiumPct?(key: string): number | undefined;
   ticket(resortId: string, date: ISODate): TicketRow | undefined;
   promosFor(resortId: string, date: ISODate): PromoRow[];
   /** The most recent cached national average — undefined falls back to
@@ -552,6 +563,8 @@ export interface TripPrice {
   driving: number;
   drivingPick: {
     from: string; roundTripMiles: number; gasPricePerGallonUsd: number;
+    /** Road miles from a map (true) or the straight-line estimate (false). */
+    milesFromMap: boolean;
     gasCostUsd: number; overnightUsd: number; wearAndTearUsd: number;
     /** Which IRS rate wearAndTearUsd was computed at, and whether it's the
      *  real rate for the trip's own year or an older one carried forward
@@ -586,6 +599,8 @@ export interface TripPrice {
   /** A multi-day ticket the resort sells at one price for any date
    *  (Disneyland), priced at its published table. */
   ticketsFlat: boolean;
+  /** Priced from Disney's undated ticket (one price any day; Paris). */
+  ticketsUndated: boolean;
   /** Which lines the owner's own price checks nudged, and by how much. Null
    *  when none did. See checkFactors.ts. */
   checkAdjust: { flight?: CheckAdjust; hotel?: CheckAdjust; tickets?: CheckAdjust } | null;
@@ -908,7 +923,10 @@ export function priceTrip(
     const from = params.originPoint ?? ORIGIN_BY_IATA.get(params.origin);
     if (!from) return { ok: false, reason: `unknown starting city ${params.origin}` };
     const fromLabel = params.originPoint ? params.originPoint.label : params.origin;
-    const oneWayMiles = haversineMiles(from.lat, from.lon, resort.lat, resort.lon) * DRIVING.roadDistanceFactor;
+    // Road miles from a map when we hold the route; else the straight line
+    // stretched by a typical road detour.
+    const mapMiles = book.roadMiles?.(from, resort.id);
+    const oneWayMiles = mapMiles ?? haversineMiles(from.lat, from.lon, resort.lat, resort.lon) * DRIVING.roadDistanceFactor;
     const roundTripMiles = oneWayMiles * 2;
     const gas = book.gasPrice();
     const gasPricePerGallonUsd = gas?.pricePerGallonUsd ?? DRIVING.fallbackGasPriceUsd;
@@ -938,7 +956,7 @@ export function priceTrip(
     }
     driving = Math.round((gasCostUsd + overnightUsd + wearAndTearUsd) * 100) / 100;
     drivingPick = {
-      from: fromLabel, roundTripMiles: Math.round(roundTripMiles),
+      from: fromLabel, roundTripMiles: Math.round(roundTripMiles), milesFromMap: mapMiles !== undefined,
       gasPricePerGallonUsd, gasCostUsd: Math.round(gasCostUsd * 100) / 100, overnightUsd,
       wearAndTearUsd: Math.round(wearAndTearUsd * 100) / 100, mileageRate,
     };
@@ -1045,24 +1063,30 @@ export function priceTrip(
   // party and the park). That price is the published table, not the curve,
   // so no season and no price-check nudge. Its 1-day ticket still varies.
   const table = resort.ticket.multiDayAdultUsd;
-  const ticketsFlat = !!(resort.ticket.flatMultiDay && table && table.length && parkDays >= 2);
-  if (ticketsFlat) {
+  // Disney's undated ticket of exactly this length (Paris sells them for any
+  // day): its own price, whole, when the start date has no dated calendar.
+  const undatedExact = !byStart && startRow?.fromUndated && parkDays >= 1 ? startRow.undated?.[parkDays] : undefined;
+  const ticketsFlat = !undatedExact && !!(resort.ticket.flatMultiDay && table && table.length && parkDays >= 2);
+  let ticketsUndated = parkDays > 0 && !byStart && !!startRow?.fromUndated;
+  if (ticketsFlat || undatedExact) {
     ticketsFromCalendar = false;
-    const adultTotal = table![0]! * multiDay * parkDays;
+    const adultTotal = undatedExact ? undatedExact.adult : table![0]! * multiDay * parkDays;
+    const childTotal = undatedExact?.child ?? adultTotal * (undatedExact ? (startRow!.child / startRow!.adult) : resort.ticket.child);
     ages.forEach((age, idx) => {
       const band = ticketBandOf(resort, age);
       const gate = band === "infant" ? 0
-        : band === "child" ? adultTotal * resort.ticket.child
+        : band === "child" ? childTotal
         : band === "junior" ? adultTotal * (resort.ticket.junior ?? 0.9)
         : adultTotal;
       ticketPerHead[idx] = gate * ticketTax;
     });
   }
-  for (let i = 0; !ticketsFlat && i < parkDays; i++) {
+  for (let i = 0; !ticketsFlat && !undatedExact && i < parkDays; i++) {
     const day = addDaysISO(start, Math.min(i, params.nights));
     const t = byStart ? startRow : book.ticket(resort.id, day);
     if (!t) return { ok: false, reason: `no ticket price for ${resort.id} on ${day}` };
     if (!t.fromCalendar) ticketsFromCalendar = false;
+    if (!t.fromUndated) ticketsUndated = false;
     const perDayScale = cal && t.adult > 0 ? cal.perDay / (t.adult * multiDay) : 1;
     ages.forEach((age, idx) => {
       const band = ticketBandOf(resort, age);
@@ -1423,7 +1447,7 @@ export function priceTrip(
       perSeatFare, flightPick, fareBelowFloor,
       hotelPick, hotelTier, ...(lodgingChoice ? { lodgingChoice } : {}), foodPlan, foodDay: foodDayUsed, foodStyle, partySize: ages.length,
       appliedPromos,
-      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, ticketsFlat, checkAdjust,
+      driving, drivingPick, transportMode, hopperUsd, ticketLines, ticketTaxPct, ticketsFromCalendar, ticketCalendarDays, ticketsFlat, ticketsUndated, checkAdjust,
       membership, parkDays: days,
     },
   };

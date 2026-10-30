@@ -7,7 +7,7 @@
  *   2. Stay under the rate limit and back off on 429 (the provider does this).
  *   3. Log every run, so when prices look wrong in three months you can find out why.
  */
-import { latestCalendar, calendarOneDay } from "../ticketCalendar.js";
+import { latestCalendar, calendarOneDay, latestUndated, undatedOneDay } from "../ticketCalendar.js";
 import { randomUUID } from "node:crypto";
 import {
   ORIGINS, REFRESH_TIERS, RESORTS, TRIP_BUCKETS, RESORT_BY_ID, isLocalRoute, firstPlannableMonth, lastPlannableMonth,
@@ -27,6 +27,9 @@ import { computeFareTrend } from "./fareTrend.js";
 import { rotateHotelSlots, slotKeys, slotPasses, type HotelSlot } from "./hotelRotation.js";
 import { primeSettingsCache } from "../settings.js";
 import { loadHotelLearning } from "../hotelLearning.js";
+import { ensureRoadMiles, osrmMiles, roadMilesLive } from "../roadMiles.js";
+import { haversineMiles } from "../geo.js";
+import { EXTRA_ORIGINS } from "../config.js";
 
 /**
  * Flights and hotels are picked independently: SERPAPI_KEY swaps in real
@@ -189,30 +192,37 @@ export async function seedTickets(db: Db, months: string[], resortIds?: string[]
   // (ticketCalendar.ts); every other date is the curve, as before.
   const sorted = [...months].sort();
   const calendar = await latestCalendar(db, monthBounds(sorted[0]!)[0], monthBounds(sorted[sorted.length - 1]!)[1]);
+  // Disney's undated tickets (Paris): one real price for any date, so a date
+  // with no calendar is priced from it rather than from the curve.
+  const undated = await latestUndated(db);
   for (const resort of RESORTS.filter((r) => !resortIds || resortIds.includes(r.id))) {
+    const und = undatedOneDay(undated.get(resort.id));
+    // The child share Disney's own undated prices show, when we hold them.
+    const childShare = und && und.child ? und.child / und.adult : resort.ticket.child;
     for (const m of months) {
       const [from, to] = monthBounds(m);
       const dates = range(from, to);
       const vals: unknown[] = [];
       const tuples = dates.map((d, i) => {
-        const b = i * 7;
+        const b = i * 8;
         const byLength = calendar.get(`${resort.id}|${d}`);
         const calAdult = byLength ? calendarOneDay(resort, byLength) : null;
         const cal = calAdult !== null;
+        const fromUndated = !cal && !!und;
         const s = 1 + (seasonOf(resort.id, d).m - 1) * 0.55;
-        const adult = cal ? calAdult : Math.round(resort.ticket.base * s * 100) / 100;
-        const child = Math.round(adult * resort.ticket.child * 100) / 100;
+        const adult = cal ? calAdult : fromUndated ? und!.adult : Math.round(resort.ticket.base * s * 100) / 100;
+        const child = fromUndated && und!.child ? und!.child : Math.round(adult * childShare * 100) / 100;
         const junior = resort.ticket.junior ? Math.round(adult * resort.ticket.junior * 100) / 100 : null;
-        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl, cal);
-        return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now(),$${b+7})`;
+        vals.push(resort.id, d, adult, child, junior, resort.ticketUrl, cal, fromUndated);
+        return `($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},now(),$${b+7},$${b+8})`;
       });
       await db.query(
-        `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd,junior_usd,source_url,updated_at,from_calendar)
+        `insert into ticket_prices (resort_id,park_date,adult_usd,child_usd,junior_usd,source_url,updated_at,from_calendar,from_undated)
          values ${tuples.join(",")}
          on conflict (resort_id,park_date) do update set
            adult_usd = excluded.adult_usd, child_usd = excluded.child_usd,
            junior_usd = excluded.junior_usd, updated_at = excluded.updated_at,
-           from_calendar = excluded.from_calendar`,
+           from_calendar = excluded.from_calendar, from_undated = excluded.from_undated`,
         vals,
       );
       n += dates.length;
@@ -353,6 +363,20 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
 
   rows += await seedTickets(db, months);
   rows += await seedGasPrice(db);
+  // Road miles from a map for every home airport to each US resort
+  // (roadMiles.ts): asked once ever per route, so after the first night this
+  // is nothing. A map service hiccup just leaves those drives on the estimate.
+  let roadNote = "";
+  if (!opts.provider && roadMilesLive()) {
+    try {
+      const wants = [...ORIGINS, ...EXTRA_ORIGINS].flatMap((o) => RESORTS.filter((r) => r.region === "dom")
+        .map((r) => ({ from: { lat: o.lat, lon: o.lon }, to: { lat: r.lat, lon: r.lon }, resortId: r.id })));
+      const added = await ensureRoadMiles(db, wants, osrmMiles,
+        { straightMiles: (w) => haversineMiles(w.from.lat, w.from.lon, w.to.lat, w.to.lon) });
+      roadNote = ` · road miles: ${added} new route(s) from the map`;
+      console.log(`refresh: road miles from the map, ${added} new route(s)`);
+    } catch (e) { console.warn(`road miles skipped: ${(e as Error).message}`); }
+  }
 
   // Reads only Postgres (flight_prices we just refreshed, plus whatever BTS
   // baseline exists) — no provider call, so it rides along here rather than
@@ -374,7 +398,7 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
        note = note || ' · ' || $5 where id = $1`,
-    [runId, calls, rows, errors, `${trendNote} · ${hotelNote}`],
+    [runId, calls, rows, errors, `${trendNote} · ${hotelNote}${roadNote}`],
   );
   return { runId, calls, rows, errors, skipped, months: months.length, trend, paidSlots };
 }

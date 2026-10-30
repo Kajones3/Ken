@@ -173,3 +173,55 @@ test("a ticket page: the Adult and Child prices beside their labels, in pounds, 
   assert.deepEqual([findAmounts(PARIS_TICKETS, "EUR")[0]!.amount, findAmounts(PARIS_TICKETS, "EUR")[0]!.currency], [297, "GBP"]);
   assert.equal(readTicketPage("Disney Ambassador Hotel ¥74,300 per night", "JPY"), null);
 });
+
+/* Paris (2026-10-31): the UK ticket site's dated calendar starts the week on
+ * Monday and prices in pounds ("£94", no "+"); its cart also sells undated
+ * tickets. Laid out like the owner's December 2026 screenshot. */
+import { readTicketCalendar, readUndatedTicket } from "../public/screenshot-reader.js";
+const PARIS_DEC_2026 = [94, 94, 94, 102, 113, 119, 117, 100, 99, 98, 99, 117, 118, 98, 99, 98, 99, 101, 118, 121, 123, 123, 119, 126, 142, 126, 126, 132, 132, 132, 164];
+function parisWords(prices: number[], headings = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]) {
+  const words: { text: string; x0: number; y0: number; x1: number; y1: number }[] = [];
+  const box = (text: string, cx: number, cy: number, w = 30, h = 18) => words.push({ text, x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 });
+  box("December", 330, 70, 150, 30); box("2026", 450, 70, 70, 30);
+  headings.forEach((t, i) => box(t, 100 + 90 * i, 165, 24, 18));
+  prices.forEach((p, i) => {
+    const slot = i + 1;                       // 1 December 2026 is a Tuesday: column 1 of Mo..Su
+    const col = slot % 7, row = Math.floor(slot / 7);
+    const cx = 100 + 90 * col, cy = 230 + 95 * row;
+    box(String(i + 1), cx + 20, cy, 18, 18);
+    box(`£${p}`, cx + 5, cy + 40, 44, 20);
+  });
+  return words;
+}
+
+test("Paris's dated calendar: pounds, Monday first, every day on its own date", () => {
+  const r = readTicketCalendar(parisWords(PARIS_DEC_2026));
+  assert.equal(r.month, "2026-12");
+  assert.equal(r.currency, "GBP");
+  assert.equal(r.resortGuess, "dlp");
+  assert.equal(r.prices.length, 31, r.warnings.join(" | "));
+  assert.deepEqual(r.prices.map((p: { perDay: number }) => p.perDay), PARIS_DEC_2026);
+  assert.equal(r.prices.find((p: { date: string }) => p.date === "2026-12-06")!.perDay, 119, "Sunday the 6th sits at the right end");
+  assert.equal(r.prices.find((p: { date: string }) => p.date === "2026-12-31")!.perDay, 164);
+});
+
+test("Paris's calendar without its headings still reads Monday first from the pounds", () => {
+  const r = readTicketCalendar(parisWords(PARIS_DEC_2026, []));
+  assert.deepEqual(r.prices.map((p: { perDay: number }) => p.perDay), PARIS_DEC_2026);
+});
+
+test("Paris's undated ticket in the cart: adult and child, 1 day, 1 park, pounds", () => {
+  const text = "Your selection Undated Ticket 1 Day/1 Park Valid 1 year (excluding 31 Oct and 31 Dec) Adult (12+) 1x £114.27 Child (3-11) 1x £106.30 Sub-total £220.57";
+  assert.deepEqual(readUndatedTicket(text), { days: 1, parks: 1, adult: 114.27, child: 106.3, currency: "GBP" });
+  assert.equal(readUndatedTicket("Adult (12+) £285 Child (3-11) £268 3-day ticket"), null, "a dated ticket page is not undated");
+});
+
+test("Paris's real December 2026 screenshot, read with ink only (coloured cells): all 31 days", async () => {
+  const { readFileSync } = await import("node:fs");
+  const w = (JSON.parse(readFileSync(new URL("./testdata/dlp-ticket-calendar-2026-12.words.json", import.meta.url), "utf8")) as Array<[string, number, number, number, number]>)
+    .map(([text, x0, y0, x1, y1]) => ({ text, x0, y0, x1, y1 }));
+  const r = readTicketCalendar(w);
+  assert.equal(r.month, "2026-12");
+  assert.equal(r.currency, "GBP");
+  assert.deepEqual(r.prices.map((p: { perDay: number }) => p.perDay), PARIS_DEC_2026, r.warnings.join(" | "));
+});
