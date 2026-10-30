@@ -23,7 +23,7 @@
  *
  * Every task also carries whether it affects the FREE product or PLUS, at
  * the owner's request. That is a priority signal, not decoration: a broken
- * free feature is everybody's problem, a broken Plus feature is a paying
+ * free feature is everybody's problem, a broken Planner Pro feature is a paying
  * customer's problem, and they deserve different urgency.
  */
 import { loadMileageRates } from "./mileageRates.js";
@@ -36,7 +36,7 @@ import { todayISO, type ISODate } from "./dates.js";
 import { requireVerifiedEmail } from "./verifyEmail.js";
 
 /** Which side of the paywall a task affects. */
-export type TaskSide = "free" | "plus" | "both";
+export type TaskSide = "free" | "pro" | "both";
 
 export interface OwnerTask {
   id: string;
@@ -437,7 +437,7 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
 export function renderOwnerTasks(tasks: OwnerTask[]): string {
   if (!tasks.length) return "Manual jobs: none outstanding. Nothing needs you right now.";
   const label = (t: OwnerTask) =>
-    `[${t.side === "both" ? "FREE+PRO" : t.side === "plus" ? "PRO" : t.side.toUpperCase()}]${t.blocking ? " [BLOCKING]" : ""}`;
+    `[${t.side === "both" ? "FREE+PRO" : t.side === "pro" ? "PRO" : t.side.toUpperCase()}]${t.blocking ? " [BLOCKING]" : ""}`;
   const lines = tasks.map((t, i) =>
     `${i + 1}. ${label(t)} ${t.title}\n   ${t.why}\n   (${t.source === "checked" ? "checked against real state just now" : "always shown until marked done in src/ownerTasks.ts"})`);
   return [

@@ -360,7 +360,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <div id="stBook"></div>
 
       <h3>Planner Pro passes picked</h3>
-      <div id="stPlus"></div>
+      <div id="stPro"></div>
 
       <h3>Day by day</h3>
       <div id="stDaily"></div>
@@ -2727,11 +2727,11 @@ async function loadStats(){
     + tile("Resort details opened", num(t.detail))
     + tile("Booking links clicked", num(t.book))
     + tile("Planner Pro window shown", num(t.paywall))
-    + tile("Planner Pro passes picked", num(t.plus));
+    + tile("Planner Pro passes picked", num(t.pro));
   $("#stRates").innerHTML = t.detail
     ? tile("Clicked a booking link", rate(p.book), "per 100 detail views")
       + tile("Saw the Planner Pro window", rate(p.paywall), "per 100 detail views")
-      + tile("Picked a Planner Pro pass", rate(p.plus), "per 100 detail views")
+      + tile("Picked a Planner Pro pass", rate(p.pro), "per 100 detail views")
     : `<p class="count">No resort details opened in this period yet.</p>`;
   $("#stResorts").innerHTML = barTable(d.byResort.map(x => ({ ...x, _bar: x.details })), [
     { h: "Resort", f: x => esc(x.name) },
@@ -2742,18 +2742,18 @@ async function loadStats(){
     { h: "Link", f: x => esc(BOOK_LABEL[x.detail] || x.detail) },
     { h: "Clicks", n: true, f: x => num(x.n) },
   ]);
-  $("#stPlus").innerHTML = barTable(d.plusBy.map(x => ({ ...x, _bar: x.n })), [
+  $("#stPro").innerHTML = barTable(d.proBy.map(x => ({ ...x, _bar: x.n })), [
     { h: "Pass", f: x => `${esc(x.label)} ($${x.priceUsd})` },
     { h: "Picked", n: true, f: x => num(x.n) },
   ]);
   // Only days something happened: thirty rows of zeros hide the few that matter.
-  const busy = d.daily.filter(x => x.compare || x.detail || x.book || x.paywall || x.plus);
+  const busy = d.daily.filter(x => x.compare || x.detail || x.book || x.paywall || x.pro);
   $("#stDaily").innerHTML = busy.length
     ? `<table class="ctab"><thead><tr><th>Day</th><th class="n">Comparisons</th>
         <th class="n">Details</th><th class="n">Bookings</th><th class="n">Planner Pro window</th><th class="n">Planner Pro picked</th></tr></thead>
       <tbody>${busy.map(x => `<tr><td>${esc(fmtD(x.day))}</td><td class="n">${num(x.compare)}</td>
         <td class="n">${num(x.detail)}</td><td class="n">${num(x.book)}</td><td class="n">${num(x.paywall)}</td>
-        <td class="n">${num(x.plus)}</td></tr>`).join("")}</tbody></table>
+        <td class="n">${num(x.pro)}</td></tr>`).join("")}</tbody></table>
       <p class="count" style="margin-top:8px">Days with nothing counted are left out.</p>`
     : `<p class="count">Nothing counted in this period yet.</p>`;
 }

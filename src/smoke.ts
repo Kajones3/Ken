@@ -55,11 +55,11 @@ for (const [i, row] of ranked.entries()) {
 
 console.log("\n3. save a trip and run the deal-alert job");
 const userId = randomUUID(), tripId = randomUUID();
-// Saving a search and hearing about new deals are Plus (owner's call,
+// Saving a search and hearing about new deals are Planner Pro (owner's call,
 // 2026-09-25); price-drop monitoring was removed. A deal email also needs a
 // confirmed address, same as a real account.
 await db.query(
-  `insert into users (id,email,email_verified_at,plus_until,created_at)
+  `insert into users (id,email,email_verified_at,pro_until,created_at)
    values ($1,$2,now(),current_date + 90, now() - interval '1 day')`,
   [userId, "you@example.com"]);
 const top = ranked[0]!;

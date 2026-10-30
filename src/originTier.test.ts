@@ -1,25 +1,25 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { ORIGINS, PLUS_ORIGINS, ALL_ORIGINS, ORIGIN_BY_IATA, originNeedsPlus } from "./config.js";
+import { ORIGINS, EXTRA_ORIGINS, ALL_ORIGINS, ORIGIN_BY_IATA, originIsExtra } from "./config.js";
 import { originIatas } from "./jobs/btsBaseline.js";
 import { haversineMiles } from "./geo.js";
 
-test("the free and Plus airport lists don't overlap", () => {
+test("the free and extra airport lists don't overlap", () => {
   const free = new Set(ORIGINS.map((o) => o.iata));
-  for (const p of PLUS_ORIGINS) {
+  for (const p of EXTRA_ORIGINS) {
     assert.ok(!free.has(p.iata), `${p.iata} is in both lists — pick one`);
   }
-  assert.equal(ALL_ORIGINS.length, ORIGINS.length + PLUS_ORIGINS.length);
+  assert.equal(ALL_ORIGINS.length, ORIGINS.length + EXTRA_ORIGINS.length);
 });
 
-test("Charlotte stays free and Raleigh needs Plus", () => {
+test("Charlotte stays free and Raleigh is an extra airport", () => {
   // The owner's own example: today they'd search from CLT, three hours away.
-  // Plus is what makes RDU — their real airport — selectable.
-  assert.equal(originNeedsPlus("CLT"), false);
-  assert.equal(originNeedsPlus("RDU"), true);
+  // Planner Pro is what makes RDU — their real airport — selectable.
+  assert.equal(originIsExtra("CLT"), false);
+  assert.equal(originIsExtra("RDU"), true);
 });
 
-test("every airport, free or Plus, resolves to real coordinates", () => {
+test("every airport, free or extra, resolves to real coordinates", () => {
   for (const o of ALL_ORIGINS) {
     const found = ORIGIN_BY_IATA.get(o.iata);
     assert.ok(found, `${o.iata} is not resolvable`);
@@ -30,19 +30,19 @@ test("every airport, free or Plus, resolves to real coordinates", () => {
   }
 });
 
-test("BTS ingests baselines for Plus airports too, or they'd have no estimate", () => {
+test("BTS ingests baselines for extra airports too, or they'd have no estimate", () => {
   // The survey is one file covering every US airport, so withholding a
-  // baseline from a Plus origin would cost nothing and buy nothing. What the
-  // free/Plus split governs is which airports can be PICKED, not which have data.
+  // baseline from a Planner Pro origin would cost nothing and buy nothing. What the
+  // free/Planner Pro split governs is which airports can be PICKED, not which have data.
   const ingested = originIatas();
   for (const o of ALL_ORIGINS) {
     assert.ok(ingested.has(o.iata), `${o.iata} would have no BTS baseline`);
   }
 });
 
-test("a Plus airport's nearest free fallback is genuinely the nearest", () => {
-  // What a free user gets when they pick a Plus airport. Spot-check the
-  // owner's case and confirm the rule holds for every Plus airport.
+test("a extra airport's nearest free fallback is genuinely the nearest", () => {
+  // What a free user gets when they pick a extra airport. Spot-check the
+  // owner's case and confirm the rule holds for every extra airport.
   const nearestFree = (iata: string) => {
     const w = ORIGIN_BY_IATA.get(iata)!;
     return ORIGINS.reduce((best, o) =>
@@ -50,7 +50,7 @@ test("a Plus airport's nearest free fallback is genuinely the nearest", () => {
   };
   assert.equal(nearestFree("RDU").iata, "CLT", "Raleigh should fall back to Charlotte");
 
-  for (const p of PLUS_ORIGINS) {
+  for (const p of EXTRA_ORIGINS) {
     const pick = nearestFree(p.iata);
     const d = haversineMiles(p.lat, p.lon, pick.lat, pick.lon);
     for (const o of ORIGINS) {

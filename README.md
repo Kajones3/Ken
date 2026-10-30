@@ -57,7 +57,7 @@ To let someone in as Plus (no payment processor exists yet — this is how the o
 comps friends, and how you'd grant your own account for testing):
 
 ```bash
-npm run grant-plus -- friend@example.com 90    # Plus for 90 days
+npm run grant-pro -- friend@example.com threeMonths    # Planner Pro, 3-month pass (or a number of days)
 ```
 
 To see whether the cache actually holds real fares for the months people
@@ -70,7 +70,7 @@ COVERAGE_ORIGIN=ATL npm run coverage    # real fare / estimate / gap, month by m
 
 **If you're on the default embedded PGlite database (no `DATABASE_URL` set), stop
 `npm start` before running any script against the same `.pgdata` directory** —
-`migrate`, `refresh`, `grant-plus`, `seed-promos`, all of them. PGlite doesn't support
+`migrate`, `refresh`, `grant-pro`, `seed-promos`, all of them. PGlite doesn't support
 two processes sharing one data directory; at best the running server never sees the
 write, at worst the store corrupts. A real Postgres doesn't have this limitation, so
 none of this applies once you're pointed at Neon below.
@@ -129,7 +129,7 @@ Steps:
    instead of PGlite — and unlike PGlite, there's no "stop the server
    first" step, since real Postgres allows more than one process at a time:
    ```bash
-   DATABASE_URL="<your neon connection string>" npm run grant-plus -- friend@example.com 90
+   DATABASE_URL="<your neon connection string>" npm run grant-pro -- friend@example.com threeMonths
    ```
 
 Nothing here needs Stripe or a paid tier. A domain is optional but it is
@@ -797,7 +797,7 @@ existing mislabelling report more pulls that never happened.
 | `src/gas/` | `mock.ts` works today; `eia.ts` needs a free EIA key. Same interface as `src/email/`/`src/providers/`. |
 | `src/email/` | `console.ts` prints instead of sending, works today; `resend.ts` needs an API key. Same interface. |
 | `src/auth.ts` | Email-only sign-in, session cookies, the one real `isPlus()` entitlement check. |
-| `src/grantPlus.ts` | `npm run grant-plus` — the one way to grant Plus (comping a friend, or your own testing). |
+| `src/grantPro.ts` | `npm run grant-pro` (old name `grant-plus` still works) — the one way to grant Planner Pro (comping a friend, or your own testing). Also the "Pricing the Magic grant Planner Pro" workflow in Actions. |
 | `src/seedPromos.ts` | A few illustrative example promo rows. Not wired into the daily refresh — promos are sparse, hand-curated content. |
 | `src/server.ts` | The API. `node:http` and nothing else, also serves `public/prototype.html`. |
 

@@ -7,13 +7,15 @@ test("only the named actions, resorts and details are accepted", () => {
   assert.deepEqual(parseEvent({ kind: "book", resort: "tdr", detail: "flights" }),
     { kind: "book", resort: "tdr", detail: "flights" });
   assert.deepEqual(parseEvent({ kind: "compare" }), { kind: "compare", resort: "", detail: "" });
-  assert.deepEqual(parseEvent({ kind: "plus", detail: "threeMonths" }), { kind: "plus", resort: "", detail: "threeMonths" });
+  assert.deepEqual(parseEvent({ kind: "pro", detail: "threeMonths" }), { kind: "pro", resort: "", detail: "threeMonths" });
   // Unknown kind, unknown resort, free text, a missing resort: all refused.
   assert.equal(parseEvent({ kind: "pageview" }), null);
   assert.equal(parseEvent({ kind: "detail", resort: "epcot" }), null);
   assert.equal(parseEvent({ kind: "book", resort: "wdw", detail: "someone@example.com" }), null);
   assert.equal(parseEvent({ kind: "detail" }), null);
-  assert.equal(parseEvent({ kind: "plus", detail: "lifetime" }), null);
+  assert.equal(parseEvent({ kind: "pro", detail: "lifetime" }), null);
+  // A page loaded before the rename still says "plus".
+  assert.deepEqual(parseEvent({ kind: "plus", detail: "week" }), { kind: "pro", resort: "", detail: "week" });
   assert.equal(parseEvent(null), null);
 });
 
@@ -39,7 +41,7 @@ test("counts add up per day and roll into the stats", async () => {
   await recordEvent(db, ev({ kind: "detail", resort: "wdw" }), "2026-10-02");
   await recordEvent(db, ev({ kind: "detail", resort: "wdw" }), "2026-10-02");
   await recordEvent(db, ev({ kind: "book", resort: "tdr", detail: "flights" }), "2026-10-02");
-  await recordEvent(db, ev({ kind: "plus", detail: "threeMonths" }), "2026-10-02");
+  await recordEvent(db, ev({ kind: "pro", detail: "threeMonths" }), "2026-10-02");
   // Outside a 7-day window ending 2026-10-02.
   await recordEvent(db, ev({ kind: "compare" }), "2026-09-20");
 
@@ -48,11 +50,11 @@ test("counts add up per day and roll into the stats", async () => {
   assert.equal(s.totals.compare, 1);
   assert.equal(s.totals.detail, 4);
   assert.equal(s.perHundredDetails.book, 25);
-  assert.equal(s.perHundredDetails.plus, 25);
+  assert.equal(s.perHundredDetails.pro, 25);
   assert.equal(s.byResort[0]!.resort, "tdr", "ties go alphabetically by name; both have 2 views");
   assert.equal(s.byResort.find((r) => r.resort === "tdr")!.book, 1);
   assert.equal(s.bookBy.find((b) => b.detail === "flights")!.n, 1);
-  assert.equal(s.plusBy.find((p) => p.pass === "threeMonths")!.n, 1);
+  assert.equal(s.proBy.find((p) => p.pass === "threeMonths")!.n, 1);
   assert.equal(s.daily.length, 7);
   assert.equal(s.daily[0]!.day, "2026-10-02");
   assert.equal(s.daily[0]!.detail, 3);
@@ -77,10 +79,10 @@ test("the rate limiter lets normal use through and stops a flood", () => {
 test("a retired pass keeps its picks in the stats, below the passes on sale", async () => {
   const db = await memoryDb();
   const ev = (o: object) => parseEvent(o)!;
-  await recordEvent(db, ev({ kind: "plus", detail: "threeMonths" }), "2026-10-29");
-  await db.query(`insert into event_counts (day, kind, resort_id, detail, n) values ('2026-10-20', 'plus', '', 'month', 3)`);
+  await recordEvent(db, ev({ kind: "pro", detail: "threeMonths" }), "2026-10-29");
+  await db.query(`insert into event_counts (day, kind, resort_id, detail, n) values ('2026-10-20', 'pro', '', 'month', 3)`);
   const s = await loadStats(db, 30, "2026-10-29");
-  assert.deepEqual(s.plusBy.map((p) => [p.pass, p.n]), [["week", 0], ["threeMonths", 1], ["nineMonths", 0], ["month", 3]]);
-  assert.match(s.plusBy[3]!.label, /no longer sold/);
+  assert.deepEqual(s.proBy.map((p) => [p.pass, p.n]), [["week", 0], ["threeMonths", 1], ["nineMonths", 0], ["month", 3]]);
+  assert.match(s.proBy[3]!.label, /no longer sold/);
   await db.close();
 });

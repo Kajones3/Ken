@@ -204,7 +204,7 @@ export async function fetchExactFare(
 
   // Same contract as every other writer: on success only, tagged with its
   // source so the trend can tell real fares from Travelpayouts leftovers.
-  // This row is now in the shared cache — the next person to ask, Plus or
+  // This row is now in the shared cache — the next person to ask, Planner Pro or
   // not, benefits from it, and it feeds the trend every free estimate uses.
   // The record first (observations.ts): a paid fare is kept even if the
   // working copy below is later replaced.

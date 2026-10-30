@@ -50,27 +50,27 @@ test("a configured deployment drops the email task entirely", async () => {
 
 test("every task says which side of the paywall it affects", async () => {
   // The owner's explicit ask: a broken free feature is everybody's problem,
-  // a broken Plus feature is a paying customer's.
+  // a broken Planner Pro feature is a paying customer's.
   const db = await memoryDb();
   const tasks = await ownerTasks(db, { env: {} as NodeJS.ProcessEnv, today: SETTLED });
   assert.ok(tasks.length > 0);
   for (const t of tasks) {
-    assert.ok(["free", "plus", "both"].includes(t.side), `${t.id} has no side`);
+    assert.ok(["free", "pro", "both"].includes(t.side), `${t.id} has no side`);
     assert.ok(t.why.length > 20, `${t.id} does not say what happens if ignored`);
     assert.ok(["checked", "standing"].includes(t.source), `${t.id} does not say how it was decided`);
   }
   await db.close();
 });
 
-test("no task is Plus-only any more — Plus buys only the PDF (2026-09-24)", async () => {
+test("no task is Planner Pro only any more — Planner Pro buys only the PDF (2026-09-24)", async () => {
   // Attraction picks and applying a promo both moved to free at launch, and
-  // nothing else here is Plus-gated data (the PDF has no hand-maintained
+  // nothing else here is Planner Pro-gated data (the PDF has no hand-maintained
   // table of its own) — so "plus" should be an empty side, not a stale label
   // left over from before the regating.
   const db = await memoryDb();
   const tasks = await ownerTasks(db, { env: ALL_SET, today: SETTLED });
-  const plus = tasks.filter((t) => t.side === "plus").map((t) => t.id);
-  assert.deepEqual(plus, []);
+  const pro = tasks.filter((t) => t.side === "pro").map((t) => t.id);
+  assert.deepEqual(pro, []);
   const attractionTask = tasks.find((t) => t.id === "attraction-list");
   const promoTask = tasks.find((t) => t.id === "real-promos");
   assert.equal(attractionTask?.side, "free", "the attraction list is free data now");
@@ -164,12 +164,12 @@ test("an on-property row does not count as a real vendor pull", async () => {
   await db.close();
 });
 
-test("the rendered list labels each job free, Plus or both", async () => {
+test("the rendered list labels each job free, Planner Pro or both", async () => {
   const db = await memoryDb();
   const text = renderOwnerTasks(await ownerTasks(db, { env: {} as NodeJS.ProcessEnv, today: SETTLED }));
   assert.match(text, /Your manual jobs \(\d+\)/);
   assert.match(text, /\[FREE\+PRO\] \[BLOCKING\]/);
-  // No task is Plus-only any more (2026-09-24 — Plus buys only the PDF), so
+  // No task is Planner Pro only any more (2026-09-24 — Planner Pro buys only the PDF), so
   // a bare [PLUS] label should never appear, only [FREE] and [FREE+PLUS].
   assert.doesNotMatch(text, /\[PRO\]/);
   assert.match(text, /\[FREE\]/);

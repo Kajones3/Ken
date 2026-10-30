@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   RESORTS, RESORT_BY_ID, IRS_MILEAGE_RATES, MILEAGE_RATE_CARRY_FORWARD_YEARS,
   irsMileageRate, newestMileageRateYear, mileageRateStatus,
-  isLocalRoute, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ALL_ORIGINS, compareOriginsByCity,
+  isLocalRoute, ORIGINS, EXTRA_ORIGINS, ORIGINS_BY_CITY, ALL_ORIGINS, compareOriginsByCity,
   CLIMATE, climateFor,
   type Origin,
 } from "./config.js";
@@ -228,7 +228,7 @@ test("an unknown airport is never guessed at", () => {
 test("no resort is cut off from every departure airport it has", () => {
   // The failure mode worth guarding against: a radius wide enough to strand
   // a resort, so the board shows it as permanently unavailable to everyone.
-  const airports = new Set([...ORIGINS, ...PLUS_ORIGINS].map((o) => o.iata));
+  const airports = new Set([...ORIGINS, ...EXTRA_ORIGINS].map((o) => o.iata));
   for (const resort of RESORTS) {
     for (const dest of [resort.iata, ...resort.altArrivalAirports.map((a) => a.iata)]) {
       const reachable = [...airports].filter((o) => !isLocalRoute(o, dest));
@@ -258,26 +258,26 @@ function isCityOrdered(list: readonly Origin[]): boolean {
 
 test("both airport lists are declared in city order", () => {
   assert.ok(isCityOrdered(ORIGINS), "free origins are out of city order");
-  assert.ok(isCityOrdered(PLUS_ORIGINS), "Plus origins are out of city order");
+  assert.ok(isCityOrdered(EXTRA_ORIGINS), "extra origins are out of city order");
   // The specific pair that was wrong: BWI before BOS by city, the other way
   // round by code.
   const codes = ORIGINS.map((o) => o.iata);
   assert.ok(codes.indexOf("BWI") < codes.indexOf("BOS"), "Baltimore comes before Boston");
 });
 
-test("the picker order interleaves free and Plus airports", () => {
+test("the picker order interleaves free and extra airports", () => {
   assert.ok(isCityOrdered(ORIGINS_BY_CITY));
   assert.equal(ORIGINS_BY_CITY.length, ALL_ORIGINS.length, "every airport is offered");
   assert.equal(new Set(ORIGINS_BY_CITY.map((o) => o.iata)).size, ALL_ORIGINS.length,
     "and exactly once");
 
-  // Austin is Plus and Baltimore is free; by city Austin comes first. If the
-  // list were still two blocks, every Plus airport would sit after every
+  // Austin is Planner Pro and Baltimore is free; by city Austin comes first. If the
+  // list were still two blocks, every extra airport would sit after every
   // free one and this would fail.
   const at = (iata: string) => ORIGINS_BY_CITY.findIndex((o) => o.iata === iata);
   assert.ok(at("AUS") > at("ATL") && at("AUS") < at("BWI"),
-    "Austin sits between Atlanta and Baltimore, not in a Plus block at the end");
-  assert.ok(at("TPA") < at("IAD"), "Tampa (Plus) still comes before Washington (free)");
+    "Austin sits between Atlanta and Baltimore, not in an extra block at the end");
+  assert.ok(at("TPA") < at("IAD"), "Tampa (extra) still comes before Washington (free)");
 });
 
 /**
@@ -485,13 +485,13 @@ test("the Arriving picker starts two months out and runs to ten (owner, 2026-09-
   assert.ok(!months.includes("2026-09") && !months.includes("2026-10"), "this month and next are not offered");
 });
 
-test("Plus passes are one-off, in price order, with the middle one highlighted", async () => {
-  const { PLUS_PASSES, PLUS_PASS_DEFAULT } = await import("./config.js");
-  assert.deepEqual(PLUS_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 91], [25, 274]]);
-  assert.equal(PLUS_PASSES[1]!.id, PLUS_PASS_DEFAULT);
+test("Planner Pro passes are one-off, in price order, with the middle one highlighted", async () => {
+  const { PRO_PASSES, PRO_PASS_DEFAULT } = await import("./config.js");
+  assert.deepEqual(PRO_PASSES.map((p) => [p.priceUsd, p.days]), [[9, 7], [15, 91], [25, 274]]);
+  assert.equal(PRO_PASSES[1]!.id, PRO_PASS_DEFAULT);
 });
 
-test("pass perks: the week pass gets no deal emails and 3 saved searches; hand-given Plus keeps everything", async () => {
+test("pass perks: the week pass gets no deal emails and 3 saved searches; hand-given Planner Pro keeps everything", async () => {
   const { passPerks } = await import("./config.js");
   assert.deepEqual(passPerks("week"), { dealEmails: false, savedSearches: 3 });
   assert.deepEqual(passPerks("threeMonths"), { dealEmails: true, savedSearches: 10 });

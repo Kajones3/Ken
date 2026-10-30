@@ -1,5 +1,5 @@
 /**
- * Set (or clear) an account's password. Same shape as grant-plus: a command,
+ * Set (or clear) an account's password. Same shape as grant-pro: a command,
  * not a dev-only API endpoint, and it upserts the user if they've never
  * signed in before.
  *
@@ -11,7 +11,7 @@
  * account cannot be signed into until somebody sets a password on it again.
  * That makes it the password RESET for a friend who forgot theirs: clear it,
  * and they re-claim the account through Sign up with the same address,
- * keeping their id, their saved trips and any comped Plus. Do it knowing
+ * keeping their id, their saved trips and any comped Planner Pro. Do it knowing
  * nothing verifies the address, so whoever gets there first claims it.
  *
  * Deliberately a command rather than a value written into this repo: a

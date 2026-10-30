@@ -14,7 +14,7 @@
  *    Disney hotels re-graded leave-one-out at other values (`gradeDisney`).
  *  - The free feed's weight and the typical-day trim: nothing to grade them
  *    against yet, said plainly rather than guessed.
- * Plus what the formulas learned on their own, read-only.
+ * Planner Pro what the formulas learned on their own, read-only.
  */
 import type { Db } from "./db.js";
 import { settingsMap } from "./settings.js";

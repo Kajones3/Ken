@@ -801,22 +801,22 @@ export const ORIGINS: Origin[] = [
   { iata: "IAD", name: "Washington, D.C. (Dulles)", lat: 38.94, lon: -77.46 },
 ];
 /**
- * Extra departure airports a Plus subscriber can pick, beyond the 19 free
+ * Extra departure airports a Planner Pro subscriber can pick, beyond the 19 free
  * metros above.
  *
  * Why the split exists: every origin multiplies the nightly and monthly
  * pre-caching bill, so the free list stays at the big metros most people can
  * reach. But "nearest big airport" is a real compromise — someone in Raleigh
  * is offered Charlotte, three hours away, and the fare they'd actually pay is
- * a different number. Plus removes that compromise, and it pays for itself:
- * a Plus user can buy the exact fare on their own airport.
+ * a different number. Planner Pro removes that compromise, and it pays for itself:
+ * a Planner Pro user can buy the exact fare on their own airport.
  *
  * These are NOT pre-cached the way the free 19 are. They are covered by BTS
  * (the survey includes every US airport — see btsBaseline's origin filter,
- * which now spans both lists), so a Plus user gets a real estimate on them
+ * which now spans both lists), so a Planner Pro user gets a real estimate on them
  * immediately, and can pay to check any specific date exactly.
  */
-export const PLUS_ORIGINS: Origin[] = [
+export const EXTRA_ORIGINS: Origin[] = [
   { iata: "AUS", name: "Austin", lat: 30.19, lon: -97.67 },
   { iata: "CVG", name: "Cincinnati", lat: 39.05, lon: -84.67 },
   { iata: "CLE", name: "Cleveland", lat: 41.41, lon: -81.85 },
@@ -841,8 +841,8 @@ export const PLUS_ORIGINS: Origin[] = [
   { iata: "TPA", name: "Tampa", lat: 27.98, lon: -82.53 },
 ];
 
-/** Every departure airport the app knows, free and Plus together. */
-export const ALL_ORIGINS: Origin[] = [...ORIGINS, ...PLUS_ORIGINS];
+/** Every departure airport the app knows, free and Planner Pro together. */
+export const ALL_ORIGINS: Origin[] = [...ORIGINS, ...EXTRA_ORIGINS];
 
 /**
  * The order a person should be offered airports in: by the CITY they live
@@ -854,7 +854,7 @@ export const ALL_ORIGINS: Origin[] = [...ORIGINS, ...PLUS_ORIGINS];
  * an obviously arbitrary order: it reads as a list you can scan and then
  * hides the entry you were scanning for.
  *
- * Free and Plus airports interleave here rather than sitting in two blocks.
+ * Free and extra airports interleave here rather than sitting in two blocks.
  * Somebody looking for Tampa should not first have to know which side of the
  * paywall Tampa is on; the label on the row says that.
  */
@@ -862,18 +862,18 @@ export function compareOriginsByCity(a: Origin, b: Origin): number {
   return a.name.localeCompare(b.name, "en");
 }
 
-/** Every airport, free and Plus interleaved, in picker order. Sent to the
+/** Every airport, free and Planner Pro interleaved, in picker order. Sent to the
  *  browser as a list of codes so the rule lives here and nowhere else. */
 export const ORIGINS_BY_CITY: Origin[] = [...ALL_ORIGINS].sort(compareOriginsByCity);
 
-/** Resolves any known origin. Callers that must enforce the free/Plus split
+/** Resolves any known origin. Callers that must enforce the free/Planner Pro split
  *  check membership of ORIGINS separately — this map deliberately does not,
  *  so pricing and distance math work the same for either list. */
 export const ORIGIN_BY_IATA = new Map(ALL_ORIGINS.map((o) => [o.iata, o]));
 
-/** Is this airport free for everyone, or does picking it need Plus? */
-export function originNeedsPlus(iata: string): boolean {
-  return PLUS_ORIGINS.some((o) => o.iata === iata);
+/** Is this airport free for everyone, or does picking it need Planner Pro? */
+export function originIsExtra(iata: string): boolean {
+  return EXTRA_ORIGINS.some((o) => o.iata === iata);
 }
 
 /** Every arrival airport the app prices, mapped back to the resort it serves.
@@ -1060,16 +1060,16 @@ export function plannableMonths(today: ISODate): string[] {
 }
 
 /**
- * Plus passes (owner, 2026-09-26). One-off payments that simply END — Plus
+ * Planner Pro passes (owner, 2026-09-26). One-off payments that simply END — Planner Pro
  * never renews automatically. Priced for a planning tool rather than a trip
  * companion: in the owner's words, "Once you pick your trip, the tool kinda
  * becomes useless," unlike TouringPlans, which is used through the trip
  * itself. The six-month pass covers the usual 6-9 month planning window.
  *
  * One home: the paywall renders these from /api/meta, and the "wants Plus"
- * email to the owner quotes the price and the exact grant-plus command.
+ * email to the owner quotes the price and the exact grant-pro command.
  */
-export interface PlusPass {
+export interface ProPass {
   id: string; label: string; priceUsd: number; days: number; note: string;
   /** Emails about new Disney deals (owner, 2026-10-29: "For the one week, we
    *  don't send deal emails. 3 month and 9 month do"). */
@@ -1077,7 +1077,7 @@ export interface PlusPass {
   /** How many searches it may keep saved; null = no limit. */
   savedSearches: number | null;
 }
-export const PLUS_PASSES: PlusPass[] = [
+export const PRO_PASSES: ProPass[] = [
   { id: "week", label: "1 week", priceUsd: 9, days: 7, note: "A quick look while you decide.",
     dealEmails: false, savedSearches: 3 },
   // Was "1 month" at $15 until 2026-10-29 (owner: "Change the $15/month to a
@@ -1089,16 +1089,16 @@ export const PLUS_PASSES: PlusPass[] = [
   { id: "nineMonths", label: "9 months", priceUsd: 25, days: 274, note: "Covers the whole planning window.",
     dealEmails: true, savedSearches: null },
 ];
-/** What a Plus account gets, by the pass it holds. An account given Plus by
- *  hand before passes were recorded (plus_pass null) keeps everything, as it
- *  always had (owner, 2026-10-29: leave the friends already given Plus as they
+/** What a Planner Pro account gets, by the pass it holds. An account given Planner Pro by
+ *  hand before passes were recorded (pro_pass null) keeps everything, as it
+ *  always had (owner, 2026-10-29: leave the friends already given Planner Pro as they
  *  are). An unknown id is treated the same way rather than taking anything away. */
 export function passPerks(passId: string | null | undefined): { dealEmails: boolean; savedSearches: number | null } {
-  const p = PLUS_PASSES.find((x) => x.id === passId);
+  const p = PRO_PASSES.find((x) => x.id === passId);
   return p ? { dealEmails: p.dealEmails, savedSearches: p.savedSearches } : { dealEmails: true, savedSearches: null };
 }
 /** The pass the paywall highlights — the middle one. */
-export const PLUS_PASS_DEFAULT = "threeMonths";
+export const PRO_PASS_DEFAULT = "threeMonths";
 
 /** Tiered freshness: near dates move, far dates don't. */
 export const REFRESH_TIERS = [

@@ -1,0 +1,37 @@
+name: Pricing the Magic grant Planner Pro
+
+# Manual only — comps a friend or a test account into Planner Pro against the same
+# production database refresh/alerts use (DATABASE_URL secret). This is the
+# same mechanism as running `npm run grant-pro -- email days` locally, just
+# runnable from the Actions tab without a Neon connection string on hand.
+# See src/grantPro.ts.
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: Email to give Planner Pro to
+        required: true
+        type: string
+      days:
+        description: "A pass (week, threeMonths, nineMonths) or a number of days"
+        required: false
+        type: string
+        default: "90"
+
+jobs:
+  grant-pro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci
+      # The nightly jobs migrate first; this one must too, or a grant made
+      # before Render's next deploy could write to columns that don't exist yet.
+      - run: npm run migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - run: npm run grant-pro -- "${{ inputs.email }}" "${{ inputs.days }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}

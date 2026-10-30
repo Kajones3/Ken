@@ -1,6 +1,6 @@
 /**
  * Anonymous action counts: how many comparisons were run, which resorts'
- * details were opened, which booking links were clicked and which Plus
+ * details were opened, which booking links were clicked and which Planner Pro
  * passes were picked (owner, 2026-10-02: "Build the click counter").
  *
  * The point is to measure what visitors DO rather than what they say they'd
@@ -19,7 +19,7 @@
  * recordEvent), so testing the site doesn't skew the numbers.
  */
 import type { Db } from "./db.js";
-import { RESORT_BY_ID, PLUS_PASSES } from "./config.js";
+import { RESORT_BY_ID, PRO_PASSES } from "./config.js";
 
 /** Every action that can be counted, and what its `detail` may be. */
 export const EVENT_KINDS = {
@@ -29,10 +29,10 @@ export const EVENT_KINDS = {
   detail: { resort: true, details: [""] },
   /** A booking link was clicked; `detail` is where it went. */
   book: { resort: true, details: ["flights", "tickets", "hotel_disney", "hotel_kayak", "hotel_booking"] },
-  /** The Plus paywall was shown. */
+  /** The Planner Pro paywall was shown. */
   paywall: { resort: false, details: [""] },
-  /** A Plus pass was picked in the paywall; `detail` is the pass id. */
-  plus: { resort: false, details: PLUS_PASSES.map((p) => p.id) },
+  /** A Planner Pro pass was picked in the paywall; `detail` is the pass id. */
+  pro: { resort: false, details: PRO_PASSES.map((p) => p.id) },
 } as const;
 export type EventKind = keyof typeof EVENT_KINDS;
 
@@ -46,7 +46,10 @@ export interface SiteEvent { kind: EventKind; resort: string; detail: string }
 export function parseEvent(body: unknown): SiteEvent | null {
   if (!body || typeof body !== "object") return null;
   const b = body as Record<string, unknown>;
-  const kind = String(b.kind ?? "") as EventKind;
+  // "plus" is the old name for "pro" (2026-10-30); a page loaded before the
+  // rename still sends it, so count it under the new name.
+  const raw = String(b.kind ?? "");
+  const kind = (raw === "plus" ? "pro" : raw) as EventKind;
   const spec = EVENT_KINDS[kind];
   if (!spec) return null;
   const resort = spec.resort ? String(b.resort ?? "") : "";
@@ -86,11 +89,11 @@ export interface SiteStats {
   from: string;
   to: string;
   totals: Record<EventKind, number>;
-  /** Per 100 detail views: how many booking clicks and Plus picks followed. */
-  perHundredDetails: { book: number | null; plus: number | null; paywall: number | null };
+  /** Per 100 detail views: how many booking clicks and Planner Pro picks followed. */
+  perHundredDetails: { book: number | null; pro: number | null; paywall: number | null };
   byResort: { resort: string; name: string; details: number; book: number }[];
   bookBy: { detail: string; n: number }[];
-  plusBy: { pass: string; label: string; priceUsd: number; n: number }[];
+  proBy: { pass: string; label: string; priceUsd: number; n: number }[];
   daily: ({ day: string } & Record<EventKind, number>)[];
 }
 
@@ -118,7 +121,7 @@ export async function loadStats(db: Db, days: number, today = new Date().toISOSt
   const totals = zero();
   const resorts = new Map<string, { details: number; book: number }>();
   const book = new Map<string, number>();
-  const plus = new Map<string, number>();
+  const pro = new Map<string, number>();
   const daily = new Map<string, Record<EventKind, number>>();
   for (const r of rows) {
     const n = Number(r.n);
@@ -134,7 +137,7 @@ export async function loadStats(db: Db, days: number, today = new Date().toISOSt
       resorts.set(r.resort_id, s);
     }
     if (r.kind === "book") book.set(r.detail, (book.get(r.detail) ?? 0) + n);
-    if (r.kind === "plus") plus.set(r.detail, (plus.get(r.detail) ?? 0) + n);
+    if (r.kind === "pro") pro.set(r.detail, (pro.get(r.detail) ?? 0) + n);
   }
 
   // Every day in the window, including quiet ones, newest first.
@@ -150,7 +153,7 @@ export async function loadStats(db: Db, days: number, today = new Date().toISOSt
     days, from, to: today, totals,
     perHundredDetails: {
       book: per100(totals.book, totals.detail),
-      plus: per100(totals.plus, totals.detail),
+      pro: per100(totals.pro, totals.detail),
       paywall: per100(totals.paywall, totals.detail),
     },
     byResort: [...RESORT_BY_ID.values()].map((r) => ({
@@ -159,12 +162,12 @@ export async function loadStats(db: Db, days: number, today = new Date().toISOSt
       book: resorts.get(r.id)?.book ?? 0,
     })).sort((a, b) => b.details - a.details || a.name.localeCompare(b.name)),
     bookBy: EVENT_KINDS.book.details.map((detail) => ({ detail, n: book.get(detail) ?? 0 })),
-    plusBy: [
-      ...PLUS_PASSES.map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: plus.get(p.id) ?? 0 })),
+    proBy: [
+      ...PRO_PASSES.map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: pro.get(p.id) ?? 0 })),
       // A pass we no longer sell still has its clicks; listed below the live
       // ones, only when it has any, so "1 month" picks don't silently vanish.
-      ...RETIRED_PASSES.filter((p) => (plus.get(p.id) ?? 0) > 0)
-        .map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: plus.get(p.id) ?? 0 })),
+      ...RETIRED_PASSES.filter((p) => (pro.get(p.id) ?? 0) > 0)
+        .map((p) => ({ pass: p.id, label: p.label, priceUsd: p.priceUsd, n: pro.get(p.id) ?? 0 })),
     ],
     daily: dailyRows,
   };

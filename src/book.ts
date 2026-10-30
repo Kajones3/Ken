@@ -410,7 +410,7 @@ export async function loadBook(
    * international baseline is itself built from sampled real fares, so
    * measuring those same fares against it always yields a ratio of 1.0 and
    * would report "0% adjustment" as though something had been verified. A
-   * fare bought *later* — a Plus user checking an exact date — is genuine new
+   * fare bought *later* — a Planner Pro user checking an exact date — is genuine new
    * evidence, and does correct it.
    */
   const observedSince = (key: string, since: Date | null) => {

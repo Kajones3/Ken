@@ -11,11 +11,11 @@ const c = (userId: string, dropPct: number): Candidate => ({
 });
 const quiet: EmailSender = { name: "unused", async send() {} };
 
-async function member(db: Db, email: string, opts: { plus?: string | null; verified?: boolean; created?: string } = {}) {
+async function member(db: Db, email: string, opts: { pro?: string | null; verified?: boolean; created?: string } = {}) {
   const id = randomUUID();
   await db.query(
-    `insert into users (id, email, plus_until, email_verified_at, created_at) values ($1,$2,$3,$4,$5)`,
-    [id, email, opts.plus === undefined ? "2099-01-01" : opts.plus,
+    `insert into users (id, email, pro_until, email_verified_at, created_at) values ($1,$2,$3,$4,$5)`,
+    [id, email, opts.pro === undefined ? "2099-01-01" : opts.pro,
      opts.verified === false ? null : new Date(), opts.created ?? "2024-01-01T00:00:00Z"]);
   return id;
 }
@@ -39,9 +39,9 @@ test("the anomaly rail still refuses a batch where everything moved wildly", () 
   assert.equal(suppressAnomalies([c("u1", 0)], 1).keep.length, 1, "a deal email (0% move) always passes");
 });
 
-test("a Plus member hears about a new deal once — no saved trip needed", async () => {
+test("a Planner Pro member hears about a new deal once — no saved trip needed", async () => {
   const db = await memoryDb();
-  await member(db, "plus@example.com");
+  await member(db, "pro@example.com");
   await promo(db, "Summer room discount");
 
   const first = await runAlerts(db, { sender: quiet });
@@ -54,17 +54,17 @@ test("a Plus member hears about a new deal once — no saved trip needed", async
   await db.close();
 });
 
-test("deal emails are Plus-only: a free or lapsed account gets none", async () => {
+test("deal emails are Planner Pro only: a free or lapsed account gets none", async () => {
   const db = await memoryDb();
-  await member(db, "free@example.com", { plus: null });
-  await member(db, "lapsed@example.com", { plus: "2020-01-01" });
+  await member(db, "free@example.com", { pro: null });
+  await member(db, "lapsed@example.com", { pro: "2020-01-01" });
   await promo(db, "Room discount");
   assert.equal((await findAlerts(db)).checked, 0);
   assert.equal((await runAlerts(db, { sender: quiet })).fired, 0);
   await db.close();
 });
 
-test("an unconfirmed email address gets nothing, even with real Plus", async () => {
+test("an unconfirmed email address gets nothing, even with real Planner Pro", async () => {
   const db = await memoryDb();
   await member(db, "unconfirmed@example.com", { verified: false });
   await promo(db, "Room discount");
@@ -115,7 +115,7 @@ test("a failed send leaves the alert for next run to retry — it is not lost", 
 test("every deal email carries a working unsubscribe link, and using it stops the next one", async () => {
   const { setDealEmailsByToken } = await import("../dealEmails.js");
   const db = await memoryDb();
-  await member(db, "plus@example.com");
+  await member(db, "pro@example.com");
   await promo(db, "Summer room discount");
   const sent: EmailMessage[] = [];
   const capture: EmailSender = { name: "capture", async send(m) { sent.push(m); } };
@@ -125,7 +125,7 @@ test("every deal email carries a working unsubscribe link, and using it stops th
   const token = /unsubscribe\?t=([0-9a-f]+)/.exec(sent[0]!.text)?.[1];
   assert.ok(token, "the email names its own unsubscribe link");
 
-  assert.equal(await setDealEmailsByToken(db, token!, false), "plus@example.com");
+  assert.equal(await setDealEmailsByToken(db, token!, false), "pro@example.com");
   await promo(db, "Another deal", new Date().toISOString());
   const after = await runAlerts(db, { sender: capture });
   assert.equal(after.fired, 0, "stopping means stopping");
@@ -140,7 +140,7 @@ test("every deal email carries a working unsubscribe link, and using it stops th
 test("a deal queued before someone unsubscribed is not retried after", async () => {
   const { setDealEmailsForUser } = await import("../dealEmails.js");
   const db = await memoryDb();
-  const id = await member(db, "plus@example.com");
+  const id = await member(db, "pro@example.com");
   await promo(db, "Summer room discount");
   const failing: EmailSender = { name: "down", async send() { throw new Error("provider down"); } };
   assert.equal((await runAlerts(db, { sender: failing })).sent, 0, "queued, unsent");
@@ -156,7 +156,7 @@ test("a deal queued before someone unsubscribed is not retried after", async () 
 test("the same person always gets the same link, and a made-up token changes nothing", async () => {
   const { unsubscribeToken, setDealEmailsByToken, dealEmailsOn } = await import("../dealEmails.js");
   const db = await memoryDb();
-  const id = await member(db, "plus@example.com");
+  const id = await member(db, "pro@example.com");
   const a = await unsubscribeToken(db, id);
   assert.equal(await unsubscribeToken(db, id), a, "an old email's link must keep working");
   assert.equal(await setDealEmailsByToken(db, "0".repeat(48), false), null);
@@ -167,7 +167,7 @@ test("the same person always gets the same link, and a made-up token changes not
 
 test("a real send is refused, and stays queued, when the unsubscribe link would be broken", async () => {
   const db = await memoryDb();
-  await member(db, "plus@example.com");
+  await member(db, "pro@example.com");
   await promo(db, "Summer room discount");
   const saved = process.env.PUBLIC_BASE_URL;
   delete process.env.PUBLIC_BASE_URL;
@@ -188,12 +188,12 @@ test("a real send is refused, and stays queued, when the unsubscribe link would 
   await db.close();
 });
 
-test("deal emails go to the 3- and 9-month passes and hand-given Plus, never the one-week pass", async () => {
+test("deal emails go to the 3- and 9-month passes and hand-given Planner Pro, never the one-week pass", async () => {
   const db = await memoryDb();
   for (const [email, pass] of [["week@example.com", "week"], ["three@example.com", "threeMonths"],
     ["nine@example.com", "nineMonths"], ["hand@example.com", null]] as const) {
     const id = await member(db, email);
-    await db.query(`update users set plus_pass = $2 where id = $1`, [id, pass]);
+    await db.query(`update users set pro_pass = $2 where id = $1`, [id, pass]);
   }
   await promo(db, "Room discount");
   const { candidates } = await findAlerts(db);

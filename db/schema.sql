@@ -46,7 +46,7 @@ create table if not exists ticket_prices (
 
 -- No official Disney promo API — fan sites and memory are the only source,
 -- and nothing here is guaranteed to repeat. Hand-maintained by the owner,
--- same precedent as ticket_prices. Plus-only to apply; free to browse.
+-- same precedent as ticket_prices. Planner Pro only to apply; free to browse.
 create table if not exists promos (
   id            uuid primary key,
   resort_id     text,                 -- null = applies to all resorts
@@ -161,8 +161,8 @@ create index if not exists price_alerts_trip on price_alerts (trip_id, fired_at 
 alter table price_alerts drop constraint if exists price_alerts_kind_check;
 alter table price_alerts add constraint price_alerts_kind_check
   check (kind in ('total_drop','crossed_your_number','gas_price_change','new_promo'));
--- 2026-09-25: price-drop monitoring was removed (owner's call — the Plus
--- trip price calendar replaces it) and the one alert left is a Plus member's
+-- 2026-09-25: price-drop monitoring was removed (owner's call — the Planner Pro
+-- trip price calendar replaces it) and the one alert left is a Planner Pro member's
 -- "new Disney deal" email. That goes to a MEMBER, not to a saved trip, so a
 -- row now names its user and a trip is optional. Old rows keep their trip_id;
 -- the retry path reads the user through either.
@@ -338,7 +338,7 @@ create index if not exists flight_prices_source on flight_prices (source);
 -- neither cap can be bypassed by the other being fine.
 --
 -- Deliberately only a counter — no route, no date, no trip contents. What a
--- Plus user looked up is their business; all this needs to know is how many.
+-- Planner Pro user looked up is their business; all this needs to know is how many.
 create table if not exists exact_fare_usage (
   user_id   text        not null,       -- a users.id, or the literal 'global'
   day       date        not null,
@@ -370,7 +370,7 @@ create index if not exists flight_prices_fetched_at on flight_prices (fetched_at
 -- Profile: things a signed-in traveller tells us about themselves, as opposed
 -- to things they tell us about one trip.
 --
--- Free, deliberately. An account is free, saving a trip is Plus, and
+-- Free, deliberately. An account is free, saving a trip is Planner Pro, and
 -- remembering which airport you fly out of is neither — it is a convenience
 -- that costs nothing to serve, and paywalling it would be the "no search
 -- quota" mistake wearing a different hat.
@@ -385,9 +385,9 @@ create index if not exists flight_prices_fetched_at on flight_prices (fetched_at
 -- entitlement living in the same row as free-form taste data gets muddy fast.
 alter table users add column if not exists home_airport text;
 
--- Which attractions a traveller says they care about. Plus-only to SET (the
+-- Which attractions a traveller says they care about. Planner Pro only to SET (the
 -- personalisation is the feature); the ATTRACTIONS list itself is public,
--- exactly as a curated promo is public to browse but Plus to apply.
+-- exactly as a curated promo is public to browse but Planner Pro to apply.
 --
 -- Its own table rather than a column on users: it is a list, and the profile
 -- had already reached the "move it out before it gets muddy" point flagged
@@ -698,7 +698,7 @@ update price_checks
 
 -- Anonymous action counts (2026-10-02, src/siteEvents.ts): how many
 -- comparisons were run, which resorts' details were opened, which booking
--- links were clicked and which Plus passes were picked. One row per day +
+-- links were clicked and which Planner Pro passes were picked. One row per day +
 -- action + resort + detail, holding only a number. Deliberately NO user,
 -- session, cookie or IP column: this counts actions, never people.
 create table if not exists event_counts (
@@ -1009,9 +1009,32 @@ create table if not exists owner_mileage_rates (
   updated_at  timestamptz  not null default now()
 );
 
--- Which Plus pass an account holds (owner, 2026-10-29: tiers differ in deal
--- emails and saved searches). Null = Plus given by hand before passes were
+-- Which Planner Pro pass an account holds (owner, 2026-10-29: tiers differ in deal
+-- emails and saved searches). Null = Planner Pro given by hand before passes were
 -- recorded, which keeps every perk. plus_reminder_for = the plus_until a
 -- "your Plus ends soon" email was already sent for, so it goes once per pass.
 alter table users add column if not exists plus_pass text;
 alter table users add column if not exists plus_reminder_for date;
+
+-- "Plus" became "Planner Pro" (owner, 2026-10-30). Step 1 of 2: the new
+-- columns sit next to the old ones. Code reads pro_* and writes BOTH, so a
+-- server still running the old code (Render before its redeploy) keeps
+-- reading correct plus_* values. The copy only fills pro_* where it is empty,
+-- so it is safe to run on every migrate. Step 2, later, once Render and the
+-- nightly jobs all run the new code: drop plus_until, plus_pass and
+-- plus_reminder_for.
+alter table users add column if not exists pro_until date;
+alter table users add column if not exists pro_pass text;
+alter table users add column if not exists pro_reminder_for date;
+update users set pro_until = plus_until where pro_until is null and plus_until is not null;
+update users set pro_pass = plus_pass where pro_pass is null and plus_pass is not null;
+update users set pro_reminder_for = plus_reminder_for where pro_reminder_for is null and plus_reminder_for is not null;
+
+-- Visitor counts: the "picked a pass" action was stored as 'plus'; it is
+-- 'pro' now. Fold any 'plus' rows into 'pro' (adding to a row already
+-- there), then remove them. Runs on every migrate, so clicks an old page
+-- still sends as 'plus' before the redeploy get folded in too.
+insert into event_counts (day, kind, resort_id, detail, n)
+  select day, 'pro', resort_id, detail, n from event_counts where kind = 'plus'
+  on conflict (day, kind, resort_id, detail) do update set n = event_counts.n + excluded.n;
+delete from event_counts where kind = 'plus';

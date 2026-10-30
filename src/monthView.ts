@@ -1,6 +1,6 @@
 /**
  * "Best months to go": one typical whole-trip total per plannable month, per
- * resort. Plus (owner, 2026-10-08), replacing the day-by-day trip price
+ * resort. Planner Pro (owner, 2026-10-08), replacing the day-by-day trip price
  * calendar.
  *
  * Why months and not days: a flight estimate is one number per route per

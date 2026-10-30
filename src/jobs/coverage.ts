@@ -529,11 +529,11 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     `select origin, sum(searches) as n from search_days group by 1`,
   ).catch(() => ({ rows: [] as { origin: string; n: string }[] }));
   const searchesBy = new Map(searched.rows.map((r) => [r.origin, Number(r.n)]));
-  const { ORIGINS: FREE, PLUS_ORIGINS: PLUS } = await import("../config.js");
+  const { ORIGINS: FREE, EXTRA_ORIGINS: PLUS } = await import("../config.js");
   const intlDests = ["CDG", "NRT", "HND", "PVG", "HKG"];
   out.push("## Fares bought, by home airport (all paid fares in the record)");
   out.push("  airport  list  US  intl  CDG NRT HND PVG HKG  searches");
-  for (const o of [...FREE.map((x) => ({ ...x, list: "free" })), ...PLUS.map((x) => ({ ...x, list: "plus" }))]) {
+  for (const o of [...FREE.map((x) => ({ ...x, list: "free" })), ...PLUS.map((x) => ({ ...x, list: "extra" }))]) {
     const rows = byOrigin.rows.filter((r) => r.origin === o.iata);
     const n = (d: string) => Number(rows.find((r) => r.destination === d)?.n ?? 0);
     const intl = intlDests.reduce((s, d) => s + n(d), 0);

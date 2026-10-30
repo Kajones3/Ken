@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  hashPassword, verifyPassword, hasPassword, isPlus, setHomeAirport, currentUser,
+  hashPassword, verifyPassword, hasPassword, isPro, setHomeAirport, currentUser,
   signUp, signIn, AuthError, MIN_PASSWORD_LENGTH,
   createSession, sessionCookieHeader,
 } from "./auth.js";
@@ -77,19 +77,19 @@ test("set-password stores a hash, and --clear returns the account to email-only"
   await db.close();
 });
 
-test("setting a password does not disturb the account's Plus status", async () => {
+test("setting a password does not disturb the account's Planner Pro status", async () => {
   const db = await memoryDb();
   await db.query(
-    `insert into users (id, email, plus_until) values (gen_random_uuid(), $1, $2)`,
+    `insert into users (id, email, pro_until) values (gen_random_uuid(), $1, $2)`,
     ["owner@example.com", "2099-01-01"],
   );
   await setPassword(db, "owner@example.com", "letmein");
 
-  const { rows } = await db.query<{ plus_until: unknown }>(
-    `select plus_until from users where email = $1`, ["owner@example.com"],
+  const { rows } = await db.query<{ pro_until: unknown }>(
+    `select pro_until from users where email = $1`, ["owner@example.com"],
   );
-  assert.ok(rows[0]!.plus_until, "a password change must never cost someone their Plus");
-  assert.equal(isPlus("2099-01-01"), true);
+  assert.ok(rows[0]!.pro_until, "a password change must never cost someone their Planner Pro");
+  assert.equal(isPro("2099-01-01"), true);
 
   await db.close();
 });
@@ -160,10 +160,10 @@ test("a home airport can be cleared again", async () => {
 });
 
 test("a free account can save one of the 22 smaller airports (2026-09-24 launch decision)", async () => {
-  // The Plus/free airport split used to gate which one you could KEEP —
-  // reversed at launch, when Plus stopped being anything but the PDF. A
+  // The Planner Pro/free airport split used to gate which one you could KEEP —
+  // reversed at launch, when Planner Pro stopped being anything but the PDF. A
   // free account saves RDU exactly as it would save any other airport, and
-  // nothing about the write depends on plus_until any more.
+  // nothing about the write depends on pro_until any more.
   const db = await memoryDb();
   const id = await makeUser(db);
   assert.equal(await setHomeAirport(db, id, "RDU"), "RDU");
@@ -171,14 +171,14 @@ test("a free account can save one of the 22 smaller airports (2026-09-24 launch 
   await db.close();
 });
 
-test("Plus lapsing does not touch a saved home airport", async () => {
+test("Planner Pro lapsing does not touch a saved home airport", async () => {
   const db = await memoryDb();
   const id = await makeUser(db);
-  await db.query(`update users set plus_until = $2 where id = $1`, [id, "2099-01-01"]);
+  await db.query(`update users set pro_until = $2 where id = $1`, [id, "2099-01-01"]);
   await setHomeAirport(db, id, "RDU");
-  // Plus lapses...
-  await db.query(`update users set plus_until = $2 where id = $1`, [id, "2020-01-01"]);
-  // ...and the same call still works, since it never depended on Plus.
+  // Planner Pro lapses...
+  await db.query(`update users set pro_until = $2 where id = $1`, [id, "2020-01-01"]);
+  // ...and the same call still works, since it never depended on Planner Pro.
   assert.equal(await setHomeAirport(db, id, "SJC"), "SJC");
   await db.close();
 });
@@ -277,21 +277,21 @@ test("an unknown email and a wrong password are indistinguishable", async () => 
   await db.close();
 });
 
-test("a legacy account with no password can be claimed, keeping its Plus and its id", async () => {
+test("a legacy account with no password can be claimed, keeping its Planner Pro and its id", async () => {
   // The migration the opt-in scheme was waiting for. Bricking these would
   // lock out every comped friend at once, which is exactly what the old
   // design existed to avoid.
   const db = await memoryDb();
   const id = randomUUID();
   await db.query(
-    `insert into users (id, email, plus_until) values ($1,'legacy@example.test','2099-01-01')`, [id],
+    `insert into users (id, email, pro_until) values ($1,'legacy@example.test','2099-01-01')`, [id],
   );
   await assert.rejects(() => signIn(db, "legacy@example.test", "anything"),
     (e: AuthError) => e.reason === "bad_credentials", "no password set means no way in yet");
 
   const claimed = await signUp(db, "legacy@example.test", "correcthorse");
   assert.equal(claimed.id, id, "the same account, not a new one");
-  assert.equal(claimed.plusUntil, "2099-01-01", "comped Plus survives the claim");
+  assert.equal(claimed.proUntil, "2099-01-01", "comped Planner Pro survives the claim");
   assert.equal((await signIn(db, "legacy@example.test", "correcthorse")).id, id);
   await db.close();
 });

@@ -119,6 +119,35 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-30, last — "Plus" renamed to Planner Pro in the CODE too (newest)
+
+Owner: "there are no real members so go ahead" (code names + click counts),
+and for the database "add the new name next to the old".
+- **Code:** `isPro`, `PRO_PASSES`, `PRO_PASS_DEFAULT`, `ProPass`, `proUntil`,
+  `proPass`, `/api/auth/me` sends `pro`/`proUntil`/`proPass`, `pro_required`,
+  `/api/pro/request`, `proPitch`/`PRO_PITCH`, `renderProPlans`, `#proPlans`,
+  `.prochip`, `src/grantPro.ts` (`npm run grant-pro`; `grant-plus` kept as an
+  alias), `src/proReminder.ts`, TaskSide `"pro"`, event kind `"pro"`. The
+  extra airports were `PLUS_ORIGINS`: now `EXTRA_ORIGINS` / `originIsExtra()`
+  / meta `extraOrigins` (they are no longer a paid tier). Comments and test
+  names say Planner Pro; quoted owner words, "Half Board Plus" (Paris meal
+  plan), "Best Western Plus" and `&plusmn;` were left alone on purpose.
+- **Database, STEP 1 of 2 (done):** new `users.pro_until`, `pro_pass`,
+  `pro_reminder_for` beside the old `plus_*` columns; schema.sql copies old
+  into new where new is empty (every migrate). Code READS `pro_*` and WRITES
+  BOTH (`grantPro`, `proReminder`), so a server still on the old code reads
+  correct `plus_*`. **STEP 2 (not done, do it later):** once Render has been
+  redeployed on this code AND the nightly jobs have run it, drop
+  `plus_until`, `plus_pass`, `plus_reminder_for` and the "write both" lines.
+  Tests: `src/proRename.test.ts`.
+- **Click counts:** `event_counts` kind `plus` is folded into `pro` on every
+  migrate (adds to an existing row, then deletes); `parseEvent` also accepts
+  an old page's `"plus"` as `"pro"`.
+- **Grant workflow** is now "Pricing the Magic grant Planner Pro"
+  (`grant-pro.yml`); it runs `npm run migrate` first and takes a pass name
+  (`week`, `threeMonths`, `nineMonths`) or a number of days.
+- 895 tests, typecheck clean, smoke OK.
+
 ## 2026-10-30, later — sign-in box closes; phone chips; one plans table; Planner (free) and Planner Pro (paid)
 
 - **Sign-in box stayed open on desktop** (owner screenshot: signed in, Admin
