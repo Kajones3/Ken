@@ -1728,3 +1728,12 @@ export const SUGGESTED_PARK_DAYS: Record<string, { days: number; why: string; sh
   shdr: { days: 2, short: "one park each", why: "one park, and two days is enough to see it at an easy pace" },
 };
 export const suggestedParkDaysKey = (resortId: string) => `tickets.${resortId}.suggestedDays`;
+
+/** The "not affiliated with Disney" line (owner, 2026-10-30; docs/legal asks
+ *  for it before launch). One wording: the page footer, the PDF and every
+ *  email to travelers use this exact text (not the coming-soon page, which
+ *  never mentions Disney on purpose; siteGate.test.ts pins that). The page keeps its
+ *  own copy (prototype.html `DISNEY_DISCLAIMER`); config.test.ts pins that the
+ *  two match. */
+export const DISNEY_DISCLAIMER =
+  "Pricing the Magic is an independent trip-planning site. It is not affiliated with, endorsed by or sponsored by The Walt Disney Company or any company that runs a Disney park. Disney names are trademarks of their owners.";

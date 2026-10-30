@@ -39,6 +39,7 @@ import { randomBytes } from "node:crypto";
 import type { Db } from "./db.js";
 import type { EmailSender } from "./email/types.js";
 import type { EmailMessage } from "./email/types.js";
+import { DISNEY_DISCLAIMER } from "./config.js";
 
 /** How long a link is good for. Long enough to survive a spam folder and a
  *  night's sleep, short enough that an old forwarded email is not a key. */
@@ -75,6 +76,8 @@ export function buildVerifyEmail(to: string, url: string): EmailMessage {
       "If this wasn't you, you can ignore this — nothing will be sent to this address unless it's confirmed.",
       "",
       "— Pricing the Magic",
+      "",
+      DISNEY_DISCLAIMER,
     ].join("\n"),
   };
 }

@@ -37,10 +37,11 @@ These are claims the drafts make that the code doesn't back yet:
 - ~~**An unsubscribe link in deal emails.**~~ **Done 2026-09-26** — every
   deal email has a "Stop these emails" link plus Gmail's one-click header,
   and the account panel has an on/off switch.
-- **A way to delete your account.** Right now it's "email us" and Claude
-  deletes it by hand — acceptable at launch, but the policy says so.
-- **A "not affiliated with Disney" line on the site itself**, not just in
-  the terms. There is none today. Recommended in the footer of every page
-  and on the PDF.
+- ~~**A way to delete your account.**~~ **Done 2026-10-30** — "Delete my
+  account" in the account panel (password asked again); one row takes all of
+  the person's data with it (`deleteAccount()` in src/auth.ts).
+- ~~**A "not affiliated with Disney" line on the site itself.**~~ **Done
+  2026-10-30** — the page footer, the PDF and every email to travelers
+  (not the coming-soon page, which on purpose never mentions Disney) (`DISNEY_DISCLAIMER` in src/config.ts).
 - **Affiliate disclosure near the links**, once any link carries an
   affiliate tag (the FTC wants it near the link, not only in the terms).

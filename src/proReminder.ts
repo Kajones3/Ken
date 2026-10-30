@@ -8,7 +8,7 @@
  */
 import type { Db } from "./db.js";
 import type { EmailMessage, EmailSender } from "./email/types.js";
-import { PRO_PASSES } from "./config.js";
+import { PRO_PASSES, DISNEY_DISCLAIMER } from "./config.js";
 import { dateStr } from "./book.js";
 import { addDaysISO, todayISO, type ISODate } from "./dates.js";
 
@@ -37,6 +37,8 @@ export function buildProReminder(to: string, passId: string | null, proUntil: IS
       `To keep saving searches and planning with Planner Pro, pick a new pass at ${base || "pricingthemagic.com"}.`,
       "",
       "Pricing the Magic",
+      "",
+      DISNEY_DISCLAIMER,
     ].join("\n"),
   };
 }

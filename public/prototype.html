@@ -197,6 +197,13 @@ a{color:var(--ink)}
   white-space:nowrap;
 }
 .chip.pro{background:var(--accent-bg); border-color:var(--accent-line); color:var(--accent)}
+.sitefoot{margin:56px 0 0; padding:18px 0 28px; border-top:1px solid var(--rule); font-size:12px; color:var(--muted); text-align:center}
+.sitefoot p{margin:0 auto; max-width:640px}
+.pfine{margin-top:24pt; font-size:8.5pt; color:#555}
+.btn-danger{border-color:var(--over, #B3261E); color:var(--over, #B3261E)}
+.acctdelete{margin:18px 0 0; border-top:1px solid var(--rule); padding-top:12px; font-size:13px; color:var(--ink-2)}
+.acctdelete summary{cursor:pointer; color:var(--over, #B3261E); font-weight:600}
+.acctdelete p{margin:8px 0}
 .btn{border:1.5px solid var(--ink); background:var(--surface); color:var(--ink); border-radius:999px; padding:8px 16px; font-weight:600; font-size:13.5px; text-decoration:none}
 .btn:hover{background:var(--surface-2)}
 .btn-primary{background:var(--ink); color:var(--on-ink); border:1.5px solid var(--ink); border-radius:999px; padding:12px 26px; font-family:var(--f-head); font-weight:800; font-size:17px; letter-spacing:-.01em; display:inline-flex; align-items:center; gap:9px}
@@ -1884,6 +1891,10 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     </div>
   </section>
 
+  <!-- "Not affiliated with Disney" (owner, 2026-10-30). Same words as
+       DISNEY_DISCLAIMER in src/config.ts, which the emails use; config.test.ts pins that they match. -->
+  <footer class="sitefoot"><p>Pricing the Magic is an independent trip-planning site. It is not affiliated with, endorsed by or sponsored by The Walt Disney Company or any company that runs a Disney park. Disney names are trademarks of their owners.</p></footer>
+
 </div>
 
 <!-- ===================== the shared document =====================
@@ -2055,6 +2066,20 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
           <small id="attrPickNote" style="color:var(--muted); font-size:12px"></small>
         </div>
         <p style="color:var(--muted); font-size:12.5px; margin:14px 0 0" id="acctHint"></p>
+        <!-- "Delete my account" (owner, 2026-10-30). Folded away so nobody
+             trips over it, and the password is asked again before anything
+             goes (deleteAccount in src/auth.ts). -->
+        <details class="acctdelete" id="acctDelete">
+          <summary>Delete my account</summary>
+          <p>This deletes your account for good: your saved searches and their extra costs, your home airport and
+          picks, and every email from us stops. Any Planner Pro time left ends with it. It can't be undone.</p>
+          <div class="authfield">
+            <label for="deletePassword">Type your password to confirm</label>
+            <input type="password" id="deletePassword" autocomplete="current-password">
+          </div>
+          <button type="button" class="btn btn-danger" id="deleteBtn">Delete my account forever</button>
+          <small id="deleteMsg" class="downgrade" hidden></small>
+        </details>
       </div>
     </div>
 
@@ -2194,6 +2219,8 @@ function foodDayLine(fd){
 const $ = s => document.querySelector(s);
 const pad = n => String(n).padStart(2,"0");
 const usd = n => "$"+Math.round(n).toLocaleString("en-US");
+/** Same words as DISNEY_DISCLAIMER in src/config.ts (config.test.ts pins it). */
+const DISNEY_DISCLAIMER = "Pricing the Magic is an independent trip-planning site. It is not affiliated with, endorsed by or sponsored by The Walt Disney Company or any company that runs a Disney park. Disney names are trademarks of their owners.";
 /* What the flight number is, in one sentence (owner, 2026-10-15). */
 function flightBasisLine(pick){
   const c = pick && pick.cheapest;
@@ -4844,6 +4871,7 @@ function openAuth(mode){
       : "Comparing all six resorts and live fare checks are free. Planner Pro adds the best months to go, a budget page (how to pay for it, what fits your budget, what would save the most, and your passes and DVC points), saved searches, the shareable PDF and emails about the latest Disney deals.";
     fillHomeAirportOptions();
     $("#homeAirportSaved").hidden = true;
+    $("#acctDelete").open = false; $("#deletePassword").value = ""; $("#deleteMsg").hidden = true; $("#deleteBtn").disabled = false;
     loadAttractions().then(renderAttractionPicker);
   } else {
     syncAuthMode();
@@ -4860,6 +4888,32 @@ $("#signinTop").addEventListener("click", ()=>openAuth("signin"));
 $("#accountTop").addEventListener("click", ()=>openAuth());
 $("#closeAuth").addEventListener("click", closeAuth);
 $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
+$("#deleteBtn").addEventListener("click", async ()=>{
+  const msg = $("#deleteMsg"), btn = $("#deleteBtn");
+  const password = $("#deletePassword").value;
+  msg.hidden = false;
+  if(!password){ msg.textContent = "Type your password first."; return; }
+  btn.disabled = true;
+  msg.textContent = "Deleting…";
+  let res, body = {};
+  try {
+    res = await fetch("/api/auth/delete", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({ password }) });
+    body = await res.json().catch(()=>({}));
+  } catch {
+    btn.disabled = false;
+    msg.textContent = "Couldn't reach the server, so nothing was deleted. Try again in a moment.";
+    return;
+  }
+  if(!res.ok){
+    btn.disabled = false;
+    msg.textContent = body.message || "Nothing was deleted. Try again in a moment.";
+    return;
+  }
+  $("#deletePassword").value = "";
+  msg.textContent = "Your account is deleted. Taking you back to the start…";
+  // Start over signed out, from the default form (same as signing out).
+  setTimeout(() => { location.href = location.pathname; }, 1800);
+});
 $("#authCompare").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
@@ -6279,7 +6333,7 @@ function buildPrintDoc(){
       <h1>The trip PDF is part of Planner Pro</h1>
       <p>With Planner Pro, this page becomes a written plan for your trip: a cover for the resort you pick, what every
       part costs, the booking links, and how the other resorts compare. Get Planner Pro at pricingthemagic.com.</p>
-    </section>`;
+    </section><p class="pfine">${esc(DISNEY_DISCLAIMER)}</p>`;
     return;
   }
 
@@ -6302,7 +6356,8 @@ function buildPrintDoc(){
 
   doc.innerHTML = coverHtml(leadFirst[0], chosen)
     + leadFirst.map(item =>
-        resortSectionHtml(item, rankOf.get(item.resortId), lead && item.resortId === lead.resortId)).join("");
+        resortSectionHtml(item, rankOf.get(item.resortId), lead && item.resortId === lead.resortId)).join("")
+    + `<p class="pfine">${esc(DISNEY_DISCLAIMER)}</p>`;
 }
 
 /* ------------------------------ the picker ------------------------------ */

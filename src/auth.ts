@@ -228,6 +228,31 @@ export class AuthError extends Error {
   ) { super(message); }
 }
 
+/**
+ * "Delete my account" (owner, 2026-10-30; the privacy draft promises it).
+ * The password is asked again so a borrowed, signed-in laptop can't erase
+ * someone's account. One row in `users` takes everything that belongs to
+ * the person with it (sessions, saved searches and their extra costs, deal
+ * emails, attraction picks, verify and reset links: all `on delete cascade`).
+ * Two tables hold the person by email or id WITHOUT a foreign key, so they
+ * are cleared here: the exact-fare counter and the sign-in lockout.
+ * Anonymous counts (event_counts, route_searches, search_days) hold no
+ * person and stay.
+ */
+export async function deleteAccount(db: Db, userId: string, password: string): Promise<{ email: string }> {
+  const { rows } = await db.query<{ email: string; password_hash: string | null }>(
+    `select email, password_hash from users where id = $1`, [userId]);
+  const row = rows[0];
+  if (!row) throw new AuthError("That account is already gone.", "bad_credentials");
+  if (!(await verifyPassword(String(password ?? ""), row.password_hash))) {
+    throw new AuthError("That password isn't right, so nothing was deleted.", "bad_credentials");
+  }
+  await db.query(`delete from exact_fare_usage where user_id = $1`, [userId]);
+  await db.query(`delete from signin_attempts where scope = $1`, [`email|${row.email}`]);
+  await db.query(`delete from users where id = $1`, [userId]);
+  return { email: row.email };
+}
+
 function cleanEmail(raw: unknown): string {
   const email = String(raw ?? "").trim().toLowerCase();
   if (!email || !email.includes("@")) {
