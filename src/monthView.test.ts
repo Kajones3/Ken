@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
 import { typicalIn, resortById, type HotelNight, type TripParams } from "./pricing.js";
-import { monthLevels, quoteMonths } from "./monthView.js";
+import { bestMonthOf, monthLevels, quoteMonths } from "./monthView.js";
 import { monthBounds, range } from "./dates.js";
 
 const NIGHT: HotelNight = { hotelId: "m", name: "Moderate lodge", descriptor: "", nightly: 100, tier: "moderate" as never, onProperty: true };
@@ -61,4 +61,18 @@ test("levels are measured against the resort's own middle month, with a 5% band"
   assert.deepEqual(monthLevels([1000, 1040, 960, 1200, 800, null]),
     ["typical", "typical", "typical", "pricier", "cheaper", null]);
   assert.deepEqual(monthLevels([null, null]), [null, null]);
+});
+
+test("best time to go: the cheapest month, saving rounded down, only past $200 and 5%", () => {
+  const q = (month: string, total: number | null) => ({ month, total, cheapest: total, level: null });
+  const months = [q("2027-01", 7_920), q("2027-03", 9_550), q("2027-06", 9_100), q("2027-08", null)];
+  assert.deepEqual(bestMonthOf(months, "2027-03"), { month: "2027-01", total: 7_920, saving: 1_600 });
+  // The searched month is the cheapest: say so.
+  assert.deepEqual(bestMonthOf(months, "2027-01"), { already: true });
+  // Cheaper, but under 5% of the trip ($9,550 vs $9,100 is $450 < $477): not worth a line.
+  assert.deepEqual(bestMonthOf([q("2027-03", 9_550), q("2027-06", 9_100)], "2027-03"), { already: true });
+  // Under $200 on a small trip, even past 5%.
+  assert.deepEqual(bestMonthOf([q("2027-03", 2_000), q("2027-06", 1_850)], "2027-03"), { already: true });
+  // No price for the searched month: nothing honest to compare with.
+  assert.equal(bestMonthOf(months, "2027-08"), null);
 });

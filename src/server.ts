@@ -34,7 +34,7 @@ import { loadParkRatings, saveParkRatings, ratingOrder } from "./parkRatings.js"
 import { checkIrsMileage, saveMileageRate, listMileageRates } from "./mileageRates.js";
 import { loadManualWork } from "./manualWork.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
-import { quoteMonths } from "./monthView.js";
+import { bestMonthOf, quoteMonths, type MonthQuote } from "./monthView.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
 import { setDealEmailsByToken, setDealEmailsForUser, dealEmailsOn } from "./dealEmails.js";
 import { getDb, type Db } from "./db.js";
@@ -567,6 +567,40 @@ async function fits(q0: URLSearchParams, user: SessionUser | null) {
     if (ms.some((x) => x.month === month && x.total! <= budget)) thisMonth++;
   }
   return { budget, month, priced, thisMonth, someMonth };
+}
+
+/**
+ * "Best time to go" on each trip card (owner, 2026-10-30): each resort's
+ * cheapest plannable month against the month searched, priced like the Plus
+ * month tiles (monthsFor) so the two can't disagree. A free account sees the
+ * month and its total; a guest sees only how much less ("up to $1,600 less at
+ * another time of year") and only for the two resorts a guest is shown
+ * (lockForGuests on the searched month's totals), so neither the month nor a
+ * locked resort is one "view source" away.
+ */
+async function bestMonths(q0: URLSearchParams, user: SessionUser | null) {
+  const q = user ? q0 : guestQuery(q0);
+  const month = q.get("month") ?? "";
+  const quotes = new Map<string, MonthQuote[]>();
+  for (const r of RESORTS) {
+    const m = await monthsFor(q, user, r.id);
+    if (!("error" in m)) quotes.set(r.id, m.months);
+  }
+  let ids = RESORTS.map((r) => r.id);
+  if (!user) {
+    const rows = RESORTS.map((r) => {
+      const cur = quotes.get(r.id)?.find((x) => x.month === month && x.total !== null);
+      return { resortId: r.id, name: r.name, iata: r.iata, ok: !!cur, ...(cur ? { price: { total: cur.total! } } : {}) };
+    });
+    ids = lockForGuests(rows).filter((r) => !("locked" in r)).map((r) => r.resortId);
+  }
+  const resorts: Record<string, unknown> = {};
+  for (const id of ids) {
+    const b = bestMonthOf(quotes.get(id) ?? [], month);
+    if (!b) continue;
+    resorts[id] = !user && "month" in b ? { saving: b.saving } : b;
+  }
+  return { month, resorts };
 }
 
 async function monthsFor(q: URLSearchParams, user: SessionUser | null, resortId: string) {
@@ -1206,6 +1240,11 @@ const server = createServer(async (req, res) => {
       const body = await months(url.searchParams, user);
       if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
       return send(200, body, { cache: "private, max-age=60" });
+    }
+    if (url.pathname === "/api/bestmonths") {
+      const body = await bestMonths(url.searchParams, await currentUser(db, req));
+      // no-store: a guest's answer (no month) must not linger after signing in.
+      return send(200, body, { cache: "no-store" });
     }
     if (url.pathname === "/api/fits") {
       const body = await fits(url.searchParams, await currentUser(db, req));

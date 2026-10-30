@@ -135,6 +135,19 @@ The rest they should have to sign in for. I was gaming the system a bit."
   or more details opens sign-up instead (`guestGuard`, capture listeners);
   the override setters and the cheapest-trip switches refuse guests.
   Signing out reloads the page so a guest starts from the default form.
+- **"Best time to go" on each trip card** (owner: free account, "up to
+  $1,600", $200/5% floor, load after the cards). `bestMonthOf()`
+  (monthView.ts, tested) + GET `/api/bestmonths` (server.ts, `no-store`):
+  each resort's cheapest plannable month vs the searched month, priced like
+  the Plus month tiles; shown only when it saves >= max($200, 5%), saving
+  rounded DOWN to $100; else "March is already one of the cheapest times to
+  go". Guests get `{saving}` only, and only for the two resorts they're
+  shown; signed-in get month + total, and the line re-runs the search for
+  that month (`data-bestmonth`). Hidden when a holiday week is picked. The
+  full month view stays Plus. A combined all-six month calendar for Plus is
+  being mocked up (not built).
+- Getting there / being there was mocked up and REJECTED by the owner; per
+  person framing too ("awful to make the user do the math").
 - **Open, owner thinking:** how to show totals when they are far apart
   (WDW $3k vs Paris $9k reads as "the tool is wrong"). Options given in the
   conversation of 2026-10-30; nothing built.

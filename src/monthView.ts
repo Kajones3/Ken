@@ -93,3 +93,30 @@ export function quoteMonths(
   const levels = monthLevels(rows.map((r) => r.total));
   return rows.map((r, i) => ({ ...r, level: levels[i]! }));
 }
+
+/** "Best time to go" on each trip card (owner, 2026-10-30) only speaks up when
+ *  another month saves at least this much: $200, and 5% of the trip. */
+export const BEST_MONTH_MIN_USD = 200;
+export const BEST_MONTH_MIN_PCT = 5;
+
+export type BestMonth =
+  | { month: string; total: number; saving: number }
+  | { already: true };
+
+/**
+ * The cheapest plannable month for one resort, against the month searched.
+ * `saving` is rounded DOWN to $100 so "up to $1,600 less" never overstates.
+ * When no month beats the searched one by the floor above, the searched
+ * month is "already one of the cheapest". Null when the searched month has
+ * no price (nothing honest to compare with).
+ */
+export function bestMonthOf(quotes: MonthQuote[], current: string): BestMonth | null {
+  const cur = quotes.find((q) => q.month === current && q.total !== null);
+  if (!cur) return null;
+  let best = cur;
+  for (const q of quotes) if (q.total !== null && q.total < best.total!) best = q;
+  const saving = cur.total! - best.total!;
+  const floor = Math.max(BEST_MONTH_MIN_USD, (cur.total! * BEST_MONTH_MIN_PCT) / 100);
+  if (best === cur || saving < floor) return { already: true };
+  return { month: best.month, total: best.total!, saving: Math.floor(saving / 100) * 100 };
+}

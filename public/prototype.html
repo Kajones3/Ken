@@ -1045,6 +1045,8 @@ body.has-results .searchside #run{width:100%}
 .tmeta{margin:0 0 10px; font-size:14px; color:var(--ink-2)}
 .tcard .bar{height:10px; margin-bottom:0}
 .tnotes{display:flex; flex-wrap:wrap; gap:6px; margin-top:10px}
+.tbest{margin:10px 0 0; font-size:14px; color:var(--ink-2)}
+.tbest b{color:var(--ink)}
 .tcard.locked .lockbar, .tcard.locked .lockblur{filter:blur(7px); opacity:.55; user-select:none}
 .tcard.locked .lockblur{display:inline-block}
 .guestnote{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; border:2px dashed var(--rule-strong); border-radius:16px; padding:14px 18px; margin:0 0 14px; background:var(--surface)}
@@ -2821,6 +2823,7 @@ async function runSearch(keepId){
     const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
     selected = idx < 0 ? 0 : idx;
     render();
+    loadBestMonths();
     // The map stays as the hero (owner, 2026-10-29); the results come into view.
     if(!detailOpen) $("#searchLayout").scrollIntoView({ behavior:"smooth", block:"start" });
   } catch(e){
@@ -2846,6 +2849,7 @@ async function recompute(changedResortId){
   const idx = keepId ? results.findIndex(x=>x.resortId===keepId) : -1;
   selected = idx < 0 ? 0 : idx;
   render();
+  loadBestMonths();
 }
 
 /* ============================ render: board ============================ */
@@ -3140,6 +3144,34 @@ function sortTrips(list, how){
 }
 
 /** One resort as a card in the results. */
+/* "Best time to go" (owner, 2026-10-30). Filled a moment after the cards,
+ * from /api/bestmonths, so the search itself stays quick. A guest is told
+ * only how much less ("up to $1,600") and asked to make a free account; the
+ * server never sends a guest the month. */
+let bestMonths = {};
+let bestToken = 0;
+async function loadBestMonths(){
+  const token = ++bestToken;
+  bestMonths = {};
+  try {
+    const d = await apiGet("/api/bestmonths", compareQuery());
+    if(token !== bestToken) return;
+    bestMonths = d.resorts || {};
+    renderBoard();
+  } catch(e){ console.error(e); }
+}
+function bestMonthLine(item){
+  const b = bestMonths[item.resortId];
+  if(!b || params.window) return "";
+  const searched = MONTHSFULL[+params.month.slice(5,7) - 1];
+  if(b.already) return `<p class="tbest">${searched} is already one of the cheapest times to go.</p>`;
+  if(!b.month) return `<p class="tbest"><b>Up to ${usd(b.saving)} less at another time of year.</b>
+    <button type="button" class="linkbtn" data-signup>Create a free account to see when</button></p>`;
+  const [y, m] = b.month.split("-").map(Number);
+  return `<p class="tbest"><button type="button" class="linkbtn" data-bestmonth="${esc(b.month)}">Cheapest in ${MONTHSFULL[m-1]} ${y}: ${usd(b.total)}</button>
+    (${usd(b.saving)}+ less)</p>`;
+}
+
 function tripCardHtml(item, i, rank, otherSort){
   const r = item.resort;
   // Signed out: the server sent this one without a price (src/guestView.ts).
@@ -3177,6 +3209,7 @@ function tripCardHtml(item, i, rank, otherSort){
       <p class="tmeta">${esc(r.city)} · ${params.nights} night${params.nights===1?"":"s"} · ${days} park day${days===1?"":"s"}${hasOv(r.id)?' · <span class="yourchip">Your numbers</span>':""}</p>
       ${costBar(b)}
       ${notes ? `<div class="tnotes">${notes}</div>` : ""}
+      ${bestMonthLine(item)}
     </div>
     <div class="ttot">
       <span class="tnum">${usd(x.total)}${b.tilde}</span>
@@ -6875,6 +6908,16 @@ function guestGuard(e){
 document.addEventListener("mousedown", guestGuard, true);
 document.addEventListener("focusin", guestGuard, true);
 document.addEventListener("keydown", guestGuard, true);
+
+// "Cheapest in January": price the whole search for that month.
+document.addEventListener("click", e => {
+  const bm = e.target.closest("[data-bestmonth]");
+  if(!bm) return;
+  e.preventDefault();
+  $("#month").value = bm.dataset.bestmonth;
+  syncWindowUi();
+  runSearch(results[selected] && results[selected].resortId);
+});
 
 // "Create a free account" from a locked card, the banner or a guest note.
 document.addEventListener("click", e => {
