@@ -914,6 +914,30 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .mhead h3{font-family:var(--f-head); font-size:26px; font-weight:800; letter-spacing:-.02em}
 .mhead p{margin:6px 0 0; color:var(--ink-2); font-size:13.5px}
 .plans{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 22px}
+#paywall .modal{max-width:880px}
+.plantable{padding:14px 22px 8px; overflow-x:auto; -webkit-overflow-scrolling:touch}
+.plans-t{border-collapse:separate; border-spacing:0; width:100%; min-width:640px; font-size:13px}
+.plans-t th, .plans-t td{padding:9px 8px; border:0; border-bottom:1px solid var(--rule); text-align:center; vertical-align:middle;
+  font-family:var(--f-body); text-transform:none; letter-spacing:normal; white-space:normal; font-size:13px; line-height:1.35}
+.plans-t tbody th{text-align:left; font-weight:600; color:var(--ink); min-width:150px; max-width:220px}
+.plans-t thead th{vertical-align:bottom; padding-top:16px; position:relative}
+.plans-t thead th:first-child, .plans-t tbody th{position:sticky; left:0; background:var(--surface); z-index:1}
+.plans-t .pn{display:block; font-family:var(--f-label); font-size:13px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
+.plans-t .pp{display:block; font-family:var(--f-head); font-weight:800; font-size:22px; margin-top:2px}
+.plans-t .pp small{font-size:12px; font-weight:600; color:var(--ink-2)}
+.plans-t td{color:var(--ink-2)}
+.plans-t td.yes .tick{font-size:16px}
+.plans-t td.no{color:var(--muted)}
+.plans-t .best{background:color-mix(in srgb, var(--gold, #E8B23E) 12%, transparent)}
+.plans-t .planbest{position:absolute; top:0; left:0; right:0; font-size:11px; font-weight:700; color:var(--accent)}
+.plans-t .here{background:color-mix(in srgb, var(--ink) 6%, transparent)}
+.plans-t .planyou{font-weight:700; color:var(--ink)}
+.plans-t tfoot td, .plans-t tfoot th{border-bottom:0; padding-top:12px}
+.plans-t tfoot .btn-sm{white-space:nowrap}
+.planswipe{display:none; margin:0 0 6px; font-size:12.5px; color:var(--ink-2)}
+@media (max-width:700px){ .planswipe{display:block} }
+.plannote{margin:6px 0 0; font-size:12.5px; color:var(--ink-2)}
+.sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
 .plan{border:1.5px solid var(--rule-strong); border-radius:14px; padding:15px; text-align:left; background:var(--surface-2)}
 .plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
 .plan .pn{font-size:11px; font-weight:800; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-2)}
@@ -1040,9 +1064,23 @@ body.has-results .searchside #run{width:100%}
   body.has-results .editsearch{display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%;
     margin:0 0 16px; padding:14px 16px; min-height:48px; background:var(--surface); color:var(--ink); border:2px solid var(--frame);
     border-radius:14px; font:inherit; font-size:15px; text-align:left; cursor:pointer}
-  .editsearch .es-what{min-width:0}
-  .editsearch .es-go{font-weight:700; color:var(--accent); white-space:nowrap}
+  .editsearch .es-what{min-width:0; display:flex; flex-direction:column; gap:2px}
+  .editsearch .es-what b{font-family:var(--f-head); font-size:17px}
+  .editsearch .es-what span{color:var(--ink-2); font-size:14px}
+  .editsearch .es-go{color:var(--ink); display:flex}
+  /* Expedia-style: one row of chips you swipe sideways, each opening the
+     search panel at that one setting (owner, 2026-10-30). */
+  body.has-results .chiprow{display:flex; gap:8px; overflow-x:auto; margin:-4px -16px 18px; padding:2px 16px 6px;
+    scrollbar-width:none; -webkit-overflow-scrolling:touch}
+  .chiprow::-webkit-scrollbar{display:none}
+  .chip{flex:none; display:flex; align-items:center; gap:6px; min-height:40px; padding:0 14px; border-radius:999px;
+    border:1.5px solid var(--frame); background:var(--surface); color:var(--ink); font:500 14px/1 var(--f-body); text-transform:none; letter-spacing:normal; white-space:nowrap; cursor:pointer}
+  .chip .k{color:var(--ink-2)}
+  .chip svg{flex:none}
+  .chip.locked{border-style:dashed; color:var(--ink-2)}
 }
+.chiprow{display:none}
+.fieldflash{outline:3px solid var(--gold, #E8B23E); outline-offset:4px; border-radius:10px; transition:outline-color .6s}
 @media (max-width:460px){ body.has-results .searchside .party{grid-template-columns:minmax(0,1fr)} }
 /* On a phone the trips come first; the notes about them follow. */
 @media (max-width:900px){
@@ -1740,7 +1778,9 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
   </div><!-- /searchside -->
   <div class="searchmain" id="searchMain">
   <button type="button" class="editsearch" id="editSearch" aria-controls="searchSide" aria-expanded="false">
-    <span class="es-what" id="editSearchWhat"></span><span class="es-go">Change</span></button>
+    <span class="es-what"><b id="editSearchWhen"></b><span id="editSearchWhat"></span></span>
+    <span class="es-go" aria-label="Change the search"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span></button>
+  <div class="chiprow" id="chipRow" role="toolbar" aria-label="Change one thing about the search"></div>
 
   <div class="res-head">
     <div>
@@ -1964,6 +2004,9 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
           <button type="button" id="authSwap" class="linkbtn">Sign in</button>
         </p>
         <p style="margin:6px 0 0; font-size:13px; color:var(--ink-2)">
+          <button type="button" id="authCompare" class="linkbtn">What do a free account and Plus include?</button>
+        </p>
+        <p style="margin:6px 0 0; font-size:13px; color:var(--ink-2)">
           <button type="button" id="forgotBtn" class="linkbtn">Forgot your password?</button>
           <span id="forgotMsg" style="margin-left:6px"></span>
         </p>
@@ -2034,17 +2077,10 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       </div>
       <p class="pwlead-you" id="pwBudgetYours" hidden></p>
     </div>
-    <!-- Filled from /api/meta's plusPasses, so the prices have one home. -->
-    <div class="plans" id="plusPlans"></div>
-    <ul class="feat">
-      <li><span class="tick">✓</span><span><b>What fits my budget?</b> — type the most you'd spend and see which resorts fit, and in which months. Plus a calendar to help plan savings goals with booking time windows</span></li>
-      <li><span class="tick">✓</span><span><b>Best months to go</b> — the whole trip's typical cost (flights, hotel, tickets and food together) for every month from two to ten months out, so you can see when to go</span></li>
-      <li><span class="tick">✓</span><span><b>What would save the most?</b> — the changes that cut your trip the most (a cheaper month, fewer nights, a different hotel, cheaper food), each one priced, and one click to try it</span></li>
-      <li><span class="tick">✓</span><span><b>Is an annual pass worth it?</b> — how many trips like yours it takes for a pass to pay for itself, and where that same amount could take you</span></li>
-      <li><span class="tick">✓</span><span><b>Saved searches</b> — keep a comparison, with your own numbers and extra costs, and come back to it</span></li>
-      <li><span class="tick">✓</span><span><b>The shareable PDF</b> — a real write-up per resort to send to whoever you're traveling with</span></li>
-      <li><span class="tick">✓</span><span><b>The latest Disney deals</b> — we email you when a new official offer turns up (3- and 9-month passes)</span></li>
-    </ul>
+    <!-- Every offering on one sheet (owner, 2026-10-30: "one of those
+         comparison tables ... all our sign up offerings"). Prices come from
+         /api/meta's plusPasses, so they have one home. -->
+    <div class="plantable" id="plusPlans"></div>
     <!-- One auth surface, not two. This used to be its own email box posting
          to /api/auth/signin with no password and `if(!res.ok) return` — so
          it failed in total silence, which is exactly what the owner saw.
@@ -4576,7 +4612,9 @@ function render(){
   const any = results.length > 0;
   document.body.classList.toggle("has-results", any);
   $("#editSearch").hidden = !any;
-  $("#editSearchWhat").textContent = `${partyParts({ ...p, ages: [] }).join(", ")}${p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""}` : ""} · ${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]} · from ${p.origin}`;
+  $("#editSearchWhen").textContent = `${MONTHSFULL[+p.month.split("-")[1]-1]} ${p.month.split("-")[0]} · from ${p.origin}`;
+  $("#editSearchWhat").textContent = `${partyParts({ ...p, ages: [] }).join(", ")}${p.ages.length ? `, ${p.ages.length} child${p.ages.length>1?"ren":""}` : ""}`;
+  renderChips();
   renderBoard(); renderTable(); renderDetail();
   $("#board").hidden = view!=="board";
   $("#tablewrap").hidden = view!=="table";
@@ -4801,7 +4839,9 @@ function openAuth(mode){
     $("#signinPassword").value = "";
   }
   $("#authModal").classList.add("on");
-  if(!on) setTimeout(()=> $("#signinEmail").focus(), 30);
+  // Only if nothing in the form has focus yet: a fast typist or a password
+  // manager already in the password box had their keys sent to Email.
+  if(!on) setTimeout(()=>{ if(!$("#authForm").contains(document.activeElement)) $("#signinEmail").focus(); }, 30);
 }
 function closeAuth(){ $("#authModal").classList.remove("on"); }
 
@@ -4809,6 +4849,7 @@ $("#signinTop").addEventListener("click", ()=>openAuth("signin"));
 $("#accountTop").addEventListener("click", ()=>openAuth());
 $("#closeAuth").addEventListener("click", closeAuth);
 $("#acctUpgradeBtn").addEventListener("click", ()=>{ closeAuth(); openPw(); });
+$("#authCompare").addEventListener("click", ()=>{ closeAuth(); openPw(); });
 $("#authModal").addEventListener("click", e=>{ if(e.target.id==="authModal") closeAuth(); });
 $("#signinEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
 $("#signinPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#signinBtn").click(); });
@@ -5022,6 +5063,7 @@ function applyHomeAirport(){
 let originPickedByUser = false;
 
 function openPw(){
+  renderPlusPlans();
   const msg = $("#pwFootMsg");
   $("#pwSignupBox").hidden = session.authenticated;
   if(!session.authenticated) msg.textContent = "Create an account first — then pick a plan and we'll let the owner know.";
@@ -5069,19 +5111,64 @@ async function requestPlus(plan){
 }
 
 let PLUS_PASSES = [], PLUS_PASS_DEFAULT = "threeMonths";
+/* One row per thing we offer; a cell is true (included), false (not) or a
+ * few words. Columns: no account, free account, then each pass. Keep the
+ * words in step with what the server actually allows (guestView.ts,
+ * /api/yeargrid, /api/fits, passPerks). */
+function planRows(){
+  const pass = id => PLUS_PASSES.find(p => p.id === id) || {};
+  const saved = id => pass(id).savedSearches == null ? "Unlimited" : `Up to ${pass(id).savedSearches}`;
+  const perPass = f => PLUS_PASSES.map(p => f(p));
+  const plus = v => PLUS_PASSES.map(() => v);
+  return [
+    ["Total trip cost at every Disney resort", "Cheapest 2 of 6", "All 6", ...plus(true)],
+    ["Change the month, who's going and your airport", true, true, ...plus(true)],
+    ["Change nights, hotel, food and park days, and type your own prices", false, true, ...plus(true)],
+    ["The cheapest trip we can find", false, true, ...plus(true)],
+    ["Best time to go for each trip", "How much you'd save", "The month and its total", ...plus(true)],
+    ["Best months to go, every resort side by side", false, "2 of 6", ...plus("All 6")],
+    ["What fits my budget?", false, "How many fit", ...plus("Which ones, and when")],
+    ["What would save the most?", false, false, ...plus(true)],
+    ["Is an annual pass worth it?", false, false, ...plus(true)],
+    ["Saved searches", false, false, ...perPass(p => saved(p.id))],
+    ["The trip PDF to share", "A sample", "A sample", ...plus(true)],
+    ["Email when Disney posts a new deal", false, false, ...perPass(p => !!p.dealEmails)],
+  ];
+}
+function planCell(v, extra){
+  const c = (k) => { const all = [k, extra].filter(Boolean).join(" "); return all ? ` class="${all}"` : ""; };
+  if(v === true) return `<td${c("yes")}><span class="tick" aria-label="Included">✓</span></td>`;
+  if(v === false) return `<td${c("no")}><span aria-label="Not included">—</span></td>`;
+  return `<td${c("")}>${esc(v)}</td>`;
+}
 function renderPlusPlans(){
-  $("#plusPlans").innerHTML = PLUS_PASSES.map(p => `
-    <button class="plan" data-plan="${esc(p.id)}" aria-pressed="${p.id === PLUS_PASS_DEFAULT}">
-      <div class="pn">${esc(p.label)}</div>
-      <div class="pp">$${p.priceUsd}<small> once</small></div>
-      <div class="ps">${esc(p.note)}</div>
-      <div class="ps pperks">${p.savedSearches == null ? "Unlimited saved searches" : `Up to ${p.savedSearches} saved searches`}<br>${p.dealEmails ? "Disney deal emails" : "No deal emails"}</div>
-    </button>`).join("");
+  const here = !session.authenticated ? 0 : !session.plus ? 1
+    : 2 + Math.max(0, PLUS_PASSES.findIndex(p => p.id === session.plusPass));
+  const heads = [
+    { name:"No account", price:"Free", note:"" },
+    { name:"Free account", price:"Free", note:"" },
+    ...PLUS_PASSES.map(p => ({ name:`Plus · ${p.label}`, price:`$${p.priceUsd}`, note:"once", id:p.id })),
+  ];
+  const cls = i => [i === here ? "here" : "", heads[i].id === PLUS_PASS_DEFAULT ? "best" : ""].join(" ").trim();
+  const foot = heads.map((h, i) => {
+    if(i === here) return `<td class="${cls(i)}"><span class="planyou">You have this</span></td>`;
+    if(i === 0) return `<td></td>`;
+    if(i === 1) return session.authenticated ? `<td></td>` : `<td><button type="button" class="btn btn-sm" data-signup>Create a free account</button></td>`;
+    return `<td class="${cls(i)}"><button type="button" class="${h.id === PLUS_PASS_DEFAULT ? "btn-primary" : "btn"} btn-sm" data-plan="${esc(h.id)}">Get ${esc(PLUS_PASSES[i-2].label)}</button></td>`;
+  }).join("");
+  $("#plusPlans").innerHTML = `<p class="planswipe">Swipe sideways to see the Plus passes &rarr;</p><table class="plans-t">
+    <thead><tr><th scope="col"><span class="sr">What you get</span></th>${heads.map((h, i) =>
+      `<th scope="col" class="${cls(i)}">${h.id === PLUS_PASS_DEFAULT ? `<span class="planbest">Our pick</span>` : ""}<span class="pn">${esc(h.name)}</span>`
+      + `<span class="pp">${esc(h.price)}${h.note ? `<small> ${esc(h.note)}</small>` : ""}</span></th>`).join("")}</tr></thead>
+    <tbody>${planRows().map(([label, ...cells]) =>
+      `<tr><th scope="row">${esc(label)}</th>${cells.map((c, i) => planCell(c, cls(i))).join("")}</tr>`).join("")}</tbody>
+    <tfoot><tr><th></th>${foot}</tr></tfoot>
+  </table>
+  <p class="plannote">Every Plus pass is paid once and never renews. It simply ends.</p>`;
 }
 $("#plusPlans").addEventListener("click", e=>{
   const b = e.target.closest("[data-plan]");
   if(!b) return;
-  $("#plusPlans").querySelectorAll("[data-plan]").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
   // Counted whether or not they're signed in: picking a pass is the
   // interest the owner wants to measure, even if sign-up stops them.
   track("plus", null, b.dataset.plan);
@@ -5115,7 +5202,12 @@ async function refreshSession(){
   }
 }
 
+let signingIn = false;
 $("#signinBtn").addEventListener("click", async ()=>{
+  // One submission at a time. A second Enter or click while the first is
+  // still on its way used to find the password already cleared, print
+  // "Enter your email and password." and leave the dialog up (2026-10-30).
+  if(signingIn) return;
   const email = $("#signinEmail").value.trim();
   const password = $("#signinPassword").value;
   const err = $("#signinError");
@@ -5128,7 +5220,19 @@ $("#signinBtn").addEventListener("click", async ()=>{
     return;
   }
   const route = authMode === "signup" ? "/api/auth/signup" : "/api/auth/signin";
-  const res = await fetch(route, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  signingIn = true;
+  $("#signinBtn").disabled = true;
+  let res;
+  try {
+    res = await fetch(route, { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) });
+  } catch {
+    err.textContent = "Couldn't reach the server. Try again in a moment.";
+    err.hidden = false;
+    return;
+  } finally {
+    signingIn = false;
+    $("#signinBtn").disabled = false;
+  }
   if(!res.ok){
     const body = await res.json().catch(()=>({}));
     err.textContent = body.message || body.error || "Could not sign in.";
@@ -5140,10 +5244,12 @@ $("#signinBtn").addEventListener("click", async ()=>{
     return;
   }
   $("#signinPassword").value = "";
-  await refreshSession();
-  // Straight back to the board, signed in — the dialog has done its job and
-  // the account button in the masthead now carries the state.
+  // Straight back to the board, signed in — the dialog has done its job.
+  // Close it BEFORE refreshing: refreshSession also fetches a Plus member's
+  // withheld calendars, which on the live site can be slow or fail, and the
+  // dialog used to sit there signed in (owner, 2026-10-30, desktop).
   closeAuth();
+  try { await refreshSession(); } catch(e){ console.error(e); }
   syncAccountUi();
   // Signing in changes what the server will resolve (attraction picks, a
   // saved home airport), so the already-fetched results are stale — re-run
@@ -6216,6 +6322,7 @@ function closePdfPicker(){ $("#pdfPicker").classList.remove("on"); }
 $("#printTop").addEventListener("click", openPdfPicker);
 $("#sortBy").value = sortBy;
 $("#sortBy").addEventListener("change", e => {
+  setTimeout(renderChips);
   sortBy = SORT_TITLES[e.target.value] ? e.target.value : "price";
   try { localStorage.setItem("pf_sort", sortBy); } catch {}
   renderBoard();
@@ -7023,6 +7130,7 @@ document.addEventListener("click", e => {
 // "Create a free account" from a locked card, the banner or a guest note.
 document.addEventListener("click", e => {
   const up = e.target.closest("[data-signup]"), inn = e.target.closest("[data-signin]");
+  if(up || inn) closePw();
   if(up){ e.preventDefault(); openAuth("signup"); }
   else if(inn){ e.preventDefault(); openAuth("signin"); }
 });
@@ -7034,7 +7142,7 @@ $("#sbBudget").addEventListener("keydown", e => {
 });
 $("#sbBudget").addEventListener("input", e => {
   setBudget(e.target.value);
-  if(results.length){ renderBudgetTop(); renderBoard(); }
+  if(results.length){ renderBudgetTop(); renderBoard(); renderChips(); }
 });
 $("#sbBudget").value = budgetValue() || "";
 $("#btPlan").addEventListener("click", () => needsAccount() ? null : session.plus ? $("#budgetBtn").click() : showFits());
@@ -7280,6 +7388,45 @@ $("#editSearch").addEventListener("click", () => {
   if(on) $("#searchSide").scrollIntoView({ behavior:"smooth", block:"start" });
 });
 
+/* The chip row on phones: each chip names one setting and opens the search
+ * panel right at it. Guests get the sign-up box for the locked ones. */
+const CHIP_DOWN = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+function chipText(id){ const el = $("#" + id); return el && el.selectedOptions && el.selectedOptions[0] ? el.selectedOptions[0].textContent.trim() : ""; }
+function chipDefs(){
+  const hotel = $("#needHotel").value === "no" ? "No hotel"
+    : `${chipText("tier").split(" / ")[$("#stay").value === "off" ? 1 : 0]}, ${$("#stay").value === "off" ? "off" : "on"} property`;
+  const budget = budgetValue();
+  return [
+    { field:"nights", k:"", v:`${$("#nights").value} nights` },
+    { field:"stay", k:"Hotel", v: hotel },
+    { field:"food", k:"Food", v: chipText("food") },
+    { field:"parkdays", k:"Park days", v: chipText("parkdays") },
+    { field:"gettingThere", k:"", v: chipText("gettingThere") },
+    { field:"priceBasis", k:"", v: $("#priceBasis").value === "cheapest" ? "Cheapest trip" : "Typical trip" },
+    { field:"sbBudget", k:"Budget", v: budget ? usd(+budget) : "Any" },
+    { field:"sortBy", k:"Sort", v: chipText("sortBy"), free:true },
+  ];
+}
+function renderChips(){
+  const row = $("#chipRow"); if(!row) return;
+  row.innerHTML = chipDefs().map(c => `<button type="button" class="chip${!c.free && isGuest() ? " locked" : ""}" data-chip="${c.field}">`
+    + `${c.k ? `<span class="k">${esc(c.k)}</span> ` : ""}<span>${esc(c.v)}</span>${CHIP_DOWN}</button>`).join("");
+}
+function openField(id){
+  const el = $("#" + id); if(!el) return;
+  if(id === "sortBy"){ el.scrollIntoView({ behavior:"smooth", block:"center" }); el.focus(); return; }
+  if(id !== "partyBtn" && needsAccount()) return;
+  document.body.classList.add("editing");
+  $("#editSearch").setAttribute("aria-expanded", "true");
+  if($("#moreDetails").contains(el) && $("#moreDetails").hidden){ $("#moreDetails").hidden = false; syncMoreDetails(); }
+  const box = el.closest(".f, .authfield, .sb-who, .sbb") || el;
+  box.scrollIntoView({ behavior:"smooth", block:"center" });
+  box.classList.add("fieldflash"); setTimeout(() => box.classList.remove("fieldflash"), 1400);
+  el.focus({ preventScroll:true });
+  if(id === "partyBtn") el.click();
+}
+$("#chipRow").addEventListener("click", e => { const c = e.target.closest("[data-chip]"); if(c) openField(c.dataset.chip); });
+
 /* The form opens short: party, when and from where. "Add more details"
  * opens the rest; while it's closed a one-line summary says what the rest
  * is set to, so nobody prices a trip without knowing what it assumed. */
@@ -7305,6 +7452,7 @@ function syncMoreDetails(){
   syncPartyBtn();
   // The fine print goes with the details: the short form stays short.
   $("#hint").hidden = !open;
+  if(results.length) renderChips();
 }
 let moreReady = false;
 function initMoreDetails(){

@@ -119,6 +119,30 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-30, later — sign-in box closes; phone chips; one plans table
+
+- **Sign-in box stayed open on desktop** (owner screenshot: signed in, Admin
+  showing, box still up). Two causes: (1) the box closed only AFTER
+  `refreshSession()`, which for a Plus member also fetches the withheld
+  calendars (slow or failing on live); it now closes first. (2) `openAuth`
+  re-focused Email 30 ms after opening, so a fast typist / password manager
+  already in Password sent keys to Email; now only when nothing in the form
+  has focus. Also one submission at a time (`signingIn`).
+- **Phones: Expedia-style search** (owner liked Expedia's sideways bar). The
+  summary card is two lines + a pencil; under it `#chipRow` (`renderChips()`,
+  `openField()`): Nights, Hotel, Food, Park days, Getting there, Trip
+  (typical/cheapest), Budget, Sort. A chip opens the side panel at that field
+  (More details opened, field outlined); guests get the sign-up box.
+- **One plans table** (`renderPlusPlans()`, `planRows()`): No account / Free
+  account / each Plus pass, every feature a row, in #paywall (the old three
+  plan cards and feature list are gone). Keep `planRows()` in step with what
+  the server allows. The sign-in box links to it ("What do a free account and
+  Plus include?"). 3 months is marked "Our pick" (never "most picked": no
+  sales yet).
+- **Name for "Plus": owner thinking.** Options given in the conversation of
+  2026-10-30. Avoid Disney's own words (FastPass, Genie, Lightning Lane, Pixie
+  Dust, Incredi-Pass, Magic Key).
+
 ## 2026-10-30 — guests change only month, party, home airport (newest)
 
 Owner: "let them change months, party size and home airport but that's it.
