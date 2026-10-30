@@ -509,3 +509,11 @@ test("every resort says what's beyond the parks, in one short sentence", () => {
     assert.ok(r.beyondParks!.howToGetThere.length < 200, `${r.id} beyondParks is too long for one line`);
   }
 });
+
+test("the 'not affiliated with Disney' line on the page is word for word the one the emails use", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { DISNEY_DISCLAIMER } = await import("./config.js");
+  const page = readFileSync(new URL("../public/prototype.html", import.meta.url), "utf8");
+  assert.ok(page.includes(`const DISNEY_DISCLAIMER = "${DISNEY_DISCLAIMER}";`), "the PDF's copy drifted");
+  assert.ok(page.includes(`<footer class="sitefoot"><p>${DISNEY_DISCLAIMER}</p></footer>`), "the footer's copy drifted");
+});

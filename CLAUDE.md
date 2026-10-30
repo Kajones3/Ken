@@ -119,7 +119,25 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## 2026-10-30, last — "Plus" renamed to Planner Pro in the CODE too (newest)
+## 2026-10-30, very last — "not affiliated with Disney" line; Delete my account (newest)
+
+- **Disclaimer** (`DISNEY_DISCLAIMER` in config.ts, one wording): page footer
+  (`.sitefoot`), the PDF (`.pfine`, also on the Planner Pro notice page) and
+  every email to travelers (deal, pass ending, confirm email, reset). NOT on
+  the coming-soon page: it never mentions Disney on purpose (siteGate test).
+  The page keeps its own copy; config.test.ts pins that they match.
+- **Delete my account** (account panel, folded `<details>`, password asked
+  again): POST `/api/auth/delete` -> `deleteAccount()` (auth.ts). Wrong
+  passwords count toward the sign-in lockout. Deletes the `users` row (all
+  user tables cascade) plus `exact_fare_usage` rows and the email's
+  `signin_attempts` row (no foreign key). Then the page reloads signed out.
+  Checked in Chromium: wrong password refused, right one deletes, sign-in
+  then fails. Privacy draft says you can do it yourself now.
+- Owner asked about ken@pricingthemagic.com from Bluehost: answered in the
+  conversation (depends on the Bluehost plan; free forwarding alternative).
+  Once an address exists, it fills the legal drafts' [CONTACT EMAIL].
+
+## 2026-10-30, last — "Plus" renamed to Planner Pro in the CODE too
 
 Owner: "there are no real members so go ahead" (code names + click counts),
 and for the database "add the new name next to the old".

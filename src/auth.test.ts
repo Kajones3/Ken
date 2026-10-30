@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   hashPassword, verifyPassword, hasPassword, isPro, setHomeAirport, currentUser,
   signUp, signIn, AuthError, MIN_PASSWORD_LENGTH,
-  createSession, sessionCookieHeader,
+  createSession, sessionCookieHeader, deleteAccount,
 } from "./auth.js";
 import { memoryDb, type Db } from "./db.js";
 import { setPassword } from "./setPassword.js";
@@ -320,5 +320,32 @@ test("a malformed email is refused on both routes", async () => {
     await assert.rejects(() => signUp(db, bad, "correcthorse"), (e: AuthError) => e.reason === "bad_email");
     await assert.rejects(() => signIn(db, bad, "correcthorse"), (e: AuthError) => e.reason === "bad_email");
   }
+  await db.close();
+});
+
+test("deleting an account needs the password, and takes everything that is the person's with it", async () => {
+  const db = await memoryDb();
+  const u = await signUp(db, "leaving@example.test", "correcthorse");
+  await createSession(db, u.id);
+  const tripId = randomUUID();
+  await db.query(`insert into saved_trips (id, user_id, params, baseline_total) values ($1, $2, '{}', 1000)`, [tripId, u.id]);
+  await db.query(`insert into custom_expenses (id, trip_id, label, amount_usd) values ($1, $2, 'PhotoPass', 100)`, [randomUUID(), tripId]);
+  await db.query(`insert into exact_fare_usage (user_id, day, lookups) values ($1, current_date, 1), ('global', current_date, 5)`, [u.id]);
+  await db.query(`insert into signin_attempts (scope, fails) values ('email|leaving@example.test', 2)`);
+
+  await assert.rejects(() => deleteAccount(db, u.id, "wrongpassword"), (e: AuthError) => e.reason === "bad_credentials");
+  assert.equal((await db.query(`select 1 from users where id = $1`, [u.id])).rows.length, 1, "a wrong password deletes nothing");
+
+  assert.equal((await deleteAccount(db, u.id, "correcthorse")).email, "leaving@example.test");
+  const count = async (sql: string, args: unknown[] = []) => (await db.query(sql, args)).rows.length;
+  assert.equal(await count(`select 1 from users where id = $1`, [u.id]), 0);
+  assert.equal(await count(`select 1 from sessions where user_id = $1`, [u.id]), 0);
+  assert.equal(await count(`select 1 from saved_trips where user_id = $1`, [u.id]), 0);
+  assert.equal(await count(`select 1 from custom_expenses where trip_id = $1`, [tripId]), 0);
+  assert.equal(await count(`select 1 from exact_fare_usage where user_id = $1`, [u.id]), 0);
+  assert.equal(await count(`select 1 from exact_fare_usage where user_id = 'global'`), 1, "the site-wide tally stays");
+  assert.equal(await count(`select 1 from signin_attempts where scope = 'email|leaving@example.test'`), 0);
+  // The address is free again: signing up starts a brand-new account.
+  assert.notEqual((await signUp(db, "leaving@example.test", "anotherpass1")).id, u.id);
   await db.close();
 });

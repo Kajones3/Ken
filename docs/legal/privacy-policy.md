@@ -98,6 +98,8 @@ affiliate links, which tell that site you came from us.
 
 ## Your choices
 
+- **Delete your account yourself:** your account panel has "Delete my
+  account". It removes your account and everything saved with it at once.
 - **See or delete your data:** email [CONTACT EMAIL] and we'll send you a
   copy or delete your account and everything saved with it within [30] days.
 - **Stop deal emails:** use the "Stop these emails" link at the bottom of

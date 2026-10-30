@@ -37,6 +37,7 @@ import { randomBytes } from "node:crypto";
 import type { Db } from "./db.js";
 import type { EmailMessage, EmailSender } from "./email/types.js";
 import { hashPassword, MIN_PASSWORD_LENGTH } from "./auth.js";
+import { DISNEY_DISCLAIMER } from "./config.js";
 
 export const RESET_TOKEN_HOURS = 2;
 
@@ -79,6 +80,8 @@ export function buildResetEmail(to: string, url: string): EmailMessage {
       "and nobody can use this link without access to this inbox.",
       "",
       "— Pricing the Magic",
+      "",
+      DISNEY_DISCLAIMER,
     ].join("\n"),
   };
 }

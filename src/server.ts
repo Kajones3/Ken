@@ -60,7 +60,7 @@ import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
-  sessionCookieHeader, clearCookieHeader, isPro, signUp, signIn, AuthError,
+  sessionCookieHeader, clearCookieHeader, isPro, signUp, signIn, AuthError, deleteAccount,
   setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, secureCookies, type SessionUser,
 } from "./auth.js";
 import {
@@ -1221,6 +1221,32 @@ const server = createServer(async (req, res) => {
           return send(400, { error: "bad_picks", message: (e as Error).message });
         }
       }
+    }
+
+    // "Delete my account": the password again, then the whole account goes
+    // (deleteAccount in auth.ts says what that takes with it). Wrong
+    // passwords count toward the same lockout as sign-in, so this can't be
+    // used to guess a password on a borrowed, signed-in laptop.
+    if (url.pathname === "/api/auth/delete" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required", message: "Sign in first." });
+      const body = await readBody(req);
+      const scopes = scopesFor(user.email, clientIp(req));
+      const gate = await checkSigninAllowed(db, scopes);
+      if (!gate.allowed) {
+        return send(429, { error: "too_many_attempts", message: lockoutMessage(gate.retryAfterSeconds) },
+          { headers: { "retry-after": String(gate.retryAfterSeconds) } });
+      }
+      try {
+        await deleteAccount(db, user.id, typeof body.password === "string" ? body.password : "");
+      } catch (e) {
+        if (e instanceof AuthError) {
+          await recordSigninFailure(db, scopes);
+          return send(400, { error: e.reason, message: e.message });
+        }
+        throw e;
+      }
+      return send(200, { ok: true }, withCookie(clearCookieHeader()));
     }
 
     if (url.pathname === "/api/auth/signout" && req.method === "POST") {

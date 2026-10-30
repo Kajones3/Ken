@@ -1,3 +1,4 @@
+import { DISNEY_DISCLAIMER } from "../config.js";
 import type { EmailMessage } from "./types.js";
 
 /** Just what an alert email needs — decoupled from Candidate so a retried
@@ -31,6 +32,7 @@ export function buildAlertEmail(a: AlertContent, to: string, unsubscribeLink: st
     "— Pricing the Magic",
     "",
     "You get these because you have Pricing the Magic Planner Pro.",
+    DISNEY_DISCLAIMER,
     `Stop these emails: ${unsubscribeLink}`,
     // CAN-SPAM: a commercial email names a valid postal address (a PO box
     // registered with the post office is fine). Set MAIL_POSTAL_ADDRESS.
