@@ -625,7 +625,7 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const [label, g] of [["US", m.plain?.dom], ["International", m.plain?.intl]] as [string, PlainFit | undefined][]) {
       const t = g?.tuning;
       if (!t) continue;
-      out.push(`  ${label} tuning: caution ${t.k}, half-life ${t.halfLifeDays ?? "none"}; replayed on ${t.testFares} fares before buying: typically off ${t.typicalOff ?? "-"}% (old settings ${t.oldTypicalOff ?? "-"}%)`);
+      out.push(`  ${label} tuning: pieces ${(t.factors ?? []).join(" + ") || "default"}, caution ${t.k}, half-life ${t.halfLifeDays ?? "none"}; replayed on ${t.testFares} fares before buying: typically off ${t.typicalOff ?? "-"}% (old settings ${t.oldTypicalOff ?? "-"}%)`);
     }
     for (const [label, g] of [["US", m.plain?.dom], ["International", m.plain?.intl]] as [string, PlainFit | undefined][]) {
       if (!g) { out.push(`  Plain candidate, ${label}: too few fares, the lever formula prices it`); continue; }

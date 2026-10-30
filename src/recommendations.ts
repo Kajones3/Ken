@@ -176,7 +176,7 @@ export async function loadRecommendations(db: Db, now: Date = new Date()): Promi
     if (P.dom?.origin) learned.push({ name: "Candidate: home airport (US)", value: moves(P.dom.origin) || "nothing yet",
       note: "US only: abroad, the home airport did not help (2026-10-16 test)." });
     const tuneLine = (t?: PlainFit["tuning"]) => !t ? "" :
-      `caution ${t.k} fare${t.k === 1 ? "" : "s"}, ${t.halfLifeDays === null ? "every fare counts the same" : `fares lose half their weight every ${t.halfLifeDays} days`}`;
+      `${t.factors && t.factors.includes("route") ? "with home airport + route" : "destination + month only"}, caution ${t.k} fare${t.k === 1 ? "" : "s"}, ${t.halfLifeDays === null ? "every fare counts the same" : `fares lose half their weight every ${t.halfLifeDays} days`}`;
     const tuneNote = (name: string, t?: PlainFit["tuning"]) => !t ? "" : t.testFares < 30 || t.typicalOff === null
       ? `${name}: only ${t.testFares} fares to replay; the old settings stand.`
       : `${name}: replayed on ${t.testFares} fares before buying, typically off ${t.typicalOff}% (old settings ${t.oldTypicalOff}%).`;

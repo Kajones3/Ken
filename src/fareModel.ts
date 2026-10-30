@@ -642,7 +642,11 @@ export function fitAdditive(rows: Obs[], factors: string[], k = 2, iters = 20): 
 /* ---- How the plain formula learns, chosen by the data (owner, 2026-10-31:
  * "Do 1 and 2"). Two dials that used to be Claude's hand-picked numbers:
  *  1. caution: how many pseudo-fares each learned piece is shrunk by (was 2);
- *  2. recency: fares lose half their weight every `halfLifeDays` (was none).
+ *  2. recency: fares lose half their weight every `halfLifeDays` (was none);
+ *  3. which pieces: international with or without home airport + route
+ *     (the 2026-10-31 coverage report: dest + month 37% within ±10%, with
+ *     home + route 49%, before buying), US likewise without them. The first
+ *     set offered is the old one.
  * Each nightly fit replays the last TUNE_DAYS: for every day, the formula is
  * fitted ONLY on fares bought before that day and graded on that day's fares
  * (the before-buying rule, governing rule 2), for every pair of settings.
@@ -658,6 +662,8 @@ export const TUNE_MIN_FARES = 30;
 export const TUNE_MARGIN = 0.5;
 export interface PlainTuning {
   k: number; halfLifeDays: number | null;
+  /** The pieces fitted (undefined = the group's old set). */
+  factors?: string[];
   /** Fares graded before buying, and how far off each setting was on them (%). */
   testFares: number; typicalOff: number | null; oldTypicalOff: number | null;
 }
@@ -666,14 +672,15 @@ export function recencyWeight(ageDays: number, halfLife: number | null): number 
   return halfLife === null ? 1 : Math.pow(0.5, Math.max(0, ageDays) / halfLife);
 }
 /** Pure: pick caution and recency for one group of rows (each with its time). */
-export function tunePlain(rows: (Obs & { t: number })[], factors: string[]): PlainTuning {
-  const old = { k: PLAIN_SHRINK_K, halfLifeDays: null as number | null };
+export function tunePlain(rows: (Obs & { t: number })[], factorSets: string[] | string[][]): PlainTuning {
+  const sets: string[][] = Array.isArray(factorSets[0]) ? factorSets as string[][] : [factorSets as string[]];
+  const old = { k: PLAIN_SHRINK_K, halfLifeDays: null as number | null, set: 0 };
   if (!rows.length) return { ...old, testFares: 0, typicalOff: null, oldTypicalOff: null };
   const dayOf = (t: number) => Math.floor(t / DAY_MS);
   const last = Math.max(...rows.map((r) => dayOf(r.t)));
   const testDays = [...new Set(rows.map((r) => dayOf(r.t)))].filter((d) => d > last - TUNE_DAYS).sort((a, b) => a - b);
   const misses = new Map<string, number[]>();
-  const keyOf = (k: number, h: number | null) => `${k}|${h}`;
+  const keyOf = (k: number, h: number | null, set: number) => `${k}|${h}|${set}`;
   let tested = 0;
   for (const day of testDays) {
     const train = rows.filter((r) => dayOf(r.t) < day), test = rows.filter((r) => dayOf(r.t) === day);
@@ -682,28 +689,31 @@ export function tunePlain(rows: (Obs & { t: number })[], factors: string[]): Pla
     const seen = (f: string, lv: string) => train.some((r) => r.keys[f] === lv);
     for (const h of TUNE_HALF_LIFE) {
       const tr = train.map((r) => ({ ...r, w: recencyWeight((day * DAY_MS - r.t) / DAY_MS, h) }));
-      for (const k of TUNE_K) {
+      for (const [si, factors] of sets.entries()) for (const k of TUNE_K) {
         const m = fitAdditive(tr, factors, k, 10);
-        const list = misses.get(keyOf(k, h)) ?? [];
+        const list = misses.get(keyOf(k, h, si)) ?? [];
         // A destination we'd never bought is priced by the fallback formula,
         // not this one: grade only what this formula would really price.
         for (const r of test) if (seen("dest", r.keys.dest!)) list.push(Math.abs(r.y - predictAdditive(m, r)));
-        misses.set(keyOf(k, h), list);
+        misses.set(keyOf(k, h, si), list);
       }
     }
   }
   const med = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor((s.length - 1) / 2)]! : NaN; };
   const pctOff = (xs: number[]) => xs.length ? Math.round((Math.exp(med(xs)) - 1) * 1000) / 10 : null;
-  const oldList = misses.get(keyOf(old.k, old.halfLifeDays)) ?? [];
+  const oldList = misses.get(keyOf(old.k, old.halfLifeDays, 0)) ?? [];
   const oldOff = pctOff(oldList);
-  if (oldList.length < TUNE_MIN_FARES || oldOff === null) return { ...old, testFares: oldList.length, typicalOff: oldOff, oldTypicalOff: oldOff };
+  const out = (b: { k: number; halfLifeDays: number | null; set: number }, off: number | null): PlainTuning =>
+    ({ k: b.k, halfLifeDays: b.halfLifeDays, factors: sets[b.set], testFares: oldList.length, typicalOff: off, oldTypicalOff: oldOff });
+  if (oldList.length < TUNE_MIN_FARES || oldOff === null) return out(old, oldOff);
   let best = { ...old, off: oldOff };
-  for (const h of TUNE_HALF_LIFE) for (const k of TUNE_K) {
-    const off = pctOff(misses.get(keyOf(k, h)) ?? []);
-    if (off !== null && off < best.off - (best.k === old.k && best.halfLifeDays === old.halfLifeDays ? TUNE_MARGIN : 0)) best = { k, halfLifeDays: h, off };
+  const isOld = (b: typeof best) => b.k === old.k && b.halfLifeDays === old.halfLifeDays && b.set === 0;
+  for (const si of sets.keys()) for (const h of TUNE_HALF_LIFE) for (const k of TUNE_K) {
+    const off = pctOff(misses.get(keyOf(k, h, si)) ?? []);
+    if (off !== null && off < best.off - (isOld(best) ? TUNE_MARGIN : 0)) best = { k, halfLifeDays: h, set: si, off };
   }
   void tested;
-  return { k: best.k, halfLifeDays: best.halfLifeDays, testFares: oldList.length, typicalOff: best.off, oldTypicalOff: oldOff };
+  return out(best, best.off);
 }
 export const predictAdditive = (m: Additive, r: Obs) =>
   (r.offset ?? 0) + m.mu + m.factors.reduce((s, f) => s + (m.effects.get(f)!.get(r.keys[f]!) ?? 0), 0);
@@ -746,7 +756,8 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
   const fitGroup = (intl: boolean): { m: Additive; fit: PlainFit; destFares: Map<string, number> } | undefined => {
     const fs = inp.fares.filter((f) => isInternational(f.destination) === intl && f.price > 0);
     if (fs.length < PLAIN_MIN_FARES) return undefined;
-    const factors = [...(intl ? PLAIN_FACTORS.intl : PLAIN_FACTORS.dom)];
+    const oldFactors = [...(intl ? PLAIN_FACTORS.intl : PLAIN_FACTORS.dom)];
+    const otherFactors = intl ? ["dest", "month", "origin", "route"] : ["dest", "month"];
     const raw: (Obs & { c: number; t: number })[] = fs.map((f) => ({
       y: Math.log(f.price / hol(f.departDate)), keys: keysOf(f.origin, f.destination, f.departDate),
       c: Math.log(carryOf(f)), t: f.observedAt.getTime() }));
@@ -754,7 +765,8 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
     const given = inp.tune === false ? undefined : inp.tune?.[intl ? "intl" : "dom"];
     const tuning: PlainTuning = inp.tune === false
       ? { k: PLAIN_SHRINK_K, halfLifeDays: null, testFares: 0, typicalOff: null, oldTypicalOff: null }
-      : given ?? tunePlain(raw, factors);
+      : given ?? tunePlain(raw, [oldFactors, otherFactors]);
+    const factors = tuning.factors ?? oldFactors;
     const now = Math.max(...raw.map((r) => r.t));
     const base = raw.map((r) => ({ ...r, w: recencyWeight((now - r.t) / DAY_MS, tuning.halfLifeDays) }));
     const K = tuning.k;
@@ -784,7 +796,7 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
     const fit: PlainFit = {
       fares: fs.length, typical: Math.exp(m.mu),
       dest: levels("dest"), month: levels("month"),
-      ...(intl ? {} : { origin: levels("origin"), route: levels("route") }),
+      ...(factors.includes("origin") ? { origin: levels("origin"), route: levels("route") } : {}),
       fareAge: { weight: w, fares: inp.index && (intl ? inp.index.ppiIntl : inp.index.cpiSa) ? fs.length : 0 },
       lowRatio: clamp(Math.exp(q(0.25)), 0.6, 1), highRatio: clamp(Math.exp(q(0.75)), 1, 1.6),
       tuning,
@@ -805,21 +817,21 @@ export function fitPlainModel(inp: ModelInputs): FareModel {
     fitted: { domestic: doms, international: inp.fares.length - doms },
     get levers() { return leverModel().levers; },
     predict(o, d, date) {
-      const intl = isInternational(d);
-      const g = intl ? groups.intl : groups.dom;
+      const g = isInternational(d) ? groups.intl : groups.dom;
       if (!g || !g.destFares.get(d)) return leverModel().predict(o, d, date);
       const keys = keysOf(o, d, date);
       const e = (f: string) => g.m.effects.get(f)?.get(keys[f]!) ?? 0;
       const value = Math.exp(predictAdditive(g.m, { y: 0, keys }));
-      const home = intl ? 1 : Math.exp(e("origin"));
+      const hasRoute = g.m.factors.includes("origin");
+      const home = hasRoute ? Math.exp(e("origin")) : 1;
       return {
         value: Math.round(value * 100) / 100,
         lowRatio: g.fit.lowRatio, highRatio: g.fit.highRatio,
         parts: {
           prior: Math.round(Math.exp(g.m.mu)), calibration: 1, destination: Math.exp(e("dest")), season: 1,
           month: Math.exp(e("month")), dayOfWeek: 1, budget: 1,
-          route: intl ? 1 : home * Math.exp(e("route")), home: intl ? undefined : home,
-          routeSearches: intl ? 0 : (g.fit.route?.[keys.route!]?.fares ?? 0),
+          route: hasRoute ? home * Math.exp(e("route")) : 1, home: hasRoute ? home : undefined,
+          routeSearches: hasRoute ? (g.fit.route?.[keys.route!]?.fares ?? 0) : 0,
           group: groupOf(d), index: 1, priorKind: "plain",
         },
       };

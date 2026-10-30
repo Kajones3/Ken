@@ -349,3 +349,16 @@ test("tunePlain: when fares jumped lately, it learns to trust newer fares; with 
   assert.equal(few.k, OLD_K);
   assert.equal(few.halfLifeDays, null);
 });
+
+test("tunePlain: when each home airport prices differently, it chooses to learn home airport + route", () => {
+  const DAY = 86_400_000, t0 = Date.parse("2026-09-01");
+  const rows: { y: number; keys: Record<string, string>; t: number }[] = [];
+  const homes: Record<string, number> = { ATL: 0.8, BOS: 1.25, CLT: 1.0, DEN: 1.1 };
+  for (let day = 0; day < 50; day++) for (const [o, f] of Object.entries(homes)) {
+    const d = day % 2 ? "CDG" : "HND";
+    rows.push({ y: Math.log((d === "CDG" ? 1000 : 1500) * f * (1 + ((day * 3) % 5 - 2) / 100)), keys: { dest: d, month: "03", origin: o, route: `${o}|${d}` }, t: t0 + day * DAY });
+  }
+  const t = tunePlain(rows, [["dest", "month"], ["dest", "month", "origin", "route"]]);
+  assert.deepEqual(t.factors, ["dest", "month", "origin", "route"]);
+  assert.ok(t.typicalOff! < t.oldTypicalOff!);
+});
