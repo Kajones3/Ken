@@ -119,7 +119,35 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## 2026-10-31 — Paris ticket screenshots, map road miles, learned holiday bump, groceries line, discounts on the budget page (newest)
+## 2026-10-31, later — the flight formula picks its own caution and recency (newest)
+
+Owner: "Do 1 and 2 on the airfares" (1 = let the data pick how cautious the
+formula is, 2 = newer fares count more).
+- `fitAdditive` takes a per-fare weight `w` (and is now rows x factors per
+  sweep, ~4x faster). `tunePlain()` (fareModel.ts) replays the last
+  `TUNE_DAYS` (21): each day, the plain formula fitted ONLY on fares bought
+  before that day, graded on that day's fares, for every caution `TUNE_K`
+  (0.5/1/2/4/8 pseudo-fares) x half-life `TUNE_HALF_LIFE` (none/120/60/30
+  days). Lowest "typically off" wins, but only by `TUNE_MARGIN` 0.5 points
+  over the old settings (k 2, no decay); under `TUNE_MIN_FARES` 30 graded,
+  the old settings stand. Per group (US / international).
+  `PlainFit.tuning` carries the pick and both grades; shown in /admin Rates &
+  settings "What the formulas learned" and the coverage report.
+- Cost: ~1 s per 600 fares, so `loadFareModel` runs the replay ONCE A DAY
+  (`tuneCache` in fareModelDb.ts) and refits every 10 min with it.
+  `leaveOneOut`, deepDive and errorBudget pass one precomputed tuning
+  (`plainTuningOf`) to their many refits (`ModelInputs.tune`; `false` = old
+  settings).
+- **The replay also picks the PIECES** (`factorSets`): US and international
+  each try dest + month vs dest + month + home airport + route. Live pick
+  (coverage run 41120803776): BOTH groups take home airport + route; US
+  caution 0.5, intl caution 1, no half-life won anywhere (recency did not
+  help yet). **Before-buying grade (section 7), same fares, earlier fares
+  only: international 37% within ±10% / 13.8% off -> 51% / 10.0%** (254
+  fares); US unchanged 38% / 14.4% (149). Replay: US 17.0% -> 14.8%, intl
+  15.3% -> 10.8%. Changes what travelers see after a Render redeploy.
+
+## 2026-10-31 — Paris ticket screenshots, map road miles, learned holiday bump, groceries line, discounts on the budget page
 
 - **Paris tickets, read from screenshots** (owner's UK-site screenshots, pounds).
   /admin -> Ticket calendars takes `dlp` (`CALENDAR_RESORTS`): (1) the DATED

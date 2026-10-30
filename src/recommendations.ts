@@ -16,6 +16,7 @@
  *    against yet, said plainly rather than guessed.
  * Planner Pro what the formulas learned on their own, read-only.
  */
+import type { PlainFit } from "./fareModel.js";
 import { loadHolidayPremiums } from "./holidayLearning.js";
 import type { Db } from "./db.js";
 import { settingsMap } from "./settings.js";
@@ -174,6 +175,14 @@ export async function loadRecommendations(db: Db, now: Date = new Date()): Promi
     if (P.intl) learned.push({ name: "Candidate: travel month (international)", value: monthLine(P.intl), note: "Each month against the typical international fare." });
     if (P.dom?.origin) learned.push({ name: "Candidate: home airport (US)", value: moves(P.dom.origin) || "nothing yet",
       note: "US only: abroad, the home airport did not help (2026-10-16 test)." });
+    const tuneLine = (t?: PlainFit["tuning"]) => !t ? "" :
+      `${t.factors && t.factors.includes("route") ? "with home airport + route" : "destination + month only"}, caution ${t.k} fare${t.k === 1 ? "" : "s"}, ${t.halfLifeDays === null ? "every fare counts the same" : `fares lose half their weight every ${t.halfLifeDays} days`}`;
+    const tuneNote = (name: string, t?: PlainFit["tuning"]) => !t ? "" : t.testFares < 30 || t.typicalOff === null
+      ? `${name}: only ${t.testFares} fares to replay; the old settings stand.`
+      : `${name}: replayed on ${t.testFares} fares before buying, typically off ${t.typicalOff}% (old settings ${t.oldTypicalOff}%).`;
+    learned.push({ name: "Candidate: how it learns (picked by replaying the last 3 weeks)",
+      value: [P.dom ? `US ${tuneLine(P.dom.tuning)}` : "", P.intl ? `international ${tuneLine(P.intl.tuning)}` : ""].filter(Boolean).join(" · "),
+      note: [tuneNote("US", P.dom?.tuning), tuneNote("International", P.intl?.tuning)].filter(Boolean).join(" ") });
     learned.push({ name: "Candidate: government airfare index (fare age)",
       value: `US ${(P.dom?.fareAge.weight ?? 0).toFixed(2)} · international ${(P.intl?.fareAge.weight ?? 0).toFixed(2)}`,
       note: "0 = it teaches nothing yet; it needs our fares to span months the government has published." });

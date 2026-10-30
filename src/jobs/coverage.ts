@@ -621,6 +621,12 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     const top = (lv: Record<string, { factor: number; fares: number }> | undefined, n = 8) => Object.entries(lv ?? {})
       .sort((a, b) => Math.abs(Math.log(b[1].factor)) - Math.abs(Math.log(a[1].factor))).slice(0, n)
       .map(([k, v]) => `${k} ${v.factor.toFixed(2)} (${v.fares})`).join(", ");
+    // How the plain formula learns, picked by the before-buying replay (2026-10-31).
+    for (const [label, g] of [["US", m.plain?.dom], ["International", m.plain?.intl]] as [string, PlainFit | undefined][]) {
+      const t = g?.tuning;
+      if (!t) continue;
+      out.push(`  ${label} tuning: pieces ${(t.factors ?? []).join(" + ") || "default"}, caution ${t.k}, half-life ${t.halfLifeDays ?? "none"}; replayed on ${t.testFares} fares before buying: typically off ${t.typicalOff ?? "-"}% (old settings ${t.oldTypicalOff ?? "-"}%)`);
+    }
     for (const [label, g] of [["US", m.plain?.dom], ["International", m.plain?.intl]] as [string, PlainFit | undefined][]) {
       if (!g) { out.push(`  Plain candidate, ${label}: too few fares, the lever formula prices it`); continue; }
       out.push(`  Plain candidate, ${label} (${g.fares} fares): typical $${Math.round(g.typical)}; range x${g.lowRatio.toFixed(2)}-x${g.highRatio.toFixed(2)}; `

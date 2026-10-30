@@ -9,7 +9,7 @@ import type { Db } from "../db.js";
 import { unzipBody } from "../rawResponses.js";
 import { pricedPool } from "../cheapestFlights.js";
 import { loadModelInputs } from "../fareModelDb.js";
-import { fitFareModel, leaveOneOut, groupOf, isInternational, type ModelInputs } from "../fareModel.js";
+import { fitFareModel, leaveOneOut, plainTuningOf, groupOf, isInternational, type ModelInputs } from "../fareModel.js";
 
 /** Google's most popular fare: the price the most itineraries share (the
  *  cheaper one on a tie). When no price repeats, the middle of the fullest
@@ -103,6 +103,9 @@ export async function deepDive(db: Db): Promise<string[]> {
   // target, graded leave-one-out on the SAME fares.
   out.push("  3. IS THE POPULAR FARE EASIER TO PREDICT? (candidate fitted on each target, leave-one-out, same fares)");
   const inputs = await loadModelInputs(db, 90);
+  // The caution/recency the replay picks today, handed to every refit below
+  // (re-running the replay per refit would take hours).
+  const tuneOnce = plainTuningOf(inputs);
   const keep = inputs.fares.map((f, i) => ({ f, i, l: find(f.origin, f.destination, f.departDate, f.observedAt) })).filter((x) => x.l);
   const onMiddle: ModelInputs = { ...inputs, fares: keep.map((x) => ({ ...x.f, price: x.l!.middle })) };
   const onPopular: ModelInputs = { ...inputs, fares: keep.map((x) => ({ ...x.f, price: x.l!.popular })) };
@@ -126,7 +129,7 @@ export async function deepDive(db: Db): Promise<string[]> {
     const before = inputs.fares.filter((f) => f.observedAt.toISOString().slice(0, 10) < day);
     const today = inputs.fares.filter((f) => f.observedAt.toISOString().slice(0, 10) === day);
     if (before.length < 20) continue;
-    const m = fitFareModel({ ...inputs, fares: before });
+    const m = fitFareModel({ ...inputs, tune: tuneOnce, fares: before });
     const wk = new Date(Date.parse(day) - ((new Date(day).getUTCDay() + 6) % 7) * DAY).toISOString().slice(0, 10);
     for (const f of today) {
       const p = m.predict(f.origin, f.destination, f.departDate);
