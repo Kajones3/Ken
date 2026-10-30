@@ -163,7 +163,10 @@ The rest they should have to sign in for. I was gaming the system a bit."
   month re-prices the search for that month and opens that resort's trip
   page; Back returns to the search for that month (owner). The Plus month
   tiles code (`monthsHtml`, `calendars`) stays: the budget page and "fits in
-  Jan" still use `calendars`.
+  Jan" still use `calendars`. The legend says one dot is "quiet for that
+  resort, not quieter than the others" (owner asked for that distinction).
+- **Guests' "See other park options" table:** the four locked resorts show a
+  blurred "$8,888" and "Sign up for a free account" (was "No cached price").
 - Getting there / being there was mocked up and REJECTED by the owner; per
   person framing too ("awful to make the user do the math").
 - **Open, owner thinking:** how to show totals when they are far apart
