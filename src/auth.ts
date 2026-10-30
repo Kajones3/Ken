@@ -29,9 +29,9 @@ const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 export interface SessionUser {
   id: string;
   email: string;
-  plusUntil: ISODate | null;
-  /** Which Plus pass (config PLUS_PASSES id); null = given by hand. */
-  plusPass: string | null;
+  proUntil: ISODate | null;
+  /** Which Planner Pro pass (config PRO_PASSES id); null = given by hand. */
+  proPass: string | null;
   /** The airport this traveler flies out of, or null if they've never said.
    *  Null and "ATL" are different facts — see setHomeAirport. */
   homeAirport: string | null;
@@ -98,7 +98,7 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   const token = sessionTokenFrom(req);
   if (!token) return null;
   const { rows } = await db.query(
-    `select u.id, u.email, u.plus_until, u.plus_pass, u.home_airport, u.email_verified_at
+    `select u.id, u.email, u.pro_until, u.pro_pass, u.home_airport, u.email_verified_at
        from sessions s join users u on u.id = s.user_id
       where s.token = $1 and s.expires_at > now()`,
     [token],
@@ -107,8 +107,8 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   if (!row) return null;
   return {
     id: row.id, email: row.email,
-    plusUntil: row.plus_until ? dateStr(row.plus_until) : null,
-    plusPass: row.plus_pass ?? null,
+    proUntil: row.pro_until ? dateStr(row.pro_until) : null,
+    proPass: row.pro_pass ?? null,
     homeAirport: row.home_airport ?? null,
     emailVerified: row.email_verified_at != null,
   };
@@ -123,25 +123,25 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
  * form the traveler couldn't explain. `null` clears it — "I haven't said"
  * has to stay reachable, otherwise the first save is irreversible.
  *
- * Having one is free: an account is free, saving and watching a TRIP is Plus,
+ * Having one is free: an account is free, saving and watching a TRIP is Planner Pro,
  * and remembering a dropdown is neither.
  *
  * But WHICH airports you may keep follows the same tiering as picking one.
- * The 22 smaller airports are Plus, and a non-Plus account cannot store one
+ * The 22 smaller airports are Planner Pro, and a non-Planner Pro account cannot store one
  * even though the board will still price a trip from it (downgraded to the
  * nearest free metro, and said so). Owner's call, and the consistent one:
- * the split is what makes the free/Plus line mean something, and a free
- * account quietly holding a Plus airport forever would hollow it out.
+ * the split is what makes the free/Planner Pro line mean something, and a free
+ * account quietly holding a extra airport forever would hollow it out.
  *
- * Plus is read from the database here, never passed in. A caller-supplied
+ * Planner Pro is read from the database here, never passed in. A caller-supplied
  * "they're Plus" flag would be a way to grant the tier from the client, the
  * same rule exact-fare follows for the same reason.
  *
- * A lapsed account KEEPS whatever it saved while it was Plus. Deleting a
+ * A lapsed account KEEPS whatever it saved while it was Planner Pro. Deleting a
  * setting because a subscription ran out is a punishment nobody asked for,
  * and the trip still prices — resolveOrigin() downgrades it to the nearest
  * free metro and the board says which it used, exactly as if they had picked
- * it by hand. They just cannot move it to another Plus airport until they
+ * it by hand. They just cannot move it to another extra airport until they
  * renew.
  */
 export class HomeAirportError extends Error {
@@ -162,8 +162,8 @@ export async function setHomeAirport(
 }
 
 /** Pure and exported so it's unit-testable without a database. */
-export function isPlus(plusUntil: ISODate | null, today: ISODate = todayISO()): boolean {
-  return plusUntil != null && plusUntil >= today;
+export function isPro(proUntil: ISODate | null, today: ISODate = todayISO()): boolean {
+  return proUntil != null && proUntil >= today;
 }
 
 // ------------------------------------------------------------- passwords
@@ -250,7 +250,7 @@ function cleanEmail(raw: unknown): string {
  * verifies that an address belongs to whoever typed it**, so claiming a
  * legacy account is first-come. That is not a regression — until today,
  * anyone who knew the address could simply sign in as them — but if an
- * account carries comped Plus, set its password with
+ * account carries comped Planner Pro, set its password with
  * `npm run set-password` before anyone else gets there. A one-time emailed
  * link through the existing EmailSender remains the real fix.
  */
@@ -280,14 +280,14 @@ export async function signUp(
   const { rows } = await db.query(
     `insert into users (id, email, password_hash) values ($1,$2,$3)
      on conflict (email) do update set password_hash = excluded.password_hash
-     returning id, email, plus_until, plus_pass, home_airport, email_verified_at`,
+     returning id, email, pro_until, pro_pass, home_airport, email_verified_at`,
     [row?.id ?? randomUUID(), email, hash],
   );
   const u = rows[0];
   return {
     id: u.id, email: u.email,
-    plusUntil: u.plus_until ? dateStr(u.plus_until) : null,
-    plusPass: u.plus_pass ?? null,
+    proUntil: u.pro_until ? dateStr(u.pro_until) : null,
+    proPass: u.pro_pass ?? null,
     homeAirport: u.home_airport ?? null,
     emailVerified: u.email_verified_at != null,
   };
@@ -309,10 +309,10 @@ export async function signIn(
   const email = cleanEmail(rawEmail);
   const bad = new AuthError("That email and password don't match.", "bad_credentials");
   const { rows } = await db.query<{
-    id: string; email: string; plus_until: unknown; plus_pass: string | null; home_airport: string | null;
+    id: string; email: string; pro_until: unknown; pro_pass: string | null; home_airport: string | null;
     password_hash: string | null; email_verified_at: unknown;
   }>(
-    `select id, email, plus_until, plus_pass, home_airport, password_hash, email_verified_at
+    `select id, email, pro_until, pro_pass, home_airport, password_hash, email_verified_at
        from users where email = $1`,
     [email],
   );
@@ -329,8 +329,8 @@ export async function signIn(
   }
   return {
     id: row.id, email: row.email,
-    plusUntil: row.plus_until ? dateStr(row.plus_until as never) : null,
-    plusPass: row.plus_pass ?? null,
+    proUntil: row.pro_until ? dateStr(row.pro_until as never) : null,
+    proPass: row.pro_pass ?? null,
     homeAirport: row.home_airport ?? null,
     emailVerified: row.email_verified_at != null,
   };

@@ -1,6 +1,6 @@
 /**
  * One-off admin script: wipe geocode_cache entirely. Same shape as
- * grantPlus.ts — a command, not an endpoint. Needed when a bad cached
+ * grantPro.ts — a command, not an endpoint. Needed when a bad cached
  * result (e.g. from a provider bug or a filtering-logic bug that's since
  * been fixed in code) is stuck being served forever, since cachedGeocode()
  * normally only re-fetches once a row passes its TTL (src/geo/cache.ts).

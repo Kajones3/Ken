@@ -213,9 +213,9 @@ export function resortDestinations(): Set<string> {
   return new Set(RESORTS.flatMap((r) => [r.iata, ...r.altArrivalAirports.map((a) => a.iata)]));
 }
 /**
- * Every departure city this app supports, free and Plus alike. DB1B covers
+ * Every departure city this app supports, free and Planner Pro alike. DB1B covers
  * every US airport at no extra cost — the survey is one file — so there is no
- * reason to withhold a baseline from a Plus origin. What the free/Plus split
+ * reason to withhold a baseline from a Planner Pro origin. What the free/Planner Pro split
  * governs is which airports can be *picked*, not which have data.
  */
 export function originIatas(): Set<string> {

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { resortTransportMode, defaultGettingThere } from "./gettingThere.js";
-import { RESORTS, ORIGINS, PLUS_ORIGINS } from "./config.js";
+import { RESORTS, ORIGINS, EXTRA_ORIGINS } from "./config.js";
 
 test("fly: every resort flies", () => {
   for (const r of RESORTS) assert.equal(resortTransportMode("fly", r), "fly", r.id);
@@ -79,7 +79,7 @@ test("an unknown airport falls back to flying, never to a broken drive", () => {
 test("the suggestion never proposes driving to a resort across an ocean", () => {
   // priceTrip refuses a drive to any non-domestic resort, so a suggestion
   // that implied one would produce an unpriceable board.
-  for (const o of [...ORIGINS, ...PLUS_ORIGINS]) {
+  for (const o of [...ORIGINS, ...EXTRA_ORIGINS]) {
     const mode = defaultGettingThere(o.iata);
     for (const r of RESORTS) {
       if (resortTransportMode(mode, r) === "drive") {

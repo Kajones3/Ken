@@ -3,10 +3,10 @@
  *
  * Price-drop monitoring (re-pricing every saved trip and emailing when it got
  * cheaper, crossed your own number, or gas moved) was REMOVED on 2026-09-25,
- * the owner's call: the Plus trip price calendar is the way to watch a trip
+ * the owner's call: the Planner Pro trip price calendar is the way to watch a trip
  * now, and a promise to keep watching is one the site should not make. What
- * Plus promises instead is word about the latest official Disney deals, so
- * this job emails every Plus member with a confirmed address when the owner
+ * Planner Pro promises instead is word about the latest official Disney deals, so
+ * this job emails every Planner Pro member with a confirmed address when the owner
  * adds a curated promo they have not been told about yet.
  *
  * It reads only the database, so it makes ZERO provider calls.
@@ -16,7 +16,7 @@
  * deal emails, whose dropPct is always 0, but runAlerts stays the one path).
  */
 import { randomUUID } from "node:crypto";
-import { PLUS_PASSES, RESORT_BY_ID } from "../config.js";
+import { PRO_PASSES, RESORT_BY_ID } from "../config.js";
 import { dateStr } from "../book.js";
 import { getDb, type Db } from "../db.js";
 import type { EmailSender } from "../email/types.js";
@@ -24,7 +24,7 @@ import { pickEmailSender } from "../email/pick.js";
 import { buildAlertEmail } from "../email/message.js";
 import { unsubscribeToken, unsubscribeUrl } from "../dealEmails.js";
 import { budgetLine, dealSaving, tripFromSaved } from "../dealSavings.js";
-import { sendPlusReminders } from "../plusReminder.js";
+import { sendProReminders } from "../proReminder.js";
 
 export interface Candidate {
   userId: string; email: string; resortId: string | null;
@@ -74,10 +74,10 @@ function describePromoEffectForEmail(kind: string, value: number): string {
 }
 
 /**
- * Every Plus member with a confirmed email, and the curated promos added since
+ * Every Planner Pro member with a confirmed email, and the curated promos added since
  * they were last told about one (or since their account was created, so a
  * brand-new member is not sent the whole back catalog — the cap trims the
- * rest). Plus is checked against today, never just for non-null: a lapsed
+ * rest). Planner Pro is checked against today, never just for non-null: a lapsed
  * member stops getting these the day it runs out.
  *
  * Emailing an unconfirmed address is the concrete harm an unverified account
@@ -90,12 +90,12 @@ export async function findAlerts(db: Db): Promise<{ candidates: Candidate[]; che
             coalesce((select max(a.fired_at) from price_alerts a
                        where a.user_id = u.id and a.kind = 'new_promo'), u.created_at) as since
        from users u
-      where u.email_verified_at is not null and u.plus_until >= current_date
+      where u.email_verified_at is not null and u.pro_until >= current_date
         and u.deal_emails_off_at is null
-        and (u.plus_pass is null or u.plus_pass = any($1))`,
+        and (u.pro_pass is null or u.pro_pass = any($1))`,
     // Only passes that include deal emails (owner, 2026-10-29: not the
-    // one-week pass). Hand-given Plus (no pass recorded) keeps them.
-    [PLUS_PASSES.filter((p) => p.dealEmails).map((p) => p.id)],
+    // one-week pass). Hand-given Planner Pro (no pass recorded) keeps them.
+    [PRO_PASSES.filter((p) => p.dealEmails).map((p) => p.id)],
   );
 
   const candidates: Candidate[] = [];
@@ -238,10 +238,10 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
     }
   }
 
-  // "Your Plus ends soon" rides the same daily run (src/plusReminder.ts).
+  // "Your Plus ends soon" rides the same daily run (src/proReminder.ts).
   let reminders = { due: 0, sent: 0 };
-  try { reminders = await sendPlusReminders(db, sender); }
-  catch (e) { console.error("plus reminders failed:", (e as Error).message); }
+  try { reminders = await sendProReminders(db, sender); }
+  catch (e) { console.error("Planner Pro reminders failed:", (e as Error).message); }
 
   await db.query(
     `update fetch_runs set finished_at = now(), rows_written = $2, note = $3 where id = $1`,

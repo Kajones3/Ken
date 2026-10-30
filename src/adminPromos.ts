@@ -4,7 +4,7 @@
  * try to put in"). Until now a deal could only be typed into seedPromos.ts.
  *
  * These are the same `promos` rows travelers apply on a resort's card, and
- * the same rows the nightly deal email announces to Plus members: a new,
+ * the same rows the nightly deal email announces to Planner Pro members: a new,
  * active deal that hasn't ended is emailed the next time the alert job runs.
  *
  * What each kind does to a trip is pricing.ts's job (applyPromoEffect); this

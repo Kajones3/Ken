@@ -63,7 +63,7 @@ export function hotelBudget(): number {
 /**
  * One row a day, national average only — cheap enough to just always fetch,
  * not gated by the near/mid/far tiering that flights and hotels use. Feeds
- * the free driving-cost estimate and the Plus gas-price-change alert.
+ * the free driving-cost estimate and the Planner Pro gas-price-change alert.
  */
 export async function seedGasPrice(db: Db): Promise<number> {
   const provider = pickGasProvider();

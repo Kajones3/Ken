@@ -192,7 +192,7 @@ test("an override for Park Hopper moves the ticket line", async () => {
   const raised = priceTrip(bookWith({ "hopper.wdw.adult": ownerValue }), wdw, p, {}, START);
   assert.ok(shipped.ok && raised.ok);
   if (!shipped.ok || !raised.ok) return;
-  // Plus Walt Disney World's 6.5% ticket tax, which the hopper carries too.
+  // Planner Pro Walt Disney World's 6.5% ticket tax, which the hopper carries too.
   assert.equal(Math.round(raised.price.tickets - shipped.price.tickets), Math.round(25 * 2 * 1.065), "two adults, taxed");
 });
 

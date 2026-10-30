@@ -30,8 +30,8 @@ test("the sample PDF's trip is the only one a guest may price in full", () => {
   assert.equal(isSampleTrip({ origin: "SFO", adults: 2, childAges: [], nights: 6 }), false);
 });
 
-test("grant-plus takes a pass name or plain days, and a new pass starts fresh", async () => {
-  const { grantArgs, grantPlus } = await import("./grantPlus.js");
+test("grant-pro takes a pass name or plain days, and a new pass starts fresh", async () => {
+  const { grantArgs, grantPro } = await import("./grantPro.js");
   const { memoryDb } = await import("./db.js");
   const { addDaysISO, todayISO } = await import("./dates.js");
   assert.deepEqual(grantArgs("week"), { days: 7, pass: "week" });
@@ -39,9 +39,9 @@ test("grant-plus takes a pass name or plain days, and a new pass starts fresh", 
   assert.deepEqual(grantArgs("30"), { days: 30, pass: null });
   assert.equal(grantArgs("forever"), null);
   const db = await memoryDb();
-  await grantPlus(db, "f@example.com", 274, "nineMonths");
-  const r = await grantPlus(db, "f@example.com", 7, "week");
-  assert.deepEqual(r, { email: "f@example.com", plusUntil: addDaysISO(todayISO(), 7), pass: "week" });
+  await grantPro(db, "f@example.com", 274, "nineMonths");
+  const r = await grantPro(db, "f@example.com", 7, "week");
+  assert.deepEqual(r, { email: "f@example.com", proUntil: addDaysISO(todayISO(), 7), pass: "week" });
   await db.close();
 });
 

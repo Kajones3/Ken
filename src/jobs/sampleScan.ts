@@ -11,7 +11,7 @@
  * calls and NO writes: it does not go through compare(), which records the
  * search as route demand and would steer tonight's paid lookups.
  */
-import { ORIGINS, PLUS_ORIGINS, RESORTS, bucketFor, isLocalRoute, plannableMonths } from "../config.js";
+import { ORIGINS, EXTRA_ORIGINS, RESORTS, bucketFor, isLocalRoute, plannableMonths } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthBounds, todayISO } from "../dates.js";
 import { loadBook } from "../book.js";
@@ -55,7 +55,7 @@ export async function scan(db: Db): Promise<string> {
   const to = monthBounds(months[months.length - 1]!)[1];
   const rows: Row[] = [];
   // The nightly metros plus Raleigh-Durham, the owner's own test airport.
-  for (const o of [...ORIGINS, ...PLUS_ORIGINS.filter((x) => x.iata === "RDU")]) {
+  for (const o of [...ORIGINS, ...EXTRA_ORIGINS.filter((x) => x.iata === "RDU")]) {
     // A short drive to a US resort would be priced as a drive on the
     // board; this scan only flies, so leave those cities out.
     if (RESORTS.some((r) => r.region === "dom" && isLocalRoute(o.iata, r.iata))) continue;

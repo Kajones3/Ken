@@ -19,7 +19,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parseEvent, recordEvent, loadStats, eventRateLimiter } from "./siteEvents.js";
 import { guestQuery, isSampleTrip, lockForGuests } from "./guestView.js";
-import { passPerks, plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
+import { passPerks, plannableMonths, PRO_PASSES, PRO_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, EXTRA_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
@@ -60,7 +60,7 @@ import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
   currentUser, createSession, sessionTokenFrom, destroySession,
-  sessionCookieHeader, clearCookieHeader, isPlus, signUp, signIn, AuthError,
+  sessionCookieHeader, clearCookieHeader, isPro, signUp, signIn, AuthError,
   setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, secureCookies, type SessionUser,
 } from "./auth.js";
 import {
@@ -92,9 +92,9 @@ const MIME: Record<string, string> = {
 };
 
 /**
- * Free for everyone — how you get there isn't a Plus feature, just a different
+ * Free for everyone — how you get there isn't a Planner Pro feature, just a different
  * way to answer "what does this trip cost". Gas-price *monitoring* (an alert
- * when the price moves after you save a trip) is the actual Plus feature.
+ * when the price moves after you save a trip) is the actual Planner Pro feature.
  *
  * A "Getting there" preset can mean different resorts get there differently
  * in the *same* six-resort comparison (e.g. drive to WDW, fly to the other
@@ -169,7 +169,7 @@ function paramsFrom(q: URLSearchParams): TripParams {
     // day picker.
     priceBasis: q.get("basis") === "cheapest" ? "cheapest" : "typical",
     // Plus since 2026-10-08 (owner: "move all the budget stuff to plus");
-    // budgetFor() below drops these for anyone without Plus. `passes` is sent as
+    // budgetFor() below drops these for anyone without Planner Pro. `passes` is sent as
     // resort:tier:count triples so one query param carries a whole party's
     // holdings across the six-resort board.
     annualPasses: parsePassHoldings(
@@ -193,7 +193,7 @@ function clamp(n: number, lo: number, hi: number): number {
  * them, the same way it would be if the boxes were empty.
  */
 function budgetFor(user: SessionUser | null, params: TripParams, overrides: Overrides): void {
-  if (user && isPlus(user.plusUntil)) return;
+  if (user && isPro(user.proUntil)) return;
   params.annualPasses = [];
   params.dvcRental = null;
 }
@@ -202,8 +202,8 @@ function budgetFor(user: SessionUser | null, params: TripParams, overrides: Over
  * Which departure airport a request actually gets.
  *
  * Launch decision 2026-09-24: every airport in `ALL_ORIGINS` (the 19 big
- * metros plus the 22 smaller ones once reserved for Plus) is available to
- * everyone — see CLAUDE.md's Free/Plus split. `ORIGINS`/`PLUS_ORIGINS` stay
+ * metros plus the 22 smaller ones once reserved for Planner Pro) is available to
+ * everyone — see CLAUDE.md's Free/Planner Pro split. `ORIGINS`/`EXTRA_ORIGINS` stay
  * two separate lists in config.ts because the nightly refresh still only
  * pre-caches the first 19; a smaller airport still prices, off a BTS-derived
  * estimate rather than a real per-date lookup, exactly like any other
@@ -282,10 +282,10 @@ async function readForm(req: IncomingMessage): Promise<Record<string, string>> {
 }
 
 async function compare(q0: URLSearchParams, user: SessionUser | null) {
-  // Launch decision 2026-09-24: the only Plus feature is the shareable PDF.
+  // Launch decision 2026-09-24: the only Planner Pro feature is the shareable PDF.
   // Nothing in this function gates behavior on plan any more — a signed-in
   // user's own account (email, plan) is what /api/session reports, not this
-  // endpoint. See CLAUDE.md's Free/Plus split for what that superseded.
+  // endpoint. See CLAUDE.md's Free/Planner Pro split for what that superseded.
   // A guest may change only the month, the party and the home airport
   // (guestQuery); the sample PDF's own trip is ours to give away in full.
   const guest = !user && !(q0.get("sample") === "1" && isSampleTrip(paramsFrom(q0)));
@@ -358,7 +358,7 @@ async function compare(q0: URLSearchParams, user: SessionUser | null) {
   const priceBasis: "typical" | "cheapest" = q.get("basis") === "cheapest" ? "cheapest" : "typical";
   // The month actually being priced drives the crowd lookup. An explicit date
   // wins over the month picker, the same rule the weather box follows, so a
-  // Plus trip pinned to real dates is not told about the wrong month.
+  // Planner Pro trip pinned to real dates is not told about the wrong month.
   const crowdMonth = Number((explicitDate ?? `${month}-01`).slice(5, 7));
 
   // A cheaper airport within a drive, per US resort (nearbyAirports.ts).
@@ -490,7 +490,7 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
   // single-day read stays free: that is how the hotel card's "every category,
   // same N nights" comparison prices one date, and it reveals nothing the
   // board did not already show. Resolved from the session, never the client.
-  if (from0 !== to0 && !(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
+  if (from0 !== to0 && !(user && isPro(user.proUntil))) return { error: "pro_required" as const };
   // A single day is free to anyone signed in; a guest would otherwise read
   // the four locked resorts' prices one day at a time (src/guestView.ts).
   if (!user) return { error: "sign_in_required" as const };
@@ -535,10 +535,10 @@ async function calendar(q: URLSearchParams, user: SessionUser | null) {
  * whole-trip total for every plannable month, priced the way the board
  * prices a month. Replaced the day-by-day calendar, whose per-day dollar
  * figures claimed more precision than quarterly flight data can back (see
- * monthView.ts). Plus is resolved from the session, never the client.
+ * monthView.ts). Planner Pro is resolved from the session, never the client.
  */
 async function months(q: URLSearchParams, user: SessionUser | null) {
-  if (!(user && isPlus(user.plusUntil))) return { error: "plus_required" as const };
+  if (!(user && isPro(user.proUntil))) return { error: "pro_required" as const };
   return monthsFor(q, user, q.get("resort") ?? "wdw");
 }
 
@@ -547,7 +547,7 @@ async function months(q: URLSearchParams, user: SessionUser | null) {
  * price, as COUNTS only (owner, 2026-10-29: a free visitor who types a budget
  * is told "4 destinations can fit into this budget at different times of the
  * year", and Plus shows which). Same month pricing as the Plus tiles, so the
- * count and what Plus then shows can't disagree. No resort is named here.
+ * count and what Planner Pro then shows can't disagree. No resort is named here.
  */
 async function fits(q0: URLSearchParams, user: SessionUser | null) {
   // Same limit as the board: a guest's count is for the default trip.
@@ -571,7 +571,7 @@ async function fits(q0: URLSearchParams, user: SessionUser | null) {
 
 /**
  * "Best time to go" on each trip card (owner, 2026-10-30): each resort's
- * cheapest plannable month against the month searched, priced like the Plus
+ * cheapest plannable month against the month searched, priced like the Planner Pro
  * month tiles (monthsFor) so the two can't disagree. A free account sees the
  * month and its total; a guest sees only how much less ("up to $1,600 less at
  * another time of year") and only for the two resorts a guest is shown
@@ -614,18 +614,18 @@ async function bestMonths(q0: URLSearchParams, user: SessionUser | null) {
  * "Best months to go, all six" (owner, 2026-10-30, mock-up "B + crowds"):
  * every plannable month's typical total for each resort, plus crowd dots
  * scaled to that resort's own year. It replaces the per-resort month tiles.
- * Plus sees all six; a free account sees two (the cheapest US and cheapest
+ * Planner Pro sees all six; a free account sees two (the cheapest US and cheapest
  * international resort in the searched month) and four locked rows sent
  * with NO prices; a guest is asked to sign in. Resolved from the session.
  */
 async function yearGrid(q: URLSearchParams, user: SessionUser | null) {
   if (!user) return { error: "sign_in_required" as const };
   const month = q.get("month") ?? "";
-  const plus = isPlus(user.plusUntil);
+  const pro = isPro(user.proUntil);
   const quotes = await allMonths(q, user);
-  const open = new Set(plus ? RESORTS.map((r) => r.id) : twoShown(quotes, month));
+  const open = new Set(pro ? RESORTS.map((r) => r.id) : twoShown(quotes, month));
   return {
-    month, plus,
+    month, pro,
     months: plannableMonths(todayISO()),
     resorts: RESORTS.map((r) => {
       if (!open.has(r.id)) return { resortId: r.id, locked: true };
@@ -669,7 +669,7 @@ async function monthsFor(q: URLSearchParams, user: SessionUser | null, resortId:
 /**
  * Public and free — browsing what Plus would unlock is exactly the "let
  * friends see what's behind the paywall" surface. Applying one to move a
- * number (via an override's promoId) is the Plus part, gated elsewhere.
+ * number (via an override's promoId) is the Planner Pro part, gated elsewhere.
  */
 async function listPromos(q: URLSearchParams) {
   const resortId = q.get("resortId");
@@ -703,7 +703,7 @@ function withSuggestedMode(origins: typeof ORIGINS) {
  * Is this request the owner?
  *
  * One account, named by OWNER_EMAIL, resolved from the session cookie against
- * the database — never from anything the client sends, the same rule Plus
+ * the database — never from anything the client sends, the same rule Planner Pro
  * follows. There is no owner ROLE and deliberately so: a role column is a
  * thing that can be set, and the only person who should be able to change
  * every price in the app is the person who holds the environment variable.
@@ -852,8 +852,8 @@ const server = createServer(async (req, res) => {
         ?? DVC_TAKE_HOME_PER_POINT;
       return send(200, {
       origins: withSuggestedMode(ORIGINS),
-      plusOrigins: withSuggestedMode(PLUS_ORIGINS),
-      // The order to OFFER them in — by city, free and Plus interleaved.
+      extraOrigins: withSuggestedMode(EXTRA_ORIGINS),
+      // The order to OFFER them in — by city, free and Planner Pro interleaved.
       // Sent as codes rather than a third copy of the airports, so the rule
       // itself stays in config.ts and the browser only obeys it.
       originOrder: ORIGINS_BY_CITY.map((o) => o.iata),
@@ -934,8 +934,8 @@ const server = createServer(async (req, res) => {
       // 2026-10-12), from the government's airline-fare price index
       // (airfareIndex.ts). Absent until the BLS job has stored it.
       airfareIndex: (await loadAirfareIndexSummary(db).catch(() => undefined))?.board ?? null,
-      plusPasses: PLUS_PASSES,
-      plusPassDefault: PLUS_PASS_DEFAULT,
+      proPasses: PRO_PASSES,
+      proPassDefault: PRO_PASS_DEFAULT,
       holidayWindows: Object.fromEntries(
         Array.from({ length: 14 }, (_, i): [string, ReturnType<typeof holidayWindowsFor>] => {
           const now = new Date();
@@ -947,7 +947,7 @@ const server = createServer(async (req, res) => {
       }, { cache: "public, max-age=300" });
     }
 
-    // --- auth: an email and nothing else. Real enough to make Plus real; ---
+    // --- auth: an email and nothing else. Real enough to make Planner Pro real; ---
     // --- explicitly not enough for a public launch (see src/auth.ts).    ---
     // Sign up and sign in are two routes now, not one. The old single route
     // created an account on any unknown email, which meant a typo silently
@@ -983,7 +983,7 @@ const server = createServer(async (req, res) => {
         if (isSignup) void sendVerification(db, user.id, user.email, pickEmailSender());
         const token = await createSession(db, user.id);
         return send(200, {
-          email: user.email, plus: isPlus(user.plusUntil), plusUntil: user.plusUntil,
+          email: user.email, pro: isPro(user.proUntil), proUntil: user.proUntil,
           emailVerified: user.emailVerified,
         }, withCookie(sessionCookieHeader(token)));
       } catch (e) {
@@ -1147,15 +1147,15 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/auth/me") {
       const user = await currentUser(db, req);
       if (!user) return send(200, { authenticated: false });
-      const plus = isPlus(user.plusUntil);
+      const pro = isPro(user.proUntil);
       // Exact-fare allowance travels with the identity, so the UI can show a
       // real remaining count instead of only finding out by hitting the cap.
       // Free for any signed-in account since the 2026-09-24 launch decision —
       // not conditioned on `plus`, which now gates only the PDF.
       const exactFare = { perDay: limitsFromEnv().perUserPerDay, remainingToday: await remainingForUser(db, user.id) };
       return send(200, {
-        authenticated: true, email: user.email, plus, plusUntil: user.plusUntil,
-        plusPass: plus ? user.plusPass : null, perks: plus ? passPerks(user.plusPass) : null,
+        authenticated: true, email: user.email, pro, proUntil: user.proUntil,
+        proPass: pro ? user.proPass : null, perks: pro ? passPerks(user.proPass) : null,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
         dealEmails: await dealEmailsOn(db, user.id),
         // Only so the masthead can offer the link. Every admin route resolves
@@ -1165,7 +1165,7 @@ const server = createServer(async (req, res) => {
       }, { cache: "no-store" });
     }
     // --- profile: free, signed in, always the caller's own row. ---------
-    // Not Plus-gated, unlike saved trips: an account is free and this is a
+    // Not Planner Pro-gated, unlike saved trips: an account is free and this is a
     // remembered form field, not monitoring. The airport is validated against
     // the app's own list inside setHomeAirport, so a junk code can't be
     // stored and handed back as a pre-selected option later.
@@ -1194,7 +1194,7 @@ const server = createServer(async (req, res) => {
     }
 
     // The attraction list itself is public — facts about what each resort
-    // has, the same way a curated promo is public to browse. What Plus buys
+    // has, the same way a curated promo is public to browse. What Planner Pro buys
     // is the personalization: picking yours and having the board answer.
     if (url.pathname === "/api/attractions") {
       // The owner's list, overlaid on the shipped one. No longer cacheable
@@ -1229,9 +1229,9 @@ const server = createServer(async (req, res) => {
       return send(200, { ok: true }, withCookie(clearCookieHeader()));
     }
 
-    // No payment processor yet — a Plus click from the paywall modal emails
+    // No payment processor yet — a Planner Pro click from the paywall modal emails
     // the owner instead of charging anyone, so it does something real rather
-    // than nothing. Granting Plus is still the one real mechanism: grantPlus.ts.
+    // than nothing. Granting Planner Pro is still the one real mechanism: grantPro.ts.
     // Anonymous action counts (siteEvents.ts). Answers 204 whatever happens:
     // a counter that breaks must never break the page that called it. The
     // owner's own clicks are skipped so testing doesn't skew the numbers.
@@ -1246,13 +1246,13 @@ const server = createServer(async (req, res) => {
       return res.end();
     }
 
-    if (url.pathname === "/api/plus/request" && req.method === "POST") {
+    if (url.pathname === "/api/pro/request" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign in first" });
       const body = await readBody(req);
       // Only a pass we sell; anything else is refused rather than guessed at,
       // so the email never quotes a price or a length nobody offered.
-      const pass = PLUS_PASSES.find((p) => p.id === body.plan);
+      const pass = PRO_PASSES.find((p) => p.id === body.plan);
       if (!pass) return send(400, { error: "unknown_plan" });
       const owner = process.env.OWNER_EMAIL;
       if (owner) {
@@ -1260,7 +1260,7 @@ const server = createServer(async (req, res) => {
           to: owner,
           subject: `Pricing the Magic: ${user.email} wants Planner Pro`,
           text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
-            + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-plus -- ${user.email} ${pass.id}`,
+            + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-pro -- ${user.email} ${pass.id}`,
         });
       }
       return send(200, { ok: true, delivered: Boolean(owner) });
@@ -1271,7 +1271,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/months") {
       const user = await currentUser(db, req);
       const body = await months(url.searchParams, user);
-      if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
+      if ("error" in body && body.error === "pro_required") return send(402, body, { cache: "no-store" });
       return send(200, body, { cache: "private, max-age=60" });
     }
     if (url.pathname === "/api/yeargrid") {
@@ -1291,7 +1291,7 @@ const server = createServer(async (req, res) => {
     if (url.pathname === "/api/compare" || url.pathname === "/api/calendar") {
       const user = await currentUser(db, req);
       const body = url.pathname === "/api/compare" ? await compare(url.searchParams, user) : await calendar(url.searchParams, user);
-      if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
+      if ("error" in body && body.error === "pro_required") return send(402, body, { cache: "no-store" });
       if ("error" in body && body.error === "sign_in_required") return send(401, body, { cache: "no-store" });
       // A guest's locked board must never be served from cache after they sign in.
       return send(200, body, { cache: user ? "private, max-age=60" : "no-store" });
@@ -1317,7 +1317,7 @@ const server = createServer(async (req, res) => {
     // --- exact live fare: signed in, free. The one route where a user's
     // click spends metered provider money — no longer paywalled at launch,
     // but still bounded by the per-user and site-wide daily caps below, so
-    // the spend stays capped even though it is no longer offset by Plus
+    // the spend stays capped even though it is no longer offset by Planner Pro
     // revenue. Sign-in stays required because the per-user cap needs an
     // identity to key on.
     if (url.pathname === "/api/exact-fare" && req.method === "POST") {
@@ -1346,17 +1346,17 @@ const server = createServer(async (req, res) => {
       return send(200, result, { cache: "no-store" });
     }
 
-    // --- saved trips: SAVING is Plus (owner's call, 2026-09-25), always the ---
+    // --- saved trips: SAVING is Planner Pro (owner's call, 2026-09-25), always the ---
     // --- caller's own rows. Listing, reopening and deleting stay open to any ---
     // --- signed-in account, so a lapsed member keeps what they saved.        ---
     if (url.pathname === "/api/trips" && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      if (!isPro(user.proUntil)) return send(402, { error: "pro_required" });
       // Saved searches per pass (owner, 2026-10-29): 3 on a week, 10 on three
-      // months, no limit on nine months or hand-given Plus. Every saved row
+      // months, no limit on nine months or hand-given Planner Pro. Every saved row
       // counts, old ones included; deleting one makes room.
-      const cap = passPerks(user.plusPass).savedSearches;
+      const cap = passPerks(user.proPass).savedSearches;
       if (cap !== null) {
         const { rows: c } = await db.query(`select count(*)::int as n from saved_trips where user_id = $1`, [user.id]);
         if (Number(c[0]?.n ?? 0) >= cap) return send(403, { error: "saved_limit", limit: cap });
@@ -1448,7 +1448,7 @@ const server = createServer(async (req, res) => {
     if (expensesMatch && req.method === "POST") {
       const user = await currentUser(db, req);
       if (!user) return send(401, { error: "sign_in_required" });
-      if (!isPlus(user.plusUntil)) return send(402, { error: "plus_required" });
+      if (!isPro(user.proUntil)) return send(402, { error: "pro_required" });
       const owns = await db.query(`select 1 from saved_trips where id = $1 and user_id = $2`, [expensesMatch[1], user.id]);
       if (!owns.rows[0]) return send(404, { error: "not found" });
       const body = await readBody(req);
