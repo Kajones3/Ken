@@ -154,8 +154,14 @@ dashboard. The privacy draft promises deletion within 30 days on request.
 A self-serve "Delete my account" in the account panel is NOT built; offer it
 before launch.
 
-**Scheduled:** popular-routes check-in 2026-10-30 12:30 UTC (expect 24
-written / 24 kept after the empty-slot fix; see the third round below).
+**Popular-routes empty-slot fix VERIFIED (governing rule #4, 2026-10-30):**
+run 41043625835 + coverage run 41056318435: **24 written / 24 kept / 24
+forecasts kept** (all `candidate`, all with `shown_cheapest_usd`), 23 of 24
+with Google's typical range, 0 empty, 0 errors. Oct 14-29 was 14-21 a night.
+The log's "furthest-off" line is printed BEFORE the move to main airports
+(it named TPA/NRT routes); those were moved, found recently bought, dropped
+and refilled. No alternate airport can be bought by construction (the final
+pass maps every route to `mainArrivalAirport`); not checked row by row.
 
 ## START HERE — 2026-10-29, second session
 
