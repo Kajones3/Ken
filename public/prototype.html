@@ -701,6 +701,27 @@ button.mtile:hover{border-color:var(--rule-strong)}
 .mtile.none{opacity:.55}
 .mtile.sel{outline:2px solid var(--accent-line); outline-offset:1px}
 .pluschip{display:inline-block; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:1px 6px; border-radius:6px; background:var(--accent-bg); color:var(--accent); vertical-align:1px}
+.ygwrap{overflow-x:auto; border:2px solid var(--frame, #16204A); border-radius:16px; background:var(--surface); padding:12px 14px}
+.ygrid{display:grid; gap:6px; min-width:680px}
+.ygrow{display:grid; grid-template-columns:132px repeat(var(--yg-n), minmax(0,1fr)); gap:6px; align-items:stretch}
+.yghead{text-align:center; font-family:var(--f-label); font-weight:600; font-size:14px; letter-spacing:.06em; text-transform:uppercase; padding:3px 0; border-radius:8px}
+.yghead.sel{background:var(--s1); color:var(--bg, #FBFAF6)}
+.ygname{display:flex; align-items:center; font-family:var(--f-head); font-weight:700; font-size:14px; line-height:1.15}
+.ygname.cur::before{content:""; width:4px; align-self:stretch; background:#E8B23E; border-radius:2px; margin-right:8px}
+.ygcell{height:56px; border-radius:10px; border:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; font:inherit; padding:0}
+button.ygcell{cursor:pointer}
+.ygcell .ygt{font-size:13px; font-weight:700; font-variant-numeric:tabular-nums}
+.ygcell.sel{outline:3px solid #E8B23E; outline-offset:2px}
+.ygcell.none{background:transparent; color:var(--muted)}
+.ygdots{display:flex; gap:3px}
+.ygdots i{width:6px; height:6px; border-radius:50%; background:currentColor}
+.yglock{position:relative; display:grid; gap:6px}
+.yglock .ygcell{filter:blur(3px); color:#8A93AD}
+.yglock-cta{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px,calc(100% - 24px)); background:var(--surface); border:2px solid var(--frame, #16204A); border-radius:16px; padding:16px 18px; display:flex; flex-direction:column; gap:8px; align-items:flex-start}
+.yglock-cta b{font-family:var(--f-head); font-size:17px}
+.yglock-cta span{font-size:13.5px; color:var(--ink-2)}
+.yglegend{display:flex; flex-wrap:wrap; gap:6px 16px; align-items:center; font-size:12.5px; color:var(--ink-2); margin-top:10px}
+.yglegend .sw{display:inline-block; width:20px; height:14px; border-radius:4px; border:1px solid var(--rule); vertical-align:-2px; margin-right:6px}
 .calgate{position:relative}
 .calgate .mgrid{filter:blur(2px); opacity:.55; pointer-events:none; user-select:none}
 .calgate-cta{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(420px,calc(100% - 24px));
@@ -2749,6 +2770,72 @@ function describePromoEffect(kind, value){
  * data can back). The server answers 402 without Plus, so a free visitor never
  * fetches one and gets a blurred stand-in instead. null means "no months",
  * never an error. Each month is priced the way the board prices a month. */
+/* "Best months to go, all six" (owner, 2026-10-30): one grid, every resort x
+ * every plannable month, lighter = cheaper, dots = how busy against that
+ * resort's own year. Plus sees all six; a free account sees two rows and a
+ * Plus box over the other four (the server sends those without prices);
+ * a guest gets a sign-up box. Cached per search. */
+let yearGridCache = { key: "", data: null };
+async function loadYearGrid(){
+  if(!session.email) return null;
+  const q = compareQuery();
+  const key = JSON.stringify(q) + "|" + session.plus;
+  if(yearGridCache.key === key) return yearGridCache.data;
+  let data = null;
+  try { data = await apiGet("/api/yeargrid", q); } catch(e){ data = null; }
+  yearGridCache = { key, data };
+  return data;
+}
+const YG_SHADES = [["#EEF2F7","#16204A"],["#C9D5E8","#16204A"],["#93A7CB","#16204A"],["#4A5F96","#FFFFFF"],["#16204A","#FFFFFF"]];
+function yearGridHtml(currentId, g){
+  const lockedBox = (title, text, btn) => `<div class="yglock-cta"><b>${title}</b><span>${text}</span>${btn}</div>`;
+  if(!session.email){
+    return `<div class="calgate"><div class="mgrid" aria-hidden="true">${gatedMonthsHtml()}</div>
+      ${lockedBox("See the Best Time to Go", "Every month you can plan, at all six resorts, side by side.",
+        '<button type="button" class="btn btn-primary btn-sm" data-signup>Create a free account</button>').replace("yglock-cta","calgate-cta")}</div>`;
+  }
+  if(!g || !Array.isArray(g.resorts)) return `<p class="sub">We couldn't load the months just now.</p>`;
+  const ms = g.months || [];
+  const shown = g.resorts.filter(r => !r.locked);
+  const totals = shown.flatMap(r => r.months.map(m => m.total)).filter(t => t !== null);
+  const lo = Math.min(...totals), hi = Math.max(...totals);
+  const step = (hi - lo) / 5 || 1;
+  const shade = t => YG_SHADES[Math.min(4, Math.floor((t - lo) / step))];
+  const edge = k => usd(Math.round((lo + step * k) / 100) * 100);
+  const head = `<div class="ygrow"><span></span>${ms.map(ym => {
+    const [y, m] = ym.split("-").map(Number);
+    return `<div class="yghead${ym === g.month ? " sel" : ""}">${MONTHS[m-1]}${m === 1 || ym === ms[0] ? " ’" + String(y).slice(2) : ""}</div>`;
+  }).join("")}</div>`;
+  const busy = ["", "quietest", "quiet", "average crowds", "busy", "busiest"];
+  const rowHtml = r => {
+    const res = RESORT_BY_ID.get(r.resortId);
+    const cells = ms.map(ym => {
+      const m = r.months.find(x => x.month === ym);
+      if(!m || m.total === null) return `<div class="ygcell none">—</div>`;
+      const [bg, fg] = shade(m.total);
+      const [y, mo] = ym.split("-").map(Number);
+      return `<button type="button" class="ygcell${ym === g.month ? " sel" : ""}" style="background:${bg};color:${fg}"
+        data-ym="${ym}" data-resort="${r.resortId}"
+        aria-label="${esc(res.name)}, ${MONTHSFULL[mo-1]} ${y}: ${usd(m.total)}${m.dots ? ", " + busy[m.dots] : ""}">
+        <span class="ygt">${usd(m.total)}</span>
+        ${m.dots ? `<span class="ygdots" aria-hidden="true">${[1,2,3,4,5].map(n => `<i style="opacity:${n <= m.dots ? 1 : .25}"></i>`).join("")}</span>` : ""}
+      </button>`;
+    }).join("");
+    return `<div class="ygrow"><div class="ygname${r.resortId === currentId ? " cur" : ""}">${esc(res.name)}</div>${cells}</div>`;
+  };
+  const locked = g.resorts.filter(r => r.locked);
+  const lockedHtml = locked.length ? `<div class="yglock">${locked.map(r => {
+    const res = RESORT_BY_ID.get(r.resortId);
+    return `<div class="ygrow" aria-hidden="true"><div class="ygname">${esc(res.name)}</div>${ms.map((ym, k) =>
+      `<div class="ygcell" style="background:${["#EEF2F7","#DDE4EF","#E8EDF4"][k % 3]}"><span class="ygt">$8,888</span></div>`).join("")}</div>`;
+  }).join("")}${lockedBox("See Every Month at All Six", "Plus shows the whole year for every resort, so you can see when each one is cheaper and quieter.",
+    '<button type="button" class="btn btn-primary btn-sm openpw">See Plus plans</button>')}</div>` : "";
+  return `<div class="ygwrap"><div class="ygrid" style="--yg-n:${ms.length}">${head}${shown.map(rowHtml).join("")}${lockedHtml}</div></div>
+    <div class="yglegend">${YG_SHADES.map(([bg], k) => `<span><span class="sw" style="background:${bg}"></span>${k === 0 ? "Under " + edge(1) : k === 4 ? edge(4) + " and up" : edge(k) + "–" + edge(k + 1)}</span>`).join("")}
+      <span>Dots: how busy that month is for that resort (1 = its quietest, 5 = its busiest)</span>
+      <span>Tap a month to see that trip</span></div>`;
+}
+
 async function fetchCalendarFor(resortId){
   if(!session.plus) return null;
   let data;
@@ -3765,9 +3852,10 @@ async function renderDetail(){
   // its checkbox visible so it can be unchecked. See the "your numbers"
   // panel below.
   const hotelWantedGlobally = p.stay !== "none";
-  const [tierRows, promoList] = await Promise.all([
+  const [tierRows, promoList, yearGrid] = await Promise.all([
     noHotel ? Promise.resolve([null,null,null]) : Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
     fetchPromosFor(item.resortId, x.start),
+    loadYearGrid(),
   ]);
   if(token !== detailToken) return;
 
@@ -4354,14 +4442,8 @@ async function renderDetail(){
         ${promosCard(item, x, promoList)}
       </div>
 
-      <p class="sec-lab">Best months to go — the whole trip, flights, hotel, tickets and food${session.plus ? "" : " · Plus"}</p>
-      ${session.plus ? `<div class="mgrid">${monthsHtml}</div>
-        <p class="hint" style="margin-top:8px">Each month is ${params.priceBasis === "cheapest" ? "the cheapest arrival day we can find" : "a typical arrival day"}, priced the way the board above prices a month, and compared with
-        ${esc(r.name)}'s own middle month. Pick one to price it.</p>` : `<div class="calgate">
-        <div class="mgrid" aria-hidden="true">${gatedMonthsHtml()}</div>
-        <div class="calgate-cta"><b>The whole trip's typical cost for every month you can plan</b>
-          <span>Not just the fare — the flights, hotel, tickets and food for your party, month by month, so you can see the best time to go.</span>
-          <button class="btn btn-primary btn-sm openpw">Get Plus</button></div></div>`}
+      <p class="sec-lab">Best months to go, all six — the whole trip, flights, hotel, tickets and food</p>
+      ${yearGridHtml(item.resortId, yearGrid)}
 
       <p class="sec-lab" style="margin-top:26px">See other park options</p>
       <p class="sub" style="margin:-6px 0 10px">Same dates and party, compared across all six resorts — pick one to jump there</p>
@@ -6487,6 +6569,20 @@ document.addEventListener("click", e=>{
     const value = Math.max(0, +$("#ppValue").value) || 0;
     if(value > 0) setPersonalPromo(resortId, kind, value, label);
   }
+});
+
+/* All-six month grid: price the whole search for that month and open that
+ * resort's trip (owner: Back then returns to the search for that month). */
+document.addEventListener("click", async e=>{
+  const t = e.target.closest(".ygcell[data-ym]");
+  if(!t) return;
+  if(!monthOpts.some(([ym])=>ym===t.dataset.ym)) return;
+  const rid = t.dataset.resort;
+  $("#month").value = t.dataset.ym;
+  $("#month").dispatchEvent(new Event("change"));
+  await runSearch(rid);
+  const i = results.findIndex(r => r.resortId === rid);
+  if(i >= 0) openTripPage(i);
 });
 
 /* "best months to go" tile click -> price that month for the same search */

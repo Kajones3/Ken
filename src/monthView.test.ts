@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { bookFrom } from "./book.js";
 import { typicalIn, resortById, type HotelNight, type TripParams } from "./pricing.js";
-import { bestMonthOf, monthLevels, quoteMonths } from "./monthView.js";
+import { bestMonthOf, crowdDots, monthLevels, quoteMonths } from "./monthView.js";
 import { monthBounds, range } from "./dates.js";
 
 const NIGHT: HotelNight = { hotelId: "m", name: "Moderate lodge", descriptor: "", nightly: 100, tier: "moderate" as never, onProperty: true };
@@ -75,4 +75,19 @@ test("best time to go: the cheapest month, saving rounded down, only past $200 a
   assert.deepEqual(bestMonthOf([q("2027-03", 2_000), q("2027-06", 1_850)], "2027-03"), { already: true });
   // No price for the searched month: nothing honest to compare with.
   assert.equal(bestMonthOf(months, "2027-08"), null);
+});
+
+test("crowd dots: each resort against its own year, quietest month 1 dot, busiest 5", () => {
+  const year = Array.from({ length: 12 }, (_, i) => `2027-${String(i + 1).padStart(2, "0")}`);
+  for (const id of ["wdw", "dlr", "dlp", "tdr", "shdr", "hkdl"]) {
+    const dots = crowdDots(id, year);
+    const shown = dots.filter((d) => d > 0);
+    assert.ok(shown.length > 0, id);
+    if (new Set(shown).size > 1) {
+      assert.equal(Math.min(...shown), 1, `${id} quietest month gets one dot`);
+      assert.equal(Math.max(...shown), 5, `${id} busiest month gets five`);
+    }
+  }
+  // One month alone has nothing to compare with.
+  assert.deepEqual(crowdDots("wdw", ["2027-03"]), [3]);
 });

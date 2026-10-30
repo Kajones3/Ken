@@ -144,8 +144,26 @@ The rest they should have to sign in for. I was gaming the system a bit."
   go". Guests get `{saving}` only, and only for the two resorts they're
   shown; signed-in get month + total, and the line re-runs the search for
   that month (`data-bestmonth`). Hidden when a holiday week is picked. The
-  full month view stays Plus. A combined all-six month calendar for Plus is
-  being mocked up (not built).
+  full month view stays Plus.
+- **"Best months to go, all six" replaced the per-resort month tiles on the
+  trip page** (owner picked mock-up "B + dots", canvas "Pricing the Magic —
+  best months, all six"). GET `/api/yeargrid` (signed in only, `no-store`):
+  every plannable month x every resort, priced like the month tiles
+  (`allMonths()` -> `monthsFor()`), plus `crowdDots()` (monthView.ts,
+  tested): 1-5 dots against THAT resort's own year (quietest month shown =
+  1, busiest = 5; owner: "Each resort needs to be dotted against its own
+  crowds"). Plus = all six rows; free account = two rows (`twoShown()`, the
+  guest rule on the searched month) and four locked rows sent with NO
+  prices, under a "See Every Month at All Six" Plus box (owner: "keep that
+  pop up blocking 3-4 resorts"; a real searched month alone would let them
+  piece the year together); guest = sign-up box. Page: `loadYearGrid()`
+  (cached per search), `yearGridHtml()`; lighter = cheaper on ONE dollar
+  scale across what's shown (five equal steps, legend gives the ranges);
+  searched month outlined gold; the trip's own resort marked. Tapping a
+  month re-prices the search for that month and opens that resort's trip
+  page; Back returns to the search for that month (owner). The Plus month
+  tiles code (`monthsHtml`, `calendars`) stays: the budget page and "fits in
+  Jan" still use `calendars`.
 - Getting there / being there was mocked up and REJECTED by the owner; per
   person framing too ("awful to make the user do the math").
 - **Open, owner thinking:** how to show totals when they are far apart
