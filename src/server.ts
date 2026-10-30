@@ -18,7 +18,7 @@ import { addCorrection, listCorrections, deleteCorrection, validateCorrection,
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import { parseEvent, recordEvent, loadStats, eventRateLimiter } from "./siteEvents.js";
-import { isSampleTrip, lockForGuests } from "./guestView.js";
+import { guestQuery, isSampleTrip, lockForGuests } from "./guestView.js";
 import { passPerks, plannableMonths, PLUS_PASSES, PLUS_PASS_DEFAULT, RESORTS, RESORT_BY_ID, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, ORIGINS, PLUS_ORIGINS, ORIGINS_BY_CITY, ORIGIN_BY_IATA, bucketFor, ATTRACTIONS, isOnlyAt, CLIMATE, CROWDS, CROWD_LABELS, CROWDS_ARE_PLACEHOLDER, CROWDS_REVIEWED, type TierIndex, type FoodStyle, type Stay } from "./config.js";
 import { EXCHANGE_RATES, EXCHANGE_AS_OF, EXCHANGE_IS_PLACEHOLDER } from "./exchangeData.js";
 import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./priceLevels.js";
@@ -34,7 +34,7 @@ import { loadParkRatings, saveParkRatings, ratingOrder } from "./parkRatings.js"
 import { checkIrsMileage, saveMileageRate, listMileageRates } from "./mileageRates.js";
 import { loadManualWork } from "./manualWork.js";
 import { holidayWindowsFor } from "./holidayWindows.js";
-import { quoteMonths } from "./monthView.js";
+import { bestMonthOf, crowdDots, quoteMonths, type MonthQuote } from "./monthView.js";
 import { waitTimesSummary, rideSummary, waitTimeRows } from "./waitTimesView.js";
 import { setDealEmailsByToken, setDealEmailsForUser, dealEmailsOn } from "./dealEmails.js";
 import { getDb, type Db } from "./db.js";
@@ -281,13 +281,16 @@ async function readForm(req: IncomingMessage): Promise<Record<string, string>> {
   return out;
 }
 
-async function compare(q: URLSearchParams, user: SessionUser | null) {
+async function compare(q0: URLSearchParams, user: SessionUser | null) {
   // Launch decision 2026-09-24: the only Plus feature is the shareable PDF.
   // Nothing in this function gates behavior on plan any more — a signed-in
   // user's own account (email, plan) is what /api/session reports, not this
   // endpoint. See CLAUDE.md's Free/Plus split for what that superseded.
+  // A guest may change only the month, the party and the home airport
+  // (guestQuery); the sample PDF's own trip is ours to give away in full.
+  const guest = !user && !(q0.get("sample") === "1" && isSampleTrip(paramsFrom(q0)));
+  const q = guest ? guestQuery(q0) : q0;
   const params = paramsFrom(q);
-  const guest = !user && !(q.get("sample") === "1" && isSampleTrip(params));
   const { gettingThere, flyBase, driveBase } = gettingThereParams(q);
   const overrides = overridesFrom(q);
   budgetFor(user, params, overrides);
@@ -546,7 +549,10 @@ async function months(q: URLSearchParams, user: SessionUser | null) {
  * year", and Plus shows which). Same month pricing as the Plus tiles, so the
  * count and what Plus then shows can't disagree. No resort is named here.
  */
-async function fits(q: URLSearchParams, user: SessionUser | null) {
+async function fits(q0: URLSearchParams, user: SessionUser | null) {
+  // Same limit as the board: a guest's count is for the default trip.
+  const q = user ? q0 : guestQuery(q0);
+  if (!user && q0.get("budget") !== null) q.set("budget", q0.get("budget")!);
   const budget = Math.round(Number(q.get("budget")));
   if (!Number.isFinite(budget) || budget <= 0 || budget > 1_000_000) return { error: "budget" as const };
   const month = q.get("month") ?? "";
@@ -561,6 +567,73 @@ async function fits(q: URLSearchParams, user: SessionUser | null) {
     if (ms.some((x) => x.month === month && x.total! <= budget)) thisMonth++;
   }
   return { budget, month, priced, thisMonth, someMonth };
+}
+
+/**
+ * "Best time to go" on each trip card (owner, 2026-10-30): each resort's
+ * cheapest plannable month against the month searched, priced like the Plus
+ * month tiles (monthsFor) so the two can't disagree. A free account sees the
+ * month and its total; a guest sees only how much less ("up to $1,600 less at
+ * another time of year") and only for the two resorts a guest is shown
+ * (lockForGuests on the searched month's totals), so neither the month nor a
+ * locked resort is one "view source" away.
+ */
+async function allMonths(q: URLSearchParams, user: SessionUser | null): Promise<Map<string, MonthQuote[]>> {
+  const quotes = new Map<string, MonthQuote[]>();
+  for (const r of RESORTS) {
+    const m = await monthsFor(q, user, r.id);
+    if (!("error" in m)) quotes.set(r.id, m.months);
+  }
+  return quotes;
+}
+/** The two resorts a limited viewer is shown: the same rule as the board's
+ *  guest view (lockForGuests), on the searched month's totals. */
+function twoShown(quotes: Map<string, MonthQuote[]>, month: string): string[] {
+  const rows = RESORTS.map((r) => {
+    const cur = quotes.get(r.id)?.find((x) => x.month === month && x.total !== null);
+    return { resortId: r.id, name: r.name, iata: r.iata, ok: !!cur, ...(cur ? { price: { total: cur.total! } } : {}) };
+  });
+  return lockForGuests(rows).filter((r) => !("locked" in r)).map((r) => r.resortId);
+}
+
+async function bestMonths(q0: URLSearchParams, user: SessionUser | null) {
+  const q = user ? q0 : guestQuery(q0);
+  const month = q.get("month") ?? "";
+  const quotes = await allMonths(q, user);
+  const ids = user ? RESORTS.map((r) => r.id) : twoShown(quotes, month);
+  const resorts: Record<string, unknown> = {};
+  for (const id of ids) {
+    const b = bestMonthOf(quotes.get(id) ?? [], month);
+    if (!b) continue;
+    resorts[id] = !user && "month" in b ? { saving: b.saving } : b;
+  }
+  return { month, resorts };
+}
+
+/**
+ * "Best months to go, all six" (owner, 2026-10-30, mock-up "B + crowds"):
+ * every plannable month's typical total for each resort, plus crowd dots
+ * scaled to that resort's own year. It replaces the per-resort month tiles.
+ * Plus sees all six; a free account sees two (the cheapest US and cheapest
+ * international resort in the searched month) and four locked rows sent
+ * with NO prices; a guest is asked to sign in. Resolved from the session.
+ */
+async function yearGrid(q: URLSearchParams, user: SessionUser | null) {
+  if (!user) return { error: "sign_in_required" as const };
+  const month = q.get("month") ?? "";
+  const plus = isPlus(user.plusUntil);
+  const quotes = await allMonths(q, user);
+  const open = new Set(plus ? RESORTS.map((r) => r.id) : twoShown(quotes, month));
+  return {
+    month, plus,
+    months: plannableMonths(todayISO()),
+    resorts: RESORTS.map((r) => {
+      if (!open.has(r.id)) return { resortId: r.id, locked: true };
+      const qs = quotes.get(r.id) ?? [];
+      const dots = crowdDots(r.id, qs.map((x) => x.month));
+      return { resortId: r.id, months: qs.map((x, i) => ({ month: x.month, total: x.total, dots: dots[i] })) };
+    }),
+  };
 }
 
 async function monthsFor(q: URLSearchParams, user: SessionUser | null, resortId: string) {
@@ -1200,6 +1273,16 @@ const server = createServer(async (req, res) => {
       const body = await months(url.searchParams, user);
       if ("error" in body && body.error === "plus_required") return send(402, body, { cache: "no-store" });
       return send(200, body, { cache: "private, max-age=60" });
+    }
+    if (url.pathname === "/api/yeargrid") {
+      const body = await yearGrid(url.searchParams, await currentUser(db, req));
+      if ("error" in body) return send(401, body, { cache: "no-store" });
+      return send(200, body, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/bestmonths") {
+      const body = await bestMonths(url.searchParams, await currentUser(db, req));
+      // no-store: a guest's answer (no month) must not linger after signing in.
+      return send(200, body, { cache: "no-store" });
     }
     if (url.pathname === "/api/fits") {
       const body = await fits(url.searchParams, await currentUser(db, req));

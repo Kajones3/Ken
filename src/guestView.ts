@@ -44,3 +44,23 @@ export function lockForGuests<T extends Row>(results: T[]): (T | LockedRow)[] {
       reason: "Create a free account to see this trip." }));
   return [...shown, ...locked];
 }
+
+/**
+ * What a visitor who isn't signed in may change (owner, 2026-10-30: "let
+ * them change months, party size and home airport but that's it. The rest
+ * they should have to sign in for"). Everything else in a guest's request
+ * (nights, hotel, food, park days, the cheapest-trip basis, a holiday week,
+ * per-resort overrides, budget extras) is dropped here, so the server prices
+ * the default trip whatever the query says. Hiding the controls on the page
+ * is only the cosmetic half.
+ */
+export const GUEST_QUERY_KEYS = ["month", "origin", "adults", "seniors", "childAges", "sample"] as const;
+
+export function guestQuery(q: URLSearchParams): URLSearchParams {
+  const out = new URLSearchParams();
+  for (const k of GUEST_QUERY_KEYS) {
+    const v = q.get(k);
+    if (v !== null) out.set(k, v);
+  }
+  return out;
+}

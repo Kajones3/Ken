@@ -119,6 +119,60 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-10-30 — guests change only month, party, home airport (newest)
+
+Owner: "let them change months, party size and home airport but that's it.
+The rest they should have to sign in for. I was gaming the system a bit."
+- **Server:** `guestQuery()` (src/guestView.ts) keeps only `month`,
+  `origin`, `adults`, `seniors`, `childAges` (+ `sample`) from a signed-out
+  request; `compare()` and `fits()` price from that, so nights, hotel, food,
+  park days, hopper, cheapest-trip basis, holiday week, overrides and budget
+  extras sent by a guest are ignored (test pins it). The sample PDF's own
+  trip is still priced in full.
+- **Page:** `isGuest()` / `needsAccount()` in prototype.html. "Add more
+  details" and "Which week" are closed to guests (sign-up box explains what
+  an account unlocks); any input/select in the trip page, the budget field
+  or more details opens sign-up instead (`guestGuard`, capture listeners);
+  the override setters and the cheapest-trip switches refuse guests.
+  Signing out reloads the page so a guest starts from the default form.
+- **"Best time to go" on each trip card** (owner: free account, "up to
+  $1,600", $200/5% floor, load after the cards). `bestMonthOf()`
+  (monthView.ts, tested) + GET `/api/bestmonths` (server.ts, `no-store`):
+  each resort's cheapest plannable month vs the searched month, priced like
+  the Plus month tiles; shown only when it saves >= max($200, 5%), saving
+  rounded DOWN to $100; else "March is already one of the cheapest times to
+  go". Guests get `{saving}` only, and only for the two resorts they're
+  shown; signed-in get month + total, and the line re-runs the search for
+  that month (`data-bestmonth`). Hidden when a holiday week is picked. The
+  full month view stays Plus.
+- **"Best months to go, all six" replaced the per-resort month tiles on the
+  trip page** (owner picked mock-up "B + dots", canvas "Pricing the Magic —
+  best months, all six"). GET `/api/yeargrid` (signed in only, `no-store`):
+  every plannable month x every resort, priced like the month tiles
+  (`allMonths()` -> `monthsFor()`), plus `crowdDots()` (monthView.ts,
+  tested): 1-5 dots against THAT resort's own year (quietest month shown =
+  1, busiest = 5; owner: "Each resort needs to be dotted against its own
+  crowds"). Plus = all six rows; free account = two rows (`twoShown()`, the
+  guest rule on the searched month) and four locked rows sent with NO
+  prices, under a "See Every Month at All Six" Plus box (owner: "keep that
+  pop up blocking 3-4 resorts"; a real searched month alone would let them
+  piece the year together); guest = sign-up box. Page: `loadYearGrid()`
+  (cached per search), `yearGridHtml()`; lighter = cheaper on ONE dollar
+  scale across what's shown (five equal steps, legend gives the ranges);
+  searched month outlined gold; the trip's own resort marked. Tapping a
+  month re-prices the search for that month and opens that resort's trip
+  page; Back returns to the search for that month (owner). The Plus month
+  tiles code (`monthsHtml`, `calendars`) stays: the budget page and "fits in
+  Jan" still use `calendars`. The legend says one dot is "quiet for that
+  resort, not quieter than the others" (owner asked for that distinction).
+- **Guests' "See other park options" table:** the four locked resorts show a
+  blurred "$8,888" and "Sign up for a free account" (was "No cached price").
+- Getting there / being there was mocked up and REJECTED by the owner; per
+  person framing too ("awful to make the user do the math").
+- **Open, owner thinking:** how to show totals when they are far apart
+  (WDW $3k vs Paris $9k reads as "the tool is wrong"). Options given in the
+  conversation of 2026-10-30; nothing built.
+
 ## START HERE — 2026-10-29, session END (newest; read first)
 
 **Merged to master this session: PRs #213-#218** (budget box, red "over",

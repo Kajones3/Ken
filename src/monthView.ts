@@ -19,6 +19,7 @@
  */
 import { typicalIn, type Overrides, type PriceBook, type TripParams } from "./pricing.js";
 import type { Resort } from "./config.js";
+import { crowdFor, crowdRank } from "./crowds.js";
 import type { ISODate } from "./dates.js";
 import { monthBounds, range } from "./dates.js";
 
@@ -92,4 +93,49 @@ export function quoteMonths(
   });
   const levels = monthLevels(rows.map((r) => r.total));
   return rows.map((r, i) => ({ ...r, level: levels[i]! }));
+}
+
+/** "Best time to go" on each trip card (owner, 2026-10-30) only speaks up when
+ *  another month saves at least this much: $200, and 5% of the trip. */
+export const BEST_MONTH_MIN_USD = 200;
+export const BEST_MONTH_MIN_PCT = 5;
+
+export type BestMonth =
+  | { month: string; total: number; saving: number }
+  | { already: true };
+
+/**
+ * The cheapest plannable month for one resort, against the month searched.
+ * `saving` is rounded DOWN to $100 so "up to $1,600 less" never overstates.
+ * When no month beats the searched one by the floor above, the searched
+ * month is "already one of the cheapest". Null when the searched month has
+ * no price (nothing honest to compare with).
+ */
+export function bestMonthOf(quotes: MonthQuote[], current: string): BestMonth | null {
+  const cur = quotes.find((q) => q.month === current && q.total !== null);
+  if (!cur) return null;
+  let best = cur;
+  for (const q of quotes) if (q.total !== null && q.total < best.total!) best = q;
+  const saving = cur.total! - best.total!;
+  const floor = Math.max(BEST_MONTH_MIN_USD, (cur.total! * BEST_MONTH_MIN_PCT) / 100);
+  if (best === cur || saving < floor) return { already: true };
+  return { month: best.month, total: best.total!, saving: Math.floor(saving / 100) * 100 };
+}
+
+/**
+ * Crowd dots for the all-six month grid (owner, 2026-10-30: "Each resort
+ * needs to be dotted against its own crowds"): 1 = that resort's quietest
+ * month shown, 5 = its busiest, from the same crowd bands the trip page
+ * uses. Months with no band get 0 (no dots). A resort whose bands never
+ * change across the months shown gets 3 everywhere: nothing to tell apart.
+ */
+export function crowdDots(resortId: string, months: string[]): number[] {
+  const ranks = months.map((ym) => {
+    const c = crowdFor(resortId, Number(ym.slice(5, 7)));
+    return c ? crowdRank(c.band) : null;
+  });
+  const known = ranks.filter((r): r is number => r !== null);
+  if (!known.length) return months.map(() => 0);
+  const lo = Math.min(...known), hi = Math.max(...known);
+  return ranks.map((r) => r === null ? 0 : hi === lo ? 3 : 1 + Math.round(((r - lo) / (hi - lo)) * 4));
 }
