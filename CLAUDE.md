@@ -119,6 +119,59 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-01, session END (newest; read first)
+
+**Merged to master this session: PRs #225-#228.** #225 "What Fits My
+Budget?" leads the budget page; #226 `docs/numbers-to-verify.md` refreshed;
+#227 Paris ticket screenshots (dated + undated), map road miles (OSRM),
+learned holiday bump, groceries line removed, passes/DVC/own discount on the
+budget page only; #228 the flight formula tunes itself (caution, recency,
+pieces) by replaying 3 weeks before buying. Details in the dated sections
+below. 910 tests, typecheck clean.
+
+**Waiting on the owner:**
+1. **Redeploy Render** (everything since #224, incl. the self-tuning flight
+   formula). Check `/health` version against master first next session.
+2. **Re-drop the two Paris ticket screenshots on the LIVE /admin** (they
+   were only saved in the dev database).
+3. Still open from before: `MAIL_POSTAL_ADDRESS` repo variable, legal blanks
+   (contact email, county, minimum age), Stripe, step 2 of the plus_* ->
+   pro_* column rename.
+
+**Governing rule #4/#2 checks for next session:**
+- Read the coverage report's tuning lines after a few more nights: the
+  pick should stay (US + intl both "dest + month + origin + route"); grade
+  must not fall back. Live grade at ship (coverage run 41120803776):
+  international 51% within ±10% / 10.0% off (was 37% / 13.8%), US 38% /
+  14.4% (unchanged). No recency half-life won yet.
+- Holiday bump learned from data: not yet read on live data. Check /admin
+  Rates & settings "What the formulas learned" (Thanksgiving / Christmas
+  routes and %) once late-November/December fares sit in the free feed.
+- Road miles: the nightly refresh should fill `drive_routes` (41 airports x
+  WDW/Disneyland); confirm rows exist and a drive card says "© OpenStreetMap".
+
+**Answered, NOT built (owner to say):**
+- **Hotels, a better estimate** (owner: Tokyo calendars only price open days,
+  "not fair", WDW/Disneyland give no calendar). Proposed: (1) each Disney
+  hotel learns its own price BY MONTH from Google's nightly rates already in
+  `hotel_samples` (shrunk to its base, graded before it ships; the resort x
+  month lever plan in the 2026-10-14 list item 7); (2) Tokyo calendar
+  screenshots as extra per-night evidence like price checks (sold-out days
+  skipped, so peaks may read low); (3) no calendars needed for WDW/DLR.
+  Grades then: Disney hotels vs Google 49% within ±10%; WDW 29% / 27.9% off,
+  Tokyo 38% / 15.7%, Disneyland 62%, Paris 58%. Owner hasn't said go.
+- **Seeing free accounts to grant Planner Pro:** owner uses Neon's SQL
+  editor (`select email, created_at, email_verified_at is not null as
+  confirmed from users where pro_until is null or pro_until < now() order
+  by created_at desc;`) + the "grant Planner Pro" workflow. Owner felt an
+  /admin account list wasn't secure enough ("Neon is fine for now"). If
+  asked again, offer a type-an-email grant box with NO list (no second
+  sign-in factor exists on the site, so a list would expose every email if
+  the owner's password leaked).
+- **"What breaks if I stop using Claude?"** answered: nothing at once; bills
+  (SerpApi, domain), the morning email's task list, Render redeploys, and
+  outside-service changes / Neon space (~2 years) / tool upgrades over time.
+
 ## 2026-10-31, later — the flight formula picks its own caution and recency (newest)
 
 Owner: "Do 1 and 2 on the airfares" (1 = let the data pick how cautious the
