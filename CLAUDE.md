@@ -119,6 +119,21 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-11-02, very last — Lands page: Add moves a land; Delete for lands the owner added
+
+Owner (screenshot of /admin Lands, Paris): Adventure Way was added to
+Disneyland Park by mistake; every Add to Disney Adventure World put it back
+in Disneyland Park (Add on a removed land ran Put back, which ignored the
+park picked). Now `addLand()` restores a removed land and then MOVES it to
+the park picked (`moveLand()`: the land's visible rows get this resort's
+park; a code-only land gets its own row naming the park), and moves a land
+already listed under another park. New `deleteLand()` (POST
+/api/admin/lands action "delete", "Delete" button beside Put back, with a
+confirm): only for removed lands the owner added (`AdminLandList.deletable`);
+a built-in land (code `parkList` or a shipped row) can only stay removed.
+Owner's live fix: Add "Adventure Way" with park Disney Adventure World, after
+a Render redeploy. 923 tests.
+
 ## 2026-11-02, last — Disney hotels learn their own price by month (hotel option 1, BUILT)
 
 Owner: "Build hotel option 1 now." Also: **Asian park tickets stay estimates**
