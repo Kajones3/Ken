@@ -119,6 +119,17 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-11-02 — Paris's second park is "Disney Adventure World"
+
+Owner: "Our name for Disneyland Paris 2nd park is wrong." Walt Disney Studios
+Park was renamed Disney Adventure World (2026). `dlp.parkList` (what the
+details card and PDF print), the wait-time probe's expected name and comments
+now say Disney Adventure World. Never write "Walt Disney Studios" in visible
+text. Its lands in `parkList` (Front Lot, Production Courtyard, Toon Studio,
+Worlds of Pixar, Avengers Campus) are the OLD park's; the owner's sheet lists
+World of Frozen, Adventure Way, Worlds of Pixar, Marvel Avengers Campus.
+Not changed: asked the owner.
+
 ## START HERE — 2026-11-01, session END (newest; read first)
 
 **Merged to master this session: PRs #225-#228.** #225 "What Fits My
