@@ -33,7 +33,7 @@
 const WANTED: { resortId: string; resortName: string; parkNames: string[] }[] = [
   { resortId: "wdw", resortName: "Walt Disney World", parkNames: ["Magic Kingdom", "Epcot", "Hollywood Studios", "Animal Kingdom"] },
   { resortId: "dlr", resortName: "Disneyland Resort", parkNames: ["Disneyland", "California Adventure"] },
-  { resortId: "dlp", resortName: "Disneyland Paris", parkNames: ["Disneyland Park", "Walt Disney Studios"] },
+  { resortId: "dlp", resortName: "Disneyland Paris", parkNames: ["Disneyland Park", "Disney Adventure World"] },
   { resortId: "tdr", resortName: "Tokyo Disney Resort", parkNames: ["Tokyo Disneyland", "Tokyo DisneySea"] },
   { resortId: "shdr", resortName: "Shanghai Disney Resort", parkNames: ["Shanghai Disneyland"] },
   { resortId: "hkdl", resortName: "Hong Kong Disneyland", parkNames: ["Hong Kong Disneyland"] },

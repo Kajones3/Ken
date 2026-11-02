@@ -352,7 +352,7 @@ export const RESORTS: Resort[] = [
     note: "2 parks · already on dynamic pricing",
     parkList: [
       { name: "Disneyland Park", lands: ["Main Street, U.S.A.", "Frontierland", "Adventureland", "Fantasyland", "Discoveryland"] },
-      { name: "Walt Disney Studios Park", lands: ["Front Lot", "Production Courtyard", "Toon Studio", "Worlds of Pixar", "Avengers Campus"] },
+      { name: "Disney Adventure World", lands: ["Front Lot", "Production Courtyard", "Toon Studio", "Worlds of Pixar", "Avengers Campus"] },
     ],
     closuresUrl: "https://news.disneylandparis.com/en/",
     closuresLabel: "Official Disneyland Paris news (closure announcements)",
@@ -643,8 +643,8 @@ export const RESORT_BY_ID = new Map(RESORTS.map((r) => [r.id, r]));
  *
  * ONE RULE ABOVE ALL: an attraction lists every resort that has it, and
  * "only here" is DERIVED from that list, never asserted per row. Clones
- * across resorts are normal — Ratatouille runs at both EPCOT and Walt
- * Disney Studios, TRON at both Shanghai and the Magic Kingdom — and the
+ * across resorts are normal — Ratatouille runs at both EPCOT and Disney
+ * Adventure World, TRON at both Shanghai and the Magic Kingdom — and the
  * first draft of this idea got that wrong out loud. A row that claims
  * exclusivity it doesn't have is worse than no row: it sends someone to the
  * wrong side of the planet.
@@ -708,7 +708,7 @@ export const ATTRACTIONS: AttractionDef[] = [
   { id: "pirates-sunken-treasure", name: "Pirates of the Caribbean: Battle for the Sunken Treasure", resortIds: ["shdr"],
     note: "Shares a name with the Pirates rides elsewhere and is a completely different attraction." },
   { id: "ratatouille", name: "Ratatouille", resortIds: ["wdw", "dlp"],
-    note: "Remy's Ratatouille Adventure at EPCOT, Ratatouille: L'Aventure Totalement Toquée at Walt Disney Studios." },
+    note: "Remy's Ratatouille Adventure at EPCOT, Ratatouille: L'Aventure Totalement Toquée at Disney Adventure World." },
   { id: "tron", name: "TRON Lightcycle / Run", resortIds: ["wdw", "shdr"] },
   { id: "rise-of-the-resistance", name: "Star Wars: Rise of the Resistance", resortIds: ["wdw", "dlr"] },
   { id: "crush-coaster", name: "Crush's Coaster", resortIds: ["dlp"] },

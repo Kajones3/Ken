@@ -15,7 +15,7 @@ import { ATTRACTIONS, ATTRACTION_BY_ID, attractionsFor, isOnlyAt, RESORTS } from
 
 test("an attraction at two resorts is not exclusive to either", () => {
   // The correction that shaped this whole file: Ratatouille runs at EPCOT
-  // AND at Walt Disney Studios. A per-row "onlyAt" flag would have been free
+  // AND at Disney Adventure World (Paris). A per-row "onlyAt" flag would have been free
   // to disagree with the list; a derived one cannot.
   const rat = ATTRACTION_BY_ID.get("ratatouille")!;
   assert.deepEqual([...rat.resortIds].sort(), ["dlp", "wdw"]);
