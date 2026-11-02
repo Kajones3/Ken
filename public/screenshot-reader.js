@@ -598,7 +598,13 @@ export function readTicketCalendar(words) {
     // Inside something already price-shaped, read the look-alikes as digits
     // and mark the box for the owner to check.
     const fixed = read(digitLookalikes(w.t));
-    return fixed ? { ...fixed, check: true } : null;
+    if (fixed) return { ...fixed, check: true };
+    // The same tight "11" can also lose a 1 altogether: "$111" comes back
+    // "$11" (owner's March 2027 calendar, 2026-11-02). No ticket costs under
+    // $20 a day, so a priced "$1x" is read as "$11x" and marked to check.
+    const short = /^([$£€])(1\d)([+t*])?$/.exec(digitLookalikes(w.t));
+    const restored = short && read(`${short[1]}1${short[2]}${short[3] || ""}`);
+    return restored ? { ...restored, check: true } : null;
   };
   let cands = W.map(w => ({ w, p: priceOf(w) })).filter(x => x.p && (x.p.badge || /[$£€+]/.test(x.w.text)))
     .filter(x => headRowY === null || x.w.cy > headRowY);

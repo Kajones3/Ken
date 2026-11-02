@@ -225,3 +225,20 @@ test("Paris's real December 2026 screenshot, read with ink only (coloured cells)
   assert.equal(r.currency, "GBP");
   assert.deepEqual(r.prices.map((p: { perDay: number }) => p.perDay), PARIS_DEC_2026, r.warnings.join(" | "));
 });
+
+test("a tight \"$111\" read as \"$11\" is put back as $111 and marked to check (owner's March 2027 calendar)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { readTicketCalendar } = await import("../public/screenshot-reader.js");
+  const w = (JSON.parse(readFileSync(new URL("./testdata/ticket-calendar-2027-03-usd.words.json", import.meta.url), "utf8")) as Array<[string, number, number, number, number]>)
+    .map(([text, x0, y0, x1, y1]) => ({ text, x0, y0, x1, y1 }));
+  assert.ok(w.some(x => x.text === "$11"), "the real reading has the short price");
+  const r = readTicketCalendar(w);
+  assert.equal(r.month, "2027-03");
+  assert.deepEqual(r.missing, []);
+  const want = [119, 116, 114, 115, 119, 125, 119, 113, 111, 113, 112, 115, 124, 117, 113, 114, 112, 112, 117, 134, 134,
+    131, 133, 131, 130, 130, 160, 159, 152, 152, 152];
+  assert.deepEqual(r.prices.map((p: { perDay: number }) => p.perDay), want, r.warnings.join(" | "));
+  const ninth = r.prices.find((p: { date: string }) => p.date === "2027-03-09");
+  assert.equal(ninth?.check, true);
+  assert.equal(r.prices.filter((p: { check?: boolean }) => p.check).length, 1);
+});

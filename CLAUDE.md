@@ -119,6 +119,14 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-11-02, later — calendar reader: "$111" read as "$11"
+
+Owner's March 2027 calendar (Mo..Su, $, coloured cells): the ink read lost a
+1 from the tight "11", so March 9's $111 came back "$11", was refused (under
+$20) and the day went missing. `priceOf` (screenshot-reader.js) now reads a
+priced "$1x" as "$11x" and marks it `check` (amber). That screenshot reads
+31/31 (`src/testdata/ticket-calendar-2027-03-usd.words.json`, real OCR).
+
 ## 2026-11-02 — Paris's second park is "Disney Adventure World"
 
 Owner: "Our name for Disneyland Paris 2nd park is wrong." Walt Disney Studios
