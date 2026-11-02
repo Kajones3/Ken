@@ -5,7 +5,7 @@ import {
   validateAttraction, overlay, effectiveAttractions, saveAttraction,
   deleteOwnerAttraction, listOwnerAttractions, sheetRows,
   effectiveParkList, effectiveParkLists, sheetWarnings, type OwnerAttractionRow,
-  adminLandLists, removeLand, restoreLand, addLand,
+  adminLandLists, removeLand, restoreLand, addLand, deleteLand,
 } from "./ownerAttractions.js";
 import { readFileSync } from "node:fs";
 import { parseCsv } from "./csv.js";
@@ -502,4 +502,54 @@ test("Add refuses a park the resort doesn't have, and a blank name", async () =>
   assert.ok(!(await addLand(d, WDW, "somewhere", "")).ok);
   assert.ok(!(await addLand(d, WDW, "Asia", "")).ok);
   assert.equal((await listOwnerAttractions(d)).length, 1);
+});
+
+/* Owner, 2026-11-02: Adventure Way went into Disneyland Park by mistake, and
+ * every Add of it to Disney Adventure World put it back in Disneyland Park. */
+const DLP = RESORTS.find((r) => r.id === "dlp")!;
+const dlpLands = async (d: Awaited<ReturnType<typeof db>>) => (await adminLandLists(d, [DLP]))[0]!;
+
+test("Add moves a REMOVED land to the park picked, not back where it was", async () => {
+  const d = await db();
+  await addLand(d, DLP, "Adventure Way", "Disneyland Park");
+  await removeLand(d, "dlp", "Adventure Way");
+  assert.ok((await addLand(d, DLP, "Adventure Way", "Disney Adventure World")).ok);
+  const v = await dlpLands(d);
+  assert.ok(landsIn(v, "Disney Adventure World").includes("Adventure Way"));
+  assert.ok(!landsIn(v, "Disneyland Park").includes("Adventure Way"));
+  assert.deepEqual(v.removed, []);
+});
+
+test("Add moves a land that is listed under the wrong park", async () => {
+  const d = await db();
+  await addLand(d, DLP, "Adventure Way", "Disneyland Park");
+  assert.ok((await addLand(d, DLP, "Adventure Way", "Disney Adventure World")).ok);
+  const v = await dlpLands(d);
+  assert.ok(landsIn(v, "Disney Adventure World").includes("Adventure Way"));
+  assert.ok(!landsIn(v, "Disneyland Park").includes("Adventure Way"));
+  // A built-in land moves too: Toon Studio from the code's list.
+  assert.ok((await addLand(d, DLP, "Toon Studio", "Disneyland Park")).ok);
+  assert.ok(landsIn(await dlpLands(d), "Disneyland Park").includes("Toon Studio"));
+  // Same park again: nothing to do.
+  assert.ok(!(await addLand(d, DLP, "Adventure Way", "Disney Adventure World")).ok);
+});
+
+test("Delete wipes a land the owner added; a built-in land can only stay removed", async () => {
+  const d = await db();
+  await addLand(d, DLP, "Adventure Way", "Disneyland Park");
+  await removeLand(d, "dlp", "Adventure Way");
+  let v = await dlpLands(d);
+  assert.deepEqual(v.deletable, ["Adventure Way"]);
+  assert.ok((await deleteLand(d, DLP, "Adventure Way")).ok);
+  v = await dlpLands(d);
+  assert.deepEqual(v.removed, []);
+  assert.equal((await listOwnerAttractions(d)).length, 0);
+  // Not removed yet: refused.
+  await addLand(d, DLP, "Adventure Way", "Disney Adventure World");
+  assert.ok(!(await deleteLand(d, DLP, "Adventure Way")).ok);
+  // Built in: stays removed, never deleted.
+  await removeLand(d, "dlp", "Toon Studio");
+  assert.ok(!(await dlpLands(d)).deletable.includes("Toon Studio"));
+  assert.ok(!(await deleteLand(d, DLP, "Toon Studio")).ok);
+  assert.ok((await dlpLands(d)).removed.includes("Toon Studio"));
 });

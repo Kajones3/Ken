@@ -25,7 +25,7 @@ import { priceLevelsVsOrlando, vsOrlandoPhrase, PRICE_LEVELS_SOURCE } from "./pr
 import { picksFor, setPicks, matchesForResort, matchSummary } from "./attractions.js";
 import { crowdFor, crowdFlag, quietestThisMonth, parseCrowdSensitivity } from "./crowds.js";
 import {
-  effectiveAttractions, effectiveParkLists, listOwnerAttractions, adminLandLists, removeLand, restoreLand, addLand, saveAttraction, deleteOwnerAttraction, sheetRows,
+  effectiveAttractions, effectiveParkLists, listOwnerAttractions, adminLandLists, removeLand, restoreLand, addLand, deleteLand, saveAttraction, deleteOwnerAttraction, sheetRows,
   validateAttraction, sheetWarnings, type AttractionValue,
 } from "./ownerAttractions.js";
 import { addDaysISO, monthBounds, range, todayISO } from "./dates.js";
@@ -2047,6 +2047,7 @@ const server = createServer(async (req, res) => {
       const r = action === "remove" ? await removeLand(db, resort.id, name, owner.email)
         : action === "restore" ? await restoreLand(db, resort.id, name, owner.email)
         : action === "add" ? await addLand(db, resort, name, String(body.park ?? ""), owner.email)
+        : action === "delete" ? await deleteLand(db, resort, name, owner.email)
         : { ok: false as const, reason: "Unknown action." };
       if (!r.ok) return send(400, { error: "rejected", message: r.reason });
       return send(200, { ok: true, resorts: await adminLandLists(db, RESORTS) }, { cache: "no-store" });

@@ -640,6 +640,9 @@ export interface AdminLandList {
   otherLands: string[];
   /** Lands taken off this resort, so they can be put back. */
   removed: string[];
+  /** Of those, the ones the owner added here (not built in), which Delete
+   *  can wipe for good. A built-in land can only stay removed. */
+  deletable: string[];
 }
 
 /** Every resort's lands as travelers see them, plus what was removed. */
@@ -661,7 +664,8 @@ export async function adminLandLists(
       removed.push(o.name);
     }
     removed.sort((a, b) => a.localeCompare(b));
-    return { id: r.id, name: r.name, parkList: view.parkList, otherLands: view.otherLands, removed };
+    const deletable = removed.filter((l) => !isBuiltInLand(r, l));
+    return { id: r.id, name: r.name, parkList: view.parkList, otherLands: view.otherLands, removed, deletable };
   });
 }
 
@@ -746,33 +750,109 @@ export async function restoreLand(
   return { ok: true };
 }
 
-/** Add a land to one resort, under one of its parks (or "Also" with none). */
+/** Is this land in the code's own list for this resort (the skeleton, or a
+ *  shipped attraction row)? Those can be removed but never deleted: deleting
+ *  the owner's rows would just bring the built-in one back. */
+function isBuiltInLand(resort: { id: string; parkList: readonly { lands: readonly string[] }[] }, name: string): boolean {
+  const n = normName(name);
+  return resort.parkList.some((p) => p.lands.some((l) => normName(l) === n))
+    || ATTRACTIONS.some((a) => (a.kind ?? "attraction") === "land" && a.resortIds.includes(resort.id) && normName(a.name) === n);
+}
+
+/** Where a land shows at one resort now: a park's name, "" for Also, null if not listed. */
+function shownUnder(list: AdminLandList, name: string): string | null {
+  const n = normName(name);
+  const p = list.parkList.find((x) => x.lands.some((l) => normName(l) === n));
+  if (p) return p.name;
+  return list.otherLands.some((l) => normName(l) === n) ? "" : null;
+}
+
+/**
+ * Put a land that is already listed under a different park (owner,
+ * 2026-11-02: Adventure Way was added to Disneyland Park by mistake, and
+ * every Add of it to Disney Adventure World put it back where it was). The
+ * land's visible rows get this resort's park; a land that only lives in the
+ * code's list gets a row of its own naming the park, which moves it.
+ */
+async function moveLand(
+  db: Db, resort: { id: string; parkList: readonly { name: string; lands: readonly string[] }[] }, name: string, park: string, by: string,
+): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
+  const n = normName(name);
+  const owner = await listOwnerAttractions(db);
+  const effective = overlay(ATTRACTIONS, owner);
+  const rows = effective.filter((a) => a.kind === "land" && a.resortIds.includes(resort.id) && normName(a.name) === n);
+  for (const a of rows) {
+    const r = await saveAttraction(db, asInput(a, { parks: { ...(a.parks ?? {}), [resort.id]: park } }), by);
+    if (!r.ok) return r;
+  }
+  if (rows.length) return { ok: true, id: rows[0]!.id };
+  const taken = new Set([...ATTRACTIONS.map((a) => a.id), ...owner.map((o) => o.id)]);
+  const base = `${resort.id}-${slug(name)}`;
+  let id = base;
+  for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
+  return saveAttraction(db, { id, name: name.trim(), resortIds: [resort.id], kind: "land", parks: { [resort.id]: park } }, by);
+}
+
+/** Add a land to one resort, under one of its parks (or "Also" with none).
+ *  A land already listed somewhere else at this resort, or removed earlier,
+ *  ends up under the park picked here. */
 export async function addLand(
   db: Db, resort: { id: string; name: string; parkList: readonly { name: string; lands: readonly string[] }[] }, name: string, park: string, by = "",
 ): Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
   const clean = name.trim();
   if (!clean) return { ok: false, reason: "Type the land's name." };
-  if (park && !findPark(resort.parkList, park)) return { ok: false, reason: `"${park}" isn't one of this resort's parks.` };
+  const parkName = park ? findPark(resort.parkList, park) : null;
+  if (park && !parkName) return { ok: false, reason: `"${park}" isn't one of this resort's parks.` };
   const owner = await listOwnerAttractions(db);
   const taken = new Set([...ATTRACTIONS.map((a) => a.id), ...owner.map((o) => o.id)]);
-  // A land that was removed here comes back with Put back, keeping its row.
+  // A land that was removed here comes back, keeping its row.
   const wasRemoved = owner.some((o) => o.hidden && o.kind === "land" && o.resortIds.includes(resort.id) && normName(o.name) === normName(clean));
   if (wasRemoved) {
     const r = await restoreLand(db, resort.id, clean, by);
     if (!r.ok) return r;
-    const back = (await adminLandLists(db, [resort]))[0]!;
-    if ([...back.parkList.flatMap((p) => p.lands), ...back.otherLands].some((l) => normName(l) === normName(clean))) {
-      return { ok: true, id: "" };
-    }
   }
   const now = (await adminLandLists(db, [resort]))[0]!;
-  if ([...now.parkList.flatMap((p) => p.lands), ...now.otherLands].some((l) => normName(l) === normName(clean))) {
-    return { ok: false, reason: `${clean} is already on the list.` };
+  const where = shownUnder(now, clean);
+  if (where !== null) {
+    if (parkName && where !== parkName) return moveLand(db, resort, clean, parkName, by);
+    if (wasRemoved) return { ok: true, id: "" };
+    return { ok: false, reason: `${clean} is already on the list${where ? ` under ${where}` : ""}.` };
   }
   const base = `${resort.id}-${slug(clean)}`;
   let id = base;
   for (let i = 2; taken.has(id); i++) id = `${base}-${i}`;
   return saveAttraction(db, {
-    id, name: clean, resortIds: [resort.id], kind: "land", parks: park ? { [resort.id]: park } : {},
+    id, name: clean, resortIds: [resort.id], kind: "land", parks: parkName ? { [resort.id]: parkName } : {},
   }, by);
+}
+
+/**
+ * Delete a removed land for good (owner, 2026-11-02: "I need a way to delete
+ * lands"). Only a land the owner added: its hidden rows naming only this
+ * resort are deleted outright, and a shared row just loses this resort. A
+ * built-in land can't be deleted (it would come straight back), so it stays
+ * removed and the answer says so.
+ */
+export async function deleteLand(
+  db: Db, resort: { id: string; parkList: readonly { name: string; lands: readonly string[] }[] }, name: string, by = "",
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const n = normName(name);
+  if (!n) return { ok: false, reason: "Which land?" };
+  if (isBuiltInLand(resort, name)) {
+    return { ok: false, reason: `${name.trim()} is in our built-in list, so it can't be deleted. Removed is as gone as it gets: it won't show anywhere.` };
+  }
+  const owner = await listOwnerAttractions(db);
+  const rows = owner.filter((o) => o.hidden && o.kind === "land" && o.resortIds.includes(resort.id) && normName(o.name) === n);
+  if (!rows.length) return { ok: false, reason: `Remove ${name.trim()} first; only a removed land can be deleted.` };
+  for (const o of rows) {
+    if (o.resortIds.length === 1) await deleteOwnerAttraction(db, o.id);
+    else {
+      const keep = o.resortIds.filter((x) => x !== resort.id);
+      const lands = Object.fromEntries(Object.entries(o.lands ?? {}).filter(([k]) => k !== resort.id));
+      const parks = Object.fromEntries(Object.entries(o.parks ?? {}).filter(([k]) => k !== resort.id));
+      const r = await saveAttraction(db, asInput(o, { resortIds: keep, lands, parks }), by);
+      if (!r.ok) return r;
+    }
+  }
+  return { ok: true };
 }

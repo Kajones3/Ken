@@ -974,7 +974,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p>This is exactly what travelers see under &ldquo;What's there&rdquo;, in a resort's details and in the PDF.
       Changes take effect the moment you press a button.</p>
     <p><b>Remove</b> takes a land off that one resort. It's tucked away under &ldquo;Removed&rdquo;, not
-      deleted, so <b>Put back</b> undoes it. <b>Add</b> puts a new land under the park you pick.</p>
+      deleted, so <b>Put back</b> undoes it. A land you added yourself also gets <b>Delete</b>, which wipes it for good.
+      <b>Add</b> puts a land under the park you pick, and moves it there if it's already listed (or removed) somewhere else.</p>
     <div class="said" id="lSaid"></div>
     <div id="landList"><p class="count">Loading…</p></div>
   </section>
@@ -1548,7 +1549,8 @@ function renderLands(d){
       ? `<div class="lpark"><div class="pn">Also</div><div class="lchips">${r.otherLands.map(chip).join("")}</div></div>` : "";
     const removed = r.removed.length
       ? `<p class="lremoved">Removed: ${r.removed.map(l => `${esc(l)} <button type="button" class="btn" data-lrestore="${esc(r.id)}"
-          data-land="${esc(l)}">Put back</button>`).join(" &middot; ")}</p>` : "";
+          data-land="${esc(l)}">Put back</button>${(r.deletable || []).includes(l) ? ` <button type="button" class="btn" data-ldelete="${esc(r.id)}"
+          data-land="${esc(l)}">Delete</button>` : ""}`).join(" &middot; ")}</p>` : "";
     const opts = r.parkList.map(p => `<option value="${esc(p.name)}">${esc(p.name)}</option>`).join("")
       + `<option value="${ALSO}">Also (no park)</option>`;
     const n = r.parkList.reduce((t, p) => t + p.lands.length, 0) + r.otherLands.length;
@@ -1594,6 +1596,11 @@ document.addEventListener("click", e => {
   const back = e.target.closest("[data-lrestore]");
   if(back){ landAction(back, { action: "restore", resort: back.dataset.lrestore, name: back.dataset.land },
     `Put back ${back.dataset.land}.`); return; }
+  const del = e.target.closest("[data-ldelete]");
+  if(del){
+    if(!confirm(`Delete ${del.dataset.land} for good? It can't be put back; you would add it again instead.`)) return;
+    landAction(del, { action: "delete", resort: del.dataset.ldelete, name: del.dataset.land }, `Deleted ${del.dataset.land}.`); return;
+  }
   const add = e.target.closest("[data-ladd]");
   if(add){
     const id = add.dataset.ladd;
