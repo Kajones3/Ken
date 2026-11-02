@@ -1577,9 +1577,21 @@ async function loadLands(){
 
 async function landAction(btn, body, done){
   btn.disabled = true;
-  const r = await fetch("/api/admin/lands", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
-  });
+  attrSay($("#lSaid"), true, "Saving...");
+  // Never leave the button stuck: a site that's asleep or mid-redeploy can
+  // take a minute to answer, and a silent grey button reads as a freeze.
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
+  let r;
+  try {
+    r = await fetch("/api/admin/lands", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), signal: ctl.signal,
+    });
+  } catch {
+    btn.disabled = false;
+    attrSay($("#lSaid"), false, "The site didn't answer in 20 seconds (it may be waking up or redeploying). Reload the page and try again.");
+    return;
+  } finally { clearTimeout(timer); }
   const d = await r.json().catch(() => ({}));
   if(!r.ok){ btn.disabled = false; attrSay($("#lSaid"), false, d.message || "That didn't save."); return; }
   attrSay($("#lSaid"), true, done);
