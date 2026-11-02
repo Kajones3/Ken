@@ -722,6 +722,22 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   }
   out.push("");
 
+  // Owner, 2026-11-02: "Build hotel option 1 now". Each Disney hotel learns
+  // its own price by month; graded leave-one-out before it reaches travelers.
+  out.push("## Disney hotels by month: graded before it ships (hotelMonths.ts)");
+  try {
+    const { settingsMap } = await import("../settings.js");
+    const { loadDisneyInputs } = await import("../userGrades.js");
+    const { loadMonthLevers, monthLeverLines } = await import("../hotelMonths.js");
+    const settings = await settingsMap(db);
+    const d = await loadDisneyInputs(db, settings, 0.1, new Date());
+    const m = await loadMonthLevers(db, settings, () => 1, d.opts);
+    for (const l of m ? monthLeverLines(m) : ["could not compute"]) out.push(`  ${l}`);
+  } catch (e) {
+    out.push(`  could not compute: ${(e as Error).message}`);
+  }
+  out.push("");
+
   // Owner, 2026-10-12: "WHY ARE WE NOT USING DATA?!" Google's usual hotel
   // prices and booking-site prices now feed pricing; this is the report.
   out.push("## Hotels: what Google tells us beyond the price, and how close we are (hotelLearning.ts)");

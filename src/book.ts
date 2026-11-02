@@ -20,6 +20,7 @@ import {
 } from "./checkFactors.js";
 import { blendFares, flightSourceWeight, type SourcedFare } from "./observations.js";
 import { asEvidence, cachedGoogleDisneyRates } from "./disneyEvidence.js";
+import { loadMonthLevers, monthFactor } from "./hotelMonths.js";
 import { loadFareModel } from "./fareModelDb.js";
 import { loadCheapestListed, type CheapestListed } from "./cheapestFlights.js";
 import { USE_CANDIDATE_KEY, type FareModel } from "./fareModel.js";
@@ -498,6 +499,28 @@ export async function loadBook(
   const factors = opts.applyChecks !== false
     ? await loadCheckFactors(db, settings)
     : new Map<string, CheckFactor>();
+  // Each Disney hotel's own price by MONTH, learned from Google's rates on
+  // top of the factor above (hotelMonths.ts). Used only while it grades
+  // better than the old way, leave-one-out; any failure prices as before.
+  const months = opts.applyChecks !== false && (settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT) > 0
+    ? await loadMonthLevers(db, settings, (id) => factors.get(`hotel|${id}`)?.factor ?? 1, {
+        checks: (settings.get(CHECKS_USE_KEY) ?? 1) >= 1 ? await countedChecks(db) : [],
+        googleWeight: settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT,
+        priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+        hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? HOTEL_BASE.get(id),
+      }).catch(() => null)
+    : null;
+  if (months?.use) {
+    const r2 = (n: number) => Math.round(n * 100) / 100;
+    for (const [key, list] of hotels) {
+      const [resortId, date] = key.split("|") as [string, string];
+      for (const night of list) {
+        if (!night.onProperty) continue;
+        const m = monthFactor(months.levers, resortId, night.hotelId, date);
+        if (m !== 1) night.nightly = r2(night.nightly * m);
+      }
+    }
+  }
   if (factors.size) {
     const r2 = (n: number) => Math.round(n * 100) / 100;
     for (const list of hotels.values()) {

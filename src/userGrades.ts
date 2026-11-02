@@ -42,6 +42,7 @@ import { computeFactors, countedChecks, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAU
   GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT, type CountedCheck } from "./checkFactors.js";
 import { asEvidence, cachedGoogleDisneyRates, type GoogleDisneyRate } from "./disneyEvidence.js";
 import { matchDisneyHotel } from "./disneyHotels.js";
+import { fitMonthLevers, monthFactor, loadMonthLevers, type MonthLevers } from "./hotelMonths.js";
 import { isRental } from "./rentals.js";
 import { hotelSeasonFactor } from "./seasonality.js";
 import { leanWords } from "./fareForecasts.js";
@@ -207,6 +208,9 @@ export interface HotelGradeOpts {
   hotelBase: (id: string) => number | undefined;
   /** Only Google rates pulled this many days back are graded. */
   days?: number;
+  /** Grade with each hotel's month levers too (hotelMonths.ts), as travelers
+   *  see them when they are in use. Refitted leave-one-out like the factors. */
+  monthLevers?: boolean;
 }
 export interface HotelSide { typical: Weekly; cheapest: Weekly; overall: Weekly }
 
@@ -215,11 +219,15 @@ export interface HotelSide { typical: Weekly; cheapest: Weekly; overall: Weekly 
 export function gradeDisney(rates: GoogleDisneyRate[], o: HotelGradeOpts): { us: HotelSide; intl: HotelSide } {
   const usable = rates.filter((r) => r.ours !== null && r.ours > 0 && r.google > 0);
   const graded = usable.filter((r) => (o.now.getTime() - r.pulledAt.getTime()) / DAY <= (o.days ?? 30));
-  const factorsWithout = (leaveOut: (r: GoogleDisneyRate) => boolean) => computeFactors(
-    o.checks.concat(asEvidence(usable.filter((r) => !leaveOut(r)), o.googleWeight)),
-    { priorWeight: o.priorWeight, hotelBase: o.hotelBase },
-  );
-  const shownOf = (f: Map<string, { factor: number }>, r: GoogleDisneyRate) => r.ours! * (f.get(`hotel|${r.hotelId}`)?.factor ?? 1);
+  type Fit = { f: Map<string, { factor: number }>; lev: MonthLevers | null };
+  const factorsWithout = (leaveOut: (r: GoogleDisneyRate) => boolean): Fit => {
+    const rest = usable.filter((r) => !leaveOut(r));
+    const f = computeFactors(o.checks.concat(asEvidence(rest, o.googleWeight)),
+      { priorWeight: o.priorWeight, hotelBase: o.hotelBase });
+    return { f, lev: o.monthLevers ? fitMonthLevers(rest, (id) => f.get(`hotel|${id}`)?.factor ?? 1) : null };
+  };
+  const shownOf = (fit: Fit, r: GoogleDisneyRate) => r.ours! * (fit.f.get(`hotel|${r.hotelId}`)?.factor ?? 1)
+    * (fit.lev ? monthFactor(fit.lev, r.resortId, r.hotelId, r.night) : 1);
   const month = (r: GoogleDisneyRate) => r.night.slice(0, 7);
   const groupBy = (key: (r: GoogleDisneyRate) => string) => {
     const m = new Map<string, GoogleDisneyRate[]>();
@@ -404,15 +412,18 @@ export async function loadDisneyInputs(db: Db, settings: Map<string, number>, zo
   Promise<{ rates: GoogleDisneyRate[]; opts: HotelGradeOpts }> {
   const checks = (settings.get(CHECKS_USE_KEY) ?? 1) >= 1 ? await countedChecks(db) : [];
   const bases = new Map(RESORTS.flatMap((r) => r.hotels.map((h) => [h.id, h.base] as const)));
-  return {
-    rates: await cachedGoogleDisneyRates(db).catch(() => []),
-    opts: {
-      zone, now, checks,
-      googleWeight: settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT,
-      priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
-      hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? bases.get(id),
-    },
+  const opts: HotelGradeOpts = {
+    zone, now, checks,
+    googleWeight: settings.get(GOOGLE_DISNEY_WEIGHT_KEY) ?? DEFAULT_GOOGLE_DISNEY_WEIGHT,
+    priorWeight: settings.get(CHECKS_WEIGHT_KEY) ?? DEFAULT_CHECKS_WEIGHT,
+    hotelBase: (id) => settings.get(`hotel.${id}.base`) ?? bases.get(id),
   };
+  // Grade what travelers see: with the month levers whenever they are in use.
+  if (opts.googleWeight > 0) {
+    const m = await loadMonthLevers(db, settings, () => 1, opts).catch(() => null);
+    opts.monthLevers = !!m?.use;
+  }
+  return { rates: await cachedGoogleDisneyRates(db).catch(() => []), opts };
 }
 
 export async function loadUserGrades(db: Db, now: Date = new Date()): Promise<UserGrades> {

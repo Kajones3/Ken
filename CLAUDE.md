@@ -119,6 +119,36 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## 2026-11-02, last — Disney hotels learn their own price by month (hotel option 1, BUILT)
+
+Owner: "Build hotel option 1 now." Also: **Asian park tickets stay estimates**
+(owner: "I tried to find useful pricing calendars, but none exist"; Tokyo,
+Shanghai and Hong Kong sell only ~1-2 months ahead). Don't re-propose
+calendar readers or price-level learning for them unless the owner asks.
+- `src/hotelMonths.ts`: after each Disney hotel's own factor (checks +
+  Google, checkFactors.ts), the leftover Google/ours ratio is read by
+  calendar month: resort x month, then hotel x month on what's left, each a
+  median shrunk n/(n+6) (`MONTH_SHRINK_K`), product held 0.5-2x. A month
+  with no Google rates is unchanged. Applied in `loadBook` (not with
+  `applyChecks: false`, not when Google's Disney weight is 0).
+- **Self-gated:** `gradeMonthLevers()` re-prices every hotel + month with
+  its own rates left out of everything it learns from; used only when it is
+  >= `MONTH_MARGIN` 0.5 points closer ("typically off") on >= 20
+  hotel-months. Owner switch `sources.hotel.monthLever` (HOTEL_MONTH_KEY in
+  checkFactors.ts; 1 = when it tests better, 0 = off). The "What the user
+  sees" grade and Rates & settings "What the formulas learned" include it;
+  coverage report section "Disney hotels by month".
+- **Live grade at ship (coverage run 41379404095):** IN USE. All Disney
+  hotels (129 hotel-months) 51% within ±10% / typically off 9.5% -> 59% /
+  7.6%. US 49% / 10.1% -> 53% / 9.1%; international 53% / 8.7% -> 63% / 7.0%.
+  By resort typically off: WDW 24.4% -> 19.9%, Disneyland 7.9 -> 6.1, Paris
+  8.9 -> 7.0, Hong Kong 5.9 -> 4.8, **Tokyo 18.3 -> 18.3 (unchanged, only 13
+  hotel-months)**. Biggest moves: hkdl Aug x0.71, tdr Aug x1.31, dlr Oct
+  x1.28, wdw Mar x0.81. Needs a Render redeploy to reach travelers.
+- Still open: WDW and Tokyo stay the weakest (~20% / 18% off). Option 2 (a
+  few nightly searches aimed at Disney's own WDW hotels) is NOT built; ask.
+- 920 tests, typecheck clean, smoke OK.
+
 ## 2026-11-02, later — calendar reader: "$111" read as "$11"
 
 Owner's March 2027 calendar (Mo..Su, $, coloured cells): the ink read lost a

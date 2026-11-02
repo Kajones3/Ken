@@ -34,7 +34,7 @@
 import type { Db } from "./db.js";
 import { RESORTS, IRS_MILEAGE_RATES, SUGGESTED_PARK_DAYS, suggestedParkDaysKey, TICKET_TAX_PCT, ticketTaxKey } from "./config.js";
 import { PASS_PROGRAMS, passPriceKey, DVC_TAKE_HOME_PER_POINT, DVC_TAKE_HOME_KEY } from "./memberships.js";
-import { CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
+import { HOTEL_MONTH_KEY, DEFAULT_HOTEL_MONTH, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT, GOOGLE_DISNEY_WEIGHT_KEY, DEFAULT_GOOGLE_DISNEY_WEIGHT } from "./checkFactors.js";
 import { FLIGHT_WEIGHT_KEYS, DEFAULT_FLIGHT_WEIGHTS } from "./observations.js";
 import { USE_CANDIDATE_KEY, ZONE_PCT_KEY, DEFAULT_ZONE_PCT } from "./fareModel.js";
 import { MEALS, MEAL_KINDS, MEAL_LABEL, shippedMealRange, mealKey, taxKey, tipKey, CHILD_MEAL_SHARE_KEY, DEFAULT_CHILD_MEAL_SHARE_PCT } from "./meals.js";
@@ -256,6 +256,16 @@ export const SETTINGS: SettingDef[] = [
     min: 0,
     max: 10,
     help: "Google's hotel search returns Disney's own hotels with a real nightly rate. Each one is compared with our rate for the same hotel and night, and moves that hotel's price the same way your price checks do. 1 counts each Google rate as much as one of your checks; 0 turns it off (they are still recorded).",
+  },
+  {
+    key: HOTEL_MONTH_KEY,
+    label: "Disney hotels learn their own price by month",
+    group: "Data sources",
+    kind: "number",
+    default: DEFAULT_HOTEL_MONTH,
+    min: 0,
+    max: 1,
+    help: "1: each Disney hotel's price moves month by month with what Google's nightly rates for it say, but only while that tests closer to Google than the old way (re-checked every few minutes, with each hotel and month left out of its own test). 0: off, one adjustment per hotel for every month as before. Our base rates are never changed either way.",
   },
   {
     key: TYPICAL_TRIM_KEY,
