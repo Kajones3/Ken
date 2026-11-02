@@ -147,7 +147,7 @@ calendar readers or price-level learning for them unless the owner asks.
   x1.28, wdw Mar x0.81. Needs a Render redeploy to reach travelers.
 - Still open: WDW and Tokyo stay the weakest (~20% / 18% off). Option 2 (a
   few nightly searches aimed at Disney's own WDW hotels) is NOT built; ask.
-- 921 tests, typecheck clean, smoke OK.
+- 920 tests, typecheck clean, smoke OK.
 
 ## 2026-11-02, later — calendar reader: "$111" read as "$11"
 
