@@ -221,6 +221,15 @@ export async function loadRecommendations(db: Db, now: Date = new Date()): Promi
     learned.push({ name: "Cheapest flight vs the middle one", value: parts.length ? parts.join(" · ") : "not learned yet",
       note: "Prices the cheapest trip on dates we haven't bought." });
   }
+  try {
+    const { loadMonthLevers, monthLeverLines } = await import("./hotelMonths.js");
+    const m = await loadMonthLevers(db, settings, () => 1, d.opts);
+    if (m) {
+      const [status, all, , , byResort, moves] = monthLeverLines(m);
+      learned.push({ name: "Disney hotels: price by month", value: status!.replace(/^Status: /, ""),
+        note: [all, byResort, moves].join(" ") });
+    }
+  } catch { /* nothing learned to show */ }
   if (hotels) {
     learned.push({ name: "Hotels: weight on Google's usual price", value: hotels.usualWeight.toFixed(2),
       note: `${hotels.dealPairs} deal pairs; 0 means the price we saw held.` });

@@ -39,6 +39,10 @@ export const DEFAULT_CHECKS_WEIGHT = 3;
 /** How much one Google rate for a Disney hotel counts, against one owner check. */
 export const GOOGLE_DISNEY_WEIGHT_KEY = "sources.hotel.googleDisney";
 export const DEFAULT_GOOGLE_DISNEY_WEIGHT = 1;
+/** Disney hotels learn their own price by month (hotelMonths.ts):
+ *  1 = when it grades better (default), 0 = off. */
+export const HOTEL_MONTH_KEY = "sources.hotel.monthLever";
+export const DEFAULT_HOTEL_MONTH = 1;
 
 /** Beyond these, a check is kept as a record but not counted. */
 export const MIN_RATIO = 0.2;
