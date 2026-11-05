@@ -119,6 +119,59 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-02 to 11-05, session END (newest; read first)
+
+**Merged to master this session: PRs #230-#234.** Details in the dated
+sections just below. 923 tests, typecheck clean, smoke OK.
+
+| PR | What |
+|---|---|
+| #230 | Paris's second park is **Disney Adventure World** (was "Walt Disney Studios Park") |
+| #231 | Ticket calendar reader: a tight "$111" read as "$11" is put back as $111, marked to check |
+| #232 | **Disney hotels learn their own price by month** from Google's rates (self-gated, IN USE: 51% -> 59% within ±10%) |
+| #233 | /admin Lands: Add moves a land to the park picked (even a removed one); Delete for lands the owner added |
+| #234 | /admin Lands: "Saving..." at once; the button never stays stuck (20 s timeout, plain message) |
+
+**Waiting on the owner:**
+1. **Redeploy Render** (everything since #224: self-tuning flight formula,
+   Disney hotels by month, Lands fixes). Check `/health` version against
+   master (`182c835` or later) first next session.
+2. **Adventure Way still to move** on the live /admin Lands page (Paris):
+   Add "Adventure Way" with park Disney Adventure World after the redeploy.
+   Owner reported Add "freezes" on 11-02; NOT reproduced (server and real
+   browser both fine locally on a copy of the owner's land state, ~0.1 s).
+   Best guess: the live site asleep or mid-redeploy, with a silent grey
+   button. If it still happens after #234, ask WHICH: button stays grey /
+   whole page unclickable / an error message.
+3. **Paris lands** in `parkList` are the old park's (Front Lot, Production
+   Courtyard, Toon Studio); owner said "I'll fix the list myself" in /admin.
+   Don't change them in code.
+4. Re-drop the two Paris ticket screenshots on the LIVE /admin (dev-only
+   save), `MAIL_POSTAL_ADDRESS`, legal blanks, Stripe, plus_* -> pro_* step 2.
+
+**Owner decisions this session (don't re-litigate):**
+- **Asian park tickets (Tokyo, Shanghai, Hong Kong) stay ESTIMATES.** They
+  sell only ~1-2 months ahead and the owner found no useful calendars.
+  Don't propose calendar readers or price-level learning unless asked.
+- Hotels: option 1 (by month, from Google rates we already hold) built.
+  **Option 2 NOT built** (move 1-2 nightly hotel searches onto Disney's own
+  WDW hotels, same SerpApi spend); offered, owner hasn't said go. WDW
+  (~20% off) and Tokyo (~18% off, only 13 hotel-months) are the weakest.
+
+**Answered, no code changed:** how a 1-day Paris ticket prices with 1-day
+and 3-day saved: arrival-date 1-day calendar exact; else that date's 3-day
+calendar per day / 0.86 (Paris has no multi-day table, curve slope 0.07);
+else the undated 1-day ticket; else the curve. Hopper on 1 day adds the
+$45/$38 guess.
+
+**Checks for next session (governing rules #2/#4):**
+- Coverage report "Disney hotels by month": status should stay IN USE and
+  the grade must not fall below the old way (ship: 59% / 7.6% vs 51% /
+  9.5%, run 41379404095). Tokyo should start moving once it has more
+  hotel-months.
+- Still standing from 11-01: the flight tuning pick, the learned holiday
+  bump (late Nov/Dec fares), `drive_routes` filling.
+
 ## 2026-11-02, very last — Lands page: Add moves a land; Delete for lands the owner added
 
 Owner (screenshot of /admin Lands, Paris): Adventure Way was added to
@@ -132,7 +185,10 @@ already listed under another park. New `deleteLand()` (POST
 confirm): only for removed lands the owner added (`AdminLandList.deletable`);
 a built-in land (code `parkList` or a shipped row) can only stay removed.
 Owner's live fix: Add "Adventure Way" with park Disney Adventure World, after
-a Render redeploy. 923 tests.
+a Render redeploy. #234 (same day): owner said Add "freezes"; not
+reproduced locally (server + Chromium on a copy of the owner's land state).
+`landAction()` now shows "Saving..." and aborts after 20 s with a plain
+message instead of leaving the button grey. 923 tests.
 
 ## 2026-11-02, last — Disney hotels learn their own price by month (hotel option 1, BUILT)
 
@@ -183,7 +239,7 @@ Worlds of Pixar, Avengers Campus) are the OLD park's; the owner's sheet lists
 World of Frozen, Adventure Way, Worlds of Pixar, Marvel Avengers Campus.
 Not changed: asked the owner.
 
-## START HERE — 2026-11-01, session END (newest; read first)
+## START HERE — 2026-11-01, session END (superseded by 2026-11-02 to 11-05 above)
 
 **Merged to master this session: PRs #225-#228.** #225 "What Fits My
 Budget?" leads the budget page; #226 `docs/numbers-to-verify.md` refreshed;
