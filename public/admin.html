@@ -326,6 +326,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#numbers">Rates &amp; settings</a>
     <a href="#fares">Fares you've seen</a>
     <a href="#deals">Deals</a>
+    <a href="#sales">Planner Pro sales</a>
     <a href="#notes">Good to know</a>
     <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
@@ -922,6 +923,37 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
     <h3>All deals</h3>
     <div id="dList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="sales">
+  <section class="sheet" id="sales">
+    <h2>Planner Pro sales</h2>
+    <p>Put every Planner Pro pass on sale for a while, like a <b>Launch sale</b> or a <b>Christmas sale</b>.
+      During the sale the plans table shows the regular price crossed out, the sale price, and a line with the
+      sale's name and last day. When payments are built, checkout charges the sale price.</p>
+    <p id="sNow" class="count"></p>
+
+    <h3 id="sFormTitle">Add a sale</h3>
+    <div class="cgrid">
+      <div><label for="saleLabel">Name travelers see</label><input type="text" id="saleLabel" maxlength="60" placeholder="Launch sale"></div>
+      <div><label for="salePct">Percent off every pass</label><input type="text" id="salePct" inputmode="numeric" placeholder="20"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="saleStart">First day</label><input type="date" id="saleStart"></div>
+      <div><label for="saleEnd">Last day</label><input type="date" id="saleEnd"></div>
+    </div>
+    <p class="count" id="salePreview"></p>
+    <p class="count">The sale starts and ends on the site within about 5 minutes of its dates (or of saving).
+      If two sales overlap, the one you saved last is the one shown.</p>
+    <div class="tools">
+      <button class="btn primary" id="saleSave">Save sale</button>
+      <button class="btn hidden" id="saleCancel">Cancel editing</button>
+    </div>
+    <div class="said" id="saleSaid"></div>
+
+    <h3>All sales</h3>
+    <div id="saleList"><p class="count">Loading…</p></div>
   </section>
   </div>
 
@@ -2316,6 +2348,93 @@ const barTable = (rows, cols) => {
       <td style="width:30%"><div class="bar" style="width:${Math.round((r._bar || 0) / max * 100)}%"></div></td></tr>`).join("")}</tbody></table>`;
 };
 let statDays = 30;
+/* --------------------------- Planner Pro sales --------------------------- */
+let SALE_PASSES = [], saleEditing = null;
+const SALE_STATUS = { live: "On now", upcoming: "Upcoming", ended: "Ended", off: "Turned off" };
+const saleUsd = n => "$" + (Number.isInteger(n) ? n : n.toFixed(2));
+const saleCut = (price, pct) => Math.round(price * (100 - pct)) / 100;
+const salePrices = pct => SALE_PASSES.map(p => `${esc(p.label)} ${saleUsd(saleCut(p.priceUsd, pct))} (was ${saleUsd(p.priceUsd)})`).join(" · ");
+function syncSalePreview(){
+  const pct = Number($("#salePct").value.replace(/[%\s]/g, ""));
+  $("#salePreview").innerHTML = Number.isInteger(pct) && pct >= 1 && pct <= 90
+    ? `Travelers would pay: ${salePrices(pct)}` : "";
+}
+function renderSales(d){
+  if(d.passes) SALE_PASSES = d.passes;
+  window.__sales = d.sales;
+  const live = d.sales.filter(x => x.status === "live").sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  $("#sNow").innerHTML = live
+    ? `<b>On sale now:</b> ${esc(live.label)}, ${live.pctOff}% off through ${esc(fmtD(live.endsOn))}. ${salePrices(live.pctOff)}`
+    : `<b>No sale on right now.</b> Regular prices: ${SALE_PASSES.map(p => `${esc(p.label)} ${saleUsd(p.priceUsd)}`).join(" · ")}`;
+  $("#saleList").innerHTML = d.sales.length
+    ? `<div class="alist">${d.sales.map(x => `<div class="aitem">
+        <span class="an">${esc(x.label)}</span>
+        <span class="ar">${x.pctOff}% off · ${esc(fmtD(x.startsOn))} – ${esc(fmtD(x.endsOn))}</span>
+        <span class="atags"><span class="atag${x.status === "ended" || x.status === "off" ? " bad" : ""}">${SALE_STATUS[x.status]}</span></span>
+        <span class="aacts">
+          <button class="btn" data-sedit="${esc(x.id)}">Edit</button>
+          ${x.active ? `<button class="btn" data-soff="${esc(x.id)}">Turn off</button>` : `<button class="btn" data-son="${esc(x.id)}">Turn on</button>`}
+          <button class="btn" data-sdel="${esc(x.id)}">Delete</button>
+        </span>
+      </div>`).join("")}</div>`
+    : `<p class="count">No sales yet.</p>`;
+}
+async function loadSales(){
+  const r = await fetch("/api/admin/sales");
+  if(!r.ok){ $("#saleList").innerHTML = `<p class="count">Couldn't load the sales.</p>`; return; }
+  renderSales(await r.json());
+}
+function clearSaleForm(){
+  saleEditing = null;
+  ["#saleLabel", "#salePct", "#saleStart", "#saleEnd"].forEach(id => $(id).value = "");
+  $("#salePreview").innerHTML = "";
+  $("#sFormTitle").textContent = "Add a sale"; $("#saleCancel").classList.add("hidden");
+}
+$("#salePct").addEventListener("input", syncSalePreview);
+$("#saleCancel").addEventListener("click", () => { clearSaleForm(); attrSay($("#saleSaid"), true, "Editing cancelled."); });
+$("#saleSave").addEventListener("click", async () => {
+  const body = { id: saleEditing || undefined, label: $("#saleLabel").value, pctOff: $("#salePct").value,
+    startsOn: $("#saleStart").value, endsOn: $("#saleEnd").value };
+  const btn = $("#saleSave"); btn.disabled = true;
+  try {
+    const r = await fetch("/api/admin/sales", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json().catch(() => ({}));
+    if(!r.ok){ attrSay($("#saleSaid"), false, d.message || "That wasn't saved."); return; }
+    attrSay($("#saleSaid"), true, saleEditing ? `Updated "${body.label}".` : `Saved "${body.label}". It shows on the site from its first day.`);
+    clearSaleForm();
+    renderSales(d);
+  } catch { attrSay($("#saleSaid"), false, "Couldn't reach the server. Try again in a moment."); }
+  finally { btn.disabled = false; }
+});
+document.addEventListener("click", async e => {
+  const ed = e.target.closest("[data-sedit]");
+  if(ed){
+    const x = (window.__sales || []).find(v => v.id === ed.dataset.sedit); if(!x) return;
+    saleEditing = x.id;
+    $("#saleLabel").value = x.label; $("#salePct").value = x.pctOff; $("#saleStart").value = x.startsOn; $("#saleEnd").value = x.endsOn;
+    syncSalePreview();
+    $("#sFormTitle").textContent = "Edit this sale"; $("#saleCancel").classList.remove("hidden");
+    $("#sFormTitle").scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
+  const t = e.target.closest("[data-soff],[data-son]");
+  if(t){
+    const id = t.dataset.soff || t.dataset.son;
+    t.disabled = true;
+    const r = await fetch(`/api/admin/sales/${id}/active`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ active: !!t.dataset.son }) });
+    if(r.ok) renderSales(await r.json()); else t.disabled = false;
+    return;
+  }
+  const del = e.target.closest("[data-sdel]");
+  if(del){
+    const x = (window.__sales || []).find(v => v.id === del.dataset.sdel);
+    if(!confirm(`Delete "${x ? x.label : "this sale"}"?`)) return;
+    const r = await fetch(`/api/admin/sales/${del.dataset.sdel}`, { method: "DELETE" });
+    if(r.ok) renderSales(await r.json());
+  }
+});
+
 /* -------------------------------- deals --------------------------------- */
 let DEAL_KINDS = [], dealEditing = null;
 const dealUnit = k => (DEAL_KINDS.find(x => x.kind === k) || {}).unit;
@@ -3083,6 +3202,7 @@ loadHoles();
 loadFares();
 loadAttractions();
 loadDeals();
+loadSales();
 loadFlights();
 loadWaits();
 loadSignals();

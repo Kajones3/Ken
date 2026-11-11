@@ -119,7 +119,31 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## START HERE — 2026-11-11 (newest; read first)
+## START HERE — 2026-11-11, later: Planner Pro sales; Stripe account approved (newest)
+
+- **Owner's Stripe account is approved** ("I can now accept payments"), as an
+  individual, no LLC (owner: $200 is a lot; told: Stripe doesn't need one,
+  NC LLC ~$125 + ~$200/yr report, form later). Branding images in
+  `docs/brand/stripe/` (#238). **Checkout is NOT built yet**; next steps
+  given in the conversation: test-mode keys into Render env (never chat),
+  legal blanks, then build Checkout (one-time `payment` mode) + a webhook
+  that runs the same grant as `grant-pro`. Checkout must charge the
+  SERVER's `passesWithSale(currentSale())` `nowUsd`, never a page's price,
+  and say "No refunds" before payment.
+- **Planner Pro sales BUILT** (owner: "go on sale for like a Launch or for
+  Christmas ... update that in the admin panel"). `src/proSales.ts`, table
+  `pro_sales` (label, pct_off 1-90, starts_on, ends_on, active). /admin ->
+  "Planner Pro sales" (add / edit / turn off / delete, live price preview).
+  The sale on today = turned on, dates include today, newest saved wins an
+  overlap; any DB error = no sale (full price). `/api/meta` sends
+  `proPasses[].nowUsd/salePriceUsd` and `proSale {label,pctOff,endsOn}`
+  (cached 5 min); the plans table shows "$15 $11.25" crossed out + a gold
+  "Launch sale: 25% off every Planner Pro pass through Dec 26." line; the
+  "wants Planner Pro" email quotes the sale price. Percent off only (no "$X
+  off"), every pass alike. Checked in Chromium (plans table + admin page).
+  930 tests. Needs a Render redeploy.
+
+## START HERE — 2026-11-11 (read first)
 
 Three fixes + Stripe advice. 926 tests, typecheck clean. Needs a Render redeploy.
 - **Sign-up no longer signs you in without a confirmed email** (owner: friends
