@@ -49,6 +49,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
+import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
 import { seedTickets, allTierMonths } from "./jobs/refresh.js";
 import { ensureRoadMiles, osrmMiles, roadMilesLive } from "./roadMiles.js";
@@ -946,7 +947,16 @@ const server = createServer(async (req, res) => {
       // 2026-10-12), from the government's airline-fare price index
       // (airfareIndex.ts). Absent until the BLS job has stored it.
       airfareIndex: (await loadAirfareIndexSummary(db).catch(() => undefined))?.board ?? null,
-      proPasses: PRO_PASSES,
+      // Each pass with today's price (nowUsd) and, during a Planner Pro sale
+      // the owner set in /admin, its sale price and the sale itself.
+      // /api/meta is cached 5 minutes, so a sale starts or ends within ~5.
+      ...await (async () => {
+        const sale = await currentSale(db, todayISO());
+        return {
+          proPasses: passesWithSale(sale),
+          proSale: sale ? { label: sale.label, pctOff: sale.pctOff, endsOn: sale.endsOn } : null,
+        };
+      })(),
       proPassDefault: PRO_PASS_DEFAULT,
       holidayWindows: Object.fromEntries(
         Array.from({ length: 14 }, (_, i): [string, ReturnType<typeof holidayWindowsFor>] => {
@@ -1312,14 +1322,16 @@ const server = createServer(async (req, res) => {
       const body = await readBody(req);
       // Only a pass we sell; anything else is refused rather than guessed at,
       // so the email never quotes a price or a length nobody offered.
-      const pass = PRO_PASSES.find((p) => p.id === body.plan);
+      const sale = await currentSale(db, todayISO());
+      const pass = passesWithSale(sale).find((p) => p.id === body.plan);
       if (!pass) return send(400, { error: "unknown_plan" });
       const owner = process.env.OWNER_EMAIL;
       if (owner) {
+        const price = sale ? `$${pass.nowUsd} in the ${sale.label}, ${sale.pctOff}% off $${pass.priceUsd}` : `$${pass.priceUsd}`;
         await pickEmailSender().send({
           to: owner,
           subject: `Pricing the Magic: ${user.email} wants Planner Pro`,
-          text: `${user.email} picked the ${pass.label} pass ($${pass.priceUsd}, no renewal) in the paywall.`
+          text: `${user.email} picked the ${pass.label} pass (${price}, no renewal) in the paywall.`
             + `\n\nPayments aren't built yet. Once they've paid, grant it with:\n  npm run grant-pro -- ${user.email} ${pass.id}`,
         });
       }
@@ -1911,6 +1923,29 @@ const server = createServer(async (req, res) => {
         : req.method === "DELETE" ? await deleteDeal(db, dealMatch[1]!) : false;
       if (!done) return send(404, { error: "not found" });
       return send(200, { ok: true, deals: await listDeals(db, todayISO()) }, { cache: "no-store" });
+    }
+
+    /* Planner Pro sales (proSales.ts): a name, a percent off every pass and
+     * the days it runs. */
+    if (url.pathname === "/api/admin/sales" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { sales: await listSales(db, todayISO()), passes: PRO_PASSES }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/sales" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await saveSale(db, body, todayISO(), typeof body?.id === "string" && body.id ? body.id : undefined);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, id: r.id, sales: await listSales(db, todayISO()) }, { cache: "no-store" });
+    }
+    const saleMatch = url.pathname.match(/^\/api\/admin\/sales\/([0-9a-f-]{36})(\/active)?$/);
+    if (saleMatch && (req.method === "DELETE" || req.method === "POST")) {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const done = saleMatch[2]
+        ? await setSaleActive(db, saleMatch[1]!, Boolean((await readBody(req))?.active))
+        : req.method === "DELETE" ? await deleteSale(db, saleMatch[1]!) : false;
+      if (!done) return send(404, { error: "not found" });
+      return send(200, { ok: true, sales: await listSales(db, todayISO()) }, { cache: "no-store" });
     }
 
     /* The Flights page: how far off our estimates run against the real fares

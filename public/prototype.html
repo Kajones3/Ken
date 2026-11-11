@@ -945,6 +945,8 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .planswipe{display:none; margin:0 0 6px; font-size:12.5px; color:var(--ink-2)}
 @media (max-width:700px){ .planswipe{display:block} }
 .plannote{margin:6px 0 0; font-size:12.5px; color:var(--ink-2)}
+.plansale{margin:0 0 10px; padding:8px 12px; border-radius:10px; background:var(--gold, #E8B23E); color:#16204A; font-weight:700; font-size:14px}
+.plans-t .ppwas{font-size:15px; font-weight:600; color:var(--ink-2); text-decoration:line-through}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
 .plan{border:1.5px solid var(--rule-strong); border-radius:14px; padding:15px; text-align:left; background:var(--surface-2)}
 .plan[aria-pressed="true"]{border-color:var(--accent-line); background:var(--accent-bg)}
@@ -5186,7 +5188,14 @@ async function requestPro(plan){
     : "Couldn't send that request right now — try again in a moment.";
 }
 
-let PRO_PASSES = [], PRO_PASS_DEFAULT = "threeMonths";
+let PRO_PASSES = [], PRO_PASS_DEFAULT = "threeMonths", PRO_SALE = null;
+/* A pass price: whole dollars stay "$15", a sale price keeps its cents ("$11.25"). */
+const passUsd = n => "$" + (Number.isInteger(n) ? n : n.toFixed(2));
+/* "Launch sale: 20% off every pass through Dec 26." (owner's sale, /admin) */
+function saleLine(){
+  if(!PRO_SALE) return "";
+  return `${esc(PRO_SALE.label)}: ${PRO_SALE.pctOff}% off every Planner Pro pass through ${esc(fmtDate(PRO_SALE.endsOn))}.`;
+}
 /* One row per thing we offer; a cell is true (included), false (not) or a
  * few words. Columns: no account, free account, then each pass. Keep the
  * words in step with what the server actually allows (guestView.ts,
@@ -5223,7 +5232,8 @@ function renderProPlans(){
   const heads = [
     { name:"No account", price:"Free", note:"" },
     { name:"Planner", price:"Free", note:"" },
-    ...PRO_PASSES.map(p => ({ name:"Planner Pro", sub:p.label, price:`$${p.priceUsd}`, note:"once", id:p.id })),
+    ...PRO_PASSES.map(p => ({ name:"Planner Pro", sub:p.label, price:passUsd(p.nowUsd ?? p.priceUsd),
+      was: p.salePriceUsd != null ? passUsd(p.priceUsd) : "", note:"once", id:p.id })),
   ];
   const cls = i => [i === here ? "here" : "", heads[i].id === PRO_PASS_DEFAULT ? "best" : ""].join(" ").trim();
   const foot = heads.map((h, i) => {
@@ -5232,11 +5242,11 @@ function renderProPlans(){
     if(i === 1) return session.authenticated ? `<td></td>` : `<td><button type="button" class="btn btn-sm" data-signup>Become a Planner, free</button></td>`;
     return `<td class="${cls(i)}"><button type="button" class="${h.id === PRO_PASS_DEFAULT ? "btn-primary" : "btn"} btn-sm" data-plan="${esc(h.id)}">Get ${esc(PRO_PASSES[i-2].label)}</button></td>`;
   }).join("");
-  $("#proPlans").innerHTML = `<p class="planswipe">Swipe sideways to see the Planner Pro passes &rarr;</p><table class="plans-t">
+  $("#proPlans").innerHTML = (PRO_SALE ? `<p class="plansale">${saleLine()}</p>` : "") + `<p class="planswipe">Swipe sideways to see the Planner Pro passes &rarr;</p><table class="plans-t">
     <thead><tr><th scope="col"><span class="sr">What you get</span></th>${heads.map((h, i) =>
       `<th scope="col" class="${cls(i)}">${h.id === PRO_PASS_DEFAULT ? `<span class="planbest">Our pick</span>` : ""}<span class="pn">${esc(h.name)}</span>`
       + (h.sub ? `<span class="psub">${esc(h.sub)}</span>` : "")
-      + `<span class="pp">${esc(h.price)}${h.note ? `<small> ${esc(h.note)}</small>` : ""}</span></th>`).join("")}</tr></thead>
+      + `<span class="pp">${h.was ? `<s class="ppwas">${esc(h.was)}</s> ` : ""}${esc(h.price)}${h.note ? `<small> ${esc(h.note)}</small>` : ""}</span></th>`).join("")}</tr></thead>
     <tbody>${planRows().map(([label, ...cells]) =>
       `<tr><th scope="row">${esc(label)}</th>${cells.map((c, i) => planCell(c, cls(i))).join("")}</tr>`).join("")}</tbody>
     <tfoot><tr><th></th>${foot}</tr></tfoot>
@@ -7347,6 +7357,7 @@ async function boot(){
   HOLIDAY_WINDOWS = meta.holidayWindows || {};
   if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);
   PRO_PASSES = meta.proPasses || [];
+  PRO_SALE = meta.proSale || null;
   // The government's airline-fare price index, year over year (owner,
   // 2026-10-12: "so users can know airfares are up/down year over year").
   // Words only; it never moves a total.
