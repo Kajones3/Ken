@@ -1079,3 +1079,16 @@ create table if not exists drive_routes (
   fetched_at  timestamptz  not null default now(),
   primary key (from_key, resort_id)
 );
+
+-- 2026-11-11: Planner Pro sales the owner runs from /admin (proSales.ts):
+-- a name, a percent off every pass, and the days it runs. The newest
+-- turned-on sale whose dates include today is the one shown and charged.
+create table if not exists pro_sales (
+  id          uuid primary key,
+  label       text not null,
+  pct_off     integer not null check (pct_off between 1 and 90),
+  starts_on   date not null,
+  ends_on     date not null,
+  active      boolean not null default true,
+  created_at  timestamptz not null default now()
+);
