@@ -127,13 +127,15 @@ Three fixes + Stripe advice. 926 tests, typecheck clean. Needs a Render redeploy
   SIGN-IN, and sign-up created a session straight away. Now
   `requireVerifiedEmail()` is ON wherever `RESEND_API_KEY` is set (unless
   `REQUIRE_VERIFIED_EMAIL=false`); with it on, POST /api/auth/signup returns
-  `{needsVerification:true}` and NO cookie, `currentUser()` treats an
-  unconfirmed account's old sessions as signed out (so friends already in
-  must confirm), and POST /api/auth/resend-verification also takes
+  `{needsVerification:true}` and NO cookie, and POST /api/auth/resend-verification also takes
   email + password (`accountByPassword()`, counts toward the sign-in lockout)
   so someone locked out can get a fresh link. Page: "We sent a link to ...",
   and "Send a new confirmation link" on an `unverified` sign-in. Unconfirmed
   rows still sit in `users`; not cleaned up (offer a purge if the owner asks).
+  **Owner (same day): friends ALREADY signed in stay signed in.** Existing
+  sessions of unconfirmed accounts keep working; only new sign-ups and new
+  sign-ins wait for the link. Once such a session ends (signing out, or the
+  session expiring), they'll need to confirm to get back in.
 - **Budget page milestones: "Right now" means only what you already have.**
   `budgetMilestones()` index 0 = now (no monthly saving yet), index i = after
   month ymAdd(now, i-1)'s saving; one-off money counts from the end of its
