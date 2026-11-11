@@ -105,6 +105,10 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   );
   const row = rows[0];
   if (!row) return null;
+  // With the gate on, an unconfirmed account is not signed in, whatever
+  // cookie it holds (sessions made before the gate, or by sign-up before
+  // 2026-11-11, which signed people straight in).
+  if (requireVerifiedEmail() && row.email_verified_at == null) return null;
   return {
     id: row.id, email: row.email,
     proUntil: row.pro_until ? dateStr(row.pro_until) : null,
@@ -316,6 +320,24 @@ export async function signUp(
     homeAirport: u.home_airport ?? null,
     emailVerified: u.email_verified_at != null,
   };
+}
+
+/**
+ * The account an email + password belong to, or null, with NO verification
+ * gate: only for asking for a new confirmation link while the gate keeps the
+ * account from signing in (POST /api/auth/resend-verification).
+ */
+export async function accountByPassword(
+  db: Db, rawEmail: unknown, password: string,
+): Promise<{ id: string; email: string; emailVerified: boolean } | null> {
+  let email: string;
+  try { email = cleanEmail(rawEmail); } catch { return null; }
+  const { rows } = await db.query<{ id: string; email: string; password_hash: string | null; email_verified_at: unknown }>(
+    `select id, email, password_hash, email_verified_at from users where email = $1`, [email]);
+  const row = rows[0];
+  if (!row || !hasPassword(row.password_hash)) return null;
+  if (!(await verifyPassword(password, row.password_hash))) return null;
+  return { id: row.id, email: row.email, emailVerified: row.email_verified_at != null };
 }
 
 /**

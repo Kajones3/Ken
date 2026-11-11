@@ -119,7 +119,35 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## START HERE — 2026-11-02 to 11-05, session END (newest; read first)
+## START HERE — 2026-11-11 (newest; read first)
+
+Three fixes + Stripe advice. 926 tests, typecheck clean. Needs a Render redeploy.
+- **Sign-up no longer signs you in without a confirmed email** (owner: friends
+  got accounts without confirming). Cause: the gate was only checked at
+  SIGN-IN, and sign-up created a session straight away. Now
+  `requireVerifiedEmail()` is ON wherever `RESEND_API_KEY` is set (unless
+  `REQUIRE_VERIFIED_EMAIL=false`); with it on, POST /api/auth/signup returns
+  `{needsVerification:true}` and NO cookie, `currentUser()` treats an
+  unconfirmed account's old sessions as signed out (so friends already in
+  must confirm), and POST /api/auth/resend-verification also takes
+  email + password (`accountByPassword()`, counts toward the sign-in lockout)
+  so someone locked out can get a fresh link. Page: "We sent a link to ...",
+  and "Send a new confirmation link" on an `unverified` sign-in. Unconfirmed
+  rows still sit in `users`; not cleaned up (offer a purge if the owner asks).
+- **Budget page milestones: "Right now" means only what you already have.**
+  `budgetMilestones()` index 0 = now (no monthly saving yet), index i = after
+  month ymAdd(now, i-1)'s saving; one-off money counts from the end of its
+  month. Owner's case: $2,000 saved + $500/month, $2,500 flight+hotel now
+  reads "Month 1, once you've set aside <this month>'s money".
+- **"Is an annual pass worth it?": "Or spend it on" never names the other US
+  pass resort** (`passAlternative`). A WDW pass row read "A whole trip to
+  Disneyland" and vice versa, which looked swapped; it now compares only
+  with resorts that sell no pass we price.
+- **Stripe:** owner opening an account 2026-11-11. Not built. What's needed is
+  in the conversation of 2026-11-11 (website live for Stripe's review, legal
+  blanks, No-refunds line before payment, webhook that grants `pro_until`).
+
+## START HERE — 2026-11-02 to 11-05, session END
 
 **Merged to master this session: PRs #230-#234.** Details in the dated
 sections just below. 923 tests, typecheck clean, smoke OK.

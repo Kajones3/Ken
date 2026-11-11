@@ -45,9 +45,23 @@ import { DISNEY_DISCLAIMER } from "./config.js";
  *  night's sleep, short enough that an old forwarded email is not a key. */
 export const VERIFY_TOKEN_HOURS = 48;
 
-/** The hard gate. Off until mail genuinely delivers — see the file header. */
+/**
+ * The hard gate. ON wherever real mail is configured (RESEND_API_KEY set),
+ * unless REQUIRE_VERIFIED_EMAIL=false says otherwise; off where mail can't
+ * send (a local dev loop), unless REQUIRE_VERIFIED_EMAIL=true.
+ *
+ * Changed 2026-11-11 (owner: friends were getting accounts without
+ * confirming, "that will bring me a bunch of junk emails"). Mail has
+ * delivered since 2026-09-19, so the reason to keep it off is gone, and a
+ * gate that depends on someone remembering a Render variable is a gate that
+ * may not be on. While it is on: sign-up does not sign you in, sign-in
+ * refuses an unconfirmed address, and an unconfirmed account's old sessions
+ * stop counting.
+ */
 export function requireVerifiedEmail(env: NodeJS.ProcessEnv = process.env): boolean {
-  return env.REQUIRE_VERIFIED_EMAIL === "true";
+  if (env.REQUIRE_VERIFIED_EMAIL === "true") return true;
+  if (env.REQUIRE_VERIFIED_EMAIL === "false") return false;
+  return !!env.RESEND_API_KEY;
 }
 
 export function verifyToken(): string {
