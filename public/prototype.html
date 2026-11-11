@@ -2029,6 +2029,8 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
           <small style="color:var(--muted); font-size:12px">Accounts are free.</small>
         </div>
         <small id="signinError" class="downgrade" hidden></small>
+        <p id="verifyNote" class="hint" hidden></p>
+        <p id="verifyResendRow" hidden style="margin:4px 0 0"><button type="button" class="ghost" id="verifyResend">Send a new confirmation link</button> <span id="verifyResendMsg"></span></p>
         <p style="margin:14px 0 0; font-size:13px; color:var(--ink-2)">
           <span id="authSwapText">Already have an account?</span>
           <button type="button" id="authSwap" class="linkbtn">Sign in</button>
@@ -4938,6 +4940,17 @@ $("#resendVerify").addEventListener("click", async ()=>{
     : " queued, but this deployment can't send email yet, so the link went to the server log. Ask the owner.";
 });
 
+$("#verifyResend").addEventListener("click", async ()=>{
+  const msg = $("#verifyResendMsg");
+  const email = $("#signinEmail").value.trim(), password = $("#signinPassword").value;
+  if(!email || !password){ msg.textContent = "Enter your email and password first."; return; }
+  msg.textContent = "sending…";
+  const res = await fetch("/api/auth/resend-verification", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) }).catch(()=>null);
+  const body = res ? await res.json().catch(()=>({})) : {};
+  if(!res || !res.ok){ msg.textContent = body.message || "Couldn't send that. Try again in a moment."; return; }
+  msg.textContent = body.alreadyVerified ? "Already confirmed. Sign in." : "Sent. Check your inbox (and spam).";
+});
+
 /* ------------------------------ attractions ------------------------------
  * Price answers "which of these can we afford". It never answers "which of
  * these is our trip", and that is where people actually start. Someone who
@@ -5276,6 +5289,7 @@ $("#signinBtn").addEventListener("click", async ()=>{
   const password = $("#signinPassword").value;
   const err = $("#signinError");
   err.hidden = true;
+  $("#verifyNote").hidden = true; $("#verifyResendRow").hidden = true;
   // Never return silently. Every path from here either signs you in or says
   // why it didn't — the bug the owner hit was a handler that just stopped.
   if(!email || !password){
@@ -5305,6 +5319,19 @@ $("#signinBtn").addEventListener("click", async ()=>{
     // find it: an existing account needs sign-in, a wrong password on a
     // legacy account needs sign-up to set one.
     if(body.error === "already_registered"){ authMode = "signin"; syncAuthMode(); err.textContent = body.message; err.hidden = false; }
+    // Not confirmed yet: offer a fresh link right here (the old one may have
+    // expired or gone to spam).
+    if(body.error === "unverified"){ $("#verifyResendRow").hidden = false; $("#verifyResendMsg").textContent = ""; }
+    return;
+  }
+  // A new account must confirm its email before it's signed in (owner,
+  // 2026-11-11). Say so plainly and switch the form to sign-in for later.
+  const okBody = await res.clone().json().catch(()=>({}));
+  if(okBody.needsVerification){
+    $("#signinPassword").value = "";
+    authMode = "signin"; syncAuthMode();
+    $("#verifyNote").innerHTML = `Almost there. We sent a link to <b>${esc(okBody.email || email)}</b>. Click it to confirm your email, then sign in here. Can't find it? Check your spam folder.`;
+    $("#verifyNote").hidden = false;
     return;
   }
   $("#signinPassword").value = "";
@@ -6810,18 +6837,22 @@ function budgetSteps(x){
 function evenMonthly(toFind, T){ return Math.ceil(toFind / (T+1)); }
 
 /**
- * When the pot first covers each milestone, saving `monthly` at the start of
- * every month from this one (index 0) through the arrival month (index T).
- * Pure. A milestone the pot never reaches by the trip is `at: null`.
+ * When the pot first covers each milestone. Index 0 is RIGHT NOW: only what
+ * you already have, nothing saved yet (owner, 2026-11-11: with $2,000 saved
+ * and $500 a month, a $2,500 flight + hotel can't be bought "now", only once
+ * this month's $500 is put by). Index i >= 1 is the end of the i-th month of
+ * saving, the month ymAdd(now, i-1); the last is the arrival month (T+1).
+ * One-off money coming in a month counts from the end of that month. Pure.
+ * A milestone the pot never reaches by the trip is `at: null`.
  */
 function budgetMilestones({ steps, T, monthly, saved, extra, extraAt, giftSaving }){
-  const pot = i => saved + giftSaving + (i >= extraAt ? extra : 0) + monthly * (i+1);
+  const pot = i => saved + giftSaving + (i >= extraAt + 1 ? extra : 0) + monthly * i;
   let cum = 0;
   return steps.map(st => {
     cum += st.amt;
     let at = null;
-    for(let i=0;i<=T;i++) if(pot(i) >= cum - 0.5){ at = i; break; }
-    return { ...st, cum, at, short: at === null ? Math.ceil(cum - pot(T)) : 0 };
+    for(let i=0;i<=T+1;i++) if(pot(i) >= cum - 0.5){ at = i; break; }
+    return { ...st, cum, at, short: at === null ? Math.ceil(cum - pot(T+1)) : 0 };
   });
 }
 
@@ -6852,7 +6883,11 @@ function passBreakEven(item){
 function passAlternative(price, passResortId){
   let best = null;
   for(const item of results){
-    if(!item.ok || item.resortId === passResortId) continue;
+    // Never the other US resort that sells a pass (owner, 2026-11-11: a Walt
+    // Disney World pass row read "A whole trip to Disneyland" and vice versa,
+    // which looked like the two were mixed up). The trip-instead comparison
+    // is with the resorts you can't hold a pass at.
+    if(!item.ok || item.resortId === passResortId || PASS_PROGRAMS.some(p => p.resortId === item.resortId)) continue;
     const x = item.price, pax = x.partySize || 1;
     const steps = [[x.transportMode === "drive" ? "gas" : "flight", (x.flights + x.driving) / pax],
       ["hotel", x.hotel / pax], ["park tickets", x.tickets / pax], ["food", x.food / pax]];
@@ -7101,17 +7136,20 @@ function renderBudget(){
   $("#bMiles").innerHTML = miles.map(m => m.at === null
     ? `<li class="short"><span class="when">Not by the trip<small>${usd(m.short)} short at this pace</small></span>
         <span class="what">You'd still need to ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`
-    : `<li${m.at > goal.idx ? ' class="late"' : ""}><span class="when">${m.at === 0 ? "This month" : "Month "+(m.at+1)}<small>${ymLabel(ymAdd(now,m.at))}${m.at > goal.idx ? ", after your goal" : ""}</small></span>
+    : `<li${m.at > goal.idx + 1 ? ' class="late"' : ""}><span class="when">${m.at === 0 ? "Right now<small>with what you already have</small>" : "Month "+m.at+"<small>once you've set aside "+ymLabel(ymAdd(now,m.at-1))+"'s money"+(m.at > goal.idx + 1 ? ", after your goal" : "")+"</small>"}</span>
         <span class="what">You can ${esc(m.what)}</span><span class="amt">${usd(m.amt)}</span></li>`).join("");
 
   // The side panel: the one number to act on, and whether it gets there.
   const last = miles[miles.length - 1];
+  // fullAt is a milestone index: 0 = right now, i = after month ymAdd(now, i-1).
   const fullAt = toFind === 0 ? 0 : last ? last.at : null;
+  const fullYm = fullAt ? ymAdd(now, fullAt - 1) : now;
   let status;
   if(toFind === 0) status = `<p class="bstatus good">What you have already covers the whole trip.</p>`;
   else if(fullAt === null) status = `<p class="bstatus bad">At ${usd(monthly)} a month you'd be ${usd(last.short)} short when you leave. ${usd(even)} a month gets you there by ${ymLabel(goalYm)}.</p>`;
-  else if(fullAt > goal.idx) status = `<p class="bstatus bad">Fully paid in ${ymLabel(ymAdd(now, fullAt))}, ${plural(fullAt - goal.idx, "month")} after your goal. ${usd(even)} a month gets you there by ${ymLabel(goalYm)}.</p>`;
-  else status = `<p class="bstatus good">Fully paid in ${ymLabel(ymAdd(now, fullAt))}, ${T - fullAt === 0 ? "the month you go" : plural(T - fullAt, "month") + " before you go"}.</p>`;
+  else if(fullAt > goal.idx + 1) status = `<p class="bstatus bad">Fully paid in ${ymLabel(fullYm)}, ${plural(fullAt - 1 - goal.idx, "month")} after your goal. ${usd(even)} a month gets you there by ${ymLabel(goalYm)}.</p>`;
+  else if(fullAt === 0) status = `<p class="bstatus good">What you have right now covers the whole trip.</p>`;
+  else status = `<p class="bstatus good">Fully paid in ${ymLabel(fullYm)}, ${T - (fullAt - 1) === 0 ? "the month you go" : plural(T - (fullAt - 1), "month") + " before you go"}.</p>`;
   const b = boardBits(item);
   $("#budgetSide").innerHTML = `<p class="tslab">Set aside each month</p>
     <p class="tstotal">${usd(monthly)}</p>

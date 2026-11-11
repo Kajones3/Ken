@@ -60,7 +60,7 @@ import { resortTransportMode, GETTING_THERE_MODES, defaultGettingThere, type Get
 import { pickGeocodeProvider, pickIpLocateProvider } from "./geo/pick.js";
 import { cachedGeocode } from "./geo/cache.js";
 import {
-  currentUser, createSession, sessionTokenFrom, destroySession,
+  currentUser, accountByPassword, createSession, sessionTokenFrom, destroySession,
   sessionCookieHeader, clearCookieHeader, isPro, signUp, signIn, AuthError, deleteAccount,
   setHomeAirport, HomeAirportError, MIN_PASSWORD_LENGTH, secureCookies, type SessionUser,
 } from "./auth.js";
@@ -74,7 +74,7 @@ import {
   lockoutMessage,
 } from "./signinThrottle.js";
 import { requestReset, lookupReset, consumeReset, RESET_TOKEN_HOURS } from "./passwordReset.js";
-import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS } from "./verifyEmail.js";
+import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS, requireVerifiedEmail } from "./verifyEmail.js";
 import { loadHotelLearning, hotelLearningLines } from "./hotelLearning.js";
 import { loadAirfareIndexSummary } from "./airfareIndex.js";
 
@@ -993,6 +993,12 @@ const server = createServer(async (req, res) => {
         // itself: the account exists either way and another link is one
         // button away.
         if (isSignup) void sendVerification(db, user.id, user.email, pickEmailSender());
+        // With the gate on, a new account is NOT signed in: it has to click
+        // the link first (owner, 2026-11-11). No cookie, so nothing of the
+        // site's signed-in side opens until the address is confirmed.
+        if (isSignup && !user.emailVerified && requireVerifiedEmail()) {
+          return send(200, { email: user.email, needsVerification: true }, { cache: "no-store" });
+        }
         const token = await createSession(db, user.id);
         return send(200, {
           email: user.email, pro: isPro(user.proUntil), proUntil: user.proUntil,
@@ -1090,7 +1096,7 @@ const server = createServer(async (req, res) => {
           result.alreadyVerified ? "Already confirmed" : "Email confirmed",
           result.alreadyVerified
             ? `${escapeHtml(result.email)} was already confirmed. Nothing more to do.`
-            : `Thanks — ${escapeHtml(result.email)} is confirmed. Price alerts can now reach you.`,
+            : `Thanks — ${escapeHtml(result.email)} is confirmed. You can sign in now.`,
         ));
       }
       return sendHtml(result.reason === "expired" ? 410 : 404, page(
@@ -1145,8 +1151,24 @@ const server = createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/auth/resend-verification" && req.method === "POST") {
-      const user = await currentUser(db, req);
-      if (!user) return send(401, { error: "sign_in_required" });
+      // Signed in (gate off), or, with the gate on, the email and password
+      // of an account that can't sign in yet: the only way back in for
+      // someone whose link expired. Wrong passwords count toward the same
+      // lockout as sign-in, so this is no easier to guess against.
+      let user: { id: string; email: string; emailVerified: boolean } | null = await currentUser(db, req);
+      if (!user) {
+        const body = await readBody(req);
+        const email = String(body.email ?? ""), password = typeof body.password === "string" ? body.password : "";
+        if (!email || !password) return send(401, { error: "sign_in_required" });
+        const scopes = scopesFor(email, clientIp(req));
+        const gate = await checkSigninAllowed(db, scopes);
+        if (!gate.allowed) return send(429, { error: "too_many_attempts", message: lockoutMessage(gate.retryAfterSeconds) });
+        user = await accountByPassword(db, email, password);
+        if (!user) {
+          await recordSigninFailure(db, scopes);
+          return send(401, { error: "bad_credentials", message: "That email and password don't match an account." });
+        }
+      }
       if (user.emailVerified) return send(200, { ok: true, alreadyVerified: true }, { cache: "no-store" });
       const sender = pickEmailSender();
       const sent = await sendVerification(db, user.id, user.email, sender);
