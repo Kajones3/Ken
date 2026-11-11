@@ -55,8 +55,8 @@ export const VERIFY_TOKEN_HOURS = 48;
  * delivered since 2026-09-19, so the reason to keep it off is gone, and a
  * gate that depends on someone remembering a Render variable is a gate that
  * may not be on. While it is on: sign-up does not sign you in, sign-in
- * refuses an unconfirmed address, and an unconfirmed account's old sessions
- * stop counting.
+ * refuses an unconfirmed address. Sessions an unconfirmed account already
+ * holds keep working (owner: keep friends who are signed in, signed in).
  */
 export function requireVerifiedEmail(env: NodeJS.ProcessEnv = process.env): boolean {
   if (env.REQUIRE_VERIFIED_EMAIL === "true") return true;

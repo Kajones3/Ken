@@ -213,17 +213,16 @@ test("with the gate on, a wrong password still fails as a wrong password", async
   await db.close();
 });
 
-test("with the gate on, an unconfirmed account's old session no longer signs it in", async () => {
+test("with the gate on, an unconfirmed account that is already signed in stays signed in", async () => {
   const db = await memoryDb();
   const user = await signUp(db, "friend@example.test", "correcthorse");
   const token = await createSession(db, user.id);
   const req = { headers: { cookie: `pf_session=${token}` } } as unknown as IncomingMessage;
-  assert.ok(await currentUser(db, req), "gate off: still signed in");
   process.env.REQUIRE_VERIFIED_EMAIL = "true";
   try {
-    assert.equal(await currentUser(db, req), null, "gate on: an unconfirmed account is signed out");
-    await db.query(`update users set email_verified_at = now() where id = $1`, [user.id]);
-    assert.ok(await currentUser(db, req), "once confirmed, the same session works");
+    assert.ok(await currentUser(db, req), "owner, 2026-11-11: friends already in stay in");
+    await assert.rejects(signIn(db, "friend@example.test", "correcthorse"),
+      (e: AuthError) => e.reason === "unverified", "but a NEW sign-in still waits for the link");
   } finally {
     delete process.env.REQUIRE_VERIFIED_EMAIL;
   }

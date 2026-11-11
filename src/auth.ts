@@ -105,10 +105,9 @@ export async function currentUser(db: Db, req: IncomingMessage): Promise<Session
   );
   const row = rows[0];
   if (!row) return null;
-  // With the gate on, an unconfirmed account is not signed in, whatever
-  // cookie it holds (sessions made before the gate, or by sign-up before
-  // 2026-11-11, which signed people straight in).
-  if (requireVerifiedEmail() && row.email_verified_at == null) return null;
+  // An unconfirmed account that is ALREADY signed in stays signed in (owner,
+  // 2026-11-11: "Keep my friends signed in if they have already signed in").
+  // The gate only stops new sign-ups and new sign-ins.
   return {
     id: row.id, email: row.email,
     proUntil: row.pro_until ? dateStr(row.pro_until) : null,
