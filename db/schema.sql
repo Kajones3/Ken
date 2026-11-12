@@ -1092,3 +1092,19 @@ create table if not exists pro_sales (
   active      boolean not null default true,
   created_at  timestamptz not null default now()
 );
+
+-- 2026-11-12: every paid Stripe Checkout Session, once (stripeCheckout.ts).
+-- The session id is the key, so the webhook and the traveler's return trip
+-- can both try to grant and only the first does. Never deleted: it is the
+-- record of who paid what.
+create table if not exists stripe_payments (
+  session_id    text primary key,
+  user_id       uuid,
+  pass          text not null,
+  days          integer not null,
+  amount_cents  integer not null,
+  currency      text not null default 'usd',
+  livemode      boolean not null default false,
+  created_at    timestamptz not null default now(),
+  granted_at    timestamptz
+);
