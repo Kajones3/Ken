@@ -206,17 +206,27 @@ async function dealUnsubscribeLink(db: Db, userId: string, sender: EmailSender):
   return link;
 }
 
-export interface AlertsOptions { sender?: EmailSender }
+export interface AlertsOptions { sender?: EmailSender; postalAddress?: string | null }
+
+/** Deal emails are marketing, and CAN-SPAM wants a real postal address in
+ *  each one (a phone number doesn't count). Owner, 2026-11-12: hold them
+ *  until MAIL_POSTAL_ADDRESS is set. Nothing is lost: new deals are found
+ *  "since your last deal email", and queued ones stay queued. */
+export function dealEmailsOnHold(addr: string | null | undefined = process.env.MAIL_POSTAL_ADDRESS): boolean {
+  return !(addr ?? "").trim();
+}
 
 export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
   const sender = opts.sender ?? pickEmailSender();
   const runId = randomUUID();
   await db.query(`insert into fetch_runs (id, job) values ($1,'alerts')`, [runId]);
 
-  const retry = await retryUnsent(db, sender);
+  const hold = dealEmailsOnHold(opts.postalAddress === undefined ? process.env.MAIL_POSTAL_ADDRESS : opts.postalAddress);
+  const retry = hold ? { retried: 0, sent: 0 } : await retryUnsent(db, sender);
 
-  const { candidates, checked } = await findAlerts(db);
-  const { keep, reason } = suppressAnomalies(candidates, checked);
+  const { candidates, checked } = hold ? { candidates: [] as Candidate[], checked: 0 } : await findAlerts(db);
+  const { keep, reason: suppressed } = suppressAnomalies(candidates, checked);
+  const reason = hold ? "deal emails on hold: no postal address (MAIL_POSTAL_ADDRESS)" : suppressed;
   const final = applyCap(keep);
 
   let sent = 0;
@@ -248,7 +258,7 @@ export async function runAlerts(db: Db, opts: AlertsOptions = {}) {
     [runId, final.length, (reason || `${checked} Planner Pro members checked, ${sent}/${final.length} sent, ${retry.sent}/${retry.retried} retried`)
       + `; ${reminders.sent}/${reminders.due} ending-soon reminders`],
   );
-  return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final, reminders };
+  return { checked, fired: final.length, sent, retried: retry.retried, retriedSent: retry.sent, suppressed: reason, candidates: final, reminders, onHold: hold };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

@@ -9,6 +9,8 @@ const c = (userId: string, dropPct: number): Candidate => ({
   userId, email: `${userId}@example.com`, resortId: "wdw",
   oldTotal: 0, newTotal: 0, dropPct, kind: "new_promo", detail: "",
 });
+// Deal emails are held without a postal address; these tests run with one.
+process.env.MAIL_POSTAL_ADDRESS = "PO Box 1, Raleigh, NC 27601";
 const quiet: EmailSender = { name: "unused", async send() {} };
 
 async function member(db: Db, email: string, opts: { pro?: string | null; verified?: boolean; created?: string } = {}) {
@@ -198,5 +200,20 @@ test("deal emails go to the 3- and 9-month passes and hand-given Planner Pro, ne
   await promo(db, "Room discount");
   const { candidates } = await findAlerts(db);
   assert.deepEqual(candidates.map((x) => x.email).sort(), ["hand@example.com", "nine@example.com", "three@example.com"]);
+  await db.close();
+});
+
+test("deal emails are held until a postal address is set, then go out", async () => {
+  const db = await memoryDb();
+  await member(db, "held@example.com");
+  await promo(db, "Held deal");
+  const sent: EmailMessage[] = [];
+  const capture: EmailSender = { name: "capture", async send(m) { sent.push(m); } };
+  const held = await runAlerts(db, { sender: capture, postalAddress: "" });
+  assert.equal(held.onHold, true);
+  assert.equal(sent.length, 0, "nothing sent without an address");
+  assert.match(String(held.suppressed), /on hold/);
+  const later = await runAlerts(db, { sender: capture, postalAddress: "PO Box 1, Raleigh, NC" });
+  assert.equal(later.sent, 1, "the held deal goes out once an address exists");
   await db.close();
 });
