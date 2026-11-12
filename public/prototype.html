@@ -946,6 +946,13 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 @media (max-width:700px){ .planswipe{display:block} }
 .plannote{margin:6px 0 0; font-size:12.5px; color:var(--ink-2)}
 .plans-t .norefund{display:block; margin-top:4px; font-size:11px; color:var(--ink-2)}
+.paynote{position:fixed; left:0; right:0; top:var(--mast-h, 64px); z-index:44; display:flex; align-items:center; justify-content:center; gap:12px;
+  padding:8px 48px 8px 16px; font-weight:600; font-size:15px; text-align:center; background:var(--paper, #FBFAF6); color:#16204A;
+  border-bottom:2px solid #16204A; transition:opacity .4s}
+.paynote.ok{background:#E8B23E; border-bottom-color:#C98A12}
+.paynote.fade{opacity:0}
+.paynote-x{position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:0; font-size:22px; line-height:1; color:inherit; cursor:pointer; padding:4px 8px}
+@media (max-width:600px){ .paynote{font-size:14px; padding:7px 40px 7px 12px} }
 .plansale{margin:0 0 10px; padding:8px 12px; border-radius:10px; background:var(--gold, #E8B23E); color:#16204A; font-weight:700; font-size:14px}
 .plans-t .ppwas{font-size:15px; font-weight:600; color:var(--ink-2); text-decoration:line-through}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
@@ -5201,24 +5208,29 @@ async function requestPro(plan){
 /* Back from Stripe's payment page: ?pro=thanks&session_id=... or ?pro=cancelled.
  * The server asks Stripe whether it's paid and turns Planner Pro on (the
  * webhook may already have). Tries a few times: a card can take a moment. */
-function payBanner(text, ok){
+/* A slim strip right under the sticky top bar, full width on every screen
+ * (owner, 2026-11-12: the floating box sat over the page and stayed put).
+ * "Done" messages fade on their own after a few seconds; × closes it now. */
+let payBannerTimer = null;
+function payBanner(text, ok, done){
   let el = document.getElementById("payNote");
   if(!el){
-    el = document.createElement("div"); el.id = "payNote"; el.setAttribute("role", "status");
-    el.style.cssText = "position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:60;max-width:min(560px,calc(100vw - 32px));padding:12px 16px;border-radius:12px;font-weight:600;box-shadow:0 6px 24px rgba(0,0,0,.18);cursor:pointer";
-    el.addEventListener("click", () => el.remove());
+    el = document.createElement("div"); el.id = "payNote"; el.className = "paynote"; el.setAttribute("role", "status");
+    el.innerHTML = `<span class="paynote-t"></span><button type="button" class="paynote-x" aria-label="Close">×</button>`;
+    el.querySelector(".paynote-x").addEventListener("click", () => el.remove());
     document.body.appendChild(el);
   }
-  el.style.background = ok ? "#E8B23E" : "#FBFAF6"; el.style.color = "#16204A";
-  el.style.border = ok ? "0" : "2px solid #16204A";
-  el.textContent = text;
+  el.classList.toggle("ok", !!ok);
+  el.querySelector(".paynote-t").textContent = text;
+  clearTimeout(payBannerTimer);
+  if(done) payBannerTimer = setTimeout(() => { el.classList.add("fade"); setTimeout(() => el.remove(), 400); }, 6000);
 }
 async function handlePaymentReturn(){
   const q = new URLSearchParams(location.search);
   const state = q.get("pro");
   if(!state) return;
   history.replaceState(null, "", location.pathname + location.hash);
-  if(state === "cancelled"){ payBanner("Payment cancelled. Nothing was charged.", false); return; }
+  if(state === "cancelled"){ payBanner("Payment cancelled. Nothing was charged.", false, true); return; }
   const id = q.get("session_id");
   if(state !== "thanks" || !id) return;
   payBanner("Thanks! Turning on Planner Pro…", true);
@@ -5227,10 +5239,10 @@ async function handlePaymentReturn(){
     const b = r ? await r.json().catch(() => ({})) : {};
     if(r && r.ok && (b.status === "granted" || b.status === "already")){
       await refreshSession(); syncAccountUi();
-      payBanner(`Planner Pro is on${b.proUntil ? " until " + fmtDate(b.proUntil) : ""}. Enjoy planning!`, true);
+      payBanner(`Planner Pro is on${b.proUntil ? " until " + fmtDate(b.proUntil) : ""}. Enjoy planning!`, true, true);
       return;
     }
-    if(r && r.status === 401){ payBanner("Thanks! Sign in to see Planner Pro on your account.", true); return; }
+    if(r && r.status === 401){ payBanner("Thanks! Sign in to see Planner Pro on your account.", true, true); return; }
     await new Promise(res => setTimeout(res, 2000));
   }
   payBanner("Thanks! Your payment is still going through. Planner Pro turns on by itself within a few minutes; refresh the page to check.", true);

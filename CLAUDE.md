@@ -119,7 +119,25 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## START HERE — 2026-11-12: Stripe Checkout BUILT (newest)
+## START HERE — 2026-11-12, later: deal emails HELD; payment banner moved
+
+- **Deal emails are ON HOLD until `MAIL_POSTAL_ADDRESS` is set** (owner: "hold
+  the deal emails until I have an address"). `dealEmailsOnHold()` in
+  jobs/alerts.ts: no new deal emails and no retries of queued ones; the run
+  note says "deal emails on hold". Pass-ending reminders, confirm-email and
+  reset emails are transactional and still go. Nothing is lost: deals are
+  found "since your last deal email", so the first run after the address is
+  set sends them. A phone number does NOT satisfy CAN-SPAM (owner has one; it
+  can go in the Terms as contact info). The owner task now says "ON HOLD".
+- **Payment banner** (owner: "consistent and annoying", screenshot): the
+  floating gold box is now a full-width strip right under the sticky top bar
+  (`.paynote`, top `--mast-h`), with ×; final messages fade after 6 s.
+  Checked in Chromium at 1300px and 390px.
+- Terms/Privacy: owner asked how to fill them in; drafts are
+  `docs/legal/terms-of-service.md` + `privacy-policy.md`, NOT live. Blanks
+  and questions given in the conversation of 2026-11-12.
+
+## START HERE — 2026-11-12: Stripe Checkout BUILT
 
 Owner: "go ahead and build the checkout". `src/stripeCheckout.ts` (fetch to
 Stripe's HTTP API, no SDK), table `stripe_payments` (session_id primary key,

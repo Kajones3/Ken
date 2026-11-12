@@ -218,8 +218,8 @@ export async function ownerTasks(db: Db, opts: OwnerTaskOptions = {}): Promise<O
   if (!env.MAIL_POSTAL_ADDRESS) {
     checked({
       id: "mail-postal-address",
-      title: "Add a postal address for deal emails (repo variable MAIL_POSTAL_ADDRESS)",
-      why: "US law (CAN-SPAM) asks every marketing email, which deal emails are, to show a real postal address. A PO box is fine. Set it as a GitHub repository variable named MAIL_POSTAL_ADDRESS and every deal email prints it under the unsubscribe link.",
+      title: "Deal emails are ON HOLD until you add a postal address (repo variable MAIL_POSTAL_ADDRESS)",
+      why: "US law (CAN-SPAM) asks every marketing email, which deal emails are, to show a real postal address; a phone number doesn't count. A PO box or a virtual mailbox is fine. Set it as a GitHub repository variable named MAIL_POSTAL_ADDRESS: the next alert run sends the held deal emails with it under the unsubscribe link.",
       side: "both",
       blocking: false,
     });
