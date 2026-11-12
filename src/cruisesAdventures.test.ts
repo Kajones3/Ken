@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { memoryDb } from "./db.js";
 import { splitCruises, readAdventure } from "../public/screenshot-reader.js";
-import { validateCruise, saveCruises, listCruises, deleteCruise, validateAdventure, saveAdventure, listAdventures } from "./cruisesAdventures.js";
+import { validateCruise, saveCruises, listCruises, deleteCruise, validateAdventure, saveAdventure, listAdventures, gratuityPerPerson } from "./cruisesAdventures.js";
+
+
+test("gratuities: nights x Disney's rate per person, the higher rate for a suite, nothing without nights", () => {
+  const rates = { regular: 16, concierge: 27.25 };
+  assert.equal(gratuityPerPerson(3, null, rates), 48);
+  assert.equal(gratuityPerPerson(4, "suite", rates), 109);
+  assert.equal(gratuityPerPerson(4, "verandah", rates), 64);
+  assert.equal(gratuityPerPerson(null, null, rates), null);
+});
 
 // Real OCR of the owner's own screenshots (2026-11-12), read in Chromium.
 const CRUISE_OCR = fs.readFileSync(new URL("./testdata/cruise-list-2026-11.ocr.txt", import.meta.url), "utf8");
@@ -43,6 +52,9 @@ test("cruises: a seen price is kept as history, never replaced; a bad row saves 
   const rows = await listCruises(db);
   assert.equal(rows.length, 2, "both sightings kept, the rejected batch wrote nothing");
   assert.deepEqual(rows.map((r) => [r.seenOn, r.price]), [["2026-11-12", 686], ["2026-11-05", 650]]);
+  assert.deepEqual([rows[0]!.gratuityUsd, rows[0]!.withGratuityUsd], [48, 734], "$686 + 3 nights x $16");
+  await db.query(`insert into owner_settings (key, value) values ('cruise.gratuityPerNight', '17')`);
+  assert.equal((await listCruises(db))[0]!.withGratuityUsd, 737, "the owner's corrected rate applies to saved cruises");
   assert.ok(await deleteCruise(db, rows[1]!.id));
   assert.equal((await listCruises(db)).length, 1);
   await db.close();

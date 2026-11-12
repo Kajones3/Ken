@@ -302,6 +302,15 @@ export const SETTINGS: SettingDef[] = [
     help: "Added to the FLIGHT ESTIMATE only (never a real cached fare) for a date in the Dec 24-31 window. "
       + "Same sourcing and same caveat as the Thanksgiving premium above.",
   },
+  // Cruises are stored as history only (cruisesAdventures.ts); nothing a
+  // traveler sees uses these yet. Disney's recommended rates, web-checked
+  // 2026-11-12 (raised in 2025 from $14.50 / $23.50); confirm on Disney's page.
+  money("cruise.gratuityPerNight", "Disney cruise gratuities, per person per night", "Cruises (history only)", 16, 0, 100,
+    "Disney's recommended gratuity for a regular stateroom, charged for every guest, children and babies too. "
+    + "Added to each saved cruise as a \"with gratuities\" estimate in /admin -> Cruises."),
+  money("cruise.gratuityConciergePerNight", "Disney cruise gratuities, Concierge or suite, per person per night",
+    "Cruises (history only)", 27.25, 0, 150,
+    "The higher recommended gratuity for Concierge staterooms and suites. Used for a saved cruise whose room is Suite."),
   // Two per year, because the IRS sets a January-June rate and a July-December
   // one and has changed it mid-year before. Adding a new year is still a code
   // change (the registry has to know the key exists) — see the note below.

@@ -146,7 +146,17 @@ information so if and when we launch those, we can have historical data."
   taxes/fees/gratuities: blank sail date/room = that. NOTHING reads these for
   travelers. Not yet seen: a cruise's per-date list or ABD "Rates & Dates":
   ask for a screenshot before tuning the readers for them.
-- 941 tests. Needs a Render redeploy.
+- 942 tests. Needs a Render redeploy.
+- **Then (owner: "Only build 4"): gratuities filled from a known fact.** The
+  /admin Cruises history has a "+ Gratuities" column: price + nights x Disney's
+  recommended gratuity per person per night (`gratuityPerPerson()`; Suite uses
+  the Concierge rate). Settings `cruise.gratuityPerNight` 16 and
+  `cruise.gratuityConciergePerNight` 27.25 (Rates & settings, "Cruises (history
+  only)"), web-checked 2026-11-12 from 2025 reports (TravelPulse, Fox 26,
+  Cruise Critic; raised from $14.50/$23.50). Owner should confirm on Disney's
+  own page. Worked out at read time, never stored, so a corrected rate updates
+  every row. Taxes and port fees are NOT added (they vary by sailing). Options
+  1-3 (searching the web per cruise) were offered and NOT chosen.
 
 ## START HERE — 2026-11-12, later: deal emails HELD; payment banner moved
 
