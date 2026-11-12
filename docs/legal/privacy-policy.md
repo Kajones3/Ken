@@ -91,8 +91,10 @@ affiliate links, which tell that site you came from us.
 ## How long we keep it
 
 - Account information: until you delete your account.
-- Searched routes (anonymous): [up to 2 years] for pricing.
-- Anonymous action counts: [up to 2 years].
+- Searched routes and anonymous action counts: we keep these with no end
+  date. They are only totals (for example, "a search from Raleigh to Tokyo
+  for March"), hold nothing that identifies you, and help us improve our
+  prices over time.
 - Sign-in attempt records: minutes.
 - Server logs: [as long as Render keeps them].
 
