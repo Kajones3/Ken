@@ -41,6 +41,15 @@ services:
       # Changing it signs every tester out.
       - key: SITE_PASSWORD
         sync: false
+      # Card payments for Planner Pro (src/stripeCheckout.ts). Leave unset and
+      # the plan buttons keep emailing the owner instead. sk_test_... while
+      # testing, sk_live_... to take real money.
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # From Stripe -> Developers -> Webhooks, for the endpoint
+      # https://pricingthemagic.com/api/stripe/webhook (starts whsec_).
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
       - key: MAX_REQUESTS_PER_MINUTE
         value: "240"
       - key: ALERT_MAX_PER_USER_PER_DAY

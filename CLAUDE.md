@@ -119,7 +119,39 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
-## START HERE — 2026-11-11, later: Planner Pro sales; Stripe account approved (newest)
+## START HERE — 2026-11-12: Stripe Checkout BUILT (newest)
+
+Owner: "go ahead and build the checkout". `src/stripeCheckout.ts` (fetch to
+Stripe's HTTP API, no SDK), table `stripe_payments` (session_id primary key,
+never deleted). 935 tests. Needs a Render redeploy + the owner's keys.
+- **Off until `STRIPE_SECRET_KEY` is set in Render** (`/api/meta` `payments`:
+  null / "test" / "live"). Without it the plan buttons still send the old
+  "wants Planner Pro" email (`/api/pro/request`), unchanged.
+- POST `/api/pro/checkout {plan}` (signed in; 409 if already Pro: a new pass
+  only after the old one ends): price = SERVER's `passesWithSale(currentSale())`
+  `nowUsd`, one-time `mode=payment`, `custom_text.submit` = "No refunds ...",
+  metadata user_id/pass/days, success `/?pro=thanks&session_id=...`, cancel
+  `/?pro=cancelled`. Plans table buttons read "Pay $11.25" + "No refunds"
+  under each; the note says "No refunds. Paid securely with Stripe" (+ test
+  mode line).
+- Grant = `grantPaidSession()` (same as grant-pro, `days` from the session's
+  metadata), ONCE per session (insert on conflict do nothing), from EITHER
+  the webhook POST `/api/stripe/webhook` (HMAC check with
+  `STRIPE_WEBHOOK_SECRET`, 5-min tolerance, open while the site is locked:
+  `siteGate` OPEN_PATHS) OR the return trip: the page polls GET
+  `/api/pro/checkout/status?session_id=` which asks Stripe itself
+  (`retrieveSession`), only for the session's own user. Owner gets an email
+  per sale ("[TEST]" in test mode).
+- Checked locally: the site reached api.stripe.com (refused the fake key
+  with 401, as expected); forged webhook 400; signed webhook granted a week
+  pass; repeat = "already". NOT yet run against the owner's real test keys.
+- **Owner's steps:** test keys into Render (`STRIPE_SECRET_KEY`), webhook
+  endpoint in Stripe (event `checkout.session.completed` +
+  `checkout.session.async_payment_succeeded`) -> `STRIPE_WEBHOOK_SECRET`,
+  redeploy, buy with card 4242 4242 4242 4242, then live keys. Stripe
+  receipts are a dashboard setting. Sales tax NOT handled (Stripe Tax off).
+
+## START HERE — 2026-11-11, later: Planner Pro sales; Stripe account approved
 
 - **Owner's Stripe account is approved** ("I can now accept payments"), as an
   individual, no LLC (owner: $200 is a lot; told: Stripe doesn't need one,

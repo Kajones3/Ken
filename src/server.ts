@@ -50,6 +50,7 @@ import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
+import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
 import { seedTickets, allTierMonths } from "./jobs/refresh.js";
 import { ensureRoadMiles, osrmMiles, roadMilesLive } from "./roadMiles.js";
@@ -256,6 +257,38 @@ const allowEvent = eventRateLimiter();
 
 function clientIp(req: IncomingMessage): string {
   return callerIp(req.headers, req.socket.remoteAddress) ?? "";
+}
+
+/** The body exactly as sent, for Stripe's signature check (a re-serialized
+ *  JSON object would not match what Stripe signed). */
+async function readRaw(req: IncomingMessage): Promise<string> {
+  return new Promise<string>((resolve) => {
+    let s = "";
+    req.on("data", (c) => (s += c));
+    req.on("end", () => resolve(s));
+  });
+}
+
+/** Where Stripe sends people back to: PUBLIC_BASE_URL, else this request's host. */
+function siteBase(req: IncomingMessage): string {
+  const env = (process.env.PUBLIC_BASE_URL ?? "").replace(/\/+$/, "");
+  if (env) return env;
+  const proto = String(req.headers["x-forwarded-proto"] ?? "").split(",")[0] || "http";
+  return `${proto}://${req.headers.host ?? "localhost"}`;
+}
+
+/** After a pass is granted by payment: tell the owner (best effort). */
+async function tellOwnerOfSale(g: GrantOutcome, amountCents: number, livemode: boolean): Promise<void> {
+  const owner = process.env.OWNER_EMAIL;
+  if (!owner || g.status !== "granted") return;
+  try {
+    await pickEmailSender().send({
+      to: owner,
+      subject: `Pricing the Magic: ${livemode ? "" : "[TEST] "}${g.email} bought Planner Pro`,
+      text: `${g.email} paid $${(amountCents / 100).toFixed(2)} for the ${g.pass} pass${livemode ? "" : " (Stripe TEST mode, no real money)"}.`
+        + ` Planner Pro is on until ${g.proUntil}. Nothing for you to do.`,
+    });
+  } catch (e) { console.error("sale email failed:", (e as Error).message); }
 }
 
 async function readBody(req: IncomingMessage): Promise<any> {
@@ -958,6 +991,9 @@ const server = createServer(async (req, res) => {
         };
       })(),
       proPassDefault: PRO_PASS_DEFAULT,
+      // Card payments are on once STRIPE_SECRET_KEY is set; "test" while it
+      // is a test key. The page shows "Pay" vs "Ask for" accordingly.
+      payments: stripeMode(),
       holidayWindows: Object.fromEntries(
         Array.from({ length: 14 }, (_, i): [string, ReturnType<typeof holidayWindowsFor>] => {
           const now = new Date();
@@ -1314,6 +1350,73 @@ const server = createServer(async (req, res) => {
       }
       res.writeHead(204, { "cache-control": "no-store" });
       return res.end();
+    }
+
+    /* Stripe Checkout (stripeCheckout.ts). The price is worked out HERE from
+     * the pass and today's sale, never taken from the page. 503 when no key
+     * is set, so the page falls back to the "wants Planner Pro" email. */
+    if (url.pathname === "/api/pro/checkout" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" }, { cache: "no-store" });
+      const key = stripeKey();
+      if (!key) return send(503, { error: "payments_off" }, { cache: "no-store" });
+      if (isPro(user.proUntil))
+        return send(409, { error: "already_pro", message: `You already have Planner Pro until ${user.proUntil}. A new pass can be bought once it ends.` }, { cache: "no-store" });
+      const body = await readBody(req);
+      const sale = await currentSale(db, todayISO());
+      const pass = passesWithSale(sale).find((p) => p.id === body.plan);
+      if (!pass) return send(400, { error: "unknown_plan" }, { cache: "no-store" });
+      try {
+        const s = await createCheckoutSession(key, checkoutFields({
+          pass, saleLabel: sale?.label ?? null, userId: user.id, email: user.email, baseUrl: siteBase(req),
+        }));
+        return send(200, { url: s.url }, { cache: "no-store" });
+      } catch (e) {
+        console.error("stripe checkout failed:", (e as Error).message);
+        return send(502, { error: "stripe_failed", message: "The payment page didn't open. Try again in a moment." }, { cache: "no-store" });
+      }
+    }
+    /* Back from Stripe: ask Stripe itself whether this session is paid, and
+     * grant if so. Works even before (or without) the webhook. */
+    if (url.pathname === "/api/pro/checkout/status" && req.method === "GET") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" }, { cache: "no-store" });
+      const key = stripeKey();
+      if (!key) return send(503, { error: "payments_off" }, { cache: "no-store" });
+      try {
+        const session = await retrieveSession(key, url.searchParams.get("session_id") ?? "");
+        const owner = String(session.metadata?.user_id ?? session.client_reference_id ?? "");
+        if (owner !== user.id) return send(403, { error: "not_yours" }, { cache: "no-store" });
+        const g = await grantPaidSession(db, session);
+        await tellOwnerOfSale(g, Number(session.amount_total) || 0, Boolean(session.livemode));
+        const me = await currentUser(db, req);
+        return send(200, { status: g.status, paid: session.payment_status === "paid", proUntil: me?.proUntil ?? null }, { cache: "no-store" });
+      } catch (e) {
+        console.error("stripe status failed:", (e as Error).message);
+        return send(502, { error: "stripe_failed" }, { cache: "no-store" });
+      }
+    }
+    /* Stripe's webhook: signed with STRIPE_WEBHOOK_SECRET. Open while the
+     * site is locked (siteGate OPEN_PATHS), because Stripe has no password. */
+    if (url.pathname === "/api/stripe/webhook" && req.method === "POST") {
+      const raw = await readRaw(req);
+      const secret = process.env.STRIPE_WEBHOOK_SECRET ?? "";
+      const header = req.headers["stripe-signature"];
+      const event = verifyWebhook(raw, Array.isArray(header) ? header[0] : header, secret, Math.floor(Date.now() / 1000));
+      if (!event) return send(400, { error: "bad_signature" }, { cache: "no-store" });
+      if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") {
+        const session = event.data?.object;
+        try {
+          const g = await grantPaidSession(db, session);
+          console.log(`stripe webhook ${event.type} ${session?.id}: ${g.status}`);
+          await tellOwnerOfSale(g, Number(session?.amount_total) || 0, Boolean(session?.livemode));
+        } catch (e) {
+          // 500 makes Stripe retry later, which is what we want if the database blinked.
+          console.error("stripe webhook grant failed:", (e as Error).message);
+          return send(500, { error: "grant_failed" }, { cache: "no-store" });
+        }
+      }
+      return send(200, { received: true }, { cache: "no-store" });
     }
 
     if (url.pathname === "/api/pro/request" && req.method === "POST") {

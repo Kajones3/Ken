@@ -945,6 +945,7 @@ body.onbudget .wrap > :not(.masthead):not(#budgetPage){display:none!important}
 .planswipe{display:none; margin:0 0 6px; font-size:12.5px; color:var(--ink-2)}
 @media (max-width:700px){ .planswipe{display:block} }
 .plannote{margin:6px 0 0; font-size:12.5px; color:var(--ink-2)}
+.plans-t .norefund{display:block; margin-top:4px; font-size:11px; color:var(--ink-2)}
 .plansale{margin:0 0 10px; padding:8px 12px; border-radius:10px; background:var(--gold, #E8B23E); color:#16204A; font-weight:700; font-size:14px}
 .plans-t .ppwas{font-size:15px; font-weight:600; color:var(--ink-2); text-decoration:line-through}
 .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0)}
@@ -5179,8 +5180,17 @@ async function requestPro(plan){
     return;
   }
   if(session.pro){
-    msg.textContent = "You already have Planner Pro on this account — nothing to request.";
+    msg.textContent = `You already have Planner Pro${session.proUntil ? " until " + fmtDate(session.proUntil) : ""}. A new pass can be bought once it ends.`;
     return;
+  }
+  // Card payments (Stripe) when the server has a key; the old "ask the
+  // owner" email otherwise, so nothing breaks before payments are switched on.
+  if(PAYMENTS){
+    msg.textContent = "Opening the secure payment page…";
+    const r = await fetch("/api/pro/checkout", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({plan}) }).catch(() => null);
+    const b = r ? await r.json().catch(() => ({})) : {};
+    if(r && r.ok && b.url){ location.href = b.url; return; }
+    if(!r || r.status !== 503){ msg.textContent = b.message || "The payment page didn't open. Try again in a moment."; return; }
   }
   const res = await fetch("/api/pro/request", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({plan}) });
   msg.textContent = res.ok
@@ -5188,7 +5198,45 @@ async function requestPro(plan){
     : "Couldn't send that request right now — try again in a moment.";
 }
 
-let PRO_PASSES = [], PRO_PASS_DEFAULT = "threeMonths", PRO_SALE = null;
+/* Back from Stripe's payment page: ?pro=thanks&session_id=... or ?pro=cancelled.
+ * The server asks Stripe whether it's paid and turns Planner Pro on (the
+ * webhook may already have). Tries a few times: a card can take a moment. */
+function payBanner(text, ok){
+  let el = document.getElementById("payNote");
+  if(!el){
+    el = document.createElement("div"); el.id = "payNote"; el.setAttribute("role", "status");
+    el.style.cssText = "position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:60;max-width:min(560px,calc(100vw - 32px));padding:12px 16px;border-radius:12px;font-weight:600;box-shadow:0 6px 24px rgba(0,0,0,.18);cursor:pointer";
+    el.addEventListener("click", () => el.remove());
+    document.body.appendChild(el);
+  }
+  el.style.background = ok ? "#E8B23E" : "#FBFAF6"; el.style.color = "#16204A";
+  el.style.border = ok ? "0" : "2px solid #16204A";
+  el.textContent = text;
+}
+async function handlePaymentReturn(){
+  const q = new URLSearchParams(location.search);
+  const state = q.get("pro");
+  if(!state) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if(state === "cancelled"){ payBanner("Payment cancelled. Nothing was charged.", false); return; }
+  const id = q.get("session_id");
+  if(state !== "thanks" || !id) return;
+  payBanner("Thanks! Turning on Planner Pro…", true);
+  for(let i = 0; i < 6; i++){
+    const r = await fetch("/api/pro/checkout/status?session_id=" + encodeURIComponent(id)).catch(() => null);
+    const b = r ? await r.json().catch(() => ({})) : {};
+    if(r && r.ok && (b.status === "granted" || b.status === "already")){
+      await refreshSession(); syncAccountUi();
+      payBanner(`Planner Pro is on${b.proUntil ? " until " + fmtDate(b.proUntil) : ""}. Enjoy planning!`, true);
+      return;
+    }
+    if(r && r.status === 401){ payBanner("Thanks! Sign in to see Planner Pro on your account.", true); return; }
+    await new Promise(res => setTimeout(res, 2000));
+  }
+  payBanner("Thanks! Your payment is still going through. Planner Pro turns on by itself within a few minutes; refresh the page to check.", true);
+}
+
+let PRO_PASSES = [], PRO_PASS_DEFAULT = "threeMonths", PRO_SALE = null, PAYMENTS = null;
 /* A pass price: whole dollars stay "$15", a sale price keeps its cents ("$11.25"). */
 const passUsd = n => "$" + (Number.isInteger(n) ? n : n.toFixed(2));
 /* "Launch sale: 20% off every pass through Dec 26." (owner's sale, /admin) */
@@ -5240,7 +5288,7 @@ function renderProPlans(){
     if(i === here) return `<td class="${cls(i)}"><span class="planyou">You have this</span></td>`;
     if(i === 0) return `<td></td>`;
     if(i === 1) return session.authenticated ? `<td></td>` : `<td><button type="button" class="btn btn-sm" data-signup>Become a Planner, free</button></td>`;
-    return `<td class="${cls(i)}"><button type="button" class="${h.id === PRO_PASS_DEFAULT ? "btn-primary" : "btn"} btn-sm" data-plan="${esc(h.id)}">Get ${esc(PRO_PASSES[i-2].label)}</button></td>`;
+    return `<td class="${cls(i)}"><button type="button" class="${h.id === PRO_PASS_DEFAULT ? "btn-primary" : "btn"} btn-sm" data-plan="${esc(h.id)}">${PAYMENTS ? `Pay ${esc(h.price)}` : `Get ${esc(PRO_PASSES[i-2].label)}`}</button>${PAYMENTS ? `<small class="norefund">No refunds</small>` : ""}</td>`;
   }).join("");
   $("#proPlans").innerHTML = (PRO_SALE ? `<p class="plansale">${saleLine()}</p>` : "") + `<p class="planswipe">Swipe sideways to see the Planner Pro passes &rarr;</p><table class="plans-t">
     <thead><tr><th scope="col"><span class="sr">What you get</span></th>${heads.map((h, i) =>
@@ -5251,7 +5299,7 @@ function renderProPlans(){
       `<tr><th scope="row">${esc(label)}</th>${cells.map((c, i) => planCell(c, cls(i))).join("")}</tr>`).join("")}</tbody>
     <tfoot><tr><th></th>${foot}</tr></tfoot>
   </table>
-  <p class="plannote">Every Planner Pro pass is paid once and never renews. It simply ends.</p>`;
+  <p class="plannote">Every Planner Pro pass is paid once and never renews. It simply ends.${PAYMENTS ? " <b>No refunds.</b> Paid securely with Stripe; we never see your card." + (PAYMENTS === "test" ? " (Test mode: use Stripe's test card, no real money.)" : "") : ""}</p>`;
 }
 $("#proPlans").addEventListener("click", e=>{
   const b = e.target.closest("[data-plan]");
@@ -7358,6 +7406,7 @@ async function boot(){
   if(Array.isArray(meta.planMonths) && meta.planMonths.length) setMonthOpts(meta.planMonths);
   PRO_PASSES = meta.proPasses || [];
   PRO_SALE = meta.proSale || null;
+  PAYMENTS = meta.payments || null;
   // The government's airline-fare price index, year over year (owner,
   // 2026-10-12: "so users can know airfares are up/down year over year").
   // Words only; it never moves a total.
@@ -7395,6 +7444,7 @@ async function boot(){
   fillJumpRow();
   buildAges();
   await refreshSession();
+  handlePaymentReturn();
   // Don't auto-run a search on load — a first-time visitor seeing prices
   // appear before they've set anything (origin, party size, dates) reads as
   // "these are MY numbers" when they're really just whatever the form

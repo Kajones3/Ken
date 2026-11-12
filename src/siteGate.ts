@@ -32,7 +32,9 @@ export const GATE_COOKIE = "pf_site";
 const MAX_AGE_SECONDS = 90 * 24 * 60 * 60;
 
 /** Paths anyone may reach while the site is locked. */
-const OPEN_PATHS = new Set(["/unsubscribe", "/health", "/robots.txt", "/site-unlock"]);
+// /api/stripe/webhook: Stripe can't type the preview password; it is guarded
+// by its own signature check instead (stripeCheckout.ts).
+const OPEN_PATHS = new Set(["/unsubscribe", "/health", "/robots.txt", "/site-unlock", "/api/stripe/webhook"]);
 
 export function sitePassword(env: NodeJS.ProcessEnv = process.env): string | null {
   const p = (env.SITE_PASSWORD ?? "").trim();
