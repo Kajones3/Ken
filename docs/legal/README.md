@@ -28,7 +28,7 @@ liability cap.
    the unused part of a pass if a major Plus feature is removed mid-pass.
    Say "no refunds" on the plan buttons and at Stripe checkout, before
    payment, or card disputes go against you.
-7. **How long to keep anonymous searched routes** (suggested: 2 years).
+7. ~~How long to keep anonymous searched routes~~ **Decided 2026-11-12: kept with no end date** (anonymous totals, no personal data; written into the privacy policy).
 
 ## Things the app needs before these promises are true
 

@@ -135,7 +135,10 @@ fallback for a destination we have never bought.
   Checked in Chromium at 1300px and 390px.
 - Terms/Privacy: owner asked how to fill them in; drafts are
   `docs/legal/terms-of-service.md` + `privacy-policy.md`, NOT live. Blanks
-  and questions given in the conversation of 2026-11-12.
+  and questions given in the conversation of 2026-11-12. **Decided: anonymous
+  searched routes and action counts are kept with NO end date** (owner,
+  option 1; no personal data, feeds the algorithm). Nothing deletes them; don't
+  add a cleanup.
 
 ## START HERE — 2026-11-12: Stripe Checkout BUILT
 
