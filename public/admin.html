@@ -989,6 +989,10 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <p class="count">The list page's price is Disney's <b>&ldquo;from&rdquo; price: the cheapest date and room, per person
       with two or more sharing a room</b>, usually before taxes, port fees and gratuities. Leave <b>Sail date</b> and
       <b>Room</b> blank for that. Fill them in when you screenshot one date's prices.</p>
+    <p class="count"><b>+ Gratuities</b> adds Disney's recommended gratuities for one person over the whole sailing
+      (nights &times; the rate per night; the higher Concierge rate for a Suite), in dollars, for a closer-to-real
+      price. The rates are in <a href="#numbers">Rates &amp; settings</a> &rarr; &ldquo;Cruises (history only)&rdquo;;
+      changing them updates every saved cruise. Taxes and port fees are still not included.</p>
     <div class="tools">
       <button class="btn" id="crAdd">Add a cruise by hand</button>
       <button class="btn primary" id="crSave">Save the ticked cruises</button>
@@ -2815,10 +2819,11 @@ function renderCruises(rows){
   for(const r of rows){ const k = r.title; if(!by.has(k)) by.set(k, []); by.get(k).push(r); }
   $("#crList").innerHTML = [...by.entries()].map(([title, list]) => `<div class="calcard">
     <b>${esc(title)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept${list[0].ports ? " · " + esc(list[0].ports) : ""}</span>
-    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sail date</th><th>Room</th><th class="n">Per person</th><th class="n">Save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
+    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sail date</th><th>Room</th><th class="n">Per person</th><th class="n" title="Disney's recommended gratuities for one person over the whole sailing">+ Gratuities</th><th class="n">Save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
     ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : "from price"}</td>
       <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td>
       <td class="n">${cash(r.price, r.currency)}${r.currency !== "USD" ? ` <span class="count">($${num(Math.round(r.priceUsd))})</span>` : ""}</td>
+      <td class="n">${r.withGratuityUsd === null ? '<span class="count">needs nights</span>' : `$${num(Math.round(r.withGratuityUsd))} <span class="count">(+$${num(Math.round(r.gratuityUsd))})</span>`}</td>
       <td class="n">${r.save === null ? "" : cash(r.save, r.currency)}</td><td class="n">${r.datesCount ?? ""}</td>
       <td class="n"><button class="btn" data-crdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
     </tbody></table></div></div>`).join("");

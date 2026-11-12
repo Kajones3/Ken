@@ -14,6 +14,7 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { toUsd } from "./ticketCalendar.js";
+import { settingsMap } from "./settings.js";
 
 export const SIGHTING_CURRENCIES = ["USD", "GBP", "EUR"] as const;
 export const CRUISE_CABINS = ["inside", "oceanview", "verandah", "suite"] as const;
@@ -112,17 +113,43 @@ export async function saveCruises(db: Db, inputs: CruiseInput[], today: string):
   return { ok: true, saved: rows.length };
 }
 
-export interface CruiseSighting extends Omit<CruiseRow, "rawText"> { id: string; savedAt: string }
+/**
+ * Disney's recommended gratuity for one person over a whole sailing, in
+ * dollars, at TODAY's rates from /admin settings (not stored with the row, so
+ * a rate the owner corrects applies to every saved cruise). Suites and
+ * Concierge pay the higher rate. Null when the nights are unknown.
+ */
+export function gratuityPerPerson(nights: number | null, cabin: string | null,
+  rates: { regular: number; concierge: number }): number | null {
+  if (!nights) return null;
+  const perNight = cabin === "suite" ? rates.concierge : rates.regular;
+  return Math.round(nights * perNight * 100) / 100;
+}
+
+export interface CruiseSighting extends Omit<CruiseRow, "rawText"> {
+  id: string; savedAt: string;
+  /** Gratuities for one person, in dollars, and the dollar price with them added. */
+  gratuityUsd: number | null; withGratuityUsd: number | null;
+}
 export async function listCruises(db: Db, limit = 1000): Promise<CruiseSighting[]> {
   const r = await db.query<any>(
     `select * from cruise_sightings order by seen_on desc, created_at desc limit $1`, [limit]);
-  return r.rows.map((x) => ({
+  let set = new Map<string, number>();
+  try { set = await settingsMap(db); } catch { /* fall back to the shipped rates below */ }
+  const rates = { regular: set.get("cruise.gratuityPerNight") ?? 16,
+    concierge: set.get("cruise.gratuityConciergePerNight") ?? 27.25 };
+  return r.rows.map((x) => {
+    const grat = gratuityPerPerson(x.nights, x.cabin, rates);
+    return {
+    gratuityUsd: grat,
+    withGratuityUsd: grat === null ? null : Math.round((Number(x.price_usd) + grat) * 100) / 100,
     id: x.id, savedAt: new Date(x.created_at).toISOString(), seenOn: dateStr(x.seen_on), title: x.title,
     nights: x.nights, departurePort: x.departure_port, ports: x.ports, ship: x.ship,
     sailDate: x.sail_date ? dateStr(x.sail_date) : null, cabin: x.cabin, price: Number(x.price),
     currency: x.currency, priceUsd: Number(x.price_usd), save: x.save_amount === null ? null : Number(x.save_amount),
     datesCount: x.dates_count, theme: x.theme, guaranteed: x.guaranteed, note: x.note,
-  }));
+    };
+  });
 }
 export async function deleteCruise(db: Db, id: string): Promise<boolean> {
   return (await db.query(`delete from cruise_sightings where id = $1 returning id`, [id])).rows.length > 0;
