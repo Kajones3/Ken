@@ -49,6 +49,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
+import { saveCruises, listCruises, deleteCruise, saveAdventure, listAdventures, deleteAdventure } from "./cruisesAdventures.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
@@ -2026,6 +2027,39 @@ const server = createServer(async (req, res) => {
         : req.method === "DELETE" ? await deleteDeal(db, dealMatch[1]!) : false;
       if (!done) return send(404, { error: "not found" });
       return send(200, { ok: true, deals: await listDeals(db, todayISO()) }, { cache: "no-store" });
+    }
+
+    /* Cruises and Adventures by Disney (cruisesAdventures.ts): the owner's
+     * screenshots, stored as history only. Nothing a traveler sees reads these. */
+    if (url.pathname === "/api/admin/cruises" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { cruises: await listCruises(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/cruises" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const r = await saveCruises(db, Array.isArray(body?.cruises) ? body.cruises : [], todayISO());
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, saved: r.saved, cruises: await listCruises(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/adventures" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { adventures: await listAdventures(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/adventures" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await saveAdventure(db, await readBody(req), todayISO());
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, id: r.id, adventures: await listAdventures(db) }, { cache: "no-store" });
+    }
+    const sightMatch = url.pathname.match(/^\/api\/admin\/(cruises|adventures)\/([0-9a-f-]{36})$/);
+    if (sightMatch && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const cruise = sightMatch[1] === "cruises";
+      const gone = cruise ? await deleteCruise(db, sightMatch[2]!) : await deleteAdventure(db, sightMatch[2]!);
+      if (!gone) return send(404, { error: "not found" });
+      return send(200, cruise ? { ok: true, cruises: await listCruises(db) } : { ok: true, adventures: await listAdventures(db) },
+        { cache: "no-store" });
     }
 
     /* Planner Pro sales (proSales.ts): a name, a percent off every pass and

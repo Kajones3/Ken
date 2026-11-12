@@ -119,6 +119,35 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-12, last: Cruises + Adventures by Disney readers (history only)
+
+Owner: "Build the screenshot reader for cruises and Adventures by Disney. They
+need to be on two different tabs. And right now they should just store
+information so if and when we launch those, we can have historical data."
+- **No cruise price feed exists** (searched 2026-11-12): SerpApi has no cruise
+  engine; Google's cruise program is cruise lines SENDING data in; Traveltek
+  (Disney joined 2023) is travel-agent only; the Apify scrapers break
+  Disney's terms (owner said no). So the owner's screenshots are the source.
+- /admin -> **Cruises** (`#cruises`) and **Adventures by Disney**
+  (`#adventures`). Readers in screenshot-reader.js: `splitCruises()` /
+  `readCruiseCard()` (cards split at "Price from"; known `CRUISE_PORTS`
+  matched even when OCR splits "Fort ... Lauderdale"; price, "Save $X",
+  "Show N Dates", ports from the "Show N Dates" line, `CRUISE_THEMES`) and
+  `readAdventure()` (days, "FROM $", trip type, meals with lunches worked out,
+  ages, highlights). Tested on REAL OCR of the owner's screenshots
+  (`src/testdata/cruise-list-2026-11.ocr.txt`, `abd-page-2026-11.ocr.txt`):
+  3/3 cruises and every ABD field right. The ABD trip NAME is usually not in
+  the screenshot: the owner types it (required).
+- Storage `src/cruisesAdventures.ts`, tables `cruise_sightings` /
+  `adventure_sightings`: every save is a NEW row with `seen_on` (history, never
+  overwritten); cruises save in a batch, all or nothing; delete only for a
+  mistaken row. Prices kept as shown + `price_usd` (ECB rate). Cruise "from"
+  price = cheapest date + room per person, 2+ per room, usually before
+  taxes/fees/gratuities: blank sail date/room = that. NOTHING reads these for
+  travelers. Not yet seen: a cruise's per-date list or ABD "Rates & Dates":
+  ask for a screenshot before tuning the readers for them.
+- 941 tests. Needs a Render redeploy.
+
 ## START HERE — 2026-11-12, later: deal emails HELD; payment banner moved
 
 - **Deal emails are ON HOLD until `MAIL_POSTAL_ADDRESS` is set** (owner: "hold

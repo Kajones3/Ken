@@ -1108,3 +1108,60 @@ create table if not exists stripe_payments (
   created_at    timestamptz not null default now(),
   granted_at    timestamptz
 );
+
+-- 2026-11-12: cruises and Adventures by Disney, read from the owner's
+-- screenshots in /admin (cruisesAdventures.ts). NOT priced or shown to
+-- travelers yet: kept so there is price history the day either launches.
+-- One row per thing seen on one day, never overwritten; a row is deleted
+-- only when the owner saved it by mistake.
+create table if not exists cruise_sightings (
+  id              uuid primary key,
+  seen_on         date not null,            -- the day the owner saw this price
+  title           text not null,            -- "3-Night Bahamian Cruise from Fort Lauderdale"
+  nights          integer,
+  departure_port  text,
+  ports           text,                     -- "Disney Lookout Cay ..., Nassau, Bahamas"
+  ship            text,
+  sail_date       date,                     -- null = the list's "from" price over all dates
+  cabin           text,                     -- inside / oceanview / verandah / suite, null = cheapest shown
+  price           numeric(10,2) not null,   -- as shown, per person
+  currency        text not null default 'USD',
+  price_usd       numeric(10,2) not null,
+  save_amount     numeric(10,2),            -- "Save $138 Avg/Person", as shown
+  dates_count     integer,                  -- "Show 26 Dates"
+  theme           text,                     -- "Very Merrytime"
+  guaranteed      boolean not null default false,
+  note            text,
+  raw_text        text,                     -- what the reader read, kept for later re-reading
+  source          text not null default 'owner_screenshot',
+  created_at      timestamptz not null default now()
+);
+create index if not exists cruise_sightings_title on cruise_sightings (title, seen_on);
+
+create table if not exists adventure_sightings (
+  id                  uuid primary key,
+  seen_on             date not null,
+  trip_name           text not null,
+  destination         text,
+  days                integer,
+  nights              integer,
+  departure_date      date,                 -- null = the trip page's "from" price
+  price               numeric(10,2) not null, -- per person, as shown
+  child_price         numeric(10,2),
+  currency            text not null default 'USD',
+  price_usd           numeric(10,2) not null,
+  trip_type           text,                 -- Escape / Classic / Expedition / River Cruise ...
+  meals               integer,
+  breakfasts          integer,
+  lunches             integer,
+  dinners             integer,
+  min_age             integer,
+  suggested_age       integer,
+  adult_exclusive_age integer,
+  highlights          text,                 -- JSON array of strings
+  note                text,
+  raw_text            text,
+  source              text not null default 'owner_screenshot',
+  created_at          timestamptz not null default now()
+);
+create index if not exists adventure_sightings_trip on adventure_sightings (trip_name, seen_on);
