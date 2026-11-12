@@ -32,3 +32,21 @@ export function readTicketCalendar(words: OcrWord[]): {
   currency?: "USD" | "GBP" | "EUR" | null;
   prices: Array<{ date: string; perDay: number; check?: boolean }>; missing: string[]; warnings: string[];
 };
+
+export interface CruiseCard {
+  title: string | null; nights: number | null; region: string | null; departurePort: string | null;
+  ports: string | null; price: number | null; currency: string; save: number | null;
+  datesCount: number | null; guaranteed: boolean; perPerson: boolean; theme: string | null; text: string;
+}
+export const CRUISE_PORTS: string[];
+export const CRUISE_THEMES: string[];
+export function readCruiseCard(text: string): CruiseCard;
+export function splitCruises(text: string): CruiseCard[];
+export interface AdventurePage {
+  days: number | null; nights: number | null; price: number | null; currency: string; perPerson: boolean;
+  tripType: string | null; meals: number | null; breakfasts: number | null; lunches: number | null;
+  dinners: number | null; minAge: number | null; suggestedAge: number | null; adultExclusiveAge: number | null;
+  highlights: string[]; text: string;
+}
+export const ADVENTURE_TYPES: string[];
+export function readAdventure(text: string): AdventurePage;

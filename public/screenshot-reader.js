@@ -411,6 +411,137 @@ export function splitOffers(text, today = new Date().toISOString().slice(0, 10))
   return offers;
 }
 
+/* ------------------------- cruises (2026-11-12) -------------------------
+ * Disney Cruise Line's list page: one card per itinerary, "Price from*
+ * $686 USD Avg Per Person", "Save $138 Avg/Person", "3-Night Bahamian Cruise
+ * from Fort Lauderdale", "Sailing to ...", "Show 26 Dates". OCR reads the
+ * photo, the middle and the price column across one another, so a port can
+ * be split ("Fort ... Lauderdale") and a stray word can sit in a title. The
+ * owner checks every row before it is saved; this only fills the boxes. */
+export const CRUISE_PORTS = ["Port Canaveral", "Fort Lauderdale", "Galveston", "Miami", "San Diego",
+  "Vancouver", "Seward", "New Orleans", "San Juan", "Barcelona", "Civitavecchia", "Southampton", "Dover",
+  "Copenhagen", "Reykjavik", "Lisbon", "Athens", "Piraeus", "Singapore", "Sydney", "Brisbane", "Melbourne",
+  "Auckland", "Honolulu", "Yokohama", "Tokyo", "Long Beach", "Los Angeles"];
+export const CRUISE_THEMES = ["Very Merrytime", "Halloween on the High Seas", "Marvel Day at Sea",
+  "Pixar Day at Sea", "Star Wars Day at Sea"];
+
+const MONEY = /(save\s+)?([$£€])\s?(\d[\d,]*)/gi;
+const curOf = sym => sym === "£" ? "GBP" : sym === "€" ? "EUR" : "USD";
+
+/** The departure port named after "from": a known port, even when OCR split
+ *  its two words apart, else the word(s) right after "from". */
+function cruisePort(text, fromAt) {
+  const tail = text.slice(Math.max(0, fromAt));
+  let best = null;
+  for (const port of CRUISE_PORTS) {
+    const w = port.split(" ");
+    const re = w.length > 1
+      ? new RegExp(`\\b${w[0]}\\b[\\s\\S]{0,160}?\\b${w[w.length - 1]}\\b`, "i")
+      : new RegExp(`\\b${w[0]}\\b`, "i");
+    const m = re.exec(tail);
+    if (m && (!best || m.index < best.at)) best = { port, at: m.index };
+  }
+  if (best) return best.port;
+  const m = /cruise\s+from\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/.exec(tail);
+  return m ? m[1] : null;
+}
+
+/** One cruise card's text to the boxes the owner checks. */
+export function readCruiseCard(text) {
+  const t = String(text || "");
+  const flat = t.replace(/\s+/g, " ");
+  const title = /(\d{1,2})\s*[-–]?\s*Night\s+([A-Za-z'’ ]{2,40}?)\s+Cruise\b/i.exec(flat);
+  const nights = title ? Number(title[1]) : null;
+  const region = title ? title[2].replace(/\s+/g, " ").trim() : null;
+  const fromAt = title ? flat.indexOf(title[0]) : 0;
+  const departurePort = title ? cruisePort(flat, fromAt) : null;
+  let price = null, save = null, currency = "USD", m;
+  MONEY.lastIndex = 0;
+  while ((m = MONEY.exec(flat))) {
+    const v = Number(m[3].replace(/,/g, ""));
+    if (m[1]) { if (save === null && v > 0) save = v; }
+    else if (price === null && v >= 50) { price = v; currency = curOf(m[2]); }
+  }
+  const dm = /Show\s+(\d{1,3})\s+Dates?/i.exec(flat);
+  // Where it sails: the "Show N Dates" line (the ports sit beside that
+  // button), else the first line after "Sailing to" with a comma in it.
+  const lines = t.split("\n").map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const si = lines.findIndex(l => /sailing\s+to/i.test(l));
+  let portsLine = lines.find(l => /Show\s+\d{1,3}\s+Dates?/i.test(l))
+    || (si >= 0 ? lines.slice(si + 1, si + 4).find(l => /,/.test(l)) : null) || null;
+  let ports = null;
+  if (portsLine) {
+    const toks = portsLine.replace(/Show\s+\d{1,3}\s+Dates?/i, "").replace(/sailing\s+to/i, "").split(" ").filter(Boolean);
+    while (toks.length && !/^[A-Z][a-z]{2,}/.test(toks[0])) toks.shift();
+    ports = toks.join(" ").trim() || null;
+  }
+  const theme = CRUISE_THEMES.find(x => new RegExp(x.replace(/ /g, "\\s+"), "i").test(flat)) || null;
+  return {
+    title: title ? `${nights}-Night ${region} Cruise${departurePort ? " from " + departurePort : ""}` : null,
+    nights, region, departurePort, ports, price, currency, save,
+    datesCount: dm ? Number(dm[1]) : null,
+    guaranteed: /guaranteed/i.test(flat),
+    perPerson: /per\s*person|avg\s*\/\s*person|\/\s*person/i.test(flat),
+    theme, text: t,
+  };
+}
+
+/** A screenshot of the cruise LIST holds several cards. Each card starts at
+ *  its "Price from" line (else at its "N-Night ... Cruise" title). Chunks
+ *  with neither a title nor a price are page furniture and are dropped. */
+export function splitCruises(text) {
+  const lines = String(text || "").split("\n");
+  const starts = lines.some(l => /price\s+from/i.test(l))
+    ? (l => /price\s+from/i.test(l))
+    : (l => /\d{1,2}\s*[-–]?\s*Night\s+.+Cruise/i.test(l));
+  const chunks = []; let cur = [];
+  for (const l of lines) {
+    if (starts(l) && cur.join("").trim()) { chunks.push(cur.join("\n")); cur = []; }
+    cur.push(l);
+  }
+  if (cur.join("").trim()) chunks.push(cur.join("\n"));
+  return chunks.map(readCruiseCard).filter(c => c.nights || c.price);
+}
+
+/* -------------------- Adventures by Disney (2026-11-12) --------------------
+ * A trip page's header: "3 DAYS FROM $2,799 /Person", "Trip Type Escape",
+ * "4 Meals 2 Breakfasts, 1 Lunches, 1 Dinners", "Minimum Age: 5 Suggested
+ * Age: 6+ Adult Exclusive: 18+", and the highlights ("Visit Neuschwanstein
+ * Castle: Step into ..."). The trip's name is usually above the screenshot,
+ * so the owner types it. */
+export const ADVENTURE_TYPES = ["Short Escape", "Escape", "Classic", "Expedition", "River Cruise", "Signature"];
+
+export function readAdventure(text) {
+  const t = String(text || "");
+  const flat = t.replace(/\s+/g, " ");
+  const n = re => { const m = re.exec(flat); return m ? Number(m[1]) : null; };
+  const pm = /FROM\s*([$£€])\s?(\d[\d,]*)/i.exec(flat) || /([$£€])\s?(\d{3}[\d,]*)/.exec(flat);
+  const meals = n(/(\d{1,2})\s*Meals\b/i);
+  const breakfasts = n(/(\d{1,2})\s*Breakfasts?\b/i);
+  const dinners = n(/(\d{1,2})\s*Dinners?\b/i);
+  let lunches = n(/(\d{1,2})\s*Lunch(?:es)?\b/i);
+  if (lunches === null && meals !== null && breakfasts !== null && dinners !== null && meals - breakfasts - dinners >= 0)
+    lunches = meals - breakfasts - dinners;
+  const tripType = ADVENTURE_TYPES.find(x => new RegExp(`\\b${x.replace(/ /g, "\\s+")}\\b`, "i").test(flat)) || null;
+  const highlights = [];
+  const hre = /(?:^|[«•*+·]\s*)([A-Z][A-Za-z'’ ,&-]{3,70}?):\s/gm;
+  let h;
+  while ((h = hre.exec(t)) && highlights.length < 12) {
+    const x = h[1].trim();
+    if (/\b(?:age|exclusive|call us|trip type|meals?)\b/i.test(x)) continue;
+    if (!highlights.includes(x)) highlights.push(x);
+  }
+  return {
+    days: n(/(\d{1,2})\s*DAYS?\b/i), nights: n(/(\d{1,2})\s*NIGHTS?\b/i),
+    price: pm ? Number(pm[2].replace(/,/g, "")) : null, currency: pm ? curOf(pm[1]) : "USD",
+    perPerson: /\/?\s*\[?\s*Person\b|per\s+person/i.test(flat),
+    tripType, meals, breakfasts, lunches, dinners,
+    minAge: n(/Minimum\s+Age:?\s*(\d{1,2})/i), suggestedAge: n(/Suggested\s+Age:?\s*(\d{1,2})/i),
+    adultExclusiveAge: n(/Adults?\s+Exclusive:?\s*(\d{1,2})/i),
+    highlights, text: t,
+  };
+}
+
 /**
  * Where to cut a screenshot of cards laid out SIDE BY SIDE (Disney's offer
  * pages are a grid). Read whole, OCR goes straight across every card a line

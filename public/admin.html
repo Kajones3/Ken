@@ -327,6 +327,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#fares">Fares you've seen</a>
     <a href="#deals">Deals</a>
     <a href="#sales">Planner Pro sales</a>
+    <a href="#cruises">Cruises</a>
+    <a href="#adventures">Adventures by Disney</a>
     <a href="#notes">Good to know</a>
     <a href="#lands">Lands</a>
     <a href="#attractions">Attractions</a>
@@ -954,6 +956,112 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
     <h3>All sales</h3>
     <div id="saleList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="cruises">
+  <section class="sheet" id="cruises">
+    <h2>Cruises</h2>
+    <p>Disney Cruise Line prices, kept as <b>history only</b>. Nothing here is priced or shown to travelers yet:
+      it's so that if cruises launch on the site, we already know how prices moved. Every save is kept with the
+      day you saw it, so saving the same cruise again next week adds a new price instead of replacing the old one.</p>
+
+    <h3>Read a screenshot</h3>
+    <p>Screenshot Disney's cruise list (or one cruise's dates), then drop it here. You can drop several at once.
+      It's read on this device, nothing is sent anywhere, and it only fills in the boxes below: check each
+      one against the picture before you save.</p>
+    <div class="dropzone" data-drop="cruises">
+      <span class="dzt"><b>Drop screenshots here</b>, paste one, or</span>
+      <button class="btn" id="crPick">Choose screenshots</button>
+      <input type="file" id="crFile" accept="image/*" multiple class="hidden">
+    </div>
+    <p class="count" id="crStatus">You can also paste a screenshot anywhere on this page.</p>
+    <img id="crImg" class="shot hidden" alt="The cruise screenshot being read">
+    <details id="crTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
+      <pre class="ocr" id="crText"></pre></details>
+
+    <h3>Cruises to save</h3>
+    <div class="cgrid">
+      <div><label for="crSeen">Day you saw these prices</label><input type="date" id="crSeen"></div>
+      <div><label for="crNote">Where they're from (optional)</label><input type="text" id="crNote" maxlength="400" placeholder="disneycruise.com, US site"></div>
+    </div>
+    <div id="crRows"><p class="count">Read a screenshot, or add a cruise by hand.</p></div>
+    <p class="count">The list page's price is Disney's <b>&ldquo;from&rdquo; price: the cheapest date and room, per person
+      with two or more sharing a room</b>, usually before taxes, port fees and gratuities. Leave <b>Sail date</b> and
+      <b>Room</b> blank for that. Fill them in when you screenshot one date's prices.</p>
+    <div class="tools">
+      <button class="btn" id="crAdd">Add a cruise by hand</button>
+      <button class="btn primary" id="crSave">Save the ticked cruises</button>
+    </div>
+    <div class="said" id="crSaid"></div>
+
+    <h3>What we've kept</h3>
+    <div id="crList"><p class="count">Loading…</p></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="adventures">
+  <section class="sheet" id="adventures">
+    <h2>Adventures by Disney</h2>
+    <p>Adventures by Disney trips, kept as <b>history only</b>. Nothing here is priced or shown to travelers yet.
+      Every save is kept with the day you saw it, so the same trip saved again later adds a new price.</p>
+
+    <h3>Read a screenshot</h3>
+    <p>Screenshot the top of a trip's page (days, &ldquo;From $&rdquo; price, meals, ages, highlights). Read on this
+      device; it only fills in the form, so check every box before you save. The trip's name is usually above
+      the part you screenshot, so type it in.</p>
+    <div class="dropzone" data-drop="adventures">
+      <span class="dzt"><b>Drop a screenshot here</b>, paste one, or</span>
+      <button class="btn" id="avPick">Choose a screenshot</button>
+      <input type="file" id="avFile" accept="image/*" class="hidden">
+    </div>
+    <p class="count" id="avStatus">You can also paste a screenshot anywhere on this page.</p>
+    <img id="avImg" class="shot hidden" alt="The trip screenshot being read">
+    <details id="avTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
+      <pre class="ocr" id="avText"></pre></details>
+
+    <h3>Add a trip</h3>
+    <div class="cgrid">
+      <div><label for="avName">Trip name</label><input type="text" id="avName" maxlength="160" placeholder="Germany: Munich Escape"></div>
+      <div><label for="avDest">Where (optional)</label><input type="text" id="avDest" maxlength="80" placeholder="Germany"></div>
+      <div><label for="avType">Trip type</label><input type="text" id="avType" maxlength="40" placeholder="Escape"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="avDays">Days</label><input type="text" id="avDays" inputmode="numeric"></div>
+      <div><label for="avNights">Nights (optional)</label><input type="text" id="avNights" inputmode="numeric"></div>
+      <div><label for="avDepart">Departure date (blank = &ldquo;from&rdquo; price)</label><input type="date" id="avDepart"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="avPrice">Price per person</label><input type="text" id="avPrice" inputmode="decimal" placeholder="2799"></div>
+      <div><label for="avChild">Child price (optional)</label><input type="text" id="avChild" inputmode="decimal"></div>
+      <div><label for="avCur">Currency</label><select id="avCur"><option>USD</option><option>GBP</option><option>EUR</option></select></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="avMeals">Meals</label><input type="text" id="avMeals" inputmode="numeric"></div>
+      <div><label for="avB">Breakfasts</label><input type="text" id="avB" inputmode="numeric"></div>
+      <div><label for="avL">Lunches</label><input type="text" id="avL" inputmode="numeric"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="avD">Dinners</label><input type="text" id="avD" inputmode="numeric"></div>
+      <div><label for="avMin">Minimum age</label><input type="text" id="avMin" inputmode="numeric"></div>
+      <div><label for="avSug">Suggested age</label><input type="text" id="avSug" inputmode="numeric"></div>
+    </div>
+    <div class="cgrid">
+      <div><label for="avAdult">Adults-only trips: age</label><input type="text" id="avAdult" inputmode="numeric"></div>
+      <div><label for="avSeen">Day you saw this price</label><input type="date" id="avSeen"></div>
+      <div><label for="avNote">Where it's from (optional)</label><input type="text" id="avNote" maxlength="400" placeholder="adventuresbydisney.com"></div>
+    </div>
+    <div class="cgrid one">
+      <div><label for="avHigh">Highlights, one per line</label><textarea id="avHigh" rows="4" style="width:100%; font-size:16px"></textarea></div>
+    </div>
+    <div class="tools">
+      <button class="btn primary" id="avSave">Save trip</button>
+      <button class="btn" id="avClear">Clear the form</button>
+    </div>
+    <div class="said" id="avSaid"></div>
+
+    <h3>What we've kept</h3>
+    <div id="avList"><p class="count">Loading…</p></div>
   </section>
   </div>
 
@@ -2104,6 +2212,8 @@ document.addEventListener("paste", e => {
   e.preventDefault();
   // A pasted picture goes to whichever reader is on screen.
   if(location.hash === "#deals") readDealShot(item.getAsFile());
+  else if(location.hash === "#cruises") readCruiseShots([item.getAsFile()]);
+  else if(location.hash === "#adventures") readAdventureShot(item.getAsFile());
   else if(location.hash === "#tickets") readCalendarShots([item.getAsFile()]);
   else readShot(item.getAsFile());
 });
@@ -2114,7 +2224,8 @@ document.addEventListener("paste", e => {
    picture dropped anywhere goes to the reader on screen; on a page with no
    reader it is refused rather than letting the browser navigate away. */
 const dropTarget = () => location.hash === "#deals" ? "deals" : location.hash === "#checks" ? "checks"
-  : location.hash === "#tickets" ? "tickets" : null;
+  : location.hash === "#tickets" ? "tickets" : location.hash === "#cruises" ? "cruises"
+  : location.hash === "#adventures" ? "adventures" : null;
 const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes("Files");
 let dragDepth = 0;
 const markZone = on => document.querySelectorAll(".dropzone").forEach(z => z.classList.toggle("over", on && z.dataset.drop === dropTarget()));
@@ -2131,16 +2242,19 @@ document.addEventListener("drop", e => {
   dragDepth = 0; markZone(false);
   const file = [...e.dataTransfer.files].find(f => f.type.startsWith("image/"));
   const where = dropTarget();
-  const say = where === "deals" ? $("#dStatus") : where === "tickets" ? $("#tStatus") : $("#sStatus");
+  const say = where === "deals" ? $("#dStatus") : where === "tickets" ? $("#tStatus")
+    : where === "cruises" ? $("#crStatus") : where === "adventures" ? $("#avStatus") : $("#sStatus");
   if(!where) return;
   if(!file){ say.textContent = "That isn't a picture. Drop a screenshot (PNG or JPG)."; return; }
   if(where === "tickets") readCalendarShots([...e.dataTransfer.files].filter(f => f.type.startsWith("image/")));
+  else if(where === "cruises") readCruiseShots([...e.dataTransfer.files].filter(f => f.type.startsWith("image/")));
+  else if(where === "adventures") readAdventureShot(file);
   else if(where === "deals") readDealShot(file); else readShot(file);
 });
 // Clicking the empty part of a drop area opens the picker too.
 document.querySelectorAll(".dropzone").forEach(z => z.addEventListener("click", e => {
   if(e.target.closest("button,input")) return;
-  (z.dataset.drop === "deals" ? $("#dFile") : z.dataset.drop === "tickets" ? $("#tFile") : $("#sFile")).click();
+  ({ deals: $("#dFile"), tickets: $("#tFile"), cruises: $("#crFile"), adventures: $("#avFile") }[z.dataset.drop] || $("#sFile")).click();
 }));
 document.addEventListener("click", e => {
   const a = e.target.closest("[data-useamt]");
@@ -2611,6 +2725,186 @@ document.addEventListener("click", e => {
   const s = e.target.closest("[data-dstart]"); if(s){ dfill("#dStart", s.dataset.dstart); return; }
   const n = e.target.closest("[data-dend]"); if(n){ dfill("#dEnd", n.dataset.dend); }
 });
+
+/* -------------------- cruises & Adventures by Disney --------------------
+ * History only (cruisesAdventures.ts): read the owner's screenshots, let
+ * them check every box, keep each price with the day it was seen. */
+const CABINS = [["", "Cheapest shown"], ["inside", "Inside"], ["oceanview", "Ocean view"], ["verandah", "Verandah"], ["suite", "Suite"]];
+let crDraft = [];
+const crNum = v => (v === null || v === undefined) ? "" : v;
+function crRowHtml(c, i){
+  const f = (k, label, extra = "") => `<div><label>${label}</label><input type="text" data-cr="${i}" data-k="${k}" value="${esc(crNum(c[k]))}" ${extra}></div>`;
+  return `<div class="calcard" data-crrow="${i}">
+    <label style="display:flex; gap:8px; align-items:center; font-weight:650"><input type="checkbox" data-cr="${i}" data-k="keep" ${c.keep ? "checked" : ""}> Save this one</label>
+    <div class="cgrid one" style="margin-top:8px">${f("title", "Cruise", 'maxlength="160"')}</div>
+    <div class="cgrid">${f("nights", "Nights", 'inputmode="numeric"')}${f("departurePort", "Sails from")}${f("ship", "Ship (optional)")}</div>
+    <div class="cgrid one">${f("ports", "Sailing to")}</div>
+    <div class="cgrid">${f("price", "Price per person", 'inputmode="decimal"')}
+      <div><label>Currency</label><select data-cr="${i}" data-k="currency">${["USD", "GBP", "EUR"].map(x => `<option${c.currency === x ? " selected" : ""}>${x}</option>`).join("")}</select></div>
+      ${f("save", "Save (per person)", 'inputmode="decimal"')}</div>
+    <div class="cgrid">
+      <div><label>Sail date (optional)</label><input type="date" data-cr="${i}" data-k="sailDate" value="${esc(c.sailDate || "")}"></div>
+      <div><label>Room</label><select data-cr="${i}" data-k="cabin">${CABINS.map(([v, l]) => `<option value="${v}"${(c.cabin || "") === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+      ${f("datesCount", "Dates it sails", 'inputmode="numeric"')}</div>
+    <div class="cgrid">${f("theme", "Theme (optional)")}
+      <div><label style="display:flex; gap:6px; align-items:center; margin-top:18px"><input type="checkbox" data-cr="${i}" data-k="guaranteed" ${c.guaranteed ? "checked" : ""}> Guaranteed with restrictions</label></div>
+      <div style="display:flex; align-items:flex-end"><button class="btn" data-crdrop="${i}">Remove</button></div></div>
+  </div>`;
+}
+function renderCrDraft(){
+  $("#crRows").innerHTML = crDraft.length ? crDraft.map(crRowHtml).join("")
+    : `<p class="count">Read a screenshot, or add a cruise by hand.</p>`;
+}
+document.addEventListener("input", e => {
+  const el = e.target.closest("[data-cr]"); if(!el) return;
+  const c = crDraft[+el.dataset.cr]; if(!c) return;
+  c[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value;
+});
+document.addEventListener("change", e => {
+  const el = e.target.closest("[data-cr]"); if(!el) return;
+  const c = crDraft[+el.dataset.cr]; if(c) c[el.dataset.k] = el.type === "checkbox" ? el.checked : el.value;
+});
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-crdrop]"); if(!d) return;
+  crDraft.splice(+d.dataset.crdrop, 1); renderCrDraft();
+});
+$("#crAdd").addEventListener("click", () => { crDraft.push({ keep: true, currency: "USD" }); renderCrDraft(); });
+$("#crPick").addEventListener("click", () => $("#crFile").click());
+$("#crFile").addEventListener("change", e => { const fs = [...e.target.files]; e.target.value = ""; if(fs.length) readCruiseShots(fs); });
+async function readCruiseShots(files){
+  const status = $("#crStatus");
+  let R, all = "", found = 0;
+  try { R = await getReader(); } catch(err){ status.textContent = "Couldn't load the reader."; return; }
+  for(const [n, file] of files.entries()){
+    $("#crImg").src = URL.createObjectURL(file); $("#crImg").classList.remove("hidden");
+    status.textContent = `Reading ${files.length > 1 ? `screenshot ${n + 1} of ${files.length}` : "the screenshot"}… the first time, the reader downloads itself.`;
+    let text;
+    try {
+      text = await R.readImage(file, { onProgress: (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading${files.length > 1 ? ` ${n + 1} of ${files.length}` : ""}… ${Math.round(p * 100)}%`; } });
+    } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; continue; }
+    all += (all ? "\n\n" : "") + text;
+    for(const c of R.splitCruises(text)){
+      crDraft.push({ keep: true, title: c.title, nights: c.nights, departurePort: c.departurePort, ports: c.ports,
+        price: c.price, currency: c.currency, save: c.save, datesCount: c.datesCount, theme: c.theme,
+        guaranteed: c.guaranteed, rawText: c.text });
+      found++;
+    }
+  }
+  $("#crText").textContent = all; $("#crTextBox").classList.toggle("hidden", !all);
+  if(!$("#crSeen").value) $("#crSeen").value = todayLocal();
+  renderCrDraft();
+  status.textContent = found
+    ? `Found ${found} cruise${found === 1 ? "" : "s"}. Check each one against the picture (OCR can split a port's name or miss a line), untick any you don't want, then save.`
+    : "Couldn't find a cruise in that picture. Try a screenshot that shows a whole card: its name, \"Price from\" and the price.";
+}
+$("#crSave").addEventListener("click", async () => {
+  const said = $("#crSaid"); said.className = "said";
+  const cruises = crDraft.filter(c => c.keep).map(({ keep, ...c }) => ({ ...c, seenOn: $("#crSeen").value || todayLocal(),
+    note: $("#crNote").value || null, cabin: c.cabin || null, sailDate: c.sailDate || null }));
+  if(!cruises.length){ said.className = "said bad"; said.textContent = "Tick at least one cruise to save."; return; }
+  const r = await fetch("/api/admin/cruises", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cruises }) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save those."; return; }
+  said.className = "said ok"; said.textContent = `Saved ${b.saved} cruise price${b.saved === 1 ? "" : "s"}.`;
+  crDraft = crDraft.filter(c => !c.keep); renderCrDraft(); renderCruises(b.cruises);
+});
+const cash = (v, cur) => (cur === "GBP" ? "£" : cur === "EUR" ? "€" : "$") + Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 });
+function renderCruises(rows){
+  if(!rows || !rows.length){ $("#crList").innerHTML = `<p class="count">Nothing kept yet.</p>`; return; }
+  const by = new Map();
+  for(const r of rows){ const k = r.title; if(!by.has(k)) by.set(k, []); by.get(k).push(r); }
+  $("#crList").innerHTML = [...by.entries()].map(([title, list]) => `<div class="calcard">
+    <b>${esc(title)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept${list[0].ports ? " · " + esc(list[0].ports) : ""}</span>
+    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sail date</th><th>Room</th><th class="n">Per person</th><th class="n">Save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
+    ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : "from price"}</td>
+      <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td>
+      <td class="n">${cash(r.price, r.currency)}${r.currency !== "USD" ? ` <span class="count">($${num(Math.round(r.priceUsd))})</span>` : ""}</td>
+      <td class="n">${r.save === null ? "" : cash(r.save, r.currency)}</td><td class="n">${r.datesCount ?? ""}</td>
+      <td class="n"><button class="btn" data-crdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
+    </tbody></table></div></div>`).join("");
+}
+async function loadCruises(){
+  const r = await fetch("/api/admin/cruises"); if(r.ok) renderCruises((await r.json()).cruises);
+}
+document.addEventListener("click", async e => {
+  const d = e.target.closest("[data-crdel]"); if(!d) return;
+  if(!confirm("Delete this saved price? Only do this if it was saved by mistake: it's the history we're keeping.")) return;
+  const r = await fetch("/api/admin/cruises/" + d.dataset.crdel, { method: "DELETE" });
+  if(r.ok) renderCruises((await r.json()).cruises);
+});
+
+const AV = { avName: "tripName", avDest: "destination", avType: "tripType", avDays: "days", avNights: "nights",
+  avDepart: "departureDate", avPrice: "price", avChild: "childPrice", avCur: "currency", avMeals: "meals",
+  avB: "breakfasts", avL: "lunches", avD: "dinners", avMin: "minAge", avSug: "suggestedAge", avAdult: "adultExclusiveAge",
+  avSeen: "seenOn", avNote: "note" };
+let avRaw = null;
+function clearAvForm(){
+  for(const id of Object.keys(AV)){ const el = $("#" + id); el.value = id === "avCur" ? "USD" : ""; el.classList.remove("filled"); }
+  $("#avHigh").value = ""; $("#avHigh").classList.remove("filled"); avRaw = null;
+  $("#avSeen").value = todayLocal();
+}
+$("#avClear").addEventListener("click", clearAvForm);
+$("#avPick").addEventListener("click", () => $("#avFile").click());
+$("#avFile").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if(f) readAdventureShot(f); });
+async function readAdventureShot(file){
+  const status = $("#avStatus");
+  $("#avImg").src = URL.createObjectURL(file); $("#avImg").classList.remove("hidden");
+  status.textContent = "Reading… the first time, the reader downloads itself (a few seconds).";
+  let R, text;
+  try {
+    R = await getReader();
+    text = await R.readImage(file, { onProgress: (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading… ${Math.round(p * 100)}%`; } });
+  } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; return; }
+  $("#avText").textContent = text; $("#avTextBox").classList.remove("hidden");
+  const a = R.readAdventure(text);
+  const name = $("#avName").value;
+  clearAvForm(); $("#avName").value = name;
+  const put = (id, v) => { if(v === null || v === undefined || v === "") return; $("#" + id).value = v; $("#" + id).classList.add("filled"); };
+  put("avDays", a.days); put("avNights", a.nights); put("avPrice", a.price); put("avCur", a.currency);
+  put("avType", a.tripType); put("avMeals", a.meals); put("avB", a.breakfasts); put("avL", a.lunches); put("avD", a.dinners);
+  put("avMin", a.minAge); put("avSug", a.suggestedAge); put("avAdult", a.adultExclusiveAge);
+  if(a.highlights.length) put("avHigh", a.highlights.join("\n"));
+  put("avSeen", todayLocal());
+  avRaw = text;
+  status.textContent = a.price
+    ? "The highlighted boxes are its best guess. Check them against the picture, type the trip's name, then save."
+    : "Couldn't find the \"From $\" price in that picture. Fill in what you can see, or try a screenshot that includes the price.";
+}
+$("#avSave").addEventListener("click", async () => {
+  const said = $("#avSaid"); said.className = "said";
+  const body = {}; for(const [id, k] of Object.entries(AV)) body[k] = $("#" + id).value || null;
+  body.highlights = $("#avHigh").value.split("\n").map(x => x.trim()).filter(Boolean);
+  body.rawText = avRaw;
+  const r = await fetch("/api/admin/adventures", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save that."; return; }
+  said.className = "said ok"; said.textContent = `Saved ${body.tripName}.`;
+  clearAvForm(); renderAdventures(b.adventures);
+});
+function renderAdventures(rows){
+  if(!rows || !rows.length){ $("#avList").innerHTML = `<p class="count">Nothing kept yet.</p>`; return; }
+  const by = new Map();
+  for(const r of rows){ if(!by.has(r.tripName)) by.set(r.tripName, []); by.get(r.tripName).push(r); }
+  $("#avList").innerHTML = [...by.entries()].map(([name, list]) => { const a = list[0]; return `<div class="calcard">
+    <b>${esc(name)}</b> <span class="count">${[a.destination, a.days ? a.days + " days" : "", a.tripType,
+      a.meals !== null ? a.meals + " meals" : "", a.minAge !== null ? "ages " + a.minAge + "+" : ""].filter(Boolean).map(esc).join(" · ")}</span>
+    ${a.highlights.length ? `<div class="count" style="margin-top:4px">${a.highlights.map(esc).join(" · ")}</div>` : ""}
+    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Departs</th><th class="n">Per person</th><th class="n">Child</th><th></th></tr></thead><tbody>
+    ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.departureDate ? esc(fmtD(r.departureDate)) : "from price"}</td>
+      <td class="n">${cash(r.price, r.currency)}</td><td class="n">${r.childPrice === null ? "" : cash(r.childPrice, r.currency)}</td>
+      <td class="n"><button class="btn" data-avdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
+    </tbody></table></div></div>`; }).join("");
+}
+async function loadAdventures(){
+  const r = await fetch("/api/admin/adventures"); if(r.ok) renderAdventures((await r.json()).adventures);
+}
+document.addEventListener("click", async e => {
+  const d = e.target.closest("[data-avdel]"); if(!d) return;
+  if(!confirm("Delete this saved price? Only do this if it was saved by mistake: it's the history we're keeping.")) return;
+  const r = await fetch("/api/admin/adventures/" + d.dataset.avdel, { method: "DELETE" });
+  if(r.ok) renderAdventures((await r.json()).adventures);
+});
+$("#crSeen").value = todayLocal(); $("#avSeen").value = todayLocal();
 
 /* -------------------------------- hotels -------------------------------- */
 const RESORT_NAME = { wdw: "Walt Disney World", dlr: "Disneyland Resort", dlp: "Disneyland Paris",
@@ -3203,6 +3497,8 @@ loadFares();
 loadAttractions();
 loadDeals();
 loadSales();
+loadCruises();
+loadAdventures();
 loadFlights();
 loadWaits();
 loadSignals();
