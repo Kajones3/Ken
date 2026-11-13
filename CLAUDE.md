@@ -119,6 +119,25 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, ninth: ship on the map; buttons in the top bar; Save PDF on every trip page
+
+Owner: "add our cruise ship icon in the mid atlantic ... between Africa and
+South America", "Put the three buttons ... in the top rail", "put a 'Save
+PDF' button on each page that views the trip".
+- **Hero map:** `ship()` + `SHIP_AT` (lon -22, lat 4) in tools/brand/gen.mjs,
+  hero maps only (`withShip`), same drawing as badge-cruise.svg, dotted wake.
+  prototype.html loads `map-light.svg?v=3` / `map-dark.svg?v=3`.
+- **Save Search / Plan Budget / Save PDF live in the sticky masthead**
+  (`.mastacts`, same ids, shown once there are results; under 1080px they
+  take their own row under the logo). Gone from the results bar.
+- **Save PDF on every trip page:** park pages' "Download the trip PDF" is now
+  "Save PDF"; cruise / cruise-only / ABD pages got one (`#xPdf` in `xSide`,
+  `printXPage()`): prints that page (heading, total, every card) into
+  `#printDoc`, held by `xDocHeld` so beforeprint doesn't rebuild the park PDF.
+  Planner Pro only (those pages are Pro anyway).
+- Checked in Chromium (laptop + phone, mocked ABD page, PDF rendered).
+  Needs a Render redeploy.
+
 ## START HERE — 2026-11-14, eighth: a search can be stopped
 
 Owner: "let the user be able to cancel a search so they can change some
