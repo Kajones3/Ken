@@ -514,7 +514,7 @@ export function splitCruises(text) {
  * $755.00 USD", "Child 1 $105 USD"), the taxes line, and "Stateroom Price".
  * Both are read from WORD POSITIONS (readWords), because a price belongs to
  * the room heading above it, not to the order OCR happens to list it in. */
-export const CRUISE_SHIPS = ["Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure"];
+export const CRUISE_SHIPS = ["Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure", "Believe"];
 export const CRUISE_ROOMS = ["inside", "oceanview", "verandah", "concierge"];
 
 /** Words with centres, grouped into lines by height. */
@@ -1197,4 +1197,75 @@ async function columnRects(image) {
     const edges = [0, ...cuts, width];
     return cuts.length ? edges.slice(1).map((x, i) => ({ left: edges[i], top: 0, width: x - edges[i], height })) : [];
   } catch { return []; }
+}
+
+
+/* ---------------- a Disney ship page, pasted as text ---------------- */
+/* Owner, 2026-11-13: paste Disney's ship page into /admin -> Ships and get the
+ * restaurants, shows, adult spaces and kids clubs as a list to check. Only
+ * NAMES and FACTS are kept (ages, adults only); Disney's own sentences are
+ * never stored. A proposal only: the owner ticks what to keep. Pure. */
+const SHIP_SECTIONS = [
+  [/^dining\b|\bdining with\b/i, "dining"],
+  [/quick bites|\btreats$/i, "quick"],
+  [/entertainment$|^extra enchantment/i, "show"],
+  [/adult (escapes|spaces)|^elevated adult/i, "adults"],
+  [/kids clubs?$/i, "kids"],
+];
+const SHIP_STOP = /^(spacious staterooms|stateroom options|deck plans|popular itineraries)/i;
+const SHIP_SKIP = /^(more to explore|view cruises|view staterooms|skip navigation|\*|\d+\.\s*\d*)$/i;
+const SHIP_STOPWORDS = new Set(["the", "and", "with", "for", "your", "from", "into", "this", "that", "all", "of", "a", "an", "in", "at", "on", "to"]);
+function shipWords(t){
+  return t.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter(w => w.length > 2 && !SHIP_STOPWORDS.has(w));
+}
+function shipFacts(p){
+  if(!p) return "";
+  const out = [];
+  const m = p.match(/(?:children\s+)?ages?\s+(\d+)\s*(?:to|-|–)\s*(\d+)/i);
+  if(m) out.push(`Ages ${m[1]} to ${m[2]}`);
+  const b = p.match(/(\d+)\s+months?\s+to\s+(\d+)\s+years?/i);
+  if(b) out.push(`Ages ${b[1]} months to ${b[2]} years`);
+  if(/adults?[- ]only|adult-exclusive|haven for adults/i.test(p)) out.push(/during the day|by day|in the morning/i.test(p) ? "Adults only at night" : "Adults only");
+  const star = p.match(/(\d)-Michelin-starred/i);
+  if(star) out.push(`By a ${star[1]}-Michelin-star chef`);
+  return out.join("; ");
+}
+export function readShipPage(text){
+  const lines = String(text || "").split(/\r?\n/).map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const long = l => l.length > 80;
+  // Each line: a section heading, a paragraph, a short line (a name or a
+  // tagline), or furniture to skip.
+  const rows = [];
+  let kind = null;
+  for(const l of lines){
+    if(SHIP_STOP.test(l)){ if(kind) break; continue; }
+    const sec = SHIP_SECTIONS.find(([re]) => !long(l) && re.test(l));
+    if(sec){ kind = sec[1]; rows.push({ t: "head" }); continue; }
+    if(!kind) continue;
+    if(long(l)){ rows.push({ t: "para", l }); continue; }
+    if(SHIP_SKIP.test(l) || /[.?]$/.test(l) || l.split(" ").length > 8 || /^\[/.test(l)){ rows.push({ t: "skip" }); continue; }
+    rows.push({ t: "short", l, kind });
+  }
+  // Disney's layout: NAME, then a tagline, then the paragraph; sometimes the
+  // tagline and paragraph come first and the name after. So the first short
+  // line before a paragraph is a name, a second one is a tagline, and a short
+  // line after a paragraph is a name only if that paragraph names it.
+  const items = [];
+  for(let i = 0; i < rows.length; i++){
+    const r = rows[i];
+    if(r.t !== "short") continue;
+    const firstInRun = rows[i - 1]?.t !== "short";
+    let j = i; while(rows[j]?.t === "short") j++;
+    const beforePara = rows[j]?.t === "para";
+    const next = beforePara ? rows[j].l : "";
+    const prev = rows[i - 1]?.t === "para" ? rows[i - 1].l : "";
+    const words = shipWords(r.l);
+    const hits = p => words.filter(w => p.toLowerCase().includes(w)).length;
+    const namedBefore = prev && words.length > 0 && hits(prev) * 2 >= words.length;
+    const likely = beforePara ? (firstInRun && !namedBefore) || (!firstInRun && false) : !!namedBefore;
+    const about = namedBefore && !(beforePara && firstInRun) ? prev : next || prev;
+    items.push({ kind: r.kind, name: r.l.replace(/!$/, ""), note: shipFacts(about), likely });
+  }
+  const seen = new Set();
+  return items.filter(x => { const k = x.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; });
 }

@@ -1114,6 +1114,22 @@ body.has-results .searchside #run{width:100%}
   .searchmain #resBrief, .searchmain #volatilityNote{order:2; margin-top:18px}
 }
 
+/* ---------- Disney cruises (Planner Pro, 2026-11-13) ---------- */
+.cruisepick{display:flex; align-items:center; gap:8px; margin:10px 0 0; font-size:14.5px; font-weight:600; cursor:pointer}
+.cruisepick input{width:18px; height:18px; accent-color:var(--accent)}
+.cruisepick .sbb-opt{font-weight:500; color:var(--ink-2)}
+.tbadge .shipic{width:76px; height:76px; display:block; color:var(--accent)}
+.tcard.cruise .teyebrow{color:var(--s3)}
+.cbar{display:flex; height:10px; border-radius:999px; overflow:hidden; background:var(--rule)}
+.cbar span{display:block; height:100%}
+.cdet{margin-top:10px; font-size:14px; color:var(--ink-2)}
+.cdet summary{cursor:pointer; font-weight:700; color:var(--ink)}
+.cdet ul{margin:8px 0 0; padding-left:18px}
+.cdet li{margin:3px 0}
+.cdet li b{color:var(--ink)}
+.tcard.cruiseteaser{border-style:dashed}
+@media (max-width:640px){ .tbadge .shipic{width:56px; height:56px} }
+
 /* ---------- trip cards ---------- */
 .tripcards{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px}
 .tcard{display:grid; grid-template-columns:76px minmax(0,1fr) auto; gap:4px 20px; align-items:center;
@@ -1615,6 +1631,10 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
         <select id="window"></select>
         <small id="windowHint" style="color:var(--muted)"></small>
       </div>
+      <!-- Disney cruises beside the parks (owner, 2026-11-13): Planner Pro
+           only; anyone else who ticks it gets the Planner Pro box. -->
+      <label class="cruisepick" id="cruisePick"><input type="checkbox" id="withCruises">
+        Consider Disney Cruises too <span class="sbb-opt">(Planner Pro)</span></label>
 
     <div class="notices">
       <p id="gettingThereNote" class="notice" hidden></p>
@@ -3006,6 +3026,7 @@ async function runSearch(keepId){
     selected = idx < 0 ? 0 : idx;
     render();
     loadBestMonths();
+    loadCruises();
     // The map stays as the hero (owner, 2026-10-29); the results come into view.
     if(!detailOpen) $("#searchLayout").scrollIntoView({ behavior:"smooth", block:"start" });
   } catch(e){
@@ -3032,6 +3053,102 @@ async function recompute(changedResortId){
   selected = idx < 0 ? 0 : idx;
   render();
   loadBestMonths();
+  loadCruises();
+}
+
+/* ============================ Disney cruises ============================ */
+/* Owner, 2026-11-13: "consider cruises" makes select Disney cruises part of a
+ * Planner Pro member's results, like the parks. Everyone else is told only
+ * HOW MANY sailings cost less than the trips shown (or fit their budget);
+ * the server never sends them which. A sailing shows only when every line
+ * has a real number behind it (src/cruisePricing.ts). */
+let cruiseState = { pro:false, cruises:[], count:0, under:null };
+let cruiseToken = 0;
+let withCruises = false;
+try { withCruises = localStorage.getItem("pf_cruises") === "1"; } catch {}
+function cheapestShown(){
+  const t = results.filter(r => r.ok && !r.locked).map(r => r.price.total);
+  return t.length ? Math.min(...t) : 0;
+}
+async function loadCruises(){
+  const token = ++cruiseToken;
+  cruiseState = { pro:false, cruises:[], count:0, under:null };
+  if(!results.length) return;
+  const q = { ...tripQuery(), month: params.month };
+  if(!session.pro){
+    const under = budgetValue() || cheapestShown();
+    if(!(under > 0)) return;
+    q.under = Math.round(under);
+  } else if(!withCruises) return;
+  try {
+    const d = await apiGet("/api/cruises", q);
+    if(token !== cruiseToken) return;
+    cruiseState = { pro: !!d.pro, cruises: d.cruises || [], count: d.count || 0, under: d.under || null };
+    renderBoard();
+  } catch(e){ console.error(e); }
+}
+const SHIP_SVG = `<svg class="shipic" viewBox="0 0 76 76" aria-hidden="true"><circle cx="38" cy="38" r="36" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M18 44h40l-6 10H24z" fill="currentColor"/><path d="M26 44V34h24v10M31 34v-7h14v7" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M34 27v-5h8v5" fill="currentColor"/><path d="M14 60c4 0 4-2 8-2s4 2 8 2 4-2 8-2 4 2 8 2 4-2 8-2 4 2 8 2" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
+const CABIN_NAME = { inside:"Inside stateroom", oceanview:"Oceanview stateroom", verandah:"Verandah stateroom", concierge:"Concierge", suite:"Concierge" };
+function shortDate(iso){ const [y,m,d] = iso.split("-").map(Number); return MONTHS[m-1] + " " + d; }
+function cruiseCardHtml(c){
+  const L = c.lines, tot = c.total || 1;
+  const segs = [["f3",L.fare],["f1",L.flights],["f2",L.gratuities],["f4",L.excursions + L.transfers]]
+    .map(([k,v]) => `<span class="seg ${k}" style="width:${(100*v/tot).toFixed(1)}%"></span>`).join("");
+  const fareHow = c.flight.how === "bought" ? `a fare we found for ${shortDate(c.flight.date)}`
+    : c.flight.how === "bought_month" ? "the typical fare we found that month" : "the typical fare for that route";
+  const adultsExc = c.excursions.filter(e => !e.privateIsland);
+  const exc = c.excursions.map(e => e.privateIsland ? `${esc(e.port)} (Disney's island, no charge)`
+    : `${esc(e.port)} (${usd(e.adult)} adult, ${usd(e.child)} age 3-9)`).join(", ");
+  const ship = c.ship ? (/^disney /i.test(c.ship) ? c.ship : "Disney " + c.ship) : "";
+  return `<li class="tcard cruise">
+    <span class="tbadge">${SHIP_SVG}</span>
+    <div class="tid">
+      <p class="teyebrow">Disney Cruise${ship ? " · " + esc(ship) : ""}</p>
+      <h3>${esc(c.title)}</h3>
+      <p class="tmeta">From ${esc(c.port.name)} · ${shortDate(c.sailDate)} to ${shortDate(c.sailEnd)} · ${c.nights} night${c.nights===1?"":"s"} · ${esc(CABIN_NAME[c.cabin] || c.cabin)}</p>
+      <div class="cbar bar">${segs}</div>
+      <details class="cdet"><summary>What's in this price</summary><ul>
+        <li><b>Cruise fare ${usd(L.fare)}:</b> Disney's ${usd(c.perPersonFare)} a person for your party, taxes, fees and port expenses included</li>
+        <li><b>Gratuities ${usd(L.gratuities)}:</b> Disney's ${usd(c.gratuityPerNight)} a guest a night, ${c.nights} nights, ${c.guests} guests</li>
+        <li><b>Flights ${usd(L.flights)}:</b> ${esc(params.origin)} to ${esc(c.port.airport)} and back, ${usd(c.flight.perSeat)} a seat, ${fareHow}${c.latestArrival ? `. Disney asks you to land by ${esc(c.latestArrival)} on sailing day` : ""}</li>
+        <li><b>Transfers ${usd(L.transfers)}:</b> Disney's airport-to-ship transfer, ${usd(c.transfer.perGuest)} a guest each way (${esc(c.transfer.minutes)})</li>
+        <li><b>Port adventures ${usd(L.excursions)}:</b> ${adultsExc.length ? "one typical Disney port adventure a guest at each stop: " : ""}${exc}. Under 3 free</li>
+      </ul></details>
+      ${onBoardHtml(c, ship)}
+    </div>
+    <div class="ttot">
+      <span class="tnum">${usd(c.total)}</span>
+      <span class="tsub">for ${countWord(c.guests)} · ${usd(c.total / c.guests)} a person</span>
+      <a class="tview" href="https://disneycruise.disney.go.com/" target="_blank" rel="noopener">Disney Cruise Line &rarr;</a>
+    </div>
+  </li>`;
+}
+/* What's on board (owner's ship lists in /admin -> Ships): names and short facts. */
+const ONBOARD_KINDS = [["dining","Dining rooms"],["quick","Quick bites"],["show","Shows and fun"],["adults","Adults only"],["kids","Kids clubs"],["room","Staterooms"]];
+function onBoardHtml(c, ship){
+  const ob = c.onBoard;
+  if(!ob || !Object.keys(ob.byKind).length) return "";
+  return `<details class="cdet"><summary>On board the ${esc(ship)}</summary><ul>
+    ${ONBOARD_KINDS.filter(([k]) => ob.byKind[k]).map(([k, label]) => `<li><b>${label}:</b> ${ob.byKind[k]
+      .map(x => esc(x.name) + (x.note ? ` <span class="tsub">(${esc(x.note)})</span>` : "")).join(", ")}</li>`).join("")}
+  </ul></details>`;
+}
+function cruiseTeaserHtml(){
+  if(cruiseState.pro){
+    return "";
+  }
+  const n = cruiseState.count;
+  if(!(n > 0)) return "";
+  const what = budgetValue() ? `fit your ${usd(budgetValue())} budget` : `cost less than the cheapest trip here`;
+  return `<li class="tcard cruiseteaser">
+    <span class="tbadge">${SHIP_SVG}</span>
+    <div class="tid"><p class="teyebrow">Disney Cruise Line</p>
+      <h3>${n === 1 ? "One Disney Cruise sailing" : (COUNT_CAP[n] || n) + " Disney Cruise sailings"} ${what}</h3>
+      <p class="tmeta">Planner Pro prices select Disney cruises for your party: fare, gratuities, flights, transfers and port adventures.</p></div>
+    <div class="ttot"><button type="button" class="tview" data-cruisepitch>See which with Planner Pro &rarr;</button></div>
+  </li>`;
 }
 
 /* ============================ render: board ============================ */
@@ -3278,7 +3395,14 @@ function renderBoard(){
         Become a Planner, free, to see all six side by side.</p>
         <button type="button" class="btn-primary" data-signup>Become a Planner, free</button>
         <button type="button" class="linkbtn" data-signin>Sign in</button></div>` : "";
-  board.innerHTML = guest + `<ol class="tripcards">${shown.concat(locked).map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
+  // Disney cruises (Planner Pro, switch on): cards beside the parks, in price
+  // order on the price sort, after the parks on any other sort.
+  const parkCards = shown.map(e => ({ total: e.item.ok ? e.item.price.total : Infinity, html: tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price") }));
+  const cruiseCards = (cruiseState.pro && withCruises ? cruiseState.cruises : []).map(c => ({ total: c.total, html: cruiseCardHtml(c) }));
+  const cards = sortBy === "price"
+    ? parkCards.concat(cruiseCards).sort((a, b) => a.total - b.total)
+    : parkCards.concat(cruiseCards);
+  board.innerHTML = guest + `<ol class="tripcards">${cards.map(c => c.html).join("")}${cruiseTeaserHtml()}${locked.map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
 }
 
 /* Sort by (owner, 2026-10-29: "We could organize by price obviously. Maybe
@@ -5336,6 +5460,7 @@ async function refreshSession(){
   // through a render, and a stale "Sign in" button after signing in is the
   // exact confusion this change exists to remove.
   syncAccountUi();
+  { const wc = $("#withCruises"); if(wc) wc.checked = withCruises && !!session.pro; }
   // The budget page is Planner Pro: the tool for members, a pitch for everyone else.
   if(document.body.classList.contains("onbudget")) renderBudget();
   // And point the form at their saved airport, which is why this runs on
@@ -6590,6 +6715,9 @@ const PRO_PITCH = {
   months: { also: "See the best months to go, with the whole trip's cost for each" },
   pass: { also: "Check whether an annual pass is worth it, and where that money could take you instead" },
   deals: { also: "Get an email when Disney posts a new deal (3- and 9-month passes)" },
+  cruises: { title: "Consider Disney Cruises with Planner Pro",
+    lead: "Planner Pro prices select Disney Cruise Line sailings the way we price the parks, for your party: Disney's fare, gratuities, flights, the transfer to the ship and a port adventure at each stop, right beside the six resorts.",
+    also: "Compare select Disney cruises with the parks" },
 };
 function pitchAlso(kind){
   return Object.entries(PRO_PITCH).filter(([k]) => k !== kind)
@@ -7324,6 +7452,16 @@ $("#sbBudget").addEventListener("input", e => {
   if(results.length){ renderBudgetTop(); renderBoard(); renderChips(); }
 });
 $("#sbBudget").value = budgetValue() || "";
+$("#withCruises").checked = withCruises && !!session.pro;
+$("#withCruises").addEventListener("change", e => {
+  if(!session.pro){ e.target.checked = false; proPitch("cruises"); return; }
+  withCruises = e.target.checked;
+  try { localStorage.setItem("pf_cruises", withCruises ? "1" : "0"); } catch {}
+  if(withCruises) loadCruises(); else renderBoard();
+});
+document.addEventListener("click", e => {
+  if(e.target.closest("[data-cruisepitch]")){ e.preventDefault(); proPitch("cruises"); }
+});
 $("#btPlan").addEventListener("click", () => needsAccount() ? null : session.pro ? $("#budgetBtn").click() : showFits());
 $("#budgetBtn").addEventListener("click", ()=>{
   // Not Plus: the Plus box, not a page that only says "Plus" (2026-10-29).

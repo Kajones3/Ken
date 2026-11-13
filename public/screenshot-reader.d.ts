@@ -69,3 +69,7 @@ export function readCruiseDates(words: OcrWord[], opts?: { rightEdge?: number })
 };
 export function readCruiseRates(words: OcrWord[]): CruiseRates | null;
 export function readCruiseScreenshot(words: OcrWord[]): ReturnType<typeof readCruiseDates> & { rates: CruiseRates | null };
+
+/** A pasted Disney ship page -> names and facts to check (ships.ts). */
+export interface ShipPageItem { kind: string; name: string; note: string; likely: boolean }
+export function readShipPage(text: string): ShipPageItem[];

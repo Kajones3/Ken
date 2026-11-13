@@ -119,6 +119,67 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-13, later: CRUISES PRICED for Planner Pro; Ships page
+
+Owner: "DO NOT GUESS. I need to know where we have data holes"; cruises
+"falling off rather than giving bad information"; "Buy flights when a planner
+pro member searches. Also, use about 50 searches per month"; excursions must be
+priced; no hole labels on cards (holes go to the owner only). Then: a Ships
+page to seed and edit what's on board each ship (facts, our own words).
+- **Facts** `src/cruiseFacts.ts`: 9 ships (`CRUISE_SHIPS`, Disney Believe
+  added to the readers too); home ports with Disney's 2026 transfer price per
+  guest each way + latest arrival (owner's paste: MCO $45 11:30 AM, FLL $29
+  12:30 PM, IAH $45 10:45 AM, SAN $18 12:15 PM, YVR $28 11:15 AM; BCN/FCO/
+  SIN/LHR kept; SJU no price); parking (Canaveral $20/day + tax official,
+  Port Everglades $25 official; Galveston/San Diego/Vancouver second-hand,
+  NOT used); port adventures = Disney's own listings (search snippets,
+  undated), median adult 10+ / child 3-9 per port; Castaway Cay and Lookout
+  Cay $0 (our choice); Catalina has none (hole).
+- **Pricing** `src/cruisePricing.ts` (pure, tested): a sailing shows only when
+  EVERY line is real: price seen in the last `CRUISE_FRESH_DAYS` (21) for the
+  EXACT party (adults + children counts) the screenshot was set to; newest per
+  room, cheapest open room; fare x guests; gratuities $16 / $27.25
+  (concierge/suite) per guest per night incl. infants; flights round trip to
+  the port airport on sailing day (seats = adults + kids 2+): bought fare
+  within 3 days, else that month's bought median, else (MCO only) the fare
+  model; transfers 2 x per guest x every guest; one median port adventure
+  per guest per port. Origin within 100 miles of the port = driving = hole.
+  No night-before hotel (Disney allows same-day arrival).
+- **Search** GET `/api/cruises` (server.ts `cruiseSearch`): Planner Pro gets
+  priced sailings in the searched month + `onBoard` (ship items), and the
+  search records the port airports as demand; everyone else gets `count` only
+  (sailings <= `under` = their budget or the cheapest park trip shown).
+  prototype.html: "Consider Disney Cruises too (Planner Pro)" box (`#withCruises`,
+  localStorage `pf_cruises`; non-Pro -> `proPitch("cruises")`), cruise cards
+  merged by price on the price sort (`cruiseCardHtml`, "What's in this
+  price", "On board the ..."), dashed teaser card for non-Pro
+  (`cruiseTeaserHtml`). Checked in Chromium (Pro card $2,822 for 2, free
+  teaser, pitch opens, box won't tick for free).
+- **Flights** `src/jobs/cruiseFlights.ts`: popular-routes buys 1-2 a night
+  (~50/month, `POPULAR_ROUTES_CRUISE`) on the EXACT sailing (sail day +
+  nights) to FLL/IAH/SAN/YVR (`CRUISE_ONLY_AIRPORTS`): Planner Pro demand
+  first, then never-bought pairs; skips dates already covered within 3 days.
+  Those airports are kept OUT of the normal demand slots. Workflow budget
+  24 -> **26** (~50 left for manual runs). **Governing rule #4: check the
+  next popular-routes run log ("N cruise port search(es)") and that the fares
+  land in flight_observations.** Nothing is bought until a fresh sailing exists.
+- **/admin -> Cruises "Cruise data holes"** (GET `/api/admin/cruise-holes`,
+  `cruiseHoles()` in cruiseData.ts): each fresh sailing (parties saved,
+  flights bought that month from N of 19 airports, what's missing), ports
+  (transfer, parking), port adventures, standing holes.
+- **/admin -> Ships** (`src/ships.ts`, table `owner_ship_items`, overlay like
+  owner_attractions: empty = shipped list): Disney Wish seeded from the owner's
+  paste (facts only, our words); others empty. Edit/hide/add per item, "Put
+  back" for edited shipped rows. Paste box: `readShipPage()` (screenshot-reader.js)
+  proposes names + facts (ages, adults only, Michelin) by Disney's layout
+  (name, tagline, paragraph); on the real Wish page it found every real item;
+  "A Timeless Tale Come to Life" and "Enchanting Nightlife" come up ticked
+  (owner unticks). Disney's text is never stored.
+- Holes told to the owner (2026-11-13): other party sizes, driving to ports,
+  Galveston/San Diego/Vancouver parking, Catalina, flights to FLL/IAH/SAN/YVR
+  until bought, weather at ports, ship details for 8 ships, undated
+  excursion prices, transfers charged for infants. ABD pricing NOT built yet.
+
 ## START HERE — 2026-11-13: cruise DATES + Rate Details readers; repeats skipped
 
 Owner sent one cruise's dates list ("Show N Dates") and Rate & Room Details
