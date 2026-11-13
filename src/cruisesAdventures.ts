@@ -17,7 +17,9 @@ import { toUsd } from "./ticketCalendar.js";
 import { settingsMap } from "./settings.js";
 
 export const SIGHTING_CURRENCIES = ["USD", "GBP", "EUR"] as const;
-export const CRUISE_CABINS = ["inside", "oceanview", "verandah", "suite"] as const;
+/** Disney's four room types (its fourth is "Concierge"; "suite" is kept for
+ *  rows saved before 2026-11-13 and means the same). */
+export const CRUISE_CABINS = ["inside", "oceanview", "verandah", "concierge", "suite"] as const;
 const ISO = /^\d{4}-\d{2}-\d{2}$/;
 
 type Result<T> = { ok: true; value: T } | { ok: false; reason: string };
@@ -57,20 +59,30 @@ export interface CruiseInput {
   seenOn?: string; title?: string; nights?: unknown; departurePort?: string; ports?: string; ship?: string;
   sailDate?: string; cabin?: string; price?: unknown; currency?: string; save?: unknown; datesCount?: unknown;
   theme?: string; guaranteed?: unknown; note?: string; rawText?: string;
+  sailEnd?: string; was?: unknown; soldOut?: unknown; partyAdults?: unknown; partyChildren?: unknown;
 }
 export interface CruiseRow {
   seenOn: string; title: string; nights: number | null; departurePort: string | null; ports: string | null;
-  ship: string | null; sailDate: string | null; cabin: string | null; price: number; currency: string;
-  priceUsd: number; save: number | null; datesCount: number | null; theme: string | null;
+  ship: string | null; sailDate: string | null; cabin: string | null; price: number | null; currency: string;
+  priceUsd: number | null; save: number | null; datesCount: number | null; theme: string | null;
   guaranteed: boolean; note: string | null; rawText: string | null;
+  /** The last day of the sailing, the crossed-out price, "Unavailable", and
+   *  the party the per-person price was shown for (blank = not recorded). */
+  sailEnd: string | null; was: number | null; soldOut: boolean;
+  partyAdults: number | null; partyChildren: number | null;
 }
 
 export function validateCruise(i: CruiseInput, today: string): Result<CruiseRow> {
   const title = text(i.title, 160);
   if (!title) return { ok: false, reason: "Give the cruise a name, like \"3-Night Bahamian Cruise from Fort Lauderdale\"." };
+  const soldOut = i.soldOut === true || i.soldOut === "true";
   const price = money(i.price);
-  if (price === null || Number.isNaN(price) || price <= 0 || price > 200000)
-    return { ok: false, reason: `"${title}": the price per person should be a number, like 686.` };
+  if (soldOut ? (Number.isNaN(price) || (price !== null && (price <= 0 || price > 200000)))
+    : (price === null || Number.isNaN(price) || price <= 0 || price > 200000))
+    return { ok: false, reason: `"${title}": the price per person should be a number, like 686${soldOut ? ", or blank when it's sold out" : ""}.` };
+  const was = money(i.was);
+  if (Number.isNaN(was) || (was !== null && (price === null || was <= price || was > 200000)))
+    return { ok: false, reason: `"${title}": the crossed-out price should be above the price, or blank.` };
   const currency = currencyOf(i.currency);
   if (!currency) return { ok: false, reason: `"${title}": the currency should be USD, GBP or EUR.` };
   const save = money(i.save);
@@ -79,38 +91,68 @@ export function validateCruise(i: CruiseInput, today: string): Result<CruiseRow>
   const nights = int(i.nights, 1, 60), datesCount = int(i.datesCount, 0, 999);
   if (nights === "bad") return { ok: false, reason: `"${title}": nights should be a whole number from 1 to 60.` };
   if (datesCount === "bad") return { ok: false, reason: `"${title}": the number of dates should be a whole number.` };
-  const sailDate = date(i.sailDate);
+  const sailDate = date(i.sailDate), sailEnd = date(i.sailEnd);
   if (sailDate === "bad") return { ok: false, reason: `"${title}": the sail date should be a real date.` };
+  if (sailEnd === "bad" || (sailEnd && (!sailDate || sailEnd <= sailDate)))
+    return { ok: false, reason: `"${title}": the last day should be a real date after the sail date.` };
+  const partyAdults = int(i.partyAdults, 1, 8), partyChildren = int(i.partyChildren, 0, 8);
+  if (partyAdults === "bad" || partyChildren === "bad")
+    return { ok: false, reason: `"${title}": the party should be 1 to 8 adults and 0 to 8 children.` };
   const seen = seenOn(i.seenOn, today);
   if (seen === "bad") return { ok: false, reason: `"${title}": the day you saw it can't be in the future.` };
   const cabin = text(i.cabin, 20)?.toLowerCase() ?? null;
   if (cabin && !(CRUISE_CABINS as readonly string[]).includes(cabin))
-    return { ok: false, reason: `"${title}": the room should be inside, oceanview, verandah or suite, or blank.` };
+    return { ok: false, reason: `"${title}": the room should be inside, oceanview, verandah or concierge, or blank.` };
   return { ok: true, value: {
     seenOn: seen, title, nights, departurePort: text(i.departurePort, 80), ports: text(i.ports, 300),
-    ship: text(i.ship, 80), sailDate, cabin, price, currency, priceUsd: toUsd(price, currency),
+    ship: text(i.ship, 80), sailDate, cabin, price, currency, priceUsd: price === null ? null : toUsd(price, currency),
+    sailEnd, was, soldOut, partyAdults, partyChildren,
     save, datesCount, theme: text(i.theme, 80), guaranteed: i.guaranteed === true || i.guaranteed === "true",
     note: text(i.note, 400), rawText: typeof i.rawText === "string" ? i.rawText.slice(0, 10000) : null,
   } };
 }
 
+/** The same sighting: same day, cruise, sailing, room, price and party.
+ *  Saving one again (the same screenshot dropped twice, owner 2026-11-13)
+ *  adds nothing to the history, so it's skipped. */
+const sightingKey = (r: { seenOn: string; title: string; sailDate: string | null; cabin: string | null;
+  price: number | null; soldOut: boolean; partyAdults: number | null; partyChildren: number | null }) =>
+  [r.seenOn, r.title.toLowerCase(), r.sailDate ?? "", r.cabin ?? "", r.soldOut ? "sold" : String(r.price),
+    r.partyAdults ?? "", r.partyChildren ?? ""].join("|");
+
 /** Saves several cruises at once (one screenshot holds several), all or
- *  nothing, so a bad row never leaves half a screenshot saved. */
+ *  nothing, so a bad row never leaves half a screenshot saved. A row that
+ *  repeats one already saved (or one earlier in the same batch) is skipped
+ *  and counted. */
 export async function saveCruises(db: Db, inputs: CruiseInput[], today: string):
-  Promise<{ ok: true; saved: number } | { ok: false; reason: string }> {
+  Promise<{ ok: true; saved: number; skipped: number } | { ok: false; reason: string }> {
   if (!Array.isArray(inputs) || !inputs.length) return { ok: false, reason: "Nothing to save." };
-  if (inputs.length > 50) return { ok: false, reason: "That's more than 50 cruises at once." };
+  if (inputs.length > 300) return { ok: false, reason: "That's more than 300 prices at once." };
   const rows: CruiseRow[] = [];
   for (const i of inputs) { const v = validateCruise(i, today); if (!v.ok) return v; rows.push(v.value); }
+  const days = [...new Set(rows.map((r) => r.seenOn))];
+  const have = new Set((await db.query<any>(
+    `select seen_on, title, sail_date, cabin, price, sold_out, party_adults, party_children
+       from cruise_sightings where seen_on = any($1::date[])`, [days])).rows.map((x) => sightingKey({
+    seenOn: dateStr(x.seen_on), title: x.title, sailDate: x.sail_date ? dateStr(x.sail_date) : null, cabin: x.cabin,
+    price: x.price === null ? null : Number(x.price), soldOut: x.sold_out,
+    partyAdults: x.party_adults, partyChildren: x.party_children })));
+  let saved = 0, skipped = 0;
   for (const r of rows) {
+    const k = sightingKey(r);
+    if (have.has(k)) { skipped++; continue; }
+    have.add(k);
     await db.query(
       `insert into cruise_sightings (id, seen_on, title, nights, departure_port, ports, ship, sail_date, cabin,
-         price, currency, price_usd, save_amount, dates_count, theme, guaranteed, note, raw_text)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+         price, currency, price_usd, save_amount, dates_count, theme, guaranteed, note, raw_text,
+         sail_end, was_price, sold_out, party_adults, party_children)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
       [randomUUID(), r.seenOn, r.title, r.nights, r.departurePort, r.ports, r.ship, r.sailDate, r.cabin,
-        r.price, r.currency, r.priceUsd, r.save, r.datesCount, r.theme, r.guaranteed, r.note, r.rawText]);
+        r.price, r.currency, r.priceUsd, r.save, r.datesCount, r.theme, r.guaranteed, r.note, r.rawText,
+        r.sailEnd, r.was, r.soldOut, r.partyAdults, r.partyChildren]);
+    saved++;
   }
-  return { ok: true, saved: rows.length };
+  return { ok: true, saved, skipped };
 }
 
 /**
@@ -122,7 +164,7 @@ export async function saveCruises(db: Db, inputs: CruiseInput[], today: string):
 export function gratuityPerPerson(nights: number | null, cabin: string | null,
   rates: { regular: number; concierge: number }): number | null {
   if (!nights) return null;
-  const perNight = cabin === "suite" ? rates.concierge : rates.regular;
+  const perNight = cabin === "suite" || cabin === "concierge" ? rates.concierge : rates.regular;
   return Math.round(nights * perNight * 100) / 100;
 }
 
@@ -142,17 +184,124 @@ export async function listCruises(db: Db, limit = 1000): Promise<CruiseSighting[
     const grat = gratuityPerPerson(x.nights, x.cabin, rates);
     return {
     gratuityUsd: grat,
-    withGratuityUsd: grat === null ? null : Math.round((Number(x.price_usd) + grat) * 100) / 100,
+    withGratuityUsd: grat === null || x.price_usd === null ? null : Math.round((Number(x.price_usd) + grat) * 100) / 100,
     id: x.id, savedAt: new Date(x.created_at).toISOString(), seenOn: dateStr(x.seen_on), title: x.title,
     nights: x.nights, departurePort: x.departure_port, ports: x.ports, ship: x.ship,
-    sailDate: x.sail_date ? dateStr(x.sail_date) : null, cabin: x.cabin, price: Number(x.price),
-    currency: x.currency, priceUsd: Number(x.price_usd), save: x.save_amount === null ? null : Number(x.save_amount),
+    sailDate: x.sail_date ? dateStr(x.sail_date) : null, cabin: x.cabin,
+    price: x.price === null ? null : Number(x.price), currency: x.currency,
+    priceUsd: x.price_usd === null ? null : Number(x.price_usd), save: x.save_amount === null ? null : Number(x.save_amount),
     datesCount: x.dates_count, theme: x.theme, guaranteed: x.guaranteed, note: x.note,
+    sailEnd: x.sail_end ? dateStr(x.sail_end) : null, was: x.was_price === null ? null : Number(x.was_price),
+    soldOut: x.sold_out === true, partyAdults: x.party_adults, partyChildren: x.party_children,
     };
   });
 }
 export async function deleteCruise(db: Db, id: string): Promise<boolean> {
   return (await db.query(`delete from cruise_sightings where id = $1 returning id`, [id])).rows.length > 0;
+}
+
+/* ------------------- a cruise's Rate & Room Details panel ------------------- */
+
+export interface RateGuest { label: string; kind: "adult" | "child"; amount: number }
+export interface RateInput {
+  seenOn?: string; title?: string; sailDate?: string; cabin?: string; guests?: unknown; taxes?: unknown;
+  total?: unknown; totalWas?: unknown; shownAs?: string; currency?: string; note?: string; rawText?: string;
+}
+export interface RateRow {
+  seenOn: string; title: string; sailDate: string | null; cabin: string | null; adults: number; children: number;
+  guests: RateGuest[]; taxes: number | null; total: number | null; totalWas: number | null;
+  shownAs: "room" | "person" | null; currency: string; note: string | null; rawText: string | null;
+}
+
+export function validateRates(i: RateInput, today: string): Result<RateRow> {
+  const title = text(i.title, 160);
+  if (!title) return { ok: false, reason: "Which cruise is this? Give it the cruise's name." };
+  const raw = Array.isArray(i.guests) ? i.guests : [];
+  const guests: RateGuest[] = [];
+  for (const g of raw as any[]) {
+    const kind = g && (g.kind === "adult" || g.kind === "child") ? g.kind : null;
+    const amount = money(g && g.amount);
+    if (!kind || amount === null || Number.isNaN(amount) || amount < 0 || amount > 100000)
+      return { ok: false, reason: "Each guest needs adult or child and an amount." };
+    guests.push({ label: text(g.label, 20) || (kind === "adult" ? "Adult" : "Child"), kind, amount });
+  }
+  const adults = guests.filter((g) => g.kind === "adult").length;
+  if (!adults || guests.length > 8) return { ok: false, reason: "The price summary should list 1 to 8 guests, at least one adult." };
+  const taxes = money(i.taxes), total = money(i.total), totalWas = money(i.totalWas);
+  if ([taxes, total, totalWas].some((v) => Number.isNaN(v) || (v !== null && (v! < 0 || v! > 200000))))
+    return { ok: false, reason: "Taxes and the stateroom price should be numbers, or blank." };
+  const shownAs = i.shownAs === "room" || i.shownAs === "person" ? i.shownAs : null;
+  const sailDate = date(i.sailDate);
+  if (sailDate === "bad") return { ok: false, reason: "The sail date should be a real date, or blank." };
+  const seen = seenOn(i.seenOn, today);
+  if (seen === "bad") return { ok: false, reason: "The day you saw it can't be in the future." };
+  const cabin = text(i.cabin, 20)?.toLowerCase() ?? null;
+  if (cabin && !(CRUISE_CABINS as readonly string[]).includes(cabin))
+    return { ok: false, reason: "The room should be inside, oceanview, verandah or concierge, or blank." };
+  const currency = currencyOf(i.currency);
+  if (!currency) return { ok: false, reason: "The currency should be USD, GBP or EUR." };
+  return { ok: true, value: {
+    seenOn: seen, title, sailDate, cabin, adults, children: guests.length - adults, guests, taxes, total, totalWas,
+    shownAs, currency, note: text(i.note, 400), rawText: typeof i.rawText === "string" ? i.rawText.slice(0, 10000) : null,
+  } };
+}
+
+/** What a price summary teaches, whichever way Disney showed it (the shares
+ *  are the same divided or not): a child's price as a share of an adult's,
+ *  and taxes as a share of the stateroom price. */
+export function rateShares(r: { guests: RateGuest[]; taxes: number | null; total: number | null }):
+  { childShare: number | null; taxShare: number | null } {
+  const a = r.guests.filter((g) => g.kind === "adult").map((g) => g.amount);
+  const c = r.guests.filter((g) => g.kind === "child").map((g) => g.amount);
+  const avg = (x: number[]) => x.reduce((s, v) => s + v, 0) / x.length;
+  return {
+    childShare: a.length && c.length && avg(a) > 0 ? Math.round((avg(c) / avg(a)) * 1000) / 1000 : null,
+    taxShare: r.taxes !== null && r.total ? Math.round((r.taxes / r.total) * 1000) / 1000 : null,
+  };
+}
+
+export async function saveRates(db: Db, input: RateInput, today: string):
+  Promise<{ ok: true; id: string | null; skipped: boolean } | { ok: false; reason: string }> {
+  const v = validateRates(input, today);
+  if (!v.ok) return v;
+  const r = v.value;
+  const dup = await db.query(
+    `select 1 from cruise_rate_details where seen_on = $1 and lower(title) = lower($2)
+        and sail_date is not distinct from $3 and cabin is not distinct from $4 and guests = $5
+        and total is not distinct from $6 limit 1`,
+    [r.seenOn, r.title, r.sailDate, r.cabin, JSON.stringify(r.guests), r.total]);
+  if (dup.rows.length) return { ok: true, id: null, skipped: true };
+  const id = randomUUID();
+  await db.query(
+    `insert into cruise_rate_details (id, seen_on, title, sail_date, cabin, adults, children, guests, taxes, total,
+       total_was, shown_as, currency, note, raw_text)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+    [id, r.seenOn, r.title, r.sailDate, r.cabin, r.adults, r.children, JSON.stringify(r.guests), r.taxes, r.total,
+      r.totalWas, r.shownAs, r.currency, r.note, r.rawText]);
+  return { ok: true, id, skipped: false };
+}
+
+export interface RateSighting extends Omit<RateRow, "rawText"> {
+  id: string; savedAt: string; childShare: number | null; taxShare: number | null;
+}
+export async function listRates(db: Db, limit = 500): Promise<RateSighting[]> {
+  const r = await db.query<any>(
+    `select * from cruise_rate_details order by seen_on desc, created_at desc limit $1`, [limit]);
+  return r.rows.map((x) => {
+    let guests: RateGuest[] = [];
+    try { guests = JSON.parse(x.guests || "[]"); } catch { guests = []; }
+    const n = (v: any) => (v === null ? null : Number(v));
+    const row = {
+      id: x.id, savedAt: new Date(x.created_at).toISOString(), seenOn: dateStr(x.seen_on), title: x.title,
+      sailDate: x.sail_date ? dateStr(x.sail_date) : null, cabin: x.cabin, adults: x.adults, children: x.children,
+      guests, taxes: n(x.taxes), total: n(x.total), totalWas: n(x.total_was), shownAs: x.shown_as,
+      currency: x.currency, note: x.note,
+    };
+    return { ...row, ...rateShares(row) };
+  });
+}
+export async function deleteRates(db: Db, id: string): Promise<boolean> {
+  return (await db.query(`delete from cruise_rate_details where id = $1 returning id`, [id])).rows.length > 0;
 }
 
 /* ------------------------- Adventures by Disney ------------------------- */

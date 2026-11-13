@@ -967,7 +967,8 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       day you saw it, so saving the same cruise again next week adds a new price instead of replacing the old one.</p>
 
     <h3>Read a screenshot</h3>
-    <p>Screenshot Disney's cruise list (or one cruise's dates), then drop it here. You can drop several at once.
+    <p>Screenshot Disney's cruise list, one cruise's <b>dates</b> (after &ldquo;Show N Dates&rdquo;: every sailing with
+      its four room prices), or a <b>Rate &amp; Room Details</b> panel, then drop it here. You can drop several at once.
       It's read on this device, nothing is sent anywhere, and it only fills in the boxes below: check each
       one against the picture before you save.</p>
     <div class="dropzone" data-drop="cruises">
@@ -985,14 +986,18 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       <div><label for="crSeen">Day you saw these prices</label><input type="date" id="crSeen"></div>
       <div><label for="crNote">Where they're from (optional)</label><input type="text" id="crNote" maxlength="400" placeholder="disneycruise.com, US site"></div>
     </div>
+    <datalist id="crTitles"></datalist>
     <div id="crRows"><p class="count">Read a screenshot, or add a cruise by hand.</p></div>
-    <p class="count">The list page's price is Disney's <b>&ldquo;from&rdquo; price: the cheapest date and room, per person
-      with two or more sharing a room</b>, usually before taxes, port fees and gratuities. Leave <b>Sail date</b> and
-      <b>Room</b> blank for that. Fill them in when you screenshot one date's prices.</p>
+    <p class="count">Disney's prices are the <b>average per person for the party the page was set to</b> (&ldquo;Avg per
+      person based on multiple occupancy&rdquo;), <b>with taxes, fees and port expenses included</b> (its Rate Details
+      panel says so). The list page's price is the <b>&ldquo;from&rdquo; price</b>: the cheapest date and room. A dates
+      screenshot gives every sailing: set <b>Party</b> to the guests the page was set to, because a family's average per
+      person is lower than a couple's. Prices outlined in amber are ones the reader wasn't sure of: check them against
+      the picture. Type <b>sold out</b> where Disney says &ldquo;Unavailable&rdquo;.</p>
     <p class="count"><b>+ Gratuities</b> adds Disney's recommended gratuities for one person over the whole sailing
-      (nights &times; the rate per night; the higher Concierge rate for a Suite), in dollars, for a closer-to-real
-      price. The rates are in <a href="#numbers">Rates &amp; settings</a> &rarr; &ldquo;Cruises (history only)&rdquo;;
-      changing them updates every saved cruise. Taxes and port fees are still not included.</p>
+      (nights &times; the rate per night; the higher rate for Concierge), in dollars. The rates are in
+      <a href="#numbers">Rates &amp; settings</a> &rarr; &ldquo;Cruises (history only)&rdquo;; changing them updates every
+      saved cruise. Saving the same price twice on the same day is skipped, so dropping a screenshot again is safe.</p>
     <div class="tools">
       <button class="btn" id="crAdd">Add a cruise by hand</button>
       <button class="btn primary" id="crSave">Save the ticked cruises</button>
@@ -1001,6 +1006,11 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 
     <h3>What we've kept</h3>
     <div id="crList"><p class="count">Loading…</p></div>
+    <h3>Price summaries (Rate &amp; Room Details)</h3>
+    <p class="count">Each guest's line, the taxes and the stateroom price, as Disney showed them. They teach how much
+      less a child (the 3rd and 4th guest) pays than an adult, and how big the taxes are. Disney sometimes shows the
+      whole room's price and sometimes divides it by the guests; <b>Shown as</b> says which.</p>
+    <div id="crRates"><p class="count">Nothing kept yet.</p></div>
   </section>
   </div>
 
@@ -2733,7 +2743,9 @@ document.addEventListener("click", e => {
 /* -------------------- cruises & Adventures by Disney --------------------
  * History only (cruisesAdventures.ts): read the owner's screenshots, let
  * them check every box, keep each price with the day it was seen. */
-const CABINS = [["", "Cheapest shown"], ["inside", "Inside"], ["oceanview", "Ocean view"], ["verandah", "Verandah"], ["suite", "Suite"]];
+const CABINS = [["", "Cheapest shown"], ["inside", "Inside"], ["oceanview", "Oceanview"], ["verandah", "Verandah"], ["concierge", "Concierge"], ["suite", "Suite (old)"]];
+const ROOMS = [["inside", "Inside"], ["oceanview", "Oceanview"], ["verandah", "Verandah"], ["concierge", "Concierge"]];
+const SHIPS = ["", "Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure"];
 let crDraft = [];
 const crNum = v => (v === null || v === undefined) ? "" : v;
 function crRowHtml(c, i){
@@ -2755,10 +2767,62 @@ function crRowHtml(c, i){
       <div style="display:flex; align-items:flex-end"><button class="btn" data-crdrop="${i}">Remove</button></div></div>
   </div>`;
 }
+/* One cruise's DATES: every sailing x four rooms, one editable grid. */
+const roomCell = r => !r ? "" : r.soldOut ? "sold out" : (r.price ?? "");
+function crDatesHtml(c, i){
+  const f = (k, label, extra = "") => `<div><label>${label}</label><input type="text" data-cr="${i}" data-k="${k}" value="${esc(crNum(c[k]))}" ${extra}></div>`;
+  const rows = c.sailings.map((s, j) => `<tr><td style="white-space:nowrap">${esc(fmtD(s.start))} <span class="count">${s.nights} nights</span></td>
+    ${ROOMS.map(([k]) => { const r = s.rooms[k] || {}; return `<td><input type="text" inputmode="decimal" style="width:84px${r.check ? ";outline:2px solid #E8A33D" : ""}" data-crs="${i}:${j}:${k}:price" value="${esc(String(roomCell(r)))}" title="${r.check ? "The reader wasn't sure: check it" : ""}">
+      <input type="text" inputmode="decimal" placeholder="was" style="width:84px; font-size:12px; margin-top:2px" data-crs="${i}:${j}:${k}:was" value="${esc(String(r.was ?? ""))}"></td>`; }).join("")}
+    <td><button class="btn" data-crsdrop="${i}:${j}" title="Leave this sailing out">&times;</button></td></tr>`).join("");
+  return `<div class="calcard" data-crrow="${i}">
+    <label style="display:flex; gap:8px; align-items:center; font-weight:650"><input type="checkbox" data-cr="${i}" data-k="keep" ${c.keep ? "checked" : ""}> Save these ${c.sailings.length} sailing${c.sailings.length === 1 ? "" : "s"}</label>
+    <div class="cgrid one" style="margin-top:8px">${f("title", "Cruise (pick one you've saved, or type it)", 'maxlength="160" list="crTitles"')}</div>
+    <div class="cgrid">${f("departurePort", "Sails from")}
+      <div><label>Ship</label><select data-cr="${i}" data-k="ship">${SHIPS.map(x => `<option value="${x}"${(c.ship || "") === x ? " selected" : ""}>${x || "Not shown"}</option>`).join("")}</select></div>
+      ${f("theme", "Theme (optional)")}</div>
+    <div class="cgrid">${f("partyAdults", "Party: adults", 'inputmode="numeric"')}${f("partyChildren", "Party: children", 'inputmode="numeric"')}
+      <div class="count" style="align-self:end">The guests the page was set to. ${c.partyFrom ? esc(c.partyFrom) : "Disney starts at 2 adults."}</div></div>
+    <div style="overflow-x:auto"><table class="ctab" style="margin-top:8px"><thead><tr><th>Sails</th>${ROOMS.map(([, l]) => `<th>${l}</th>`).join("")}<th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="margin-top:6px"><button class="btn" data-crdrop="${i}">Remove</button></div>
+  </div>`;
+}
+/* The Rate & Room Details panel. */
+function crRatesHtml(c, i){
+  const f = (k, label, extra = "") => `<div><label>${label}</label><input type="text" data-cr="${i}" data-k="${k}" value="${esc(crNum(c[k]))}" ${extra}></div>`;
+  return `<div class="calcard" data-crrow="${i}">
+    <label style="display:flex; gap:8px; align-items:center; font-weight:650"><input type="checkbox" data-cr="${i}" data-k="keep" ${c.keep ? "checked" : ""}> Save this price summary</label>
+    <div class="cgrid one" style="margin-top:8px">${f("title", "Cruise", 'maxlength="160" list="crTitles"')}</div>
+    <div class="cgrid">
+      <div><label>Sailing (if you know it)</label><input type="date" data-cr="${i}" data-k="sailDate" value="${esc(c.sailDate || "")}"></div>
+      <div><label>Room (the tab it was on)</label><select data-cr="${i}" data-k="cabin">${CABINS.slice(0, 5).map(([v, l]) => `<option value="${v}"${(c.cabin || "") === v ? " selected" : ""}>${v ? l : "Not sure"}</option>`).join("")}</select></div>
+      <div><label>Shown as</label><select data-cr="${i}" data-k="shownAs">${[["", "Not sure"], ["room", "The whole room"], ["person", "Per person"]].map(([v, l]) => `<option value="${v}"${(c.shownAs || "") === v ? " selected" : ""}>${l}</option>`).join("")}</select></div></div>
+    <div class="cgrid">${c.guests.map((g, j) => `<div><label>${esc(g.label)}</label><input type="text" inputmode="decimal" data-crg="${i}:${j}" value="${esc(String(g.amount))}"></div>`).join("")}</div>
+    <div class="cgrid">${f("taxes", "Taxes, fees &amp; port expenses", 'inputmode="decimal"')}${f("total", "Stateroom price", 'inputmode="decimal"')}${f("totalWas", "Crossed-out price (optional)", 'inputmode="decimal"')}</div>
+    ${c.why ? `<p class="count">${esc(c.why)}</p>` : ""}
+    <div><button class="btn" data-crdrop="${i}">Remove</button></div>
+  </div>`;
+}
 function renderCrDraft(){
-  $("#crRows").innerHTML = crDraft.length ? crDraft.map(crRowHtml).join("")
+  $("#crRows").innerHTML = crDraft.length ? crDraft.map((c, i) => c.kind === "dates" ? crDatesHtml(c, i) : c.kind === "rates" ? crRatesHtml(c, i) : crRowHtml(c, i)).join("")
     : `<p class="count">Read a screenshot, or add a cruise by hand.</p>`;
 }
+document.addEventListener("input", e => {
+  const s = e.target.closest("[data-crs]");
+  if(s){ const [i, j, k, f] = s.dataset.crs.split(":"); const c = crDraft[+i]; if(!c) return;
+    const r = c.sailings[+j].rooms[k] || (c.sailings[+j].rooms[k] = { price: null, was: null, soldOut: false });
+    const v = s.value.trim();
+    if(f === "price"){ r.soldOut = /^(sold|unavail)/i.test(v); r.price = r.soldOut || v === "" ? null : v; r.check = false; s.style.outline = ""; }
+    else r.was = v === "" ? null : v;
+    return; }
+  const g = e.target.closest("[data-crg]");
+  if(g){ const [i, j] = g.dataset.crg.split(":"); const c = crDraft[+i]; if(c) c.guests[+j].amount = g.value; }
+});
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-crsdrop]"); if(!d) return;
+  const [i, j] = d.dataset.crsdrop.split(":"); const c = crDraft[+i]; if(!c) return;
+  c.sailings.splice(+j, 1); renderCrDraft();
+});
 document.addEventListener("input", e => {
   const el = e.target.closest("[data-cr]"); if(!el) return;
   const c = crDraft[+el.dataset.cr]; if(!c) return;
@@ -2782,10 +2846,35 @@ async function readCruiseShots(files){
   for(const [n, file] of files.entries()){
     $("#crImg").src = URL.createObjectURL(file); $("#crImg").classList.remove("hidden");
     status.textContent = `Reading ${files.length > 1 ? `screenshot ${n + 1} of ${files.length}` : "the screenshot"}… the first time, the reader downloads itself.`;
+    const progress = (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading${files.length > 1 ? ` ${n + 1} of ${files.length}` : ""}… ${Math.round(p * 100)}%`; };
+    // First by word positions: a dates list or a Rate Details panel needs to
+    // know which room heading a price sits under.
+    let read = null;
+    try { read = await R.readWords(file, { onProgress: progress }); }
+    catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; continue; }
+    const shot = R.readCruiseScreenshot(read.words);
+    if(shot.sailings.length || shot.rates){
+      all += (all ? "\n\n" : "") + read.text;
+      const known = crKnownTitle(shot);
+      const party = shot.rates ? { partyAdults: shot.rates.adults, partyChildren: shot.rates.children,
+        partyFrom: `Read from the price summary in the same screenshot (${shot.rates.adults} adult${shot.rates.adults === 1 ? "" : "s"}${shot.rates.children ? `, ${shot.rates.children} child${shot.rates.children === 1 ? "" : "ren"}` : ""}).` }
+        : { partyAdults: 2, partyChildren: 0, partyFrom: "" };
+      if(shot.sailings.length){
+        crDraft.push({ kind: "dates", keep: true, title: known.title, departurePort: known.departurePort, ports: known.ports,
+          ship: shot.ship, theme: null, nights: shot.nights, sailings: shot.sailings, rawText: read.text, ...party });
+        found += shot.sailings.length;
+      }
+      if(shot.rates){
+        const g = crRatesGuess(shot);
+        crDraft.push({ kind: "rates", keep: true, title: known.title, cabin: shot.rates.cabin, guests: shot.rates.guests,
+          taxes: shot.rates.taxes, total: shot.rates.total, totalWas: shot.rates.totalWas, rawText: read.text, ...g });
+        found++;
+      }
+      continue;
+    }
     let text;
-    try {
-      text = await R.readImage(file, { onProgress: (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading${files.length > 1 ? ` ${n + 1} of ${files.length}` : ""}… ${Math.round(p * 100)}%`; } });
-    } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; continue; }
+    try { text = await R.readImage(file, { onProgress: progress }); }
+    catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; continue; }
     all += (all ? "\n\n" : "") + text;
     for(const c of R.splitCruises(text)){
       crDraft.push({ keep: true, title: c.title, nights: c.nights, departurePort: c.departurePort, ports: c.ports,
@@ -2798,39 +2887,113 @@ async function readCruiseShots(files){
   if(!$("#crSeen").value) $("#crSeen").value = todayLocal();
   renderCrDraft();
   status.textContent = found
-    ? `Found ${found} cruise${found === 1 ? "" : "s"}. Check each one against the picture (OCR can split a port's name or miss a line), untick any you don't want, then save.`
+    ? `Found ${found} to check (cruises, sailings and price summaries). Check each against the picture (amber = the reader wasn't sure), untick any you don't want, then save.`
     : "Couldn't find a cruise in that picture. Try a screenshot that shows a whole card: its name, \"Price from\" and the price.";
 }
+/* The cruise a dates screenshot belongs to: its own title when the picture
+ * shows it, else the saved cruise with the same nights (when only one). */
+let crSaved = [];
+function crKnownTitle(shot){
+  if(shot.title) return { title: shot.title, departurePort: shot.departurePort, ports: null };
+  const same = [...new Map(crSaved.filter(r => !shot.nights || r.nights === shot.nights).map(r => [r.title, r])).values()];
+  return same.length === 1 ? { title: same[0].title, departurePort: same[0].departurePort, ports: same[0].ports } : { title: "", departurePort: shot.departurePort, ports: null };
+}
+/* Which sailing and how the panel's total was shown: the stateroom price
+ * equals a list price (per person) or a list price x the guests (the room). */
+function crRatesGuess(shot){
+  const r = shot.rates, guests = r.adults + r.children;
+  if(r.total == null) return { shownAs: null, sailDate: null, why: "" };
+  for(const s of shot.sailings) for(const [k, room] of Object.entries(s.rooms)){
+    if(room.price == null || (r.cabin && r.cabin !== k)) continue;
+    if(Math.abs(room.price - r.total) <= 2) return { shownAs: "person", sailDate: s.start, cabin: k,
+      why: `The stateroom price matches ${fmtD(s.start)}'s ${k} price per person, so Disney showed it per person.` };
+    if(Math.abs(room.price * guests - r.total) <= guests * 2) return { shownAs: "room", sailDate: s.start, cabin: k,
+      why: `The stateroom price is ${guests} x ${fmtD(s.start)}'s ${k} price per person, so it's the whole room.` };
+  }
+  return { shownAs: null, sailDate: null, why: "The panel doesn't say which sailing it's for: pick it if you know it." };
+}
+const crMoney = v => v === null || v === undefined || v === "" ? null : v;
 $("#crSave").addEventListener("click", async () => {
   const said = $("#crSaid"); said.className = "said";
-  const cruises = crDraft.filter(c => c.keep).map(({ keep, ...c }) => ({ ...c, seenOn: $("#crSeen").value || todayLocal(),
-    note: $("#crNote").value || null, cabin: c.cabin || null, sailDate: c.sailDate || null }));
-  if(!cruises.length){ said.className = "said bad"; said.textContent = "Tick at least one cruise to save."; return; }
-  const r = await fetch("/api/admin/cruises", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cruises }) });
-  const b = await r.json().catch(() => ({}));
-  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save those."; return; }
-  said.className = "said ok"; said.textContent = `Saved ${b.saved} cruise price${b.saved === 1 ? "" : "s"}.`;
-  crDraft = crDraft.filter(c => !c.keep); renderCrDraft(); renderCruises(b.cruises);
+  const seenOn = $("#crSeen").value || todayLocal(), note = $("#crNote").value || null;
+  const kept = crDraft.filter(c => c.keep);
+  if(!kept.length){ said.className = "said bad"; said.textContent = "Tick at least one to save."; return; }
+  const cruises = [];
+  for(const c of kept.filter(c => c.kind !== "rates")){
+    if(c.kind !== "dates"){ const { keep, kind, ...x } = c; cruises.push({ ...x, seenOn, note, cabin: c.cabin || null, sailDate: c.sailDate || null }); continue; }
+    if(!String(c.title || "").trim()){ said.className = "said bad"; said.textContent = "Give each dates screenshot its cruise's name (pick one you've saved, or type it)."; return; }
+    for(const s of c.sailings) for(const [k] of ROOMS){
+      const r = s.rooms[k]; if(!r || (!r.soldOut && (r.price === null || r.price === ""))) continue;
+      cruises.push({ seenOn, note, title: c.title, nights: s.nights, departurePort: c.departurePort || null, ports: c.ports || null,
+        ship: c.ship || null, theme: c.theme || null, sailDate: s.start, sailEnd: s.end, cabin: k, price: r.soldOut ? null : r.price,
+        was: crMoney(r.was), soldOut: !!r.soldOut, currency: "USD", partyAdults: c.partyAdults, partyChildren: c.partyChildren,
+        rawText: c.rawText });
+    }
+  }
+  const msgs = [];
+  if(cruises.length){
+    const r = await fetch("/api/admin/cruises", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ cruises }) });
+    const b = await r.json().catch(() => ({}));
+    if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save those."; return; }
+    msgs.push(`Saved ${b.saved} cruise price${b.saved === 1 ? "" : "s"}${b.skipped ? `; ${b.skipped} you'd already saved today were skipped` : ""}.`);
+    renderCruises(b.cruises);
+  }
+  for(const c of kept.filter(c => c.kind === "rates")){
+    const r = await fetch("/api/admin/cruise-rates", { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ seenOn, note, title: c.title, sailDate: c.sailDate || null, cabin: c.cabin || null, guests: c.guests,
+        taxes: crMoney(c.taxes), total: crMoney(c.total), totalWas: crMoney(c.totalWas), shownAs: c.shownAs || null, rawText: c.rawText }) });
+    const b = await r.json().catch(() => ({}));
+    if(!r.ok){ said.className = "said bad"; said.textContent = (msgs.join(" ") + " " + (b.message || "Couldn't save the price summary.")).trim(); return; }
+    msgs.push(b.skipped ? "That price summary was already saved today." : "Saved the price summary.");
+    renderRates(b.rates);
+  }
+  said.className = "said ok"; said.textContent = msgs.join(" ");
+  crDraft = crDraft.filter(c => !c.keep); renderCrDraft();
 });
 const cash = (v, cur) => (cur === "GBP" ? "£" : cur === "EUR" ? "€" : "$") + Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 });
+const partyOf = r => r.partyAdults ? `${r.partyAdults}A${r.partyChildren ? ` ${r.partyChildren}C` : ""}` : "";
 function renderCruises(rows){
+  crSaved = rows || [];
+  $("#crTitles").innerHTML = [...new Set(crSaved.map(r => r.title))].map(t => `<option value="${esc(t)}">`).join("");
   if(!rows || !rows.length){ $("#crList").innerHTML = `<p class="count">Nothing kept yet.</p>`; return; }
   const by = new Map();
   for(const r of rows){ const k = r.title; if(!by.has(k)) by.set(k, []); by.get(k).push(r); }
-  $("#crList").innerHTML = [...by.entries()].map(([title, list]) => `<div class="calcard">
-    <b>${esc(title)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept${list[0].ports ? " · " + esc(list[0].ports) : ""}</span>
-    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sail date</th><th>Room</th><th class="n">Per person</th><th class="n" title="Disney's recommended gratuities for one person over the whole sailing">+ Gratuities</th><th class="n">Save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : "from price"}</td>
-      <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td>
-      <td class="n">${cash(r.price, r.currency)}${r.currency !== "USD" ? ` <span class="count">($${num(Math.round(r.priceUsd))})</span>` : ""}</td>
-      <td class="n">${r.withGratuityUsd === null ? '<span class="count">needs nights</span>' : `$${num(Math.round(r.withGratuityUsd))} <span class="count">(+$${num(Math.round(r.gratuityUsd))})</span>`}</td>
-      <td class="n">${r.save === null ? "" : cash(r.save, r.currency)}</td><td class="n">${r.datesCount ?? ""}</td>
+  $("#crList").innerHTML = [...by.entries()].map(([title, list]) => {
+    const dated = list.filter(r => r.sailDate).length, sailings = new Set(list.filter(r => r.sailDate).map(r => r.sailDate)).size;
+    return `<details class="calcard"><summary style="cursor:pointer">
+    <b>${esc(title)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept${sailings ? ` · ${sailings} sailing${sailings === 1 ? "" : "s"}` : ""}${list[0].ship ? " · Disney " + esc(list[0].ship) : ""}${list[0].ports ? " · " + esc(list[0].ports) : ""}</span></summary>
+    <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sails</th><th>Room</th><th>Party</th><th class="n">Per person</th><th class="n" title="Disney's recommended gratuities for one person over the whole sailing">+ Gratuities</th><th class="n">Was / save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
+    ${list.slice().sort((a, b) => (b.seenOn > a.seenOn) - (b.seenOn < a.seenOn) || String(a.sailDate || "").localeCompare(String(b.sailDate || "")) || ROOMS.findIndex(([k]) => k === a.cabin) - ROOMS.findIndex(([k]) => k === b.cabin)).map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : "from price"}</td>
+      <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td><td>${partyOf(r)}</td>
+      <td class="n">${r.soldOut ? '<span class="count">sold out</span>' : cash(r.price, r.currency) + (r.currency !== "USD" ? ` <span class="count">($${num(Math.round(r.priceUsd))})</span>` : "")}</td>
+      <td class="n">${r.soldOut ? "" : r.withGratuityUsd === null ? '<span class="count">needs nights</span>' : `$${num(Math.round(r.withGratuityUsd))} <span class="count">(+$${num(Math.round(r.gratuityUsd))})</span>`}</td>
+      <td class="n">${r.was !== null && r.was !== undefined ? `<s>${cash(r.was, r.currency)}</s>` : r.save === null ? "" : "save " + cash(r.save, r.currency)}</td><td class="n">${r.datesCount ?? ""}</td>
       <td class="n"><button class="btn" data-crdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
-    </tbody></table></div></div>`).join("");
+    </tbody></table></div></details>`; }).join("");
+}
+const pct = v => v === null || v === undefined ? "" : Math.round(v * 100) + "%";
+function renderRates(rows){
+  if(!rows || !rows.length){ $("#crRates").innerHTML = `<p class="count">Nothing kept yet.</p>`; return; }
+  $("#crRates").innerHTML = `<div style="overflow-x:auto"><table class="ctab"><thead><tr><th>Seen</th><th>Cruise</th><th>Sails</th><th>Room</th><th>Guests</th><th class="n">Taxes</th><th class="n">Stateroom price</th><th>Shown as</th><th class="n" title="A child's price as a share of an adult's">Child</th><th class="n" title="Taxes, fees and port expenses as a share of the price">Taxes share</th><th></th></tr></thead><tbody>
+  ${rows.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${esc(r.title)}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : ""}</td>
+    <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td>
+    <td>${r.guests.map(g => `${esc(g.label)} ${cash(g.amount, r.currency)}`).join(", ")}</td>
+    <td class="n">${r.taxes === null ? "" : cash(r.taxes, r.currency)}</td><td class="n">${r.total === null ? "" : cash(r.total, r.currency)}</td>
+    <td>${r.shownAs === "room" ? "whole room" : r.shownAs === "person" ? "per person" : ""}</td>
+    <td class="n">${pct(r.childShare)}</td><td class="n">${pct(r.taxShare)}</td>
+    <td class="n"><button class="btn" data-crratedel="${r.id}" title="Only for one saved by mistake">Delete</button></td></tr>`).join("")}
+  </tbody></table></div>`;
 }
 async function loadCruises(){
-  const r = await fetch("/api/admin/cruises"); if(r.ok) renderCruises((await r.json()).cruises);
+  const r = await fetch("/api/admin/cruises"); if(!r.ok) return;
+  const b = await r.json(); renderCruises(b.cruises); renderRates(b.rates);
 }
+document.addEventListener("click", async e => {
+  const d = e.target.closest("[data-crratedel]"); if(!d) return;
+  if(!confirm("Delete this saved price summary? Only if it was saved by mistake.")) return;
+  const r = await fetch("/api/admin/cruise-rates/" + d.dataset.crratedel, { method: "DELETE" });
+  if(r.ok) renderRates((await r.json()).rates);
+});
 document.addEventListener("click", async e => {
   const d = e.target.closest("[data-crdel]"); if(!d) return;
   if(!confirm("Delete this saved price? Only do this if it was saved by mistake: it's the history we're keeping.")) return;

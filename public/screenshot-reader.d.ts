@@ -50,3 +50,22 @@ export interface AdventurePage {
 }
 export const ADVENTURE_TYPES: string[];
 export function readAdventure(text: string): AdventurePage;
+
+export function enlargeBy(width: number): number;
+export type CruiseRoomKey = "inside" | "oceanview" | "verandah" | "concierge";
+export interface CruiseRoomPrice { price: number | null; was: number | null; soldOut: boolean; check: boolean }
+export interface CruiseSailing { start: string; end: string; nights: number; ship: string | null; rooms: Partial<Record<CruiseRoomKey, CruiseRoomPrice>> }
+export interface CruiseRates {
+  guests: Array<{ label: string; kind: "adult" | "child"; amount: number }>; adults: number; children: number;
+  taxes: number | null; total: number | null; totalWas: number | null; startingFrom: number | null; cabin: CruiseRoomKey | null;
+}
+export const CRUISE_SHIPS: string[];
+export const CRUISE_ROOMS: CruiseRoomKey[];
+export function cruisePrice(token: string): { value: number; check: boolean; tag: boolean; alts: number[] } | null;
+export function sailingDates(line: string): { start: string; end: string; nights: number } | null;
+export function readCruiseDates(words: OcrWord[], opts?: { rightEdge?: number }): {
+  sailings: CruiseSailing[]; ship: string | null; title: string | null; nights: number | null;
+  departurePort: string | null; warnings: string[];
+};
+export function readCruiseRates(words: OcrWord[]): CruiseRates | null;
+export function readCruiseScreenshot(words: OcrWord[]): ReturnType<typeof readCruiseDates> & { rates: CruiseRates | null };
