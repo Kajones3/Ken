@@ -119,6 +119,50 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, later: no driving limit; port parking set; ABD Rates & Dates reader; "add to this vacation" (idea)
+
+- **Driving to a port has NO distance limit** (owner: "I regularly drive from
+  Raleigh to Disney World"). `MAX_PORT_DRIVE_MILES` is gone; the nightly
+  refresh asks OSRM for every home airport x the 5 drivable ports once.
+  No overnight stop is added on a long drive (told the owner).
+- **Parking at Galveston, San Diego, Vancouver = the average of the
+  travel-site figures** (owner: "Set the parking at those ports for the
+  average of what you see. It's just an estimate"): $16, $16, $29 (C$41 at
+  ~0.72; USD/CAD ~1.39-1.40 early Nov 2026). Defaults in settings.ts AND
+  `PARKING_DEFAULT_USD` (cruiseFacts.ts) — keep them equal; each setting's
+  help text lists the figures averaged. 0 = don't offer driving there.
+- **ABD trips under $5k (owner's list screenshot, 2026-11-14):** Munich
+  Escape 3d/2n $2,799; Barcelona Escape 4d/3n $3,399; Disneyland Resort and
+  Southern California Escape 4d/3n $3,599; London Escape 3d/2n $3,599; Paris
+  Escape 3d/2n $2,999. All "Escape", ages 5+.
+- **ABD Rates & Dates reader** (`readAdventureDates(words)` in
+  screenshot-reader.js): date-range lines ("June 1,2027 - June 3,2027"; a
+  single date like "Pair this departure with the June 3, 2027 ... Cruise" is
+  NOT a departure), each "$" price to the nearest date row (prices sit ~24px
+  above) and to the nearest column heading (CHILD (11 AND UNDER) / ADULT (12
+  AND OVER)); "Adult Exclusive" on the date line = no child price. Real-OCR
+  fixture `src/testdata/abd-dates-paris-2026-11.words.json` reads 5/5.
+  /admin Adventures: a dropped screenshot is tried as Rates & Dates first
+  (`readWords`), else the trip-page reader; an editable departures table,
+  "Save these departures" -> POST `/api/admin/adventures {departures}` ->
+  `saveAdventureDepartures()` (all checked first; same day + trip + date +
+  prices = skipped). `adventure_sightings` gained `return_date`,
+  `adult_only`, `child_max_age`. Paris 2027: Jun 1-3 $2,849/$2,999, Jun
+  15-17 $3,419/$3,599, Jun 29-Jul 1 $2,849/$2,999, Sep 7-9 Adult Exclusive
+  $2,999, Sep 21-23 Adult Exclusive $3,199 (child 11 and under, per person,
+  double occupancy). Saved locally only: the owner drops it on the live /admin.
+- **ABD PRICING NOT BUILT YET.** Settled with the owner: meals not included
+  are priced from the country's eating-out price level vs Orlando ("Your meal
+  price instincts are correct"); flights into the trip's start city and out
+  of its end city (same nightly buying as cruises). Still needed per trip:
+  which meals are included (itinerary), airports, guide count for tips
+  ($9-11 per guest per guide per day; count unknown). Owner is finding each
+  trip's dates.
+- **Idea, NOT to build yet (owner): "Add to this vacation"** — combine
+  trips, e.g. price a cruise then add a few days at Disneyland Paris to the
+  same vacation. Owner: "Don't build that yet. Just somewhere I think we
+  should go."
+
 ## START HERE — 2026-11-14: driving to cruise ports, pixie dust loader, "Read it" fixed
 
 Owner: "I want people in Houston to be able to see a cruise AND price flying
@@ -129,9 +173,8 @@ that star"); "Read it" didn't work.
   `cruiseDriveLookup`): each sailing carries `travel.fly` and/or
   `travel.drive`; `base` = fare + gratuities + port adventures. Drive = gas
   (25 mpg, today's gas price) + IRS wear and tear (honors "Include wear &
-  tear?", `driveWearAndTear=0`) both ways + parking x (nights + 1). Offered
-  within `MAX_PORT_DRIVE_MILES` (500 road miles, one day) and only where the
-  port has a parking price. Too close to fly (< 100 miles) = drive only; no
+  tear?", `driveWearAndTear=0`) both ways + parking x (nights + 1). (Distance
+  limit removed later the same day; see above.) Too close to fly (< 100 miles) = drive only; no
   fare yet but drivable = drive. The parks are unaffected: a Houston member
   sees Galveston by car AND flies to WDW/Disneyland as before.
 - **Parking = /admin settings** `cruise.parking.<port>`: Canaveral 20 and

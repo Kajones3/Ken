@@ -308,18 +308,20 @@ export const SETTINGS: SettingDef[] = [
   // Parking at the cruise ports, for someone driving (owner, 2026-11-14:
   // "most people drive for cruises"). Official for Port Canaveral ($20/day +
   // tax, port's page, 2025-10-01) and Port Everglades ($25 max daily,
-  // porteverglades.net). Galveston, San Diego and Vancouver publish none
-  // (travel sites disagree), so 0 = not set and driving there isn't offered.
+  // porteverglades.net). Galveston, San Diego and Vancouver publish none, so
+  // (owner, 2026-11-14: "Set the parking at those ports for the average of
+  // what you see. It's just an estimate.") each is the average of the
+  // travel-site figures found that day, listed in its help text.
   money("cruise.parking.canaveral", "Cruise parking, Port Canaveral, per day", "Cruises", 20, 0, 200,
     "Port Canaveral's own parking page: $20 a day plus tax, arrival and departure days included (2025-10-01). Charged for nights + 1 days."),
   money("cruise.parking.fll", "Cruise parking, Port Everglades (Fort Lauderdale), per day", "Cruises", 25, 0, 200,
     "porteverglades.net: $25 maximum daily rate. Charged for nights + 1 days."),
-  money("cruise.parking.galveston", "Cruise parking, Galveston, per day (0 = not set)", "Cruises", 0, 0, 200,
-    "The port shows its prices only inside its booking flow; travel sites say $9 to $35 a day. Until you type one, nobody is offered driving to Galveston."),
-  money("cruise.parking.sandiego", "Cruise parking, San Diego, per day (0 = not set)", "Cruises", 0, 0, 200,
-    "No parking at the terminal; nearby lots run about $6 to $25 a day (travel sites). Until you type one, nobody is offered driving to San Diego."),
-  money("cruise.parking.vancouver", "Cruise parking, Vancouver (Canada Place), per day in US dollars (0 = not set)", "Cruises", 0, 0, 200,
-    "Travel sites say C$23 a day booked ahead (WestPark), up to C$74 elsewhere. Type it in US dollars. Until you do, nobody is offered driving to Vancouver."),
+  money("cruise.parking.galveston", "Cruise parking, Galveston, per day (an estimate)", "Cruises", 16, 0, 200,
+    "Average of travel-site figures (2026-11-14): $20-35, $15-22, $9-10 pre-booked, and an older official $40/4 days, $45/5, $60/7. The port prices only inside its booking flow. 0 = don't offer driving there."),
+  money("cruise.parking.sandiego", "Cruise parking, San Diego, per day (an estimate)", "Cruises", 16, 0, 200,
+    "No parking at the terminal. Average of nearby lots on travel sites (2026-11-14): $24.95, $12, $21-23, $14-16, $6, $15. 0 = don't offer driving there."),
+  money("cruise.parking.vancouver", "Cruise parking, Vancouver (Canada Place), per day in US dollars (an estimate)", "Cruises", 29, 0, 200,
+    "Average of travel-site figures (2026-11-14): C$23, C$26, C$30, C$35-45, C$50, C$74.50 = about C$41, at about 0.72 US dollars to the Canadian dollar. 0 = don't offer driving there."),
   money("cruise.gratuityPerNight", "Disney cruise gratuities, per person per night", "Cruises", 16, 0, 100,
     "Disney's recommended gratuity for a regular stateroom, charged for every guest, children and babies too. "
     + "Added to each saved cruise as a \"with gratuities\" estimate in /admin -> Cruises."),

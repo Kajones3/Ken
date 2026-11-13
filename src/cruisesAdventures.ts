@@ -311,6 +311,7 @@ export interface AdventureInput {
   departureDate?: string; price?: unknown; childPrice?: unknown; currency?: string; tripType?: string;
   meals?: unknown; breakfasts?: unknown; lunches?: unknown; dinners?: unknown; minAge?: unknown;
   suggestedAge?: unknown; adultExclusiveAge?: unknown; highlights?: unknown; note?: string; rawText?: string;
+  returnDate?: string; adultOnly?: unknown; childMaxAge?: unknown;
 }
 export interface AdventureRow {
   seenOn: string; tripName: string; destination: string | null; days: number | null; nights: number | null;
@@ -318,6 +319,8 @@ export interface AdventureRow {
   tripType: string | null; meals: number | null; breakfasts: number | null; lunches: number | null;
   dinners: number | null; minAge: number | null; suggestedAge: number | null; adultExclusiveAge: number | null;
   highlights: string[]; note: string | null; rawText: string | null;
+  /** A dated departure's last day; "Adult Exclusive"; the child column's top age. */
+  returnDate: string | null; adultOnly: boolean; childMaxAge: number | null;
 }
 
 export function validateAdventure(i: AdventureInput, today: string): Result<AdventureRow> {
@@ -334,13 +337,18 @@ export function validateAdventure(i: AdventureInput, today: string): Result<Adve
   for (const [k, lo, hi, label] of [["days", 1, 60, "days"], ["nights", 0, 60, "nights"], ["meals", 0, 200, "meals"],
     ["breakfasts", 0, 60, "breakfasts"], ["lunches", 0, 60, "lunches"], ["dinners", 0, 60, "dinners"],
     ["minAge", 0, 25, "minimum age"], ["suggestedAge", 0, 25, "suggested age"],
-    ["adultExclusiveAge", 0, 25, "adults-only age"]] as const) {
+    ["adultExclusiveAge", 0, 25, "adults-only age"], ["childMaxAge", 0, 25, "child age"]] as const) {
     const v = int((i as any)[k], lo, hi);
     if (v === "bad") return { ok: false, reason: `The ${label} should be a whole number from ${lo} to ${hi}, or blank.` };
     nums[k] = v;
   }
   const departureDate = date(i.departureDate);
   if (departureDate === "bad") return { ok: false, reason: "The departure date should be a real date, or blank." };
+  const returnDate = date(i.returnDate);
+  if (returnDate === "bad" || (returnDate && (!departureDate || returnDate < departureDate)))
+    return { ok: false, reason: "The last day should be a real date on or after the departure, or blank." };
+  const adultOnly = i.adultOnly === true || i.adultOnly === "true";
+  if (adultOnly && childPrice !== null) return { ok: false, reason: "An Adult Exclusive departure has no child price." };
   const seen = seenOn(i.seenOn, today);
   if (seen === "bad") return { ok: false, reason: "The day you saw it can't be in the future." };
   const raw = Array.isArray(i.highlights) ? i.highlights : typeof i.highlights === "string" ? i.highlights.split(/\n|;/) : [];
@@ -351,23 +359,54 @@ export function validateAdventure(i: AdventureInput, today: string): Result<Adve
     meals: nums.meals!, breakfasts: nums.breakfasts!, lunches: nums.lunches!, dinners: nums.dinners!,
     minAge: nums.minAge!, suggestedAge: nums.suggestedAge!, adultExclusiveAge: nums.adultExclusiveAge!,
     highlights, note: text(i.note, 400), rawText: typeof i.rawText === "string" ? i.rawText.slice(0, 10000) : null,
+    returnDate, adultOnly, childMaxAge: nums.childMaxAge!,
   } };
 }
 
+async function insertAdventure(db: Db, r: AdventureRow): Promise<string> {
+  const id = randomUUID();
+  await db.query(
+    `insert into adventure_sightings (id, seen_on, trip_name, destination, days, nights, departure_date, price,
+       child_price, currency, price_usd, trip_type, meals, breakfasts, lunches, dinners, min_age, suggested_age,
+       adult_exclusive_age, highlights, note, raw_text, return_date, adult_only, child_max_age)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
+    [id, r.seenOn, r.tripName, r.destination, r.days, r.nights, r.departureDate, r.price, r.childPrice, r.currency,
+      r.priceUsd, r.tripType, r.meals, r.breakfasts, r.lunches, r.dinners, r.minAge, r.suggestedAge,
+      r.adultExclusiveAge, JSON.stringify(r.highlights), r.note, r.rawText, r.returnDate, r.adultOnly, r.childMaxAge]);
+  return id;
+}
 export async function saveAdventure(db: Db, input: AdventureInput, today: string):
   Promise<{ ok: true; id: string } | { ok: false; reason: string }> {
   const v = validateAdventure(input, today);
   if (!v.ok) return v;
-  const r = v.value, id = randomUUID();
-  await db.query(
-    `insert into adventure_sightings (id, seen_on, trip_name, destination, days, nights, departure_date, price,
-       child_price, currency, price_usd, trip_type, meals, breakfasts, lunches, dinners, min_age, suggested_age,
-       adult_exclusive_age, highlights, note, raw_text)
-     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
-    [id, r.seenOn, r.tripName, r.destination, r.days, r.nights, r.departureDate, r.price, r.childPrice, r.currency,
-      r.priceUsd, r.tripType, r.meals, r.breakfasts, r.lunches, r.dinners, r.minAge, r.suggestedAge,
-      r.adultExclusiveAge, JSON.stringify(r.highlights), r.note, r.rawText]);
-  return { ok: true, id };
+  return { ok: true, id: await insertAdventure(db, v.value) };
+}
+
+/**
+ * A whole "Rates & Dates" table at once (owner, 2026-11-14), all or nothing.
+ * The same day + trip + departure + prices saved again is skipped and
+ * counted, as for cruises, so dropping a screenshot twice is safe.
+ */
+export async function saveAdventureDepartures(db: Db, inputs: AdventureInput[], today: string):
+  Promise<{ ok: true; saved: number; skipped: number } | { ok: false; reason: string }> {
+  if (!inputs.length) return { ok: false, reason: "No departures to save." };
+  const rows: AdventureRow[] = [];
+  for (const [k, i] of inputs.entries()) {
+    const v = validateAdventure(i, today);
+    if (!v.ok) return { ok: false, reason: `Departure ${k + 1}: ${v.reason}` };
+    if (!v.value.departureDate) return { ok: false, reason: `Departure ${k + 1}: a departure date is needed.` };
+    rows.push(v.value);
+  }
+  let saved = 0, skipped = 0;
+  for (const r of rows) {
+    const dup = await db.query(
+      `select 1 from adventure_sightings where seen_on = $1 and trip_name = $2 and departure_date = $3
+         and price = $4 and child_price is not distinct from $5 limit 1`,
+      [r.seenOn, r.tripName, r.departureDate, r.price, r.childPrice]);
+    if (dup.rows.length) { skipped++; continue; }
+    await insertAdventure(db, r); saved++;
+  }
+  return { ok: true, saved, skipped };
 }
 
 export interface AdventureSighting extends Omit<AdventureRow, "rawText"> { id: string; savedAt: string }
@@ -385,6 +424,8 @@ export async function listAdventures(db: Db, limit = 1000): Promise<AdventureSig
       priceUsd: Number(x.price_usd), tripType: x.trip_type, meals: x.meals, breakfasts: x.breakfasts,
       lunches: x.lunches, dinners: x.dinners, minAge: x.min_age, suggestedAge: x.suggested_age,
       adultExclusiveAge: x.adult_exclusive_age, highlights, note: x.note,
+      returnDate: x.return_date ? dateStr(x.return_date) : null, adultOnly: x.adult_only === true,
+      childMaxAge: x.child_max_age ?? null,
     };
   });
 }

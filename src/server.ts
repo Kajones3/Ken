@@ -53,7 +53,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { saveCruises, listCruises, deleteCruise, saveAdventure, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
+import { saveCruises, listCruises, deleteCruise, saveAdventure, saveAdventureDepartures, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
@@ -2127,7 +2127,14 @@ const server = createServer(async (req, res) => {
     }
     if (url.pathname === "/api/admin/adventures" && req.method === "POST") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
-      const r = await saveAdventure(db, await readBody(req), todayISO());
+      const body = await readBody(req);
+      // A whole "Rates & Dates" table: { departures: [...] }.
+      if (Array.isArray((body as any)?.departures)) {
+        const d = await saveAdventureDepartures(db, (body as any).departures, todayISO());
+        if (!d.ok) return send(400, { error: "rejected", message: d.reason });
+        return send(200, { ok: true, saved: d.saved, skipped: d.skipped, adventures: await listAdventures(db) }, { cache: "no-store" });
+      }
+      const r = await saveAdventure(db, body, todayISO());
       if (!r.ok) return send(400, { error: "rejected", message: r.reason });
       return send(200, { ok: true, id: r.id, adventures: await listAdventures(db) }, { cache: "no-store" });
     }

@@ -15,7 +15,7 @@ import { DRIVING, irsMileageRate } from "./config.js";
 import { haversineMiles } from "./geo.js";
 import { loadMileageRates } from "./mileageRates.js";
 import { loadRoadMiles, routeKey, ensureRoadMiles, osrmMiles, roadMilesLive, type RouteWant } from "./roadMiles.js";
-import { DRIVE_PORTS, MAX_PORT_DRIVE_MILES, parkingKey, type HomePort } from "./cruiseFacts.js";
+import { DRIVE_PORTS, parkingKey, PARKING_DEFAULT_USD, type HomePort } from "./cruiseFacts.js";
 import type { DriveLookup } from "./cruisePricing.js";
 import { HOME_PORTS, PORTS_OF_CALL, PARKING_NOT_USED, homePortOf, portsOfCall, excursionAt } from "./cruiseFacts.js";
 import { CRUISE_FRESH_DAYS, pickCruiseFare, type BoughtFare, type FlightLookup, type SightingIn } from "./cruisePricing.js";
@@ -134,7 +134,7 @@ export async function cruiseHoles(db: Db, today: string): Promise<CruiseHolesRep
     excursions: portsOfCallStatus(),
     standing: [
       "A price only works for the party Disney's page was set to (2 adults, 2 adults + 2 children ...): other parties don't see that sailing. Save each sailing for the parties you want covered.",
-      "Driving to a port: offered within one day's drive (500 road miles) when that port has a parking price, priced like a drive to the parks (gas, IRS wear and tear, parking for nights + 1 days). Someone within 100 miles of the port's airport can only drive. Each cruise card has an \"I'm driving\" switch.",
+      "Driving to a port: offered from anywhere, priced like a drive to the parks (gas, IRS wear and tear, parking for nights + 1 days). Someone within 100 miles of the port's airport can only drive. Each cruise card has an \"I'm driving\" switch. No overnight stop is added on a long drive.",
       "No hotel the night before: Disney's guidelines allow flying in on sailing day (latest arrivals: MCO 11:30 AM, FLL 12:30 PM, IAH 10:45 AM, SAN 12:15 PM, YVR 11:15 AM).",
       "Flights to Fort Lauderdale, Houston, San Diego and Vancouver come only from fares we bought: a sailing shows once a fare that month exists (bought nightly, ~50 searches a month, plus Planner Pro searches). Port Canaveral uses the same flight formula as Walt Disney World.",
       "Transfers are charged for every guest, infants included (Disney's page says \"per guest\").",
@@ -146,8 +146,8 @@ export async function cruiseHoles(db: Db, today: string): Promise<CruiseHolesRep
 
 function parkingLine(id: string, official: { perDayUsd: number; source: string } | null, set: number | undefined): string {
   if (!(DRIVE_PORTS as readonly string[]).includes(id)) return "Not looked up (nobody drives there from the US)";
-  const v = set ?? official?.perDayUsd ?? 0;
-  if (v > 0) return `$${v} a day, used for anyone driving${official && v === official.perDayUsd ? ` (official: ${official.source})` : " (your number)"}`;
+  const v = set ?? PARKING_DEFAULT_USD[id] ?? 0;
+  if (v > 0) return `$${v} a day, used for anyone driving${official && v === official.perDayUsd ? ` (official: ${official.source})` : set === undefined ? " (average of travel-site figures; change it in Rates & settings)" : " (your number)"}`;
   return `NOT SET: driving there isn't offered. Type a price in Rates & settings -> Cruises. ${PARKING_NOT_USED[id] ?? ""}`;
 }
 const money = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -166,7 +166,6 @@ export const portRouteId = (portId: string) => `port-${portId}`;
 /** Road miles from home airports to the ports someone might drive to. */
 export function portRouteWants(from: { lat: number; lon: number }[]): RouteWant[] {
   return from.flatMap((o) => HOME_PORTS.filter((p) => (DRIVE_PORTS as readonly string[]).includes(p.id))
-    .filter((p) => haversineMiles(o.lat, o.lon, p.terminal.lat, p.terminal.lon) <= MAX_PORT_DRIVE_MILES)
     .map((p) => ({ from: { lat: o.lat, lon: o.lon }, to: p.terminal, resortId: portRouteId(p.id) })));
 }
 
@@ -174,8 +173,8 @@ export function portRouteWants(from: { lat: number; lon: number }[]): RouteWant[
  * Driving to a port for one traveler, priced like a drive to the parks
  * (pricing.ts): gas at today's price and 25 mpg, plus the IRS mileage rate
  * for wear and tear, both ways; parking from /admin. Road miles from the map
- * when held, else the straight line x 1.25, as for the parks. Only ports with
- * a parking price set and within one day's drive.
+ * when held, else the straight line x 1.25, as for the parks. Any distance
+ * (owner); a port whose parking is set to 0 isn't offered.
  */
 export async function cruiseDriveLookup(db: Db, from: { lat: number; lon: number },
   opts: { wear?: boolean } = {}): Promise<DriveLookup> {
@@ -192,14 +191,12 @@ export async function cruiseDriveLookup(db: Db, from: { lat: number; lon: number
   const gas = await db.query<any>(`select price_per_gallon_usd from gas_prices order by as_of desc limit 1`).catch(() => ({ rows: [] as any[] }));
   const gasPrice = gas.rows[0] ? Number(gas.rows[0].price_per_gallon_usd) : DRIVING.fallbackGasPriceUsd;
   const rates = await loadMileageRates(db).catch(() => []);
-  const PARKING_DEFAULT: Record<string, number> = { canaveral: 20, fll: 25 };
   return (port: HomePort, sailDate: string) => {
     if (!(DRIVE_PORTS as readonly string[]).includes(port.id)) return null;
-    const parkingPerDay = set.get(parkingKey(port.id)) ?? PARKING_DEFAULT[port.id] ?? 0;
+    const parkingPerDay = set.get(parkingKey(port.id)) ?? PARKING_DEFAULT_USD[port.id] ?? 0;
     if (!(parkingPerDay > 0)) return null;
     const mapMiles = miles.get(routeKey(from, portRouteId(port.id)));
     const oneWayMiles = mapMiles ?? haversineMiles(from.lat, from.lon, port.terminal.lat, port.terminal.lon) * DRIVING.roadDistanceFactor;
-    if (oneWayMiles > MAX_PORT_DRIVE_MILES) return null;
     const rate = irsMileageRate(sailDate, rates);
     if (!rate.ok) return null;
     const half = Number(sailDate.slice(5, 7)) <= 6 ? "h1" : "h2";

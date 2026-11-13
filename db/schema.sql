@@ -1238,3 +1238,10 @@ create table if not exists owner_ship_items (
   updated_by  text not null default '',
   updated_at  timestamptz not null default now()
 );
+
+-- 2026-11-14: Adventures by Disney "Rates & Dates" (owner's Paris Escape
+-- screenshot): each departure is a row with its last day, its child price
+-- (null on an "Adult Exclusive" departure) and the ages the columns name.
+alter table adventure_sightings add column if not exists return_date date;
+alter table adventure_sightings add column if not exists adult_only boolean not null default false;
+alter table adventure_sightings add column if not exists child_max_age integer;

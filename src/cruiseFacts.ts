@@ -82,13 +82,15 @@ export const HOME_PORTS: HomePort[] = [
     transferUsd: 75, transferMinutes: "1 hr 30 min", latestArrival: null, parking: null },
 ];
 
-/** The /admin setting holding a port's parking price per day (0 = not set:
- *  driving to that port isn't offered until the owner types one). */
+/** The /admin setting holding a port's parking price per day (0 =
+ *  driving to that port isn't offered). */
 export const parkingKey = (portId: string) => `cruise.parking.${portId}`;
+/** Shipped parking per day, the same defaults as the /admin settings: official
+ *  at Canaveral and Port Everglades, travel-site averages elsewhere (2026-11-14). */
+export const PARKING_DEFAULT_USD: Record<string, number> = { canaveral: 20, fll: 25, galveston: 16, sandiego: 16, vancouver: 29 };
 /** Ports someone might drive to (US and Vancouver). */
 export const DRIVE_PORTS = ["canaveral", "fll", "galveston", "sandiego", "vancouver"] as const;
-/** Furthest one-way road drive offered to a port: one day's driving. */
-export const MAX_PORT_DRIVE_MILES = 500;
+/** Driving to a port has no distance limit (owner, 2026-11-14: "I regularly drive from Raleigh to Disney World"). */
 
 /** Second-hand parking figures found 2026-11-13, kept for the owner's
  *  holes list, never priced unless the owner types one in /admin. */

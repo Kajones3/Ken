@@ -73,3 +73,7 @@ export function readCruiseScreenshot(words: OcrWord[]): ReturnType<typeof readCr
 /** A pasted Disney ship page -> names and facts to check (ships.ts). */
 export interface ShipPageItem { kind: string; name: string; note: string; likely: boolean }
 export function readShipPage(text: string): ShipPageItem[];
+
+/** Adventures by Disney "Rates & Dates": one row per departure. */
+export interface AdventureDeparture { start: string; end: string; adult: number | null; child: number | null; adultOnly: boolean }
+export function readAdventureDates(words: Word[]): { departures: AdventureDeparture[]; childMaxAge: number | null; adultMinAge: number | null; occupancy: "double" | null };
