@@ -119,6 +119,36 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, third: no cruise checkbox; overview pages for cruises and ABD
+
+Owner: "remove the checkbox about adding in Disney Cruise and ABD. That should
+just be part of it but you only get access to that with PLUS ... inserting
+blurry boxes doesn't work" and "Why don't we have overview pages for our
+cruise and ABD trips like we do for the parks trips?"
+- **Checkbox gone** (`#withCruises`, `pf_cruises`, "Show them" all removed):
+  Planner Pro always gets cruise / cruise-only / unpriced / ABD cards.
+- **Everyone else: ONE plain line above the trip cards** (`beyondStripHtml()`,
+  `.beyond`, gold left rule, ship icon, no blur): guest "Disney Cruise Line
+  sails and Adventures by Disney has trips in April 2027." + "Become a
+  Planner, free, to see how many"; free account "Also in April 2027: three
+  Disney Cruise sailings and an Adventures by Disney trip from under $3,000 a
+  person. Planner Pro prices them for your party ..." + "See what Planner Pro
+  adds" (opens `proPitch("cruises")`). The old dashed teaser card is gone.
+  The blurred LOCKED PARK cards for guests are unchanged (owner may mean
+  those too: ask).
+- **Overview pages** reuse `#tripPage` (same Back, browser back, scroll
+  restore): hashes `#cruise=N`, `#only=N`, `#abd=N` (index into
+  cruiseState's lists; `xHash()`, `xItem()`, `openXPage()`, `renderXPage()`;
+  `syncTripView()` handles them; Pro only; a reload with no search goes
+  back). Cruise: fare (estimate note), getting to the ship (fly AND drive
+  shown, the one not in the total greyed, "I'm driving" switch), gratuities,
+  port adventures per port, on board; side panel total + lines + "See it on
+  Disney Cruise Line". Cruise only: fare + gratuities + "Not in this price
+  yet". ABD: trip price per adult/child and for the party, not-included
+  list, highlights, ages; "See it on Adventures by Disney". Cards say "View
+  trip" (the Disney links moved onto the pages). Checked in Chromium with
+  faked Pro data. Needs a Render redeploy.
+
 ## START HERE — 2026-11-14, second session: cruises + ABD for every party; cruise editing; confirm-email resend (read first)
 
 Owner's four asks, all built (978 tests, typecheck clean). **Needs a Render redeploy.**
