@@ -119,6 +119,54 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, session END: cruises/ABD pages, ABD flights, stop a search, ship on the map (read first)
+
+**Merged to master this session: PRs #255-#261.** Details are in the dated
+sections just below (fifth to ninth). 990 tests, typecheck clean.
+
+| PR | What |
+|---|---|
+| #255 | Cruise/ABD overview pages built like park pages; port weather; "close to home" fixed |
+| #256 | Port-weather job retry |
+| #257 | ABD editing in /admin; ABD readers fixed on the owner's real Paris screenshots |
+| #258 | ABD flights + live fare on opening an ABD page; ship/ABD badges; port write-ups; headline "A World of Magic / in One Search." |
+| #259 | A running search can be stopped ("Comparing… Stop") |
+| #260 | Ship on the hero map; Save Search / Plan Budget / Save PDF in the sticky top bar; Save PDF on every trip page |
+| #261 | Disney-style liner, castle-sized, mid-ocean, little waves (no wake) |
+
+**First thing next session:** ask whether Render was redeployed, then open
+`/health` and compare `version` with master (`f731942` or later). Nothing
+from #255 on is live until then.
+
+**Waiting on the owner:**
+1. **Redeploy Render** (above).
+2. **Save the Paris ABD trip on the LIVE /admin** -> Adventures by Disney:
+   drop the trip-page screenshot first, then Rates & Dates. The live DB holds
+   only the two UNDATED rows (Croatia, Thailand), so no ABD card shows yet.
+3. **Copy:** the owner is writing their own lines in
+   `docs/copy/cruise-and-abd-copy.md`; swap them in when they arrive.
+4. **Cruise prices drop off ~2026-12-04** (`CRUISE_FRESH_DAYS` 21 from the
+   2026-11-13 screenshots). Remind the owner to save new ones before then.
+5. **Touring ABD trips** (Croatia & Slovenia, Thailand) need start/end
+   airports before flights can be priced.
+6. **Ship details** are entered only for Disney Wish (/admin -> Ships).
+7. Ship art: offered fully black smokestacks (Disney's real funnels are red
+   with black tops, which is what shipped). Owner hasn't answered.
+8. Still standing: `MAIL_POSTAL_ADDRESS` (deal emails held), Stripe keys +
+   test purchase, legal blanks, step 2 of the plus_* -> pro_* column rename,
+   the 2-adult cruise estimate question (now answered by "cruises for ANY
+   party"; confirm the owner is happy with the estimate wording).
+
+**Governing rule #4 check:** the first time the owner opens an ABD page as
+Planner Pro on live, `/api/abd-fare` buys one Google Flights search. Run the
+"Pricing the Magic debug coverage" workflow after and confirm a
+`serpapi_flights` row to CDG in `flight_observations` (and its raw answer in
+`provider_responses`). Also still open: the nightly popular-routes log's "N
+cruise port search(es)" and those fares landing in the record.
+
+**Told the owner, not changed:** the top-bar Save PDF prints the
+six-resort comparison PDF; the Save PDF on a trip page prints only that trip.
+
 ## START HERE — 2026-11-14, ninth: ship on the map; buttons in the top bar; Save PDF on every trip page
 
 Owner: "add our cruise ship icon in the mid atlantic ... between Africa and
