@@ -119,6 +119,62 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, session END (read first)
+
+**Merged this session: PRs #239-#249** (cruises priced for Planner Pro, the
+Ships page, driving to cruise ports, the pixie dust loader, the "Read it" fix,
+no driving limit, port parking, the ABD Rates & Dates reader, and the
+coverage report's cruise check). Details are in the dated sections below.
+969 tests, typecheck clean. **Needs a Render redeploy**: check `/health`
+version against master (`bd12b01` or later) first. Claude's sandbox can't
+reach pricingthemagic.com, so ask the owner.
+
+**Last question answered: "My cruise card isn't showing up" (April 2027,
+2 adults from RDU).** NOT a bug. Every April 2027 cruise price the owner
+saved was for **2 adults + 2 children**. Cruise prices are used only for the
+EXACT party they were saved for (Disney's price is an average per person for
+that party), so a 2-adult search finds nothing. Proven on live data (coverage
+runs 43411488565 and 43412098698, section "Cruise search check"):
+- RDU, April 2027, 2 adults: 0 priced.
+- RDU, 2 adults + 2 children: the 4-Night Western Caribbean from Galveston,
+  Apr 14, $6,556, priced as a DRIVE (no RDU->IAH fare bought yet).
+- ATL, same family: $5,944, also a drive.
+- The 7-Night Bahamian from Galveston (Apr 18) is a hole for every party: no
+  ports line saved for that title. The owner should save its card from
+  Disney's cruise list.
+
+What was told to the owner:
+- For a 2-adult card, re-take Disney's dates screenshot set to 2 adults.
+- OFFERED, NOT BUILT: derive a 2-adult price from a family price using the
+  learned shares (child ~54% of an adult). That is an estimate, so it goes
+  against "DO NOT GUESS". Wait for the owner's answer.
+- If a family-of-four search still shows nothing, Render isn't on #248 (the
+  old 500-mile driving cap would block RDU->Galveston): redeploy.
+
+**What's in the live cruise data (2026-11-13 screenshots, all seen
+2026-11-13):**
+- Galveston: 4-night (8 sailings), 5-night (3) and 7-night (2) prices, all
+  party 2+2.
+- Canaveral and Fort Lauderdale 4-night: one undated "from" price each.
+- Prices count for `CRUISE_FRESH_DAYS` (21), so **these all drop off
+  ~2026-12-04** unless the owner saves new screenshots. Tell the owner
+  before then.
+
+**Open, in order:**
+1. Owner's answer on the 2-adult estimate (above).
+2. Governing rule #4: check that the nightly popular-routes log says
+   "N cruise port search(es)" and that those fares land in
+   `flight_observations` (FLL/IAH/SAN/YVR). It buys only once a fresh
+   sailing exists, which it does now (Galveston -> IAH).
+3. ABD pricing for travelers: NOT built. Needs, per trip, the included
+   meals, airports and guide count. The owner is finding the dates.
+4. "Add to this vacation" (combine a cruise with park days): an idea only,
+   do NOT build.
+5. Still standing from before: `MAIL_POSTAL_ADDRESS` (deal emails held),
+   Stripe live keys and test purchase, legal blanks, step 2 of the
+   plus_* -> pro_* column rename, the redeploy checks in the 2026-11-02 to
+   11-05 section.
+
 ## START HERE — 2026-11-14, later: no driving limit; port parking set; ABD Rates & Dates reader; "add to this vacation" (idea)
 
 - **Driving to a port has NO distance limit** (owner: "I regularly drive from
