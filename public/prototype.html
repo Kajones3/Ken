@@ -712,7 +712,7 @@ button.mtile:hover{border-color:var(--rule-strong)}
 .ygrid{display:grid; gap:6px; min-width:680px}
 .ygrow{display:grid; grid-template-columns:132px repeat(var(--yg-n), minmax(0,1fr)); gap:6px; align-items:stretch}
 .yghead{text-align:center; font-family:var(--f-label); font-weight:600; font-size:14px; letter-spacing:.06em; text-transform:uppercase; padding:3px 0; border-radius:8px}
-.yghead.sel{background:var(--s1); color:var(--bg, #FBFAF6)}
+.yghead.sel{background:var(--ink); color:var(--surface)}
 .ygname{display:flex; align-items:center; font-family:var(--f-head); font-weight:700; font-size:14px; line-height:1.15}
 .ygname.cur::before{content:""; width:4px; align-self:stretch; background:#E8B23E; border-radius:2px; margin-right:8px}
 .ygcell{height:56px; border-radius:10px; border:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; font:inherit; padding:0}
@@ -1125,6 +1125,10 @@ body.has-results .searchside #run{width:100%}
 .pixie .pdust.c{fill:var(--ink)}
 @keyframes pxtwinkle{0%,100%{transform:scale(1) rotate(0deg)} 50%{transform:scale(.82) rotate(12deg)}}
 .updatingnote .pixie{display:inline-block; vertical-align:middle; margin-right:8px}
+/* The pixie dust in place of the old spinning ring, inside buttons and notes
+   (owner, 2026-11-14: "replace those with the spinning pixie dust"). */
+.pxspin{display:inline-flex; align-items:center; margin-right:8px; flex:none}
+.pxspin .pixie .pdust.c{fill:currentColor}
 @media (prefers-reduced-motion: reduce){ .pixie .pstar{animation:none} }
 
 /* ---------- Disney cruises (Planner Pro, 2026-11-13) ---------- */
@@ -3015,12 +3019,12 @@ function setSearchBusy(busy){
   const btn = $("#run"), label = $("#runLabel");
   if(!btn) return;
   btn.disabled = busy;
-  label.innerHTML = busy ? `<span class="spinner"></span>Comparing…` : "Compare";
+  label.innerHTML = busy ? `${pxSpin()}Comparing…` : "Compare";
   // "Update prices" and the results say it too (owner, 2026-10-29: "it
   // looks like it isn't working"): the button spins, the cards dim and a
   // line over them says the prices are being updated.
   const b2 = $("#run2");
-  if(b2){ b2.disabled = busy; b2.innerHTML = busy ? `<span class="spinner"></span>Updating prices…` : "Update prices"; }
+  if(b2){ b2.disabled = busy; b2.innerHTML = busy ? `${pxSpin()}Updating prices…` : "Update prices"; }
   document.body.classList.toggle("updating", busy && document.body.classList.contains("has-results"));
   const st = $("#updatingNote");
   if(st) st.hidden = !(busy && document.body.classList.contains("has-results"));
@@ -3095,6 +3099,7 @@ function pixieSvg(size = 72){
     <g transform="rotate(-24 32 32)"><path class="porbit" d="${orbit}"/>${dust}</g>
     <path class="pstar" d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z"/></svg>`;
 }
+function pxSpin(){ return `<span class="pxspin">${pixieSvg(26)}</span>`; }
 function pixieLoader(label){
   return `<div class="pixieload" role="status">${pixieSvg(84)}<p>${esc(label)}</p></div>`;
 }
@@ -7377,7 +7382,7 @@ async function loadSavings(item){
 
 function renderSavings(item){
   const el = $("#bSave"), note = $("#bSaveNote");
-  if(savings.loading){ note.innerHTML = `<span class="spinner"></span>Working out where ${esc(item.resort.name)} could cost less…`; el.innerHTML = ""; return; }
+  if(savings.loading){ note.innerHTML = `${pxSpin()}Working out where ${esc(item.resort.name)} could cost less…`; el.innerHTML = ""; return; }
   if(savings.failed){ note.textContent = "We couldn't price the ideas just now. Try again in a minute."; el.innerHTML = ""; return; }
   if(!savings.ideas.length){ note.textContent = "Nothing we can change on this search saves more than a few dollars: it's already about as cheap as this trip gets."; el.innerHTML = ""; return; }
   note.textContent = `One change at a time to your ${esc(item.resort.name)} trip, biggest saving first, priced the same way as the board. "Try it" changes your search and re-prices all six resorts.`;

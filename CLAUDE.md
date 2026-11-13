@@ -119,6 +119,19 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, fourth: pixie dust everywhere; dark-mode month heading
+
+- The spinning ring is gone from the site: Compare, Update prices and the
+  budget page's "Working out ..." show the pixie dust (`pxSpin()`, `.pxspin`,
+  26px `pixieSvg`). No `class="spinner"` is used any more (the `.spinner` CSS
+  stays, unused).
+- Best months grid, dark mode: the searched month's heading was cream on cream
+  (`var(--bg)` isn't defined, its fallback was cream); now
+  `var(--ink)` on `var(--surface)`, readable in both themes.
+- Owner's screenshots still showed the cruise checkbox and "Disney Cruise
+  Line" link on the cards: the live site was NOT on #252 yet. Check `/health`
+  version against master before judging cruise cards.
+
 ## START HERE — 2026-11-14, third: no cruise checkbox; overview pages for cruises and ABD
 
 Owner: "remove the checkbox about adding in Disney Cruise and ABD. That should
