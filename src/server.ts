@@ -55,7 +55,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { saveCruises, listCruises, deleteCruise, updateCruise, updateCruiseDetails, saveAdventure, saveAdventureDepartures, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
+import { saveCruises, listCruises, deleteCruise, updateCruise, updateCruiseDetails, saveAdventure, saveAdventureDepartures, listAdventures, deleteAdventure, updateAdventure, updateAdventureDetails, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
@@ -2206,6 +2206,19 @@ const server = createServer(async (req, res) => {
       const r = await updateCruise(db, crEdit[1]!, await readBody(req) as any, todayISO());
       if (!r.ok) return send("notFound" in r && r.notFound ? 404 : 400, { error: "rejected", message: r.reason });
       return send(200, { ok: true, cruises: await listCruises(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/adventures/details" && req.method === "PUT") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await updateAdventureDetails(db, await readBody(req) as any);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, changed: r.changed, adventures: await listAdventures(db) }, { cache: "no-store" });
+    }
+    const avEdit = url.pathname.match(/^\/api\/admin\/adventures\/([0-9a-f-]{36})$/);
+    if (avEdit && req.method === "PUT") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await updateAdventure(db, avEdit[1]!, await readBody(req) as any, todayISO());
+      if (!r.ok) return send("notFound" in r && r.notFound ? 404 : 400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, adventures: await listAdventures(db) }, { cache: "no-store" });
     }
     const sightMatch = url.pathname.match(/^\/api\/admin\/(cruises|adventures|cruise-rates)\/([0-9a-f-]{36})$/);
     if (sightMatch && req.method === "DELETE") {

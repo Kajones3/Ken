@@ -213,3 +213,32 @@ test("a saved cruise price can be corrected, and a cruise's details set on every
   assert.equal((await updateCruiseDetails(db, { title: t })).ok, false, "nothing to change");
   await db.close();
 });
+
+test("editing Adventures by Disney: one price, then a whole trip's facts", async () => {
+  const { updateAdventure, updateAdventureDetails, saveAdventureDepartures } = await import("./cruisesAdventures.js");
+  const db = await memoryDb();
+  const base = { tripName: "Paris Escape", currency: "USD", seenOn: "2026-11-13", days: 3, childMaxAge: 11 };
+  await saveAdventureDepartures(db, [
+    { ...base, departureDate: "2027-06-15", returnDate: "2027-06-17", price: 3599, childPrice: 341 },
+    { ...base, departureDate: "2027-09-07", returnDate: "2027-09-09", price: 2999, adultOnly: true },
+  ], "2026-11-14");
+  let rows = await listAdventures(db);
+  const june = rows.find((r) => r.departureDate === "2027-06-15")!;
+  // The $341 the reader got wrong, fixed.
+  assert.deepEqual(await updateAdventure(db, june.id, { childPrice: 3419 }, "2026-11-14"), { ok: true });
+  const sept = rows.find((r) => r.departureDate === "2027-09-07")!;
+  const bad = await updateAdventure(db, sept.id, { childPrice: 2000 }, "2026-11-14");
+  assert.equal(bad.ok, false, "an Adult Exclusive departure still refuses a child price");
+  // The trip page's facts go onto every departure, and the trip can be renamed.
+  const d = await updateAdventureDetails(db, { tripName: "Paris Escape", newTripName: "France: Paris Escape",
+    destination: "Paris", nights: 2, meals: 4, breakfasts: 2, lunches: 1, dinners: 1, minAge: 5,
+    highlights: "Saint-Germain Guided Food Tour\nThe Louvre" });
+  assert.deepEqual(d, { ok: true, changed: 2 });
+  rows = await listAdventures(db);
+  assert.ok(rows.every((r) => r.tripName === "France: Paris Escape" && r.dinners === 1 && r.nights === 2));
+  assert.equal(rows.find((r) => r.departureDate === "2027-06-15")!.childPrice, 3419);
+  assert.deepEqual(rows[0]!.highlights, ["Saint-Germain Guided Food Tour", "The Louvre"]);
+  const cleared = await updateAdventureDetails(db, { tripName: "France: Paris Escape", minAge: "-" });
+  assert.equal(cleared.ok, true);
+  assert.ok((await listAdventures(db)).every((r) => r.minAge === null));
+});

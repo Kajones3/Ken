@@ -783,10 +783,22 @@ export function readAdventure(text) {
   const pm = /FROM\s*([$£€])\s?(\d[\d,]*)/i.exec(flat) || /([$£€])\s?(\d{3}[\d,]*)/.exec(flat);
   const meals = n(/(\d{1,2})\s*Meals\b/i);
   const breakfasts = n(/(\d{1,2})\s*Breakfasts?\b/i);
-  const dinners = n(/(\d{1,2})\s*Dinners?\b/i);
   let lunches = n(/(\d{1,2})\s*Lunch(?:es)?\b/i);
+  let dinners = n(/(\d{1,2})\s*Dinners?\b/i);
   if (lunches === null && meals !== null && breakfasts !== null && dinners !== null && meals - breakfasts - dinners >= 0)
     lunches = meals - breakfasts - dinners;
+  // "2 Breakfasts, 1 Lunch, 1" + "Dinner" on the next line: the page wraps,
+  // and OCR puts other words in between (owner's Paris screenshot, 2026-11-14).
+  if (dinners === null && meals !== null && breakfasts !== null && lunches !== null && meals - breakfasts - lunches >= 0)
+    dinners = meals - breakfasts - lunches;
+  // The trip's name and place sit under "EUROPE | Paris" (a guess the owner
+  // checks; often the screenshot leaves them out).
+  const lines = t.split(/\n/).map(x => x.trim()).filter(Boolean);
+  const placeAt = lines.findIndex(x => /^(EUROPE|ASIA|AFRICA|NORTH AMERICA|SOUTH AMERICA|CENTRAL AMERICA|OCEANIA|AUSTRALIA|ANTARCTICA|CARIBBEAN|MIDDLE EAST|USA|UNITED STATES|CANADA|MEXICO)\s*\|\s*\S/i.test(x));
+  const destination = placeAt >= 0 ? lines[placeAt].split("|")[1].replace(/[^A-Za-zÀ-ÿ' &.-]+$/, "").replace(/,\s*\w?$/, "").trim() || null : null;
+  const name = placeAt >= 0 && lines[placeAt + 1] && !/^[-—–\s]*$/.test(lines[placeAt + 1]) ? lines[placeAt + 1]
+    : placeAt >= 0 && lines[placeAt + 2] ? lines[placeAt + 2] : null;
+  const nightsFromUrl = n(/(\d{1,2})-night/i);
   const tripType = ADVENTURE_TYPES.find(x => new RegExp(`\\b${x.replace(/ /g, "\\s+")}\\b`, "i").test(flat)) || null;
   const highlights = [];
   const hre = /(?:^|[«•*+·]\s*)([A-Z][A-Za-z'’ ,&-]{3,70}?):\s/gm;
@@ -797,7 +809,8 @@ export function readAdventure(text) {
     if (!highlights.includes(x)) highlights.push(x);
   }
   return {
-    days: n(/(\d{1,2})\s*DAYS?\b/i), nights: n(/(\d{1,2})\s*NIGHTS?\b/i),
+    days: n(/(\d{1,2})\s*DAYS?\b/i), nights: n(/(\d{1,2})\s*NIGHTS?\b/i) ?? nightsFromUrl,
+    name: name && /^[A-Z][A-Za-z'’ :&-]{2,60}$/.test(name) ? name : null, destination,
     price: pm ? Number(pm[2].replace(/,/g, "")) : null, currency: pm ? curOf(pm[1]) : "USD",
     perPerson: /\/?\s*\[?\s*Person\b|per\s+person/i.test(flat),
     tripType, meals, breakfasts, lunches, dinners,
@@ -1283,6 +1296,34 @@ export function readShipPage(text){
  * A single date ("Pair this departure with the June 3, 2027 Rhône River
  * Cruise") is never a departure: only a range is. Pure. */
 const ABD_MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+/**
+ * Put prices back together that OCR split into pieces. On the owner's Paris
+ * Rates & Dates screenshot (2026-11-14, read at full width) "$2,999" came back
+ * as "$2" "99" "9" and "$3,419" as "$3,41" "9": every adult price was lost
+ * and one child price read $341. A "$" word followed, close on the same
+ * line, by words of only digits and commas is one price. Pure.
+ */
+export function joinPriceFragments(words) {
+  const out = [];
+  for (const ln of wordLines(words || [])) {
+    const ws = ln.words;
+    for (let i = 0; i < ws.length; i++) {
+      const w = ws[i];
+      const t = String(w.text).trim().replace(/^[©@]/, "$");
+      if (!/^\$[\d,]*$/.test(t)) { out.push(w); continue; }
+      let text = t, last = w, j = i + 1;
+      while (j < ws.length && /^[\d,]+$/.test(String(ws[j].text).trim())
+        && ws[j].x0 - last.x1 < Math.max(8, (w.y1 - w.y0) * 1.5)
+        && text.replace(/\D/g, "").length < 6) {
+        text += String(ws[j].text).trim(); last = ws[j]; j++;
+      }
+      out.push({ ...w, text, x1: last.x1 });
+      i = j - 1;
+    }
+  }
+  return out;
+}
+
 export function readAdventureDates(words) {
   const lines = wordLines(words || []);
   const join = (ln) => ln.words.map(w => w.text).join(" ").replace(/(\d),(\d{4})/g, "$1, $2");
@@ -1309,7 +1350,7 @@ export function readAdventureDates(words) {
     rows.push({ y: ln.cy, start, end, adultOnly: /adult\s+exclusive/i.test(join(ln)), prices: [] });
   }
   if (!rows.length) return { departures: [], childMaxAge: childMax, adultMinAge: adultMin, occupancy: null };
-  for (const w of words || []) {
+  for (const w of joinPriceFragments(words)) {
     const m = /^\$?([\d,]{3,7})(?:\.\d\d)?$/.exec(w.text.replace(/^[©@]/, "$"));
     if (!m || !/^\$/.test(w.text.replace(/^[©@]/, "$"))) continue;
     const v = Number(m[1].replace(/,/g, ""));
