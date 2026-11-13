@@ -80,10 +80,11 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     const prevLive = process.env.ROAD_MILES_LIVE;
     process.env.ROAD_MILES_LIVE = "false";
     try {
-      for (const [from, month] of [["RDU", "2027-04"], ["ATL", "2027-04"]] as const) {
+      for (const [from, month, kids] of [["RDU", "2027-04", []], ["RDU", "2027-04", [8, 11]], ["ATL", "2027-04", [8, 11]]] as const) {
         const o = ORIGIN_BY_IATA.get(from);
         if (!o) continue;
-        const res = priceCruises({ rows, party: { adults: 2, childAges: [] }, origin: { iata: o.iata, lat: o.lat, lon: o.lon },
+        out.push(`(party: 2 adults${kids.length ? ` + ${kids.length} children` : ""})`);
+        const res = priceCruises({ rows, party: { adults: 2, childAges: [...kids] }, origin: { iata: o.iata, lat: o.lat, lon: o.lon },
           today, month, rates: await gratuityRates(db), flight: await cruiseFlightLookup(db, from, today),
           drive: await cruiseDriveLookup(db, { lat: o.lat, lon: o.lon }) });
         out.push(`${from} ${month}, 2 adults: ${res.priced.length} priced, ${res.holes.length} hole(s)`);
