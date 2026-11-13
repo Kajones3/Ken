@@ -47,6 +47,8 @@ export interface AdventurePage {
   tripType: string | null; meals: number | null; breakfasts: number | null; lunches: number | null;
   dinners: number | null; minAge: number | null; suggestedAge: number | null; adultExclusiveAge: number | null;
   highlights: string[]; text: string;
+  /** Guessed from the "EUROPE | Paris" line and the title under it; the owner checks. */
+  name: string | null; destination: string | null;
 }
 export const ADVENTURE_TYPES: string[];
 export function readAdventure(text: string): AdventurePage;
@@ -76,4 +78,5 @@ export function readShipPage(text: string): ShipPageItem[];
 
 /** Adventures by Disney "Rates & Dates": one row per departure. */
 export interface AdventureDeparture { start: string; end: string; adult: number | null; child: number | null; adultOnly: boolean }
+export function joinPriceFragments(words: Word[]): Word[];
 export function readAdventureDates(words: Word[]): { departures: AdventureDeparture[]; childMaxAge: number | null; adultMinAge: number | null; occupancy: "double" | null };

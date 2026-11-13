@@ -492,6 +492,75 @@ export async function listAdventures(db: Db, limit = 1000): Promise<AdventureSig
     };
   });
 }
+/**
+ * Corrects one saved Adventures by Disney price (owner, 2026-11-14: "I need to
+ * be able to edit the adventures by Disney"). Same rule as cruises: a fix for
+ * a row saved wrong; a newly seen price is still a new row. Re-checked whole.
+ */
+export async function updateAdventure(db: Db, id: string, input: AdventureInput, today: string):
+  Promise<{ ok: true } | { ok: false; reason: string; notFound?: boolean }> {
+  const cur = (await listAdventures(db, 100000)).find((a) => a.id === id);
+  if (!cur) return { ok: false, reason: "That saved price isn't there any more.", notFound: true };
+  const { id: _id, savedAt: _s, priceUsd: _p, ...rest } = cur;
+  const merged: Record<string, unknown> = { ...rest, destination: cur.destination ?? "", tripType: cur.tripType ?? "",
+    departureDate: cur.departureDate ?? "", returnDate: cur.returnDate ?? "", note: cur.note ?? "" };
+  for (const [k, v] of Object.entries(input ?? {})) if (k in merged) merged[k] = v;
+  const v = validateAdventure(merged as AdventureInput, today);
+  if (!v.ok) return v;
+  const r = v.value;
+  await db.query(
+    `update adventure_sightings set seen_on=$2, trip_name=$3, destination=$4, days=$5, nights=$6, departure_date=$7,
+       price=$8, child_price=$9, currency=$10, price_usd=$11, trip_type=$12, meals=$13, breakfasts=$14, lunches=$15,
+       dinners=$16, min_age=$17, suggested_age=$18, adult_exclusive_age=$19, highlights=$20, note=$21,
+       return_date=$22, adult_only=$23, child_max_age=$24
+     where id=$1`,
+    [id, r.seenOn, r.tripName, r.destination, r.days, r.nights, r.departureDate, r.price, r.childPrice, r.currency,
+      r.priceUsd, r.tripType, r.meals, r.breakfasts, r.lunches, r.dinners, r.minAge, r.suggestedAge,
+      r.adultExclusiveAge, JSON.stringify(r.highlights), r.note, r.returnDate, r.adultOnly, r.childMaxAge]);
+  return { ok: true };
+}
+
+/**
+ * Facts about a whole trip, set on every row saved under its name (the Rates &
+ * Dates table has no meals or ages; the trip page has no dates). Blank = keep;
+ * "-" clears. Highlights: one per line, blank keeps. Can rename the trip.
+ */
+export async function updateAdventureDetails(db: Db, input: Record<string, unknown>):
+  Promise<{ ok: true; changed: number } | { ok: false; reason: string }> {
+  const name = text(input.tripName, 160);
+  if (!name) return { ok: false, reason: "Which trip? Its name is missing." };
+  const sets: string[] = [], vals: unknown[] = [name];
+  const put = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+  const blank = (raw: unknown) => raw === undefined || raw === null || String(raw).trim() === "";
+  for (const [k, col, max] of [["destination", "destination", 80], ["tripType", "trip_type", 40]] as const) {
+    const raw = input[k];
+    if (!blank(raw)) put(col, String(raw).trim() === "-" ? null : text(raw, max));
+  }
+  for (const [k, col, lo, hi, label] of [["days", "days", 1, 60, "Days"], ["nights", "nights", 0, 60, "Nights"],
+    ["meals", "meals", 0, 200, "Meals"], ["breakfasts", "breakfasts", 0, 60, "Breakfasts"],
+    ["lunches", "lunches", 0, 60, "Lunches"], ["dinners", "dinners", 0, 60, "Dinners"],
+    ["minAge", "min_age", 0, 25, "Minimum age"], ["suggestedAge", "suggested_age", 0, 25, "Suggested age"],
+    ["adultExclusiveAge", "adult_exclusive_age", 0, 25, "Adults-only age"]] as const) {
+    const raw = input[k];
+    if (blank(raw)) continue;
+    if (String(raw).trim() === "-") { put(col, null); continue; }
+    const n = int(raw, lo, hi);
+    if (n === "bad" || n === null) return { ok: false, reason: `${label} should be a whole number from ${lo} to ${hi}.` };
+    put(col, n);
+  }
+  if (!blank(input.highlights)) {
+    const list = String(input.highlights).trim() === "-" ? [] : String(input.highlights).split(/\n|;/)
+      .map((h) => text(h, 120)).filter((h): h is string => !!h).slice(0, 12);
+    put("highlights", JSON.stringify(list));
+  }
+  const newName = text(input.newTripName, 160);
+  if (newName && newName !== name) put("trip_name", newName);
+  if (!sets.length) return { ok: false, reason: "Nothing to change." };
+  const r = await db.query(`update adventure_sightings set ${sets.join(", ")} where trip_name = $1 returning id`, vals);
+  if (!r.rows.length) return { ok: false, reason: "No saved prices under that name." };
+  return { ok: true, changed: r.rows.length };
+}
+
 export async function deleteAdventure(db: Db, id: string): Promise<boolean> {
   return (await db.query(`delete from adventure_sightings where id = $1 returning id`, [id])).rows.length > 0;
 }

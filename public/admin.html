@@ -3238,12 +3238,14 @@ async function readAdventureShot(file){
   } catch(err){ status.textContent = err && err.message ? err.message : "Couldn't read that picture."; return; }
   $("#avText").textContent = text; $("#avTextBox").classList.remove("hidden");
   const a = R.readAdventure(text);
-  const name = $("#avName").value;
-  clearAvForm(); $("#avName").value = name;
+  const name = $("#avName").value, dest = $("#avDest").value;
+  clearAvForm(); $("#avName").value = name; $("#avDest").value = dest;
   const put = (id, v) => { if(v === null || v === undefined || v === "") return; $("#" + id).value = v; $("#" + id).classList.add("filled"); };
   put("avDays", a.days); put("avNights", a.nights); put("avPrice", a.price); put("avCur", a.currency);
   put("avType", a.tripType); put("avMeals", a.meals); put("avB", a.breakfasts); put("avL", a.lunches); put("avD", a.dinners);
   put("avMin", a.minAge); put("avSug", a.suggestedAge); put("avAdult", a.adultExclusiveAge);
+  if(!name && a.name) put("avName", a.name);
+  if(!dest && a.destination) put("avDest", a.destination);
   if(a.highlights.length) put("avHigh", a.highlights.join("\n"));
   put("avSeen", todayLocal());
   avRaw = text;
@@ -3286,7 +3288,7 @@ function showAdventureDates(rd, rawText){
         departureDate: start, returnDate: end || null, days: nights === null ? null : nights + 1, nights,
         price: cleanAmt(tr.querySelector(".avdAdult").value), childPrice: cleanAmt(tr.querySelector(".avdChild").value),
         adultOnly: tr.querySelector(".avdOnly").checked, childMaxAge: rd.childMaxAge, currency: "USD",
-        seenOn: $("#avSeen").value || todayLocal(), note: $("#avNote").value || null, rawText };
+        seenOn: $("#avSeen").value || todayLocal(), note: $("#avNote").value || null, rawText, ...tripFacts() };
     });
     if(!departures.length){ said.className = "said bad"; said.textContent = "Nothing ticked."; return; }
     const r = await fetch("/api/admin/adventures", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ departures }) });
@@ -3308,20 +3310,95 @@ $("#avSave").addEventListener("click", async () => {
   said.className = "said ok"; said.textContent = `Saved ${body.tripName}.`;
   clearAvForm(); renderAdventures(b.adventures);
 });
+/* The trip page's facts in the form (meals, ages, highlights), so a Rates &
+   Dates table read after it saves them on every departure. */
+function tripFacts(){
+  const o = {};
+  for(const [id, k] of [["avMeals","meals"],["avB","breakfasts"],["avL","lunches"],["avD","dinners"],["avMin","minAge"],["avSug","suggestedAge"],["avAdult","adultExclusiveAge"]]){
+    const v = $("#" + id).value; if(v !== "") o[k] = v;
+  }
+  const h = $("#avHigh").value.split("\n").map(x => x.trim()).filter(Boolean);
+  if(h.length) o.highlights = h;
+  return o;
+}
+let avSaved = [];
 function renderAdventures(rows){
+  avSaved = rows || [];
   if(!rows || !rows.length){ $("#avList").innerHTML = `<p class="count">Nothing kept yet.</p>`; return; }
   const by = new Map();
   for(const r of rows){ if(!by.has(r.tripName)) by.set(r.tripName, []); by.get(r.tripName).push(r); }
-  $("#avList").innerHTML = [...by.entries()].map(([name, list]) => { const a = list[0]; return `<div class="calcard">
-    <b>${esc(name)}</b> <span class="count">${[a.destination, a.days ? a.days + " days" : "", a.tripType,
-      a.meals !== null ? a.meals + " meals" : "", a.minAge !== null ? "ages " + a.minAge + "+" : ""].filter(Boolean).map(esc).join(" · ")}</span>
-    ${a.highlights.length ? `<div class="count" style="margin-top:4px">${a.highlights.map(esc).join(" · ")}</div>` : ""}
+  $("#avList").innerHTML = [...by.entries()].map(([name, list]) => { const a = list[0];
+    const pick = k => { const r = list.find(x => x[k] !== null && x[k] !== undefined && x[k] !== ""); return r ? r[k] : ""; };
+    const hl = (list.find(x => x.highlights && x.highlights.length) || { highlights: [] }).highlights;
+    const num = (k, label, w) => `<label>${label}<br><input name="${k}" value="${esc(String(pick(k)))}" inputmode="numeric" style="width:${w || 4}em"></label>`;
+    return `<details class="calcard"><summary style="cursor:pointer">
+    <b>${esc(name)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept · ${[a.destination, a.days ? a.days + " days" : "", a.tripType,
+      a.meals !== null ? a.meals + " meals" : "", a.minAge !== null ? "ages " + a.minAge + "+" : ""].filter(Boolean).map(esc).join(" · ")}</span></summary>
+    <form data-avfacts="${esc(name)}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:8px 0">
+      <label>Name<br><input name="newTripName" value="${esc(name)}" size="30"></label>
+      <label>Where<br><input name="destination" value="${esc(String(pick("destination")))}" size="14"></label>
+      <label>Trip type<br><input name="tripType" value="${esc(String(pick("tripType")))}" size="12"></label>
+      ${num("days","Days")}${num("nights","Nights")}${num("meals","Meals")}${num("breakfasts","Breakfasts")}${num("lunches","Lunches")}${num("dinners","Dinners")}
+      ${num("minAge","Min age")}${num("suggestedAge","Suggested")}${num("adultExclusiveAge","Adults-only")}
+      <label style="flex:1 1 100%">Highlights, one per line<br><textarea name="highlights" rows="3" style="width:100%">${esc(hl.join("\n"))}</textarea></label>
+      <button class="btn">Save trip details</button> <span class="said"></span>
+      <small class="count" style="flex-basis:100%">Applies to every price saved under this trip. Leave a box blank to keep what's there; type a dash (-) to clear it.</small>
+    </form>
     <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Departs</th><th class="n">Per person</th><th class="n">Child</th><th></th></tr></thead><tbody>
     ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.departureDate ? esc(fmtD(r.departureDate)) + (r.returnDate ? " to " + esc(fmtD(r.returnDate)) : "") : "from price"}</td>
       <td class="n">${cash(r.price, r.currency)}</td><td class="n">${r.adultOnly ? "Adult Exclusive" : r.childPrice === null ? "" : cash(r.childPrice, r.currency)}</td>
-      <td class="n"><button class="btn" data-avdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
-    </tbody></table></div></div>`; }).join("");
+      <td class="n" style="white-space:nowrap"><button class="btn" data-avedit="${r.id}" title="Fix a price saved wrong">Edit</button> <button class="btn" data-avdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
+    </tbody></table></div></details>`; }).join("");
 }
+/* Editing (owner, 2026-11-14: "I need to be able to edit the adventures by
+   Disney"): a whole trip's facts, or one saved price. */
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("[data-avfacts]"); if(!f) return;
+  e.preventDefault();
+  const said = f.querySelector(".said"), fd = new FormData(f);
+  const body = { tripName: f.dataset.avfacts };
+  for(const k of ["newTripName","destination","tripType","days","nights","meals","breakfasts","lunches","dinners","minAge","suggestedAge","adultExclusiveAge","highlights"])
+    body[k] = String(fd.get(k) || "").trim();
+  said.className = "said"; said.textContent = "Saving...";
+  const r = await fetch("/api/admin/adventures/details", { method:"PUT", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save that."; return; }
+  renderAdventures(b.adventures);
+});
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-avedit]"); if(!d) return;
+  const r = avSaved.find(x => x.id === d.dataset.avedit); if(!r) return;
+  const tr = d.closest("tr");
+  if(tr.nextElementSibling && tr.nextElementSibling.classList.contains("avedrow")){ tr.nextElementSibling.remove(); return; }
+  const v = x => x === null || x === undefined ? "" : esc(String(x));
+  const ed = document.createElement("tr");
+  ed.className = "avedrow";
+  ed.innerHTML = `<td colspan="5"><form data-avform="${r.id}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    <label>Seen<br><input type="date" name="seenOn" value="${v(r.seenOn)}"></label>
+    <label>Departs<br><input type="date" name="departureDate" value="${v(r.departureDate)}"></label>
+    <label>Last day<br><input type="date" name="returnDate" value="${v(r.returnDate)}"></label>
+    <label>Adult, per person<br><input name="price" value="${v(r.price)}" style="width:6em"></label>
+    <label>Child, per person<br><input name="childPrice" value="${v(r.childPrice)}" style="width:6em"></label>
+    <label>Child up to age<br><input name="childMaxAge" value="${v(r.childMaxAge)}" style="width:4em"></label>
+    <label>Currency<br><select name="currency">${["USD","GBP","EUR"].map(c => `<option${r.currency === c ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+    <label><input type="checkbox" name="adultOnly"${r.adultOnly ? " checked" : ""}> Adult Exclusive</label>
+    <button class="btn">Save</button> <span class="said"></span></form></td>`;
+  tr.after(ed);
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("[data-avform]"); if(!f) return;
+  e.preventDefault();
+  const said = f.querySelector(".said"), fd = new FormData(f);
+  const body = {};
+  for(const k of ["seenOn","departureDate","returnDate","price","childPrice","childMaxAge","currency"]) body[k] = String(fd.get(k) ?? "").trim();
+  body.adultOnly = fd.get("adultOnly") === "on";
+  if(body.adultOnly) body.childPrice = "";
+  said.className = "said"; said.textContent = "Saving...";
+  const r = await fetch("/api/admin/adventures/" + f.dataset.avform, { method:"PUT", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save that."; return; }
+  renderAdventures(b.adventures);
+});
 async function loadAdventures(){
   const r = await fetch("/api/admin/adventures"); if(r.ok) renderAdventures((await r.json()).adventures);
 }

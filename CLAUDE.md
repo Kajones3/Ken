@@ -119,6 +119,35 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, sixth: ABD editing; the ABD readers fixed on the owner's real Paris screenshots
+
+Owner: "I need to be able to edit the adventures by Disney. The screen Reader
+didn't work super great on this. I need it to be able to read these really
+well." (Paris Escape trip page + Rates & Dates, 2026-11-13 screenshots.)
+- **Rates & Dates: prices split into pieces.** At full width (2,000px, no
+  enlarging) OCR read "$2,999" as "$2" "99" "9" and "$3,419" as "$3,41" "9":
+  every ADULT price was lost and June 15's child read $341.
+  `joinPriceFragments()` (screenshot-reader.js) joins a "$" word with the
+  digit/comma words right after it on the same line. Real-OCR fixture
+  `src/testdata/abd-dates-paris-2026-11-13-full.words.json` now reads 5/5.
+- **Trip page:** dinner wrapped onto the next line ("1 Lunch, 1" / "Dinner"),
+  so dinners = meals - breakfasts - lunches; nights from the address bar's
+  "2-night"; the trip's name and place guessed from "EUROPE | Paris" and the
+  title under it (`readAdventure().name/.destination`, filled only when the
+  boxes are empty). Fixture `abd-page-paris-2026-11-13.ocr.txt`.
+- **Read the trip page FIRST, then Rates & Dates:** the departures now save
+  with the trip page's meals, ages and highlights from the form (`tripFacts()`).
+- **Editing in /admin -> Adventures by Disney** (like cruises): each trip is a
+  folded card with "Save trip details" (name, where, type, days, nights,
+  meals, ages, highlights -> every row of that trip; blank keeps, "-" clears;
+  PUT /api/admin/adventures/details, `updateAdventureDetails()`), and each
+  saved price has Edit (PUT /api/admin/adventures/:id, `updateAdventure()`,
+  re-validated whole; Adult Exclusive still refuses a child price).
+- Checked in Chromium on the owner's two real screenshots: every field and
+  all 5 departures right, saved, edited. 986 tests. Needs a Render redeploy.
+  The live database still holds only the two UNDATED ABD rows (Croatia,
+  Thailand; coverage run 43463299382): the owner saves Paris on live /admin.
+
 ## START HERE — 2026-11-14, fifth: cruise/ABD pages built like park pages; port weather; "close to home" fixed
 
 Owner: "Why aren't these being built the same visual way the parks ones are?
