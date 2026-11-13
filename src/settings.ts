@@ -305,6 +305,21 @@ export const SETTINGS: SettingDef[] = [
   // Disney cruise gratuities (cruisePricing.ts prices Planner Pro cruises
   // with these). Disney gratuity page, confirmed by the owner 2026-11-13;
   // raised in 2025 from $14.50 / $23.50.
+  // Parking at the cruise ports, for someone driving (owner, 2026-11-14:
+  // "most people drive for cruises"). Official for Port Canaveral ($20/day +
+  // tax, port's page, 2025-10-01) and Port Everglades ($25 max daily,
+  // porteverglades.net). Galveston, San Diego and Vancouver publish none
+  // (travel sites disagree), so 0 = not set and driving there isn't offered.
+  money("cruise.parking.canaveral", "Cruise parking, Port Canaveral, per day", "Cruises", 20, 0, 200,
+    "Port Canaveral's own parking page: $20 a day plus tax, arrival and departure days included (2025-10-01). Charged for nights + 1 days."),
+  money("cruise.parking.fll", "Cruise parking, Port Everglades (Fort Lauderdale), per day", "Cruises", 25, 0, 200,
+    "porteverglades.net: $25 maximum daily rate. Charged for nights + 1 days."),
+  money("cruise.parking.galveston", "Cruise parking, Galveston, per day (0 = not set)", "Cruises", 0, 0, 200,
+    "The port shows its prices only inside its booking flow; travel sites say $9 to $35 a day. Until you type one, nobody is offered driving to Galveston."),
+  money("cruise.parking.sandiego", "Cruise parking, San Diego, per day (0 = not set)", "Cruises", 0, 0, 200,
+    "No parking at the terminal; nearby lots run about $6 to $25 a day (travel sites). Until you type one, nobody is offered driving to San Diego."),
+  money("cruise.parking.vancouver", "Cruise parking, Vancouver (Canada Place), per day in US dollars (0 = not set)", "Cruises", 0, 0, 200,
+    "Travel sites say C$23 a day booked ahead (WestPark), up to C$74 elsewhere. Type it in US dollars. Until you do, nobody is offered driving to Vancouver."),
   money("cruise.gratuityPerNight", "Disney cruise gratuities, per person per night", "Cruises", 16, 0, 100,
     "Disney's recommended gratuity for a regular stateroom, charged for every guest, children and babies too. "
     + "Added to each saved cruise as a \"with gratuities\" estimate in /admin -> Cruises."),

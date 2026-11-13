@@ -18,6 +18,7 @@ import { MockProvider } from "../providers/mock.js";
 import { TravelpayoutsProvider } from "../providers/travelpayouts.js";
 import { SerpApiHotelProvider } from "../providers/serpapi.js";
 import { recordHotelSamples, recordHotelSearches } from "../hotelScoreboard.js";
+import { portRouteWants } from "../cruiseData.js";
 import { flushRaw } from "../rawResponses.js";
 import { recordFlightObservations } from "../observations.js";
 import type { FlightQuote, HotelQuote, Provider } from "../providers/types.js";
@@ -370,7 +371,9 @@ export async function runRefresh(db: Db, opts: RefreshOptions = {}) {
   if (!opts.provider && roadMilesLive()) {
     try {
       const wants = [...ORIGINS, ...EXTRA_ORIGINS].flatMap((o) => RESORTS.filter((r) => r.region === "dom")
-        .map((r) => ({ from: { lat: o.lat, lon: o.lon }, to: { lat: r.lat, lon: r.lon }, resortId: r.id })));
+        .map((r) => ({ from: { lat: o.lat, lon: o.lon }, to: { lat: r.lat, lon: r.lon }, resortId: r.id })))
+        // And to the cruise ports within a day's drive (cruiseData.ts).
+        .concat(portRouteWants([...ORIGINS, ...EXTRA_ORIGINS]));
       const added = await ensureRoadMiles(db, wants, osrmMiles,
         { straightMiles: (w) => haversineMiles(w.from.lat, w.from.lon, w.to.lat, w.to.lon) });
       roadNote = ` · road miles: ${added} new route(s) from the map`;

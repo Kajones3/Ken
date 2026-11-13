@@ -119,6 +119,43 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14: driving to cruise ports, pixie dust loader, "Read it" fixed
+
+Owner: "I want people in Houston to be able to see a cruise AND price flying
+to WDW or DL ... most people drive for cruises, we should have a 'I'm
+driving' thing"; a loader on the slow trip page ("pixie dust spinning around
+that star"); "Read it" didn't work.
+- **Driving to a port** (cruisePricing.ts `CruiseTravel`, cruiseData.ts
+  `cruiseDriveLookup`): each sailing carries `travel.fly` and/or
+  `travel.drive`; `base` = fare + gratuities + port adventures. Drive = gas
+  (25 mpg, today's gas price) + IRS wear and tear (honors "Include wear &
+  tear?", `driveWearAndTear=0`) both ways + parking x (nights + 1). Offered
+  within `MAX_PORT_DRIVE_MILES` (500 road miles, one day) and only where the
+  port has a parking price. Too close to fly (< 100 miles) = drive only; no
+  fare yet but drivable = drive. The parks are unaffected: a Houston member
+  sees Galveston by car AND flies to WDW/Disneyland as before.
+- **Parking = /admin settings** `cruise.parking.<port>`: Canaveral 20 and
+  Port Everglades 25 (official); Galveston, San Diego, Vancouver **0 = not
+  set** (no official figure anywhere, travel sites disagree), so nobody drives
+  there until the owner types one. Road miles: OSRM to each port's terminal
+  (`HomePort.terminal`), kept in drive_routes as `port-<id>`; the nightly
+  refresh asks for every home airport within 500 miles, a search asks for its
+  own (5 s cap); else straight line x 1.25 like the parks.
+- **Card:** "I'm driving" checkbox when both are priced (`cruiseModes`,
+  this visit); "Priced driving: <port> is close to home" when drive-only.
+  The free count uses the cheaper way there.
+- **Pixie dust loader** (`pixieSvg()` / `pixieLoader()` in prototype.html):
+  the tab icon's star with a trail of dust circling its tilted orbit (SVG
+  animateMotion; still with reduced motion). Shown on the trip page after
+  150 ms while hotel categories, deals and best months load, and in the
+  "Updating prices" note.
+- **"Read it" fix:** Disney's page starts with a menu (Dining, Entertainment,
+  Adult Spaces, Kids Clubs, Staterooms, Deck Plans) and the reader took that
+  "Deck Plans" as the end of the page: found nothing. Now it stops only after
+  a paragraph; errors show in the status line. Owner's full Wish paste: 18
+  found.
+- ABD: what's needed was asked of the owner (conversation of 2026-11-14).
+
 ## START HERE — 2026-11-13, later: CRUISES PRICED for Planner Pro; Ships page
 
 Owner: "DO NOT GUESS. I need to know where we have data holes"; cruises
@@ -143,7 +180,7 @@ page to seed and edit what's on board each ship (facts, our own words).
   the port airport on sailing day (seats = adults + kids 2+): bought fare
   within 3 days, else that month's bought median, else (MCO only) the fare
   model; transfers 2 x per guest x every guest; one median port adventure
-  per guest per port. Origin within 100 miles of the port = driving = hole.
+  per guest per port. (Driving to the port: see 2026-11-14 above.)
   No night-before hotel (Disney allows same-day arrival).
 - **Search** GET `/api/cruises` (server.ts `cruiseSearch`): Planner Pro gets
   priced sailings in the searched month + `onBoard` (ship items), and the

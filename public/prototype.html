@@ -1114,6 +1114,19 @@ body.has-results .searchside #run{width:100%}
   .searchmain #resBrief, .searchmain #volatilityNote{order:2; margin-top:18px}
 }
 
+/* ---------- the pixie dust loader (owner, 2026-11-14): the tab icon's star,
+   with a trail of pixie dust circling it on the icon's tilted orbit ---------- */
+.pixieload{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:56px 16px; color:var(--ink-2); text-align:center}
+.pixieload p{margin:0; font-size:15px; font-weight:600}
+.pixie{display:block; overflow:visible}
+.pixie .porbit{fill:none; stroke:currentColor; stroke-width:2; stroke-dasharray:3.5 4; opacity:.45}
+.pixie .pstar{fill:var(--accent-line, #E8B23E); transform-origin:32px 32px; animation:pxtwinkle 1.6s ease-in-out infinite}
+.pixie .pdust{fill:var(--accent-line, #E8B23E)}
+.pixie .pdust.c{fill:var(--ink)}
+@keyframes pxtwinkle{0%,100%{transform:scale(1) rotate(0deg)} 50%{transform:scale(.82) rotate(12deg)}}
+.updatingnote .pixie{display:inline-block; vertical-align:middle; margin-right:8px}
+@media (prefers-reduced-motion: reduce){ .pixie .pstar{animation:none} }
+
 /* ---------- Disney cruises (Planner Pro, 2026-11-13) ---------- */
 .cruisepick{display:flex; align-items:center; gap:8px; margin:10px 0 0; font-size:14.5px; font-weight:600; cursor:pointer}
 .cruisepick input{width:18px; height:18px; accent-color:var(--accent)}
@@ -1128,6 +1141,9 @@ body.has-results .searchside #run{width:100%}
 .cdet li{margin:3px 0}
 .cdet li b{color:var(--ink)}
 .tcard.cruiseteaser{border-style:dashed}
+.cdrive{display:inline-flex; align-items:center; gap:8px; margin:10px 0 0; font-size:14px; font-weight:600; color:var(--ink-2)}
+label.cdrive{cursor:pointer}
+.cdrive input{width:18px; height:18px; accent-color:var(--accent)}
 @media (max-width:640px){ .tbadge .shipic{width:56px; height:56px} }
 
 /* ---------- trip cards ---------- */
@@ -1905,7 +1921,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     </div>
   </details>
 
-  <p class="updatingnote" id="updatingNote" hidden role="status"><span class="spinner"></span>Updating prices for your new search…</p>
+  <p class="updatingnote" id="updatingNote" hidden role="status"><span class="pxslot"></span>Updating prices for your new search…</p>
   <div class="board" id="board"></div>
   <div class="tablewrap" id="tablewrap" hidden></div>
   </div><!-- /searchmain -->
@@ -3003,6 +3019,8 @@ function setSearchBusy(busy){
   document.body.classList.toggle("updating", busy && document.body.classList.contains("has-results"));
   const st = $("#updatingNote");
   if(st) st.hidden = !(busy && document.body.classList.contains("has-results"));
+  const slot = st && st.querySelector(".pxslot");
+  if(slot && busy && !slot.innerHTML) slot.innerHTML = pixieSvg(30);
 }
 
 async function runSearch(keepId){
@@ -3056,6 +3074,26 @@ async function recompute(changedResortId){
   loadCruises();
 }
 
+/* ============================ pixie dust loader ============================ */
+/* The tab icon (a gold star on a dashed, tilted orbit) with pixie dust
+   chasing round the orbit: a head and a fading trail. SVG animateMotion, so
+   no library; with reduced motion the dust sits still. */
+const PX_REDUCE = (() => { try { return matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; } })();
+function pixieSvg(size = 72){
+  const orbit = "M7,32 a25,10 0 1,0 50,0 a25,10 0 1,0 -50,0";
+  const dust = Array.from({ length: 9 }, (_, i) => {
+    const r = (3.2 - i * 0.3).toFixed(2), op = (1 - i * 0.1).toFixed(2), cls = i % 3 === 1 ? "pdust c" : "pdust";
+    if(PX_REDUCE) return i ? "" : `<circle class="${cls}" cx="57" cy="32" r="${r}"/>`;
+    return `<circle class="${cls}" r="${r}" opacity="${op}"><animateMotion dur="1.6s" repeatCount="indefinite" begin="${(-i * 0.07).toFixed(2)}s" path="${orbit}"/></circle>`;
+  }).join("");
+  return `<svg class="pixie" width="${size}" height="${size}" viewBox="0 0 64 64" aria-hidden="true">
+    <g transform="rotate(-24 32 32)"><path class="porbit" d="${orbit}"/>${dust}</g>
+    <path class="pstar" d="M32 13L36.56 27.44L51 32L36.56 36.56L32 51L27.44 36.56L13 32L27.44 27.44Z"/></svg>`;
+}
+function pixieLoader(label){
+  return `<div class="pixieload" role="status">${pixieSvg(84)}<p>${esc(label)}</p></div>`;
+}
+
 /* ============================ Disney cruises ============================ */
 /* Owner, 2026-11-13: "consider cruises" makes select Disney cruises part of a
  * Planner Pro member's results, like the parks. Everyone else is told only
@@ -3075,6 +3113,8 @@ async function loadCruises(){
   cruiseState = { pro:false, cruises:[], count:0, under:null };
   if(!results.length) return;
   const q = { ...tripQuery(), month: params.month };
+  // The same "Include wear & tear on your car?" answer as a drive to the parks.
+  if(params.driveWearAndTear === false) q.driveWearAndTear = "0";
   if(!session.pro){
     const under = budgetValue() || cheapestShown();
     if(!(under > 0)) return;
@@ -3092,16 +3132,39 @@ const SHIP_SVG = `<svg class="shipic" viewBox="0 0 76 76" aria-hidden="true"><ci
   <path d="M34 27v-5h8v5" fill="currentColor"/><path d="M14 60c4 0 4-2 8-2s4 2 8 2 4-2 8-2 4 2 8 2 4-2 8-2 4 2 8 2" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 const CABIN_NAME = { inside:"Inside stateroom", oceanview:"Oceanview stateroom", verandah:"Verandah stateroom", concierge:"Concierge", suite:"Concierge" };
 function shortDate(iso){ const [y,m,d] = iso.split("-").map(Number); return MONTHS[m-1] + " " + d; }
+/* "I'm driving" on each cruise card (owner, 2026-11-14: "most people drive
+   for cruises"). Flying first unless the port is too close to fly; the
+   switch only shows when both are priced. Kept per sailing, this visit. */
+const cruiseModes = new Map();
+function cruiseMode(c){
+  const m = cruiseModes.get(c.id) || c.travel.default;
+  return c.travel[m] ? m : c.travel.default;
+}
+function cruiseTotal(c){ return c.base + c.travel[cruiseMode(c)].total; }
 function cruiseCardHtml(c){
-  const L = c.lines, tot = c.total || 1;
-  const segs = [["f3",L.fare],["f1",L.flights],["f2",L.gratuities],["f4",L.excursions + L.transfers]]
+  const mode = cruiseMode(c), T = c.travel, L = c.lines, tot = cruiseTotal(c) || 1;
+  const fly = mode === "fly" ? T.fly : null, drv = mode === "drive" ? T.drive : null;
+  const getThere = fly ? fly.total : drv.total;
+  const segs = [["f3",L.fare],["f1",getThere],["f2",L.gratuities],["f4",L.excursions]]
     .map(([k,v]) => `<span class="seg ${k}" style="width:${(100*v/tot).toFixed(1)}%"></span>`).join("");
-  const fareHow = c.flight.how === "bought" ? `a fare we found for ${shortDate(c.flight.date)}`
-    : c.flight.how === "bought_month" ? "the typical fare we found that month" : "the typical fare for that route";
   const adultsExc = c.excursions.filter(e => !e.privateIsland);
   const exc = c.excursions.map(e => e.privateIsland ? `${esc(e.port)} (Disney's island, no charge)`
     : `${esc(e.port)} (${usd(e.adult)} adult, ${usd(e.child)} age 3-9)`).join(", ");
   const ship = c.ship ? (/^disney /i.test(c.ship) ? c.ship : "Disney " + c.ship) : "";
+  let travelLines;
+  if(fly){
+    const f = fly.flight;
+    const fareHow = f.how === "bought" ? `a fare we found for ${shortDate(f.date)}`
+      : f.how === "bought_month" ? "the typical fare we found that month" : "the typical fare for that route";
+    travelLines = `<li><b>Flights ${usd(fly.flights)}:</b> ${esc(params.origin)} to ${esc(c.port.airport)} and back, ${usd(f.perSeat)} a seat, ${fareHow}${c.latestArrival ? `. Disney asks you to land by ${esc(c.latestArrival)} on sailing day` : ""}</li>
+        <li><b>Transfers ${usd(fly.transfers)}:</b> Disney's airport-to-ship transfer, ${usd(c.transfer.perGuest)} a guest each way (${esc(c.transfer.minutes)})</li>`;
+  } else {
+    travelLines = `<li><b>Driving ${usd(drv.gas + drv.wear)}:</b> ${drv.roundTripMiles.toLocaleString()} miles there and back: gas ${usd(drv.gas)}${drv.wear ? ` and wear on your car ${usd(drv.wear)} (the IRS mileage rate)` : ""}</li>
+        <li><b>Parking ${usd(drv.parking)}:</b> ${usd(drv.parkingPerDay)} a day at the port, ${drv.parkingDays} days</li>`;
+  }
+  const both = T.fly && T.drive;
+  const sw = both ? `<label class="cdrive"><input type="checkbox" data-cruisedrive="${esc(c.id)}"${mode === "drive" ? " checked" : ""}> I'm driving</label>`
+    : !T.fly ? `<p class="cdrive">Priced driving: ${esc(c.port.name)} is close to home</p>` : "";
   return `<li class="tcard cruise">
     <span class="tbadge">${SHIP_SVG}</span>
     <div class="tid">
@@ -3109,18 +3172,18 @@ function cruiseCardHtml(c){
       <h3>${esc(c.title)}</h3>
       <p class="tmeta">From ${esc(c.port.name)} · ${shortDate(c.sailDate)} to ${shortDate(c.sailEnd)} · ${c.nights} night${c.nights===1?"":"s"} · ${esc(CABIN_NAME[c.cabin] || c.cabin)}</p>
       <div class="cbar bar">${segs}</div>
+      ${sw}
       <details class="cdet"><summary>What's in this price</summary><ul>
         <li><b>Cruise fare ${usd(L.fare)}:</b> Disney's ${usd(c.perPersonFare)} a person for your party, taxes, fees and port expenses included</li>
         <li><b>Gratuities ${usd(L.gratuities)}:</b> Disney's ${usd(c.gratuityPerNight)} a guest a night, ${c.nights} nights, ${c.guests} guests</li>
-        <li><b>Flights ${usd(L.flights)}:</b> ${esc(params.origin)} to ${esc(c.port.airport)} and back, ${usd(c.flight.perSeat)} a seat, ${fareHow}${c.latestArrival ? `. Disney asks you to land by ${esc(c.latestArrival)} on sailing day` : ""}</li>
-        <li><b>Transfers ${usd(L.transfers)}:</b> Disney's airport-to-ship transfer, ${usd(c.transfer.perGuest)} a guest each way (${esc(c.transfer.minutes)})</li>
+        ${travelLines}
         <li><b>Port adventures ${usd(L.excursions)}:</b> ${adultsExc.length ? "one typical Disney port adventure a guest at each stop: " : ""}${exc}. Under 3 free</li>
       </ul></details>
       ${onBoardHtml(c, ship)}
     </div>
     <div class="ttot">
-      <span class="tnum">${usd(c.total)}</span>
-      <span class="tsub">for ${countWord(c.guests)} · ${usd(c.total / c.guests)} a person</span>
+      <span class="tnum">${usd(cruiseTotal(c))}</span>
+      <span class="tsub">for ${countWord(c.guests)} · ${usd(cruiseTotal(c) / c.guests)} a person</span>
       <a class="tview" href="https://disneycruise.disney.go.com/" target="_blank" rel="noopener">Disney Cruise Line &rarr;</a>
     </div>
   </li>`;
@@ -3398,7 +3461,7 @@ function renderBoard(){
   // Disney cruises (Planner Pro, switch on): cards beside the parks, in price
   // order on the price sort, after the parks on any other sort.
   const parkCards = shown.map(e => ({ total: e.item.ok ? e.item.price.total : Infinity, html: tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price") }));
-  const cruiseCards = (cruiseState.pro && withCruises ? cruiseState.cruises : []).map(c => ({ total: c.total, html: cruiseCardHtml(c) }));
+  const cruiseCards = (cruiseState.pro && withCruises ? cruiseState.cruises : []).map(c => ({ total: cruiseTotal(c), html: cruiseCardHtml(c) }));
   const cards = sortBy === "price"
     ? parkCards.concat(cruiseCards).sort((a, b) => a.total - b.total)
     : parkCards.concat(cruiseCards);
@@ -4061,11 +4124,16 @@ async function renderDetail(){
   // its checkbox visible so it can be unchecked. See the "your numbers"
   // panel below.
   const hotelWantedGlobally = p.stay !== "none";
+  // These three can take a moment: say so with the pixie dust (owner,
+  // 2026-11-14: "people will think something is wrong"). Not for a fast answer.
+  let waiting = true;
+  setTimeout(() => { if(waiting && token === detailToken) box.innerHTML = pixieLoader("Gathering every detail of your trip…"); }, 150);
   const [tierRows, promoList, yearGrid] = await Promise.all([
     noHotel ? Promise.resolve([null,null,null]) : Promise.all([0,1,2].map(t => hotelAtTier(item, t))),
     fetchPromosFor(item.resortId, x.start),
     loadYearGrid(),
   ]);
+  waiting = false;
   if(token !== detailToken) return;
 
   // "Best months to go": one typical total per plannable month (Plus).
@@ -7461,6 +7529,12 @@ $("#withCruises").addEventListener("change", e => {
 });
 document.addEventListener("click", e => {
   if(e.target.closest("[data-cruisepitch]")){ e.preventDefault(); proPitch("cruises"); }
+});
+document.addEventListener("change", e => {
+  const d = e.target.closest && e.target.closest("[data-cruisedrive]");
+  if(!d) return;
+  cruiseModes.set(d.dataset.cruisedrive, d.checked ? "drive" : "fly");
+  renderBoard();
 });
 $("#btPlan").addEventListener("click", () => needsAccount() ? null : session.pro ? $("#budgetBtn").click() : showFits());
 $("#budgetBtn").addEventListener("click", ()=>{

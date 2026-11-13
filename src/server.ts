@@ -43,7 +43,7 @@ import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COL
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { priceCruises, countUnder } from "./cruisePricing.js";
-import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles } from "./cruiseData.js";
+import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles, cruiseDriveLookup } from "./cruiseData.js";
 import { homePortOf, CRUISE_SHIPS } from "./cruiseFacts.js";
 import { listShipItems, saveShipItems, deleteShipItem, shipSummary, SHIP_ITEM_KINDS, SHIP_KIND_LABEL, SHIP_HOME_NOTES } from "./ships.js";
 import { loadScoreboard } from "./fareScoreboard.js";
@@ -667,6 +667,7 @@ async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
     rows, party: { adults: p.adults, childAges: p.childAges },
     origin: o ? { iata: o.iata, lat: o.lat, lon: o.lon } : null,
     today, month, rates: await gratuityRates(db), flight: await cruiseFlightLookup(db, p.origin, today),
+    drive: o ? await cruiseDriveLookup(db, { lat: o.lat, lon: o.lon }, { wear: q0.get("driveWearAndTear") !== "0" }) : undefined,
   });
   const pro = !!user && isPro(user.proUntil);
   if (pro) {

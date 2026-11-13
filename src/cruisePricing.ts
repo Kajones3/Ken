@@ -42,13 +42,31 @@ export interface FareFound { perSeat: number; how: "bought" | "bought_month" | "
 /** Round-trip fare per seat from the traveler's airport to `dest`. */
 export type FlightLookup = (dest: string, depart: string, nights: number) => FareFound | null;
 
+/** Driving to a port, for one traveler: what the car costs both ways. */
+export interface DriveFound {
+  oneWayMiles: number; fromMap: boolean; gasUsd: number; wearUsd: number; parkingPerDay: number;
+}
+/** Null = driving to this port isn't offered (no parking price, too far, or abroad). */
+export type DriveLookup = (port: HomePort, sailDate: string, nights: number) => DriveFound | null;
+
+export interface CruiseTravel {
+  fly: { total: number; flights: number; transfers: number; flight: FareFound & { seats: number } } | null;
+  drive: { total: number; gas: number; wear: number; parking: number; parkingDays: number; parkingPerDay: number;
+    roundTripMiles: number; fromMap: boolean } | null;
+  /** What the card opens on: flying, unless the port is too close to fly. */
+  default: "fly" | "drive";
+}
+
 export interface PricedCruise {
   id: string; title: string; ship: string | null; port: { id: string; name: string; airport: string };
   sailDate: string; sailEnd: string; nights: number; cabin: string; seenOn: string;
   guests: number; perPersonFare: number;
+  /** flights + transfers follow `travel.default`; drive's costs are in travel.drive. */
   lines: { fare: number; gratuities: number; flights: number; transfers: number; excursions: number };
+  /** Everything but getting to the ship. */
+  base: number;
   total: number;
-  flight: FareFound & { seats: number };
+  travel: CruiseTravel;
   gratuityPerNight: number;
   transfer: { perGuest: number; minutes: string };
   latestArrival: string | null;
@@ -75,7 +93,7 @@ export function freshSailings(rows: SightingIn[], party: { adults: number; child
   for (const r of rows) {
     if (!r.sailDate || r.sailDate <= today) continue;
     if (month && r.sailDate.slice(0, 7) !== month) continue;
-    if (r.partyAdults !== party.adults || (r.partyChildren ?? 0) !== party.children || r.partyAdults === null) continue;
+    if (r.partyAdults === null || r.partyAdults !== party.adults || (r.partyChildren ?? 0) !== party.children) continue;
     if (r.seenOn < since) continue;
     const k = `${r.title}|${r.sailDate}|${r.cabin ?? ""}`;
     const prev = latest.get(k);
@@ -99,6 +117,8 @@ export interface PriceCruisesInput {
   month?: string;
   rates: { regular: number; concierge: number };
   flight: FlightLookup;
+  /** Omitted = driving is never offered. */
+  drive?: DriveLookup;
 }
 
 export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; holes: CruiseHole[] } {
@@ -120,24 +140,47 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
     const sailEnd = s.sailEnd ?? addDaysISO(s.sailDate!, nights);
     const port: HomePort | null = homePortOf(s.departurePort ?? info.port) ?? homePortOf(s.title);
     if (!port) { hole(s, "which home port it sails from"); continue; }
-    if (port.transferUsd === null) { hole(s, `Disney's transfer price at ${port.name}`); continue; }
     if (!inp.origin) { hole(s, "the traveler's home airport"); continue; }
-    if (inp.origin.iata === port.airport
-      || haversineMiles(inp.origin.lat, inp.origin.lon, port.lat, port.lon) < NO_FLY_RADIUS_MILES) {
-      hole(s, `driving to ${port.name} (not priced yet)`); continue;
-    }
     // Port adventures.
-    const ports = portsOfCall(info.ports);
     if (!info.ports) { hole(s, "its ports of call"); continue; }
+    const ports = portsOfCall(info.ports);
     if (ports.unknown.length) { hole(s, `port adventure prices for ${ports.unknown.join(", ")}`); continue; }
     const exc = ports.known.map((p) => ({ p, e: excursionAt(p) }));
     const noPrice = exc.filter((x) => !x.e).map((x) => x.p.name);
     if (noPrice.length) { hole(s, `port adventure prices for ${noPrice.join(", ")}`); continue; }
-    // Flights.
-    const fare = inp.flight(port.airport, s.sailDate!, nights);
-    if (!fare) { hole(s, `a flight ${inp.origin.iata}-${port.airport} that month`); continue; }
 
-    const seats = party.adults + party.childAges.filter((a) => a >= LAP_INFANT_UNDER).length;
+    // Getting to the ship: flying (fare + Disney's transfer) and/or driving
+    // (gas, wear and parking). Too close to fly = driving only.
+    const tooClose = inp.origin.iata === port.airport
+      || haversineMiles(inp.origin.lat, inp.origin.lon, port.lat, port.lon) < NO_FLY_RADIUS_MILES;
+    let fly: CruiseTravel["fly"] = null;
+    const flyWhy: string[] = [];
+    if (tooClose) flyWhy.push("too close to fly");
+    else if (port.transferUsd === null) flyWhy.push(`Disney's transfer price at ${port.name}`);
+    else {
+      const fare = inp.flight(port.airport, s.sailDate!, nights);
+      if (!fare) flyWhy.push(`a flight ${inp.origin.iata}-${port.airport} that month`);
+      else {
+        const seats = party.adults + party.childAges.filter((a) => a >= LAP_INFANT_UNDER).length;
+        const flights = round2(fare.perSeat * seats), transfers = round2(2 * port.transferUsd * guests);
+        fly = { total: round2(flights + transfers), flights, transfers, flight: { ...fare, seats } };
+      }
+    }
+    let drive: CruiseTravel["drive"] = null;
+    const d = inp.drive?.(port, s.sailDate!, nights) ?? null;
+    if (d) {
+      const parkingDays = nights + 1;
+      const parking = round2(d.parkingPerDay * parkingDays);
+      drive = { total: round2(d.gasUsd + d.wearUsd + parking), gas: round2(d.gasUsd), wear: round2(d.wearUsd),
+        parking, parkingDays, parkingPerDay: d.parkingPerDay, roundTripMiles: Math.round(d.oneWayMiles * 2), fromMap: d.fromMap };
+    }
+    if (!fly && !drive) {
+      hole(s, tooClose ? `driving to ${port.name} (no parking price set, or too far)` : flyWhy.join("; ")
+        + (inp.drive ? `; driving to ${port.name} not offered (no parking price set, or over one day's drive)` : ""));
+      continue;
+    }
+    const mode: "fly" | "drive" = fly ? "fly" : "drive";
+
     const adultsExc = party.adults + party.childAges.filter((a) => a >= EXCURSION_ADULT_FROM).length;
     const kidsExc = party.childAges.filter((a) => a >= EXCURSION_CHILD_FROM && a < EXCURSION_ADULT_FROM).length;
     const concierge = s.cabin === "concierge" || s.cabin === "suite";
@@ -145,18 +188,20 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
     const lines = {
       fare: round2(s.priceUsd! * guests),
       gratuities: round2(guests * nights * perNight),
-      flights: round2(fare.perSeat * seats),
-      transfers: round2(2 * port.transferUsd * guests),
+      flights: mode === "fly" ? fly!.flights : 0,
+      transfers: mode === "fly" ? fly!.transfers : 0,
       excursions: round2(exc.reduce((t, x) => t + x.e!.adult * adultsExc + x.e!.child * kidsExc, 0)),
     };
+    const base = round2(lines.fare + lines.gratuities + lines.excursions);
     priced.push({
       id: `${s.title}|${s.sailDate}`, title: s.title, ship: s.ship ?? info.ship,
       port: { id: port.id, name: port.name, airport: port.airport },
       sailDate: s.sailDate!, sailEnd, nights, cabin: s.cabin!, seenOn: s.seenOn, guests,
-      perPersonFare: s.priceUsd!, lines,
-      total: round2(lines.fare + lines.gratuities + lines.flights + lines.transfers + lines.excursions),
-      flight: { ...fare, seats }, gratuityPerNight: perNight,
-      transfer: { perGuest: port.transferUsd, minutes: port.transferMinutes },
+      perPersonFare: s.priceUsd!, lines, base,
+      total: round2(base + (mode === "fly" ? fly!.total : drive!.total)),
+      travel: { fly, drive, default: mode },
+      gratuityPerNight: perNight,
+      transfer: { perGuest: port.transferUsd ?? 0, minutes: port.transferMinutes },
       latestArrival: port.latestArrival,
       excursions: exc.map((x) => ({ port: x.p.name, adult: x.e!.adult, child: x.e!.child, privateIsland: !!x.p.privateIsland })),
     });
@@ -165,9 +210,11 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
   return { priced, holes };
 }
 
-/** "N sailings cost less than X": what a free visitor is told. Counts only. */
+/** "N sailings cost less than X": what a free visitor is told. Counts only.
+ *  A sailing counts if either way of getting there fits. */
 export function countUnder(priced: PricedCruise[], under: number): number {
-  return priced.filter((c) => c.total <= under).length;
+  return priced.filter((c) => Math.min(...[c.travel.fly?.total, c.travel.drive?.total]
+    .filter((x): x is number => x !== undefined).map((t) => c.base + t)) <= under).length;
 }
 
 /**

@@ -1238,12 +1238,15 @@ export function readShipPage(text){
   const rows = [];
   let kind = null;
   for(const l of lines){
-    if(SHIP_STOP.test(l)){ if(kind) break; continue; }
-    const sec = SHIP_SECTIONS.find(([re]) => !long(l) && re.test(l));
+    // Disney's page opens with a small menu (Dining, Entertainment, Adult
+    // Spaces, Kids Clubs, Staterooms, Deck Plans): "Deck Plans" there is not
+    // the end of the page, so stop only once something has been found.
+    if(SHIP_STOP.test(l)){ if(rows.some(r => r.t === "para")) break; kind = null; rows.length = 0; continue; }
+    const sec = SHIP_SECTIONS.find(([re]) => !long(l) && re.test(l.replace(/^[*•-]\s*/, "")));
     if(sec){ kind = sec[1]; rows.push({ t: "head" }); continue; }
     if(!kind) continue;
     if(long(l)){ rows.push({ t: "para", l }); continue; }
-    if(SHIP_SKIP.test(l) || /[.?]$/.test(l) || l.split(" ").length > 8 || /^\[/.test(l)){ rows.push({ t: "skip" }); continue; }
+    if(SHIP_SKIP.test(l) || /^[*•]/.test(l) || /[.?]$/.test(l) || l.split(" ").length > 8 || /^\[/.test(l)){ rows.push({ t: "skip" }); continue; }
     rows.push({ t: "short", l, kind });
   }
   // Disney's layout: NAME, then a tagline, then the paragraph; sometimes the

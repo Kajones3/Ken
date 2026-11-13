@@ -3086,6 +3086,12 @@ document.getElementById("shAdd").addEventListener("click", async () => {
   if(ok){ document.getElementById("shName").value = ""; document.getElementById("shNote").value = ""; }
 });
 document.getElementById("shRead").addEventListener("click", async () => {
+  const st0 = document.getElementById("shReadStatus");
+  st0.textContent = "Reading…";
+  try { await readShipPaste(); } catch(e){ st0.textContent = "Couldn't read it: " + ((e && e.message) || e); }
+});
+async function readShipPaste(){
+  if(!shipData) await loadShips();
   const { readShipPage } = await getReader();
   const ship = document.getElementById("shShip").value;
   const have = new Set(shipData.items.filter(x => x.ship === ship).map(x => x.name.toLowerCase()));
@@ -3105,7 +3111,7 @@ document.getElementById("shRead").addEventListener("click", async () => {
     if(!items.length){ document.getElementById("shSaveStatus").textContent = "Nothing ticked."; return; }
     if(await postShips(items, document.getElementById("shSaveStatus"))) box.innerHTML = "";
   });
-});
+}
 loadShips();
 
 async function loadCruiseHoles(){
