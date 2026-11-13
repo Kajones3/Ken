@@ -61,6 +61,8 @@ export interface PricedCruise {
   id: string; title: string; ship: string | null; port: { id: string; name: string; airport: string };
   sailDate: string; sailEnd: string; nights: number; cabin: string; seenOn: string;
   guests: number; perPersonFare: number;
+  /** Null = Disney's own price for this exact party; otherwise how we got there. */
+  estimate: FareEstimate | null;
   /** flights + transfers follow `travel.default`; drive's costs are in travel.drive. */
   lines: { fare: number; gratuities: number; flights: number; transfers: number; excursions: number };
   /** Everything but getting to the ship. */
@@ -73,6 +75,15 @@ export interface PricedCruise {
   excursions: { port: string; adult: number; child: number; privateIsland: boolean }[];
 }
 export interface CruiseHole { title: string; sailDate: string | null; what: string }
+/** A sailing whose cruise fare we can estimate for the party but not the rest
+ *  (getting there or port adventures): shown as "cruise only", never mixed
+ *  in with whole-trip totals. */
+export interface CruiseOnly {
+  id: string; title: string; ship: string | null; port: string | null; sailDate: string; sailEnd: string;
+  nights: number; cabin: string; seenOn: string; guests: number; perPersonFare: number;
+  estimate: FareEstimate | null; lines: { fare: number; gratuities: number }; total: number; gratuityPerNight: number;
+  notIncluded: ("getting there" | "port adventures")[];
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -85,28 +96,118 @@ function nightsOf(s: SightingIn): number | null {
   return null;
 }
 
-/** The newest fresh price per sailing + room, and the cheapest open room per
- *  sailing, for one party. */
-export function freshSailings(rows: SightingIn[], party: { adults: number; children: number }, today: string, month?: string) {
+/**
+ * Staterooms for a party (owner, 2026-11-14: "a party of 6, we can guestimate
+ * two staterooms"): a Disney stateroom sleeps up to 4 (most rooms; some 5),
+ * so the party is split into the fewest rooms of up to 4, as evenly as it
+ * goes, and every room needs an adult. Null = not enough adults to go round.
+ */
+export const ROOM_MAX_GUESTS = 4;
+export function roomsFor(adults: number, children: number): number[] | null {
+  const n = adults + children;
+  if (n < 1 || adults < 1) return null;
+  const rooms = Math.ceil(n / ROOM_MAX_GUESTS);
+  if (adults < rooms) return null;
+  const base = Math.floor(n / rooms), extra = n % rooms;
+  return Array.from({ length: rooms }, (_, i) => base + (i < extra ? 1 : 0));
+}
+/** Disney's fare structure, as its Rate Details panels show it: the first two
+ *  guests in a room pay the full fare (one guest alone still pays for two),
+ *  the 3rd and 4th pay a share of it. Weight in "full fares". */
+export function roomWeight(guests: number, extraShare: number): number {
+  return 2 + extraShare * Math.max(0, guests - 2);
+}
+const partyWeight = (rooms: number[], share: number) => rooms.reduce((t, k) => t + roomWeight(k, share), 0);
+/** The 3rd/4th guest share when no price summary has taught one yet: the
+ *  owner's Port Canaveral panel (2026-11-13), $105 vs $194. */
+export const DEFAULT_EXTRA_GUEST_SHARE = 0.54;
+
+/** How a party's fare was reached when Disney's price was for another party. */
+export interface FareEstimate {
+  fromAdults: number; fromChildren: number; rooms: number[]; extraShare: number;
+}
+export interface FreshSailing {
+  row: SightingIn;
+  /** Cruise fare for the whole asked-for party. */
+  fare: number;
+  estimate: FareEstimate | null;
+}
+
+/**
+ * The newest fresh price per sailing + room + party, then per sailing the
+ * cheapest open room for the asked-for party. Disney's exact party wins;
+ * otherwise the saved party closest in size, re-shaped with roomsFor and
+ * roomWeight (owner, 2026-11-14: "no matter their search persons, we should
+ * return something ... just be clear with the user on what we estimated").
+ */
+export function freshSailings(rows: SightingIn[], party: { adults: number; children: number }, today: string,
+  month?: string, extraShare = DEFAULT_EXTRA_GUEST_SHARE): FreshSailing[] {
   const since = addDaysISO(today, -CRUISE_FRESH_DAYS);
   const latest = new Map<string, SightingIn>();
   for (const r of rows) {
     if (!r.sailDate || r.sailDate <= today) continue;
     if (month && r.sailDate.slice(0, 7) !== month) continue;
-    if (r.partyAdults === null || r.partyAdults !== party.adults || (r.partyChildren ?? 0) !== party.children) continue;
+    if (r.partyAdults === null || r.partyAdults < 1) continue;
     if (r.seenOn < since) continue;
-    const k = `${r.title}|${r.sailDate}|${r.cabin ?? ""}`;
+    const k = `${r.title}|${r.sailDate}|${r.cabin ?? ""}|${r.partyAdults}+${r.partyChildren ?? 0}`;
     const prev = latest.get(k);
     if (!prev || r.seenOn > prev.seenOn || (r.seenOn === prev.seenOn && (r.savedAt ?? "") > (prev.savedAt ?? ""))) latest.set(k, r);
   }
-  const best = new Map<string, SightingIn>();
+  const guests = party.adults + party.children;
+  const want = roomsFor(party.adults, party.children);
+  // Per sailing + room, the saved party to use.
+  const pick = new Map<string, SightingIn>();
+  const score = (r: SightingIn) => {
+    const exact = r.partyAdults === party.adults && (r.partyChildren ?? 0) === party.children;
+    return exact ? -1 : Math.abs(r.partyAdults! + (r.partyChildren ?? 0) - guests);
+  };
   for (const r of latest.values()) {
-    if (r.soldOut || r.priceUsd === null || !r.cabin) continue;
+    if (!r.cabin) continue;
+    const k = `${r.title}|${r.sailDate}|${r.cabin}`;
+    const prev = pick.get(k);
+    if (!prev || score(r) < score(prev) || (score(r) === score(prev) && r.seenOn > prev.seenOn)) pick.set(k, r);
+  }
+  const best = new Map<string, FreshSailing>();
+  for (const r of pick.values()) {
+    if (r.soldOut || r.priceUsd === null) continue;
+    let fare: number, estimate: FareEstimate | null = null;
+    if (score(r) === -1) fare = r.priceUsd * guests;
+    else {
+      if (!want) continue;
+      const from = roomsFor(r.partyAdults!, r.partyChildren ?? 0);
+      if (!from) continue;
+      const fromGuests = r.partyAdults! + (r.partyChildren ?? 0);
+      const perFull = (r.priceUsd * fromGuests) / partyWeight(from, extraShare);
+      fare = perFull * partyWeight(want, extraShare);
+      estimate = { fromAdults: r.partyAdults!, fromChildren: r.partyChildren ?? 0, rooms: want, extraShare };
+    }
     const k = `${r.title}|${r.sailDate}`;
     const prev = best.get(k);
-    if (!prev || r.priceUsd! < prev.priceUsd!) best.set(k, r);
+    if (!prev || fare < prev.fare) best.set(k, { row: r, fare: round2(fare), estimate });
   }
   return [...best.values()];
+}
+
+/** Every sailing we know of in a month, priced or not (the free count, and
+ *  the Planner Pro list of sailings without a recent price). */
+export interface KnownSailing { title: string; sailDate: string; nights: number | null; ship: string | null; port: string | null }
+export function knownSailings(rows: SightingIn[], today: string, month: string): KnownSailing[] {
+  const out = new Map<string, KnownSailing>();
+  const info = new Map<string, { ship: string | null; port: string | null; nights: number | null }>();
+  for (const r of rows) {
+    const t = info.get(r.title) ?? { ship: null, port: null, nights: null };
+    t.ship ??= r.ship; t.port ??= r.departurePort; t.nights ??= nightsOf(r);
+    info.set(r.title, t);
+  }
+  for (const r of rows) {
+    if (!r.sailDate || r.sailDate <= today || r.sailDate.slice(0, 7) !== month) continue;
+    const k = `${r.title}|${r.sailDate}`;
+    if (out.has(k)) continue;
+    const t = info.get(r.title)!;
+    const port = homePortOf(t.port) ?? homePortOf(r.title);
+    out.set(k, { title: r.title, sailDate: r.sailDate, nights: nightsOf(r) ?? t.nights, ship: t.ship, port: port?.name ?? null });
+  }
+  return [...out.values()].sort((a, b) => a.sailDate.localeCompare(b.sailDate) || a.title.localeCompare(b.title));
 }
 
 export interface PriceCruisesInput {
@@ -119,12 +220,14 @@ export interface PriceCruisesInput {
   flight: FlightLookup;
   /** Omitted = driving is never offered. */
   drive?: DriveLookup;
+  /** The 3rd/4th guest's share of a full fare (learned from price summaries). */
+  extraShare?: number;
 }
 
-export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; holes: CruiseHole[] } {
+export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; cruiseOnly: CruiseOnly[]; holes: CruiseHole[] } {
   const { party } = inp;
   const guests = party.adults + party.childAges.length;
-  const priced: PricedCruise[] = [], holes: CruiseHole[] = [];
+  const priced: PricedCruise[] = [], holes: CruiseHole[] = [], cruiseOnly: CruiseOnly[] = [];
   // Details a dated row may not carry: borrowed from any row of the same cruise.
   const byTitle = new Map<string, { ports: string | null; ship: string | null; port: string | null }>();
   for (const r of inp.rows) {
@@ -133,21 +236,40 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
     byTitle.set(r.title, t);
   }
   const hole = (s: SightingIn, what: string) => { holes.push({ title: s.title, sailDate: s.sailDate, what }); };
-  for (const s of freshSailings(inp.rows, { adults: party.adults, children: party.childAges.length }, inp.today, inp.month)) {
+  const share = inp.extraShare ?? DEFAULT_EXTRA_GUEST_SHARE;
+  const adultsGuests = party.adults, kids = party.childAges.length;
+  if (!roomsFor(adultsGuests, kids)) {
+    holes.push({ title: "(this party)", sailDate: null, what: "every stateroom needs an adult: not enough adults for the rooms this party needs" });
+  }
+  for (const fs of freshSailings(inp.rows, { adults: adultsGuests, children: kids }, inp.today, inp.month, share)) {
+    const s = fs.row;
     const info = byTitle.get(s.title)!;
     const nights = nightsOf(s);
     if (!nights) { hole(s, "how many nights"); continue; }
     const sailEnd = s.sailEnd ?? addDaysISO(s.sailDate!, nights);
+    const concierge = s.cabin === "concierge" || s.cabin === "suite";
+    const perNight = concierge ? inp.rates.concierge : inp.rates.regular;
+    const fareLine = fs.fare, gratLine = round2(guests * nights * perNight);
     const port: HomePort | null = homePortOf(s.departurePort ?? info.port) ?? homePortOf(s.title);
-    if (!port) { hole(s, "which home port it sails from"); continue; }
-    if (!inp.origin) { hole(s, "the traveler's home airport"); continue; }
+    // Something we can't price beyond the cruise itself: kept as "cruise only".
+    const only = (what: string, missing: CruiseOnly["notIncluded"]) => {
+      hole(s, what);
+      cruiseOnly.push({
+        id: `${s.title}|${s.sailDate}`, title: s.title, ship: s.ship ?? info.ship, port: port?.name ?? null,
+        sailDate: s.sailDate!, sailEnd, nights, cabin: s.cabin!, seenOn: s.seenOn, guests,
+        perPersonFare: round2(fareLine / guests), estimate: fs.estimate,
+        lines: { fare: fareLine, gratuities: gratLine }, total: round2(fareLine + gratLine), gratuityPerNight: perNight,
+        notIncluded: missing,
+      });
+    };
+    if (!port) { only("which home port it sails from", ["getting there"]); continue; }
+    if (!inp.origin) { only("the traveler's home airport", ["getting there"]); continue; }
     // Port adventures.
-    if (!info.ports) { hole(s, "its ports of call"); continue; }
-    const ports = portsOfCall(info.ports);
-    if (ports.unknown.length) { hole(s, `port adventure prices for ${ports.unknown.join(", ")}`); continue; }
+    const excMissing: string | null = !info.ports ? "its ports of call" : null;
+    const ports = info.ports ? portsOfCall(info.ports) : { known: [], unknown: [] as string[] };
     const exc = ports.known.map((p) => ({ p, e: excursionAt(p) }));
-    const noPrice = exc.filter((x) => !x.e).map((x) => x.p.name);
-    if (noPrice.length) { hole(s, `port adventure prices for ${noPrice.join(", ")}`); continue; }
+    const noPrice = [...ports.unknown, ...exc.filter((x) => !x.e).map((x) => x.p.name)];
+    const excHole = excMissing ?? (noPrice.length ? `port adventure prices for ${noPrice.join(", ")}` : null);
 
     // Getting to the ship: flying (fare + Disney's transfer) and/or driving
     // (gas, wear and parking). Too close to fly = driving only.
@@ -175,19 +297,19 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
         parking, parkingDays, parkingPerDay: d.parkingPerDay, roundTripMiles: Math.round(d.oneWayMiles * 2), fromMap: d.fromMap };
     }
     if (!fly && !drive) {
-      hole(s, tooClose ? `driving to ${port.name} (its parking is set to 0)` : flyWhy.join("; ")
-        + (inp.drive ? `; driving to ${port.name} not offered (its parking is set to 0)` : ""));
+      const why = tooClose ? `driving to ${port.name} (its parking is set to 0)` : flyWhy.join("; ")
+        + (inp.drive ? `; driving to ${port.name} not offered (its parking is set to 0)` : "");
+      only(excHole ? `${why}; ${excHole}` : why, excHole ? ["getting there", "port adventures"] : ["getting there"]);
       continue;
     }
+    if (excHole) { only(excHole, ["port adventures"]); continue; }
     const mode: "fly" | "drive" = fly ? "fly" : "drive";
 
     const adultsExc = party.adults + party.childAges.filter((a) => a >= EXCURSION_ADULT_FROM).length;
     const kidsExc = party.childAges.filter((a) => a >= EXCURSION_CHILD_FROM && a < EXCURSION_ADULT_FROM).length;
-    const concierge = s.cabin === "concierge" || s.cabin === "suite";
-    const perNight = concierge ? inp.rates.concierge : inp.rates.regular;
     const lines = {
-      fare: round2(s.priceUsd! * guests),
-      gratuities: round2(guests * nights * perNight),
+      fare: fareLine,
+      gratuities: gratLine,
       flights: mode === "fly" ? fly!.flights : 0,
       transfers: mode === "fly" ? fly!.transfers : 0,
       excursions: round2(exc.reduce((t, x) => t + x.e!.adult * adultsExc + x.e!.child * kidsExc, 0)),
@@ -197,7 +319,7 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
       id: `${s.title}|${s.sailDate}`, title: s.title, ship: s.ship ?? info.ship,
       port: { id: port.id, name: port.name, airport: port.airport },
       sailDate: s.sailDate!, sailEnd, nights, cabin: s.cabin!, seenOn: s.seenOn, guests,
-      perPersonFare: s.priceUsd!, lines, base,
+      perPersonFare: fs.estimate ? round2(fareLine / guests) : s.priceUsd!, estimate: fs.estimate, lines, base,
       total: round2(base + (mode === "fly" ? fly!.total : drive!.total)),
       travel: { fly, drive, default: mode },
       gratuityPerNight: perNight,
@@ -207,7 +329,8 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
     });
   }
   priced.sort((a, b) => a.total - b.total);
-  return { priced, holes };
+  cruiseOnly.sort((a, b) => a.sailDate.localeCompare(b.sailDate));
+  return { priced, cruiseOnly, holes };
 }
 
 /** "N sailings cost less than X": what a free visitor is told. Counts only.

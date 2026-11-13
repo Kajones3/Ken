@@ -5,7 +5,7 @@
 import type { Db } from "./db.js";
 import { dateStr } from "./book.js";
 import { addDaysISO } from "./dates.js";
-import { listCruises } from "./cruisesAdventures.js";
+import { listCruises, listRates } from "./cruisesAdventures.js";
 import { settingsMap } from "./settings.js";
 import { ORIGINS } from "./config.js";
 import { loadFareModel } from "./fareModelDb.js";
@@ -18,7 +18,7 @@ import { loadRoadMiles, routeKey, ensureRoadMiles, osrmMiles, roadMilesLive, typ
 import { DRIVE_PORTS, parkingKey, PARKING_DEFAULT_USD, type HomePort } from "./cruiseFacts.js";
 import type { DriveLookup } from "./cruisePricing.js";
 import { HOME_PORTS, PORTS_OF_CALL, PARKING_NOT_USED, homePortOf, portsOfCall, excursionAt } from "./cruiseFacts.js";
-import { CRUISE_FRESH_DAYS, pickCruiseFare, type BoughtFare, type FlightLookup, type SightingIn } from "./cruisePricing.js";
+import { CRUISE_FRESH_DAYS, DEFAULT_EXTRA_GUEST_SHARE, pickCruiseFare, type BoughtFare, type FlightLookup, type SightingIn } from "./cruisePricing.js";
 
 export async function loadSightings(db: Db): Promise<SightingIn[]> {
   return (await listCruises(db, 5000)).map((c) => ({
@@ -133,7 +133,8 @@ export async function cruiseHoles(db: Db, today: string): Promise<CruiseHolesRep
     })),
     excursions: portsOfCallStatus(),
     standing: [
-      "A price only works for the party Disney's page was set to (2 adults, 2 adults + 2 children ...): other parties don't see that sailing. Save each sailing for the parties you want covered.",
+      "A price is exact only for the party Disney's page was set to. Every other party gets an ESTIMATE from the closest saved party (staterooms of up to 4, an adult in each; the 3rd and 4th guest in a room at the share your price summaries show), and the card says so. Saving more parties makes more of them exact.",
+      "A sailing missing its ports of call, a port adventure price or a way to get there shows to Planner Pro as \"cruise only\" (fare + gratuities). A sailing with no price in the last 3 weeks is listed by name only. Fix a cruise's ports, ship or nights with Save cruise details on its card above.",
       "Driving to a port: offered from anywhere, priced like a drive to the parks (gas, IRS wear and tear, parking for nights + 1 days). Someone within 100 miles of the port's airport can only drive. Each cruise card has an \"I'm driving\" switch. No overnight stop is added on a long drive.",
       "No hotel the night before: Disney's guidelines allow flying in on sailing day (latest arrivals: MCO 11:30 AM, FLL 12:30 PM, IAH 10:45 AM, SAN 12:15 PM, YVR 11:15 AM).",
       "Flights to Fort Lauderdale, Houston, San Diego and Vancouver come only from fares we bought: a sailing shows once a fare that month exists (bought nightly, ~50 searches a month, plus Planner Pro searches). Port Canaveral uses the same flight formula as Walt Disney World.",
@@ -205,4 +206,16 @@ export async function cruiseDriveLookup(db: Db, from: { lat: number; lon: number
     return { oneWayMiles, fromMap: mapMiles !== undefined, gasUsd: (round / DRIVING.mpg) * gasPrice,
       wearUsd: opts.wear === false ? 0 : round * perMile, parkingPerDay };
   };
+}
+
+/** The 3rd/4th guest's share of a full fare, learned from the owner's saved
+ *  price summaries (median), else the shipped figure. */
+export async function extraGuestShare(db: Db): Promise<number> {
+  try {
+    const shares = (await listRates(db)).map((r) => r.childShare).filter((x): x is number => x !== null && x > 0.1 && x < 1.2)
+      .sort((a, b) => a - b);
+    if (!shares.length) return DEFAULT_EXTRA_GUEST_SHARE;
+    const m = shares.length >> 1;
+    return shares.length % 2 ? shares[m]! : (shares[m - 1]! + shares[m]!) / 2;
+  } catch { return DEFAULT_EXTRA_GUEST_SHARE; }
 }

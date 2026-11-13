@@ -1143,6 +1143,7 @@ body.has-results .searchside #run{width:100%}
 .tcard.cruiseteaser{border-style:dashed}
 .cdrive{display:inline-flex; align-items:center; gap:8px; margin:10px 0 0; font-size:14px; font-weight:600; color:var(--ink-2)}
 label.cdrive{cursor:pointer}
+.cest{margin:8px 0 0; font-size:13px; color:var(--ink-2); max-width:62ch}
 .cdrive input{width:18px; height:18px; accent-color:var(--accent)}
 @media (max-width:640px){ .tbadge .shipic{width:56px; height:56px} }
 
@@ -1650,7 +1651,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <!-- Disney cruises beside the parks (owner, 2026-11-13): Planner Pro
            only; anyone else who ticks it gets the Planner Pro box. -->
       <label class="cruisepick" id="cruisePick"><input type="checkbox" id="withCruises">
-        Consider Disney Cruises too <span class="sbb-opt">(Planner Pro)</span></label>
+        Consider Disney Cruises and Adventures by Disney too <span class="sbb-opt">(Planner Pro)</span></label>
 
     <div class="notices">
       <p id="gettingThereNote" class="notice" hidden></p>
@@ -3100,30 +3101,25 @@ function pixieLoader(label){
  * HOW MANY sailings cost less than the trips shown (or fit their budget);
  * the server never sends them which. A sailing shows only when every line
  * has a real number behind it (src/cruisePricing.ts). */
-let cruiseState = { pro:false, cruises:[], count:0, under:null };
+let cruiseState = { loaded:false };
 let cruiseToken = 0;
 let withCruises = false;
 try { withCruises = localStorage.getItem("pf_cruises") === "1"; } catch {}
-function cheapestShown(){
-  const t = results.filter(r => r.ok && !r.locked).map(r => r.price.total);
-  return t.length ? Math.min(...t) : 0;
-}
+/* Every sailing and Adventures by Disney departure we know of in the searched
+ * month is surfaced for everyone (owner, 2026-11-14): a guest is told there
+ * are some, a free account how many (and "an ABD trip from under $X a
+ * person"), Planner Pro sees each one priced for their party. */
 async function loadCruises(){
   const token = ++cruiseToken;
-  cruiseState = { pro:false, cruises:[], count:0, under:null };
+  cruiseState = { loaded:false };
   if(!results.length) return;
   const q = { ...tripQuery(), month: params.month };
   // The same "Include wear & tear on your car?" answer as a drive to the parks.
   if(params.driveWearAndTear === false) q.driveWearAndTear = "0";
-  if(!session.pro){
-    const under = budgetValue() || cheapestShown();
-    if(!(under > 0)) return;
-    q.under = Math.round(under);
-  } else if(!withCruises) return;
   try {
     const d = await apiGet("/api/cruises", q);
     if(token !== cruiseToken) return;
-    cruiseState = { pro: !!d.pro, cruises: d.cruises || [], count: d.count || 0, under: d.under || null };
+    cruiseState = { loaded:true, ...d };
     renderBoard();
   } catch(e){ console.error(e); }
 }
@@ -3172,9 +3168,10 @@ function cruiseCardHtml(c){
       <h3>${esc(c.title)}</h3>
       <p class="tmeta">From ${esc(c.port.name)} · ${shortDate(c.sailDate)} to ${shortDate(c.sailEnd)} · ${c.nights} night${c.nights===1?"":"s"} · ${esc(CABIN_NAME[c.cabin] || c.cabin)}</p>
       <div class="cbar bar">${segs}</div>
+      ${estimateNote(c)}
       ${sw}
       <details class="cdet"><summary>What's in this price</summary><ul>
-        <li><b>Cruise fare ${usd(L.fare)}:</b> Disney's ${usd(c.perPersonFare)} a person for your party, taxes, fees and port expenses included</li>
+        <li><b>Cruise fare ${usd(L.fare)}:</b> ${c.estimate ? `about ${usd(c.perPersonFare)} a person on average (our estimate, below)` : `Disney's ${usd(c.perPersonFare)} a person for your party`}, taxes, fees and port expenses included</li>
         <li><b>Gratuities ${usd(L.gratuities)}:</b> Disney's ${usd(c.gratuityPerNight)} a guest a night, ${c.nights} nights, ${c.guests} guests</li>
         ${travelLines}
         <li><b>Port adventures ${usd(L.excursions)}:</b> ${adultsExc.length ? "one typical Disney port adventure a guest at each stop: " : ""}${exc}. Under 3 free</li>
@@ -3198,19 +3195,97 @@ function onBoardHtml(c, ship){
       .map(x => esc(x.name) + (x.note ? ` <span class="tsub">(${esc(x.note)})</span>` : "")).join(", ")}</li>`).join("")}
   </ul></details>`;
 }
-function cruiseTeaserHtml(){
-  if(cruiseState.pro){
-    return "";
-  }
-  const n = cruiseState.count;
-  if(!(n > 0)) return "";
-  const what = budgetValue() ? `fit your ${usd(budgetValue())} budget` : `cost less than the cheapest trip here`;
-  return `<li class="tcard cruiseteaser">
+/* "Estimated for your party": said in words whenever Disney's price was for
+   another party (owner: "just be clear with the user on what we estimated"). */
+function estimateNote(c){
+  const e = c.estimate;
+  if(!e) return "";
+  const from = `${e.fromAdults} adult${e.fromAdults===1?"":"s"}${e.fromChildren ? ` and ${e.fromChildren} child${e.fromChildren===1?"":"ren"}` : ""}`;
+  const rooms = e.rooms.length === 1 ? "one stateroom" : `${countWord(e.rooms.length)} staterooms (${e.rooms.join(" and ")} guests)`;
+  return `<p class="cest"><b>Estimated for your party.</b> Disney's price we have is for ${from}. Disney charges the 3rd and 4th guest in a stateroom about ${Math.round(e.extraShare*100)}% of what the first two pay (its own price summaries show it), so we worked out the first two's price from that and put your ${countWord(c.guests)} guests in ${rooms}. Check the exact price on Disney's site.</p>`;
+}
+const MONTH_OF = m => { const [y, mm] = m.split("-").map(Number); return MONTHSFULL[mm-1] + " " + y; };
+function shipName(s){ return s ? (/^disney /i.test(s) ? s : "Disney " + s) : ""; }
+/* A sailing we can price only as far as the cruise itself. Never mixed in
+   with whole-trip totals. */
+function cruiseOnlyCardHtml(c){
+  const notIn = c.notIncluded.map(x => x === "getting there" ? "flights or driving to the ship" : "port adventures").join(" or ");
+  return `<li class="tcard cruise">
+    <span class="tbadge">${SHIP_SVG}</span>
+    <div class="tid">
+      <p class="teyebrow">Disney Cruise${c.ship ? " · " + esc(shipName(c.ship)) : ""} · cruise only</p>
+      <h3>${esc(c.title)}</h3>
+      <p class="tmeta">${c.port ? "From " + esc(c.port) + " · " : ""}${shortDate(c.sailDate)} to ${shortDate(c.sailEnd)} · ${c.nights} night${c.nights===1?"":"s"} · ${esc(CABIN_NAME[c.cabin] || c.cabin)}</p>
+      ${estimateNote(c)}
+      <p class="tmeta">The cruise fare (${usd(c.lines.fare)}) and Disney's gratuities (${usd(c.lines.gratuities)}). Not in this price yet: ${notIn}.</p>
+    </div>
+    <div class="ttot">
+      <span class="tnum">${usd(c.total)}</span>
+      <span class="tsub">cruise for ${countWord(c.guests)}</span>
+      <a class="tview" href="https://disneycruise.disney.go.com/" target="_blank" rel="noopener">Disney Cruise Line &rarr;</a>
+    </div>
+  </li>`;
+}
+function unpricedCardHtml(list){
+  if(!list || !list.length) return "";
+  return `<li class="tcard cruise">
     <span class="tbadge">${SHIP_SVG}</span>
     <div class="tid"><p class="teyebrow">Disney Cruise Line</p>
-      <h3>${n === 1 ? "One Disney Cruise sailing" : (COUNT_CAP[n] || n) + " Disney Cruise sailings"} ${what}</h3>
-      <p class="tmeta">Planner Pro prices select Disney cruises for your party: fare, gratuities, flights, transfers and port adventures.</p></div>
-    <div class="ttot"><button type="button" class="tview" data-cruisepitch>See which with Planner Pro &rarr;</button></div>
+      <h3>Also sailing in ${esc(MONTH_OF(cruiseState.month))}</h3>
+      <ul class="tmeta">${list.map(k => `<li>${esc(k.title)}, ${shortDate(k.sailDate)}${k.ship ? " · " + esc(shipName(k.ship)) : ""}</li>`).join("")}</ul>
+      <p class="tmeta">We don't have a recent price for ${list.length === 1 ? "this sailing" : "these sailings"}. Disney's site has today's.</p></div>
+    <div class="ttot"><a class="tview" href="https://disneycruise.disney.go.com/" target="_blank" rel="noopener">Disney Cruise Line &rarr;</a></div>
+  </li>`;
+}
+const ABD_SVG = `<svg class="shipic" viewBox="0 0 76 76" aria-hidden="true"><circle cx="38" cy="38" r="36" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M16 54l14-22 8 12 6-8 16 18z" fill="currentColor"/><circle cx="52" cy="24" r="5" fill="currentColor"/></svg>`;
+function adventureCardHtml(d){
+  const p = d.party, days = d.days ? `${d.days} days${d.nights ? ", " + d.nights + " nights" : ""}` : "";
+  const each = p.ok ? `${usd(p.adultUsd)} an adult${p.children ? p.childUsd !== null ? `, ${usd(p.childUsd)} a child ${d.childMaxAge} and under` : ", children at the adult price (no child price shown)" : ""}` : "";
+  return `<li class="tcard cruise">
+    <span class="tbadge">${ABD_SVG}</span>
+    <div class="tid">
+      <p class="teyebrow">Adventures by Disney${d.tripType ? " · " + esc(d.tripType) : ""}${d.adultOnly ? " · Adults only" : ""}</p>
+      <h3>${esc(d.tripName)}</h3>
+      <p class="tmeta">${d.destination ? esc(d.destination) + " · " : ""}${shortDate(d.departureDate)}${d.returnDate ? " to " + shortDate(d.returnDate) : ""}${days ? " · " + days : ""}</p>
+      ${p.ok ? `<p class="tmeta">Adventures by Disney's own price: ${each}. Flights, meals that aren't included and tips for your guides are not in this price yet.</p>`
+        : `<p class="tmeta"><b>${esc(p.why)}</b>, so it doesn't fit your party.</p>`}
+      ${d.highlights && d.highlights.length ? `<details class="cdet"><summary>Highlights</summary><ul>${d.highlights.slice(0,6).map(h => `<li>${esc(h)}</li>`).join("")}</ul></details>` : ""}
+    </div>
+    <div class="ttot">
+      ${p.ok ? `<span class="tnum">${usd(p.total)}</span><span class="tsub">trip for ${countWord(p.adults + p.children)} · ${usd(p.total / (p.adults + p.children))} a person</span>` : ""}
+      <a class="tview" href="https://www.adventuresbydisney.com/" target="_blank" rel="noopener">Adventures by Disney &rarr;</a>
+    </div>
+  </li>`;
+}
+/* The one-line summary everyone sees when this month has a sailing or an ABD
+   departure. Planner Pro with the switch on sees the cards instead. */
+function cruiseTeaserHtml(){
+  const c = cruiseState;
+  if(!c.loaded) return "";
+  const month = esc(MONTH_OF(c.month));
+  if(c.guest){
+    if(!c.anySailings && !c.anyAdventures) return "";
+    const what = [c.anySailings && "Disney Cruise Line sails", c.anyAdventures && "Adventures by Disney has trips"].filter(Boolean).join(" and ");
+    return `<li class="tcard cruiseteaser"><span class="tbadge">${SHIP_SVG}</span>
+      <div class="tid"><p class="teyebrow">Beyond the parks</p><h3>${what} in ${month}</h3>
+        <p class="tmeta">Become a Planner, free, to see how many.</p></div>
+      <div class="ttot"><button type="button" class="tview" data-signup>Become a Planner, free &rarr;</button></div></li>`;
+  }
+  const n = c.sailings || 0;
+  const adv = c.pro ? (c.adventures || []).length : (c.adventures?.count || 0);
+  if(!n && !adv) return "";
+  if(c.pro && withCruises) return "";
+  const bits = [];
+  if(n) bits.push(`${n === 1 ? "One Disney Cruise sailing" : (COUNT_CAP[n] || n) + " Disney Cruise sailings"}`);
+  if(adv) bits.push(c.pro ? `${adv === 1 ? "an Adventures by Disney trip" : adv + " Adventures by Disney departures"}`
+    : `${adv === 1 ? "an Adventures by Disney trip" : adv + " Adventures by Disney departures"}${c.adventures.underPerPerson ? ` from under ${usd(c.adventures.underPerPerson)} a person` : ""}`);
+  const head = `${bits.join(" and ")} in ${month}`;
+  return `<li class="tcard cruiseteaser"><span class="tbadge">${SHIP_SVG}</span>
+    <div class="tid"><p class="teyebrow">Beyond the parks</p><h3>${head.charAt(0).toUpperCase() + head.slice(1)}</h3>
+      <p class="tmeta">${c.pro ? "Priced for your party, beside the parks." : "Planner Pro prices each one for your party: the cruise or trip, and getting there."}</p></div>
+    <div class="ttot">${c.pro ? `<button type="button" class="tview" data-cruiseshow>Show them &rarr;</button>`
+      : `<button type="button" class="tview" data-cruisepitch>See them with Planner Pro &rarr;</button>`}</div>
   </li>`;
 }
 
@@ -3461,11 +3536,15 @@ function renderBoard(){
   // Disney cruises (Planner Pro, switch on): cards beside the parks, in price
   // order on the price sort, after the parks on any other sort.
   const parkCards = shown.map(e => ({ total: e.item.ok ? e.item.price.total : Infinity, html: tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price") }));
-  const cruiseCards = (cruiseState.pro && withCruises ? cruiseState.cruises : []).map(c => ({ total: cruiseTotal(c), html: cruiseCardHtml(c) }));
+  const proOn = cruiseState.loaded && cruiseState.pro && withCruises;
+  const cruiseCards = (proOn ? cruiseState.cruises || [] : []).map(c => ({ total: cruiseTotal(c), html: cruiseCardHtml(c) }));
   const cards = sortBy === "price"
     ? parkCards.concat(cruiseCards).sort((a, b) => a.total - b.total)
     : parkCards.concat(cruiseCards);
-  board.innerHTML = guest + `<ol class="tripcards">${cards.map(c => c.html).join("")}${cruiseTeaserHtml()}${locked.map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
+  // Not whole-trip totals, so after the parks: cruise-only, unpriced sailings, ABD.
+  const extra = proOn ? (cruiseState.cruiseOnly || []).map(cruiseOnlyCardHtml).join("") + unpricedCardHtml(cruiseState.unpriced)
+    + (cruiseState.adventures || []).map(adventureCardHtml).join("") : "";
+  board.innerHTML = guest + `<ol class="tripcards">${cards.map(c => c.html).join("")}${extra}${cruiseTeaserHtml()}${locked.map(e => tripCardHtml(e.item, e.i, priceRank.get(e.i), sortBy !== "price")).join("")}</ol>`;
 }
 
 /* Sort by (owner, 2026-10-29: "We could organize by price obviously. Maybe
@@ -5150,7 +5229,9 @@ $("#verifyResend").addEventListener("click", async ()=>{
   const res = await fetch("/api/auth/resend-verification", { method:"POST", headers:{"content-type":"application/json"}, body: JSON.stringify({email, password}) }).catch(()=>null);
   const body = res ? await res.json().catch(()=>({})) : {};
   if(!res || !res.ok){ msg.textContent = body.message || "Couldn't send that. Try again in a moment."; return; }
-  msg.textContent = body.alreadyVerified ? "Already confirmed. Sign in." : "Sent. Check your inbox (and spam).";
+  msg.textContent = body.alreadyVerified ? "Already confirmed. Sign in."
+    : body.ok === false || body.delivers === false ? "We couldn't send it just now. Try again in a minute."
+    : "Sent. Check your inbox (and spam).";
 });
 
 /* ------------------------------ attractions ------------------------------
@@ -5281,7 +5362,10 @@ function fillHomeAirportOptions(){
  * nothing. The same setting the email's own unsubscribe link changes. */
 function syncDealEmailsUi(){
   // Not on the one-week pass, which carries no deal emails (2026-10-29).
-  $("#dealEmailsRow").hidden = !(session.authenticated && session.pro && (!session.perks || session.perks.dealEmails));
+  // Hidden while deal emails are on hold (no postal address yet): a switch
+  // for emails nobody is sent (owner, 2026-11-14).
+  $("#dealEmailsRow").hidden = !(session.authenticated && session.pro && !session.dealEmailsHeld
+    && (!session.perks || session.perks.dealEmails));
   $("#dealEmailsCk").checked = session.dealEmails !== false;
 }
 $("#dealEmailsCk").addEventListener("change", async (e)=>{
@@ -5520,7 +5604,7 @@ async function refreshSession(){
   const me = await apiGet("/api/auth/me", {});
   session = me.authenticated
     ? { authenticated:true, email:me.email, pro:me.pro, proUntil:me.proUntil, homeAirport:me.homeAirport ?? null,
-        emailVerified:!!me.emailVerified, owner:!!me.owner, dealEmails: me.dealEmails !== false,
+        emailVerified:!!me.emailVerified, owner:!!me.owner, dealEmails: me.dealEmails !== false, dealEmailsHeld: !!me.dealEmailsHeld,
         proPass: me.proPass ?? null, perks: me.perks ?? null }
     : { authenticated:false, email:null, pro:false, proUntil:null, homeAirport:null, emailVerified:false, owner:false };
   // Repaint the masthead here rather than only in render(): boot() and the
@@ -6783,8 +6867,8 @@ const PRO_PITCH = {
   months: { also: "See the best months to go, with the whole trip's cost for each" },
   pass: { also: "Check whether an annual pass is worth it, and where that money could take you instead" },
   deals: { also: "Get an email when Disney posts a new deal (3- and 9-month passes)" },
-  cruises: { title: "Consider Disney Cruises with Planner Pro",
-    lead: "Planner Pro prices select Disney Cruise Line sailings the way we price the parks, for your party: Disney's fare, gratuities, flights, the transfer to the ship and a port adventure at each stop, right beside the six resorts.",
+  cruises: { title: "Disney Cruises and Adventures by Disney with Planner Pro",
+    lead: "Planner Pro prices the Disney Cruise Line sailings we know of the way we price the parks, for your party: Disney's fare, gratuities, flights, the transfer to the ship and a port adventure at each stop. Adventures by Disney trips show their price for your party. All right beside the six resorts.",
     also: "Compare select Disney cruises with the parks" },
 };
 function pitchAlso(kind){
@@ -7525,10 +7609,17 @@ $("#withCruises").addEventListener("change", e => {
   if(!session.pro){ e.target.checked = false; proPitch("cruises"); return; }
   withCruises = e.target.checked;
   try { localStorage.setItem("pf_cruises", withCruises ? "1" : "0"); } catch {}
-  if(withCruises) loadCruises(); else renderBoard();
+  renderBoard();
 });
 document.addEventListener("click", e => {
   if(e.target.closest("[data-cruisepitch]")){ e.preventDefault(); proPitch("cruises"); }
+  if(e.target.closest("[data-cruiseshow]")){
+    e.preventDefault();
+    withCruises = true;
+    try { localStorage.setItem("pf_cruises", "1"); } catch {}
+    $("#withCruises").checked = true;
+    renderBoard();
+  }
 });
 document.addEventListener("change", e => {
   const d = e.target.closest && e.target.closest("[data-cruisedrive]");

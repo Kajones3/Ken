@@ -119,6 +119,68 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, second session: cruises + ABD for every party; cruise editing; confirm-email resend (read first)
+
+Owner's four asks, all built (978 tests, typecheck clean). **Needs a Render redeploy.**
+- **Cruises for ANY party** (owner: "no matter their search persons, we should
+  return something ... guestimate two staterooms ... be clear with the user on
+  what we estimated"). SUPERSEDES "a different party never borrows this
+  party's average" and the "2-adult estimate: wait for the owner" item below.
+  `freshSailings()` (cruisePricing.ts): exact saved party wins; else the
+  saved party closest in size, re-shaped: `roomsFor()` = fewest staterooms of
+  up to 4 (`ROOM_MAX_GUESTS`), as even as it goes, an adult in each (else no
+  price); `roomWeight()` = first two guests a full fare each (one alone pays
+  for two), 3rd/4th at `extraShare` = median child share of the owner's
+  saved price summaries (`extraGuestShare()` in cruiseData.ts, default 0.54).
+  `PricedCruise.estimate` says from which party and which rooms; the card
+  says it in words ("Estimated for your party ...").
+- **"Cruise only"**: a sailing missing a way there or a port adventure price
+  (e.g. the Galveston 7-night with no ports line) now comes back in
+  `priceCruises().cruiseOnly` (fare + gratuities, `notIncluded`) instead of
+  vanishing; shown to Planner Pro after the parks, never in the price sort.
+  Still a hole for the owner too. Sailings with no price in 21 days are
+  `unpriced` (named + linked, no number). `knownSailings()` = every sailing
+  in the month.
+- **/api/cruises now answers everyone**: guest `{guest, anySailings,
+  anyAdventures}` ("... in April 2027. Become a Planner, free, to see how
+  many"); free `{sailings, adventures:{count, underPerPerson}}` ("Three
+  Disney Cruise sailings and an Adventures by Disney trip from under $3,000 a
+  person in April 2027", "See them with Planner Pro"); Pro `{cruises,
+  cruiseOnly, unpriced, adventures}`. The old `under`/`countUnder` count is
+  no longer used by the page. Pro sees cards when "Consider Disney Cruises
+  and Adventures by Disney too" is ticked, else a summary card with "Show
+  them".
+- **Adventures by Disney on the board** (`src/adventureSearch.ts`): newest
+  saved price per trip + DATED departure in the searched month;
+  `priceForParty()`: children <= the child column age (default 11) at the
+  child price (none shown = adult price), adults-only / under min age = "doesn't
+  fit your party"; `underPerPerson()` = cheapest adult price rounded UP to
+  the next $500. Card says flights, meals not included and guide tips are NOT
+  in the price (ABD whole-trip pricing still not built). Only departures the
+  owner saved on the LIVE /admin show (Paris was saved locally only).
+- **Editing cruises in /admin -> Cruises** (owner: "I need to be able to edit
+  the cruise sailings ... add the port of call to that Galveston sailing"):
+  each cruise card has "Save cruise details" (name, ship, nights, sails
+  from, ports of call -> every row of that cruise; blank keeps, "-" clears;
+  PUT /api/admin/cruises/details, `updateCruiseDetails()`), and each saved
+  price an Edit button (PUT /api/admin/cruises/:id, `updateCruise()`,
+  re-validated whole). Edits are corrections; a newly seen price is still a
+  new row.
+- **Confirm-email: found the bug.** Signing in unconfirmed said "check your
+  inbox for the link we sent" and sent NOTHING (the only link was the one
+  from sign-up, valid 48 h). Now that sign-in sends a fresh link
+  (`sendVerificationIfQuiet()`, not again within 5 minutes) and says "We just
+  sent a new link to X". The "Send a new confirmation link" button also stops
+  saying "Sent" when the send failed. NOT checked: whether Render really
+  delivers (sandbox can't reach it); if the owner's wife still gets nothing
+  after the redeploy, look her address up in Resend's dashboard.
+- **Deal-email switch hidden while deal emails are on hold** (owner's
+  screenshot: the box was ticked though no deal email can go out).
+  `/api/auth/me` `dealEmailsHeld` = no `MAIL_POSTAL_ADDRESS` on Render AND
+  the latest alerts run note says "deal emails on hold". It comes back by
+  itself after the first alerts run with the address set. Interpretation of
+  "I still see a check": ask if the owner meant something else.
+
 ## START HERE — 2026-11-14, session END (read first)
 
 **Merged this session: PRs #239-#249** (cruises priced for Planner Pro, the
