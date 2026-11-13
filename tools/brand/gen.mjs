@@ -143,6 +143,8 @@ function castle(id, line) {
   return o.join("");
 }
 
+const CREAM = "#F5EFE0", SHADE = "#ddd7ca", DEEP = "#d3cec1";
+
 // Resorts: true location, and where the castle sits (offset so Asia's three don't collide).
 const RES = [
   { id: "dlr", lon: -117.92, lat: 33.81, dx: 0, dy: -10 },
@@ -153,7 +155,25 @@ const RES = [
   { id: "hkdl", lon: 114.04, lat: 22.31, dx: -86, dy: 96 },
 ];
 
-function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = true }) {
+// The cruise ship, sailing the mid-Atlantic between Africa and South America
+// (owner, 2026-11-14: "add our cruise ship icon in the mid atlantic"). The
+// same ship as badge-cruise.svg, drawn with its keel at 0,0.
+function ship(line) {
+  const L = line ? ` stroke="${line}" stroke-width="1" stroke-linejoin="round"` : "";
+  return `<g transform="translate(-60,-88)">` +
+    `<path d="M22 74 H98 L90 88 H30 Z" fill="#5a83d7"${L}/><path d="M60 74 H98 L90 88 H60 Z" fill="#3157a3"/>` +
+    `<rect x="24" y="76" width="72" height="2.5" fill="${GOLD}"/>` +
+    `<rect x="32" y="62" width="56" height="12" fill="${CREAM}"${L}/><rect x="60" y="62" width="28" height="12" fill="${DEEP}"/>` +
+    `<rect x="40" y="52" width="40" height="10" fill="${CREAM}"${L}/><rect x="60" y="52" width="20" height="10" fill="${SHADE}"/>` +
+    `<g fill="#16204A">${[36, 42, 48, 54, 64, 70, 76, 82].map((x) => `<circle cx="${x}" cy="68" r="1.6"/>`).join("")}` +
+    `${[45, 51, 57, 63, 69, 75].map((x) => `<rect x="${x - 1.6}" y="55.5" width="3.2" height="3" rx=".6"/>`).join("")}</g>` +
+    `<rect x="47" y="38" width="9" height="14" fill="${CREAM}"${L}/><rect x="47" y="38" width="9" height="4" fill="${GOLD}"/>` +
+    `<rect x="63" y="38" width="9" height="14" fill="${SHADE}"${L}/><rect x="63" y="38" width="9" height="4" fill="${GOLD}"/>` +
+    `<rect x="59" y="24" width="1.6" height="14" fill="${CREAM}"/><path d="M60.6 24 L70 27 L60.6 30 Z" fill="${GOLD}"/></g>`;
+}
+const SHIP_AT = { lon: -22, lat: 4 };
+
+function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = true, withShip = false }) {
   const o = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`];
   // One path of zero-length round-capped strokes: a quarter of the bytes of 6,000 <circle>s.
   o.push(`<path d="${dots.map(([x, y]) => `M${f1(x)} ${f1(y)}h0`).join("")}" stroke="${dot}" stroke-width="3.8" stroke-linecap="round"/>`);
@@ -185,15 +205,22 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
     if (labels) o.push(`<text x="${f1(lx)}" y="${f1(ly)}" text-anchor="middle" font-family="Helvetica Neue, Arial, sans-serif" font-size="${f1(11.5 * Math.max(1, s * 0.85))}" font-weight="700" letter-spacing="1.4" fill="${label}">${CASTLES[r.id].label.toUpperCase()}</text>`);
     o.push(`</g>`);
   }
+  if (withShip) {
+    const [x, y] = px(SHIP_AT.lon, SHIP_AT.lat);
+    // A dotted wake behind it, in the route's color, then its shadow.
+    o.push(`<path d="M${f1(x + 26)},${f1(y + 2)} q40,10 86,4" fill="none" stroke="${route}" stroke-width="1.6" stroke-dasharray="2 6" stroke-linecap="round"/>`);
+    o.push(`<ellipse cx="${f1(x)}" cy="${f1(y + 1)}" rx="34" ry="4" fill="#000" opacity=".18"/>`);
+    o.push(`<g transform="translate(${f1(x)},${f1(y)}) scale(.78)">${ship(line)}</g>`);
+  }
   o.push(`</svg>`);
   return o.join("");
 }
 
 // Dark is "After Dark": black, not navy (owner, 2026-10-21).
-writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null }));
+writeFileSync(`${out}/map-dark.svg`, map({ dot: "#2B2A31", label: "#BDB6A6", pin: GOLD, route: "#E8B23E99", line: null, withShip: true }));
 // Light: darker grey dots and navy labels (owner, 2026-10-29: the pale
 // dots on the pale page had too little contrast; picked option A).
-writeFileSync(`${out}/map-light.svg`, map({ dot: "#8FA3B8", label: "#16204A", pin: "#C98A12", route: "#C98A12CC", line: "#16204A" }));
+writeFileSync(`${out}/map-light.svg`, map({ dot: "#8FA3B8", label: "#16204A", pin: "#C98A12", route: "#C98A12CC", line: "#16204A", withShip: true }));
 // The PDF cover: the chosen resort's castle larger, the other five faded.
 for (const r of RES) {
   writeFileSync(`${out}/map-cover-${r.id}.svg`, map({ dot: "#D5DFEF", label: "#3A4670", pin: "#C98A12", route: "#C98A1288", line: "#2B3A67", focus: r.id }));
@@ -214,7 +241,6 @@ for (const id of Object.keys(CASTLES)) {
 // "so inconsistent with the nice castles"): a Disney Cruise ship and an
 // Adventures by Disney trip, drawn the same way as the castles: cream with a
 // shaded right side, gold trim, on the navy circle with the gold ring.
-const CREAM = "#F5EFE0", SHADE = "#ddd7ca", DEEP = "#d3cec1";
 const badgeFrame = (inner) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">` +
   `<circle cx="60" cy="60" r="58" fill="#16204A"/><circle cx="60" cy="60" r="58" fill="none" stroke="${GOLD}" stroke-width="2.5"/>` +

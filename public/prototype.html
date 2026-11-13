@@ -48,7 +48,7 @@ try{ var pfTheme = localStorage.getItem("pf_theme"); if(pfTheme === "dark" || pf
   --lock:rgba(22,32,74,.06);
   --shadow:none;
   --ring:rgba(22,32,74,.12);
-  --hero-map:url("/public/brand/map-light.svg?v=2");
+  --hero-map:url("/public/brand/map-light.svg?v=3");
   --hero-bg:var(--surface);
   --route-label:#16204A; --route-halo:#FBFAF6; --route-line:#C98A12;
   --on-ink:#F5EFE0;          /* text on an --ink fill (pill buttons, avatar) */
@@ -89,7 +89,7 @@ try{ var pfTheme = localStorage.getItem("pf_theme"); if(pfTheme === "dark" || pf
     --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
     --lock:rgba(255,255,255,.05);
     --ring:rgba(255,255,255,.12);
-    --hero-map:url("/public/brand/map-dark.svg");
+    --hero-map:url("/public/brand/map-dark.svg?v=3");
     --route-label:#F5EFE0; --route-halo:#0B0B0E; --route-line:#E8B23E;
     --on-ink:#08080A;
     --frame:rgba(245,239,224,.24);
@@ -124,7 +124,7 @@ try{ var pfTheme = localStorage.getItem("pf_theme"); if(pfTheme === "dark" || pf
   --dv-hi-1:#5c2626; --dv-hi-2:#a13333; --dv-hi-3:#e0605a; --dv-hi-4:#f7c9c5;
   --lock:rgba(255,255,255,.05);
   --ring:rgba(255,255,255,.12);
-  --hero-map:url("/public/brand/map-dark.svg");
+  --hero-map:url("/public/brand/map-dark.svg?v=3");
   --route-label:#F5EFE0; --route-halo:#0B0B0E; --route-line:#E8B23E;
   --on-ink:#08080A;
   --frame:rgba(245,239,224,.24);
@@ -471,6 +471,19 @@ a{color:var(--ink)}
   #printDoc, #printDoc *{color:#111; background:transparent!important; box-shadow:none!important}
   #printDoc .pnote, #printDoc .pcost caption, #printDoc .pcost tr.sub td,
   #printDoc .presort .prank, #printDoc .pcover .psub{color:#555}
+
+  /* --- a cruise / Adventures by Disney page --- */
+  .pxpage .pbrand{display:flex; align-items:center; gap:8px; font-weight:700; margin:0 0 10px}
+  .pxpage .pbrand img{width:24px; height:24px}
+  .pxpage .pxhead h1{font-family:var(--f-head); font-size:22pt; margin:4px 0 6px}
+  .pxpage .pxhead img{width:56px; height:56px; float:right}
+  .pxpage .pxside{border:1px solid #bbb; border-radius:8px; padding:8px 14px; margin:12px 0 16px; break-inside:avoid}
+  .pxpage .pxside .tslines{list-style:none; padding:0; margin:6px 0}
+  .pxpage .pxside .tslines li{display:flex; justify-content:space-between}
+  .pxpage .pxside .tstotal{font-size:20pt; font-weight:800; margin:0}
+  .pxpage .card{break-inside:avoid; border:1px solid #ccc; margin:0 0 10px; padding:10px 14px}
+  .pxpage .cols{display:block}
+  .pxpage .ci{display:none}
 
   /* --- the cover --- */
   .pcover{break-after:page}
@@ -1329,6 +1342,14 @@ html{scroll-padding-top:76px}
 .brand .mark{width:36px; height:36px}
 .brand h1{font-size:23px; white-space:nowrap}
 .acct{flex-wrap:nowrap; gap:8px}
+.mastacts{display:flex; gap:8px; margin-left:auto; flex-wrap:nowrap}
+.mastacts .btn-sm{white-space:nowrap}
+.mastacts:not(:has(button:not([hidden]))){display:none}
+@media (max-width:1080px){
+  .masthead{flex-wrap:wrap; row-gap:10px}
+  .mastacts{order:3; width:100%; justify-content:center; margin-left:0}
+}
+@media (max-width:420px){ .mastacts{gap:6px} .mastacts .btn-sm{padding-left:12px; padding-right:12px} }
 .btn-quiet{border-color:transparent; background:transparent}
 .btn-quiet:hover{border-color:var(--rule-strong)}
 .sortby{display:inline-flex; align-items:center; gap:8px; margin-top:8px; font-size:13.5px; font-weight:600; color:var(--ink-2)}
@@ -1370,6 +1391,15 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <img class="mark" src="/public/brand/tab-icon.svg" alt="">
       <h1>Pricing the <span>Magic</span></h1>
     </a>
+    <!-- Save Search, Plan Budget and Save PDF ride in the top bar, so they
+         stay on screen while you scroll (owner, 2026-11-14: "Put the three
+         buttons ... in the top rail"). Shown once there are results. On a
+         narrow screen they take a row of their own under the logo. -->
+    <div class="mastacts">
+      <button class="btn btn-sm" id="saveSearchBtn" hidden>Save Search</button>
+      <button class="btn btn-sm" id="budgetBtn" hidden>Plan Budget</button>
+      <button class="btn btn-sm" id="printTop" hidden title="Save this comparison as a PDF">Save PDF</button>
+    </div>
     <div class="acct">
       <div class="tripsmenu" id="tripsMenu" hidden>
         <button class="btn btn-sm btn-quiet" id="tripsTop" aria-haspopup="true" aria-expanded="false"><span class="wide">My searches</span><span class="narrow">Saved</span></button>
@@ -1567,7 +1597,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       </div>
     </div>
     <figure class="herofig bleed">
-      <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong"></div>
+      <div class="heromap" role="img" aria-label="A world map with a small castle at each of the six Disney resorts: Anaheim, Orlando, Paris, Shanghai, Tokyo and Hong Kong, and a Disney cruise ship in the Atlantic"></div>
     </figure>
   </section>
 
@@ -1886,16 +1916,6 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
       <span class="viewtog">
         <button id="vBoard" aria-pressed="true">Board</button>
         <button id="vTable" aria-pressed="false">Table</button>
-      </span>
-      <!-- Saving is an act on the WHOLE comparison now, so the control
-           belongs beside the whole comparison rather than buried in one
-           resort's detail card. -->
-      <!-- Short labels so the three fit one line on a phone; centered if
-           they ever wrap (owner, 2026-10-30). -->
-      <span class="resbtns">
-      <button class="btn btn-sm" id="saveSearchBtn" hidden>Save Search</button>
-      <button class="btn btn-sm" id="budgetBtn" hidden>Plan Budget</button>
-      <button class="btn btn-sm" id="printTop" hidden title="Save this comparison as a PDF">Save PDF</button>
       </span>
     </div>
   </div>
@@ -3053,6 +3073,7 @@ async function runSearch(keepId){
   // never excluded.
   pdfChoice = null;
   sampleDocReady = false;   // a new search, so the held sample PDF is done
+  xDocHeld = false;
   params = readParams();
   const token = ++searchToken;
   if(searchAbort){ try { searchAbort.abort(); } catch {} }
@@ -6782,6 +6803,7 @@ $("#pdfPickGo").addEventListener("click", async ()=>{
   }
   pdfChoice = picked;
   sampleDocReady = false;
+  xDocHeld = false;
   closePdfPicker();
   buildPrintDoc();
   // The logo and cover map are images added a moment ago. Printing at once
@@ -6822,7 +6844,7 @@ function preloadBrandArt(){
 // once and afterprint fires before the page is drawn; the print sheet then
 // fires beforeprint again, which rebuilt the document from the visitor's own
 // (often empty) search and printed one blank page (owner, 2026-10-10).
-window.addEventListener("beforeprint", () => { if(!sampleDocReady) buildPrintDoc(); });
+window.addEventListener("beforeprint", () => { if(!sampleDocReady && !(xDocHeld && xHash())) buildPrintDoc(); });
 
 /* ------------------------------ the sample ------------------------------ */
 
@@ -7846,6 +7868,7 @@ function xSide(total, sub, lines, linkHref, linkText, bar){
   return `<p class="tslab">Your trip total</p><p class="tstotal">${usd(total)}</p><p class="tssub">${sub}</p>${bar || ""}
     <ul class="tslines">${lines.filter(l => l[1] !== null).map(([lab, v]) => `<li><span>${lab}</span><b>${usd(v)}</b></li>`).join("")}</ul>
     <a class="tsbtn primary" href="${linkHref}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none">${linkText} &rarr;</a>
+    <button type="button" class="tsbtn" id="xPdf">Save PDF</button>
     <button type="button" class="tsbtn link" id="xBack">Back to my search</button>`;
 }
 /* The cruise and ABD pages are built from the SAME pieces as a park trip
@@ -7936,6 +7959,28 @@ async function abdLiveFare(d){
   const h = xHash();
   if(h && h.kind === "abd") renderXPage();
 }
+/* Save PDF on a cruise or Adventures by Disney page (owner, 2026-11-14:
+   "put a Save PDF button on each page that views the trip"). The document
+   is this page as it stands: its heading, every card and the total, under
+   the same cover line and disclaimer as the park PDF. Held so the print
+   sheet's own "beforeprint" doesn't rebuild the park document over it. */
+let xDocHeld = false;
+async function printXPage(){
+  if(!session.pro){ openPdfSample(); return; }
+  const doc = $("#printDoc");
+  const head = $("#tripHead").cloneNode(true), body = $("#detail").cloneNode(true), side = $("#tripSide").cloneNode(true);
+  for(const el of [...body.querySelectorAll("#abdLive, .pxspin, button, input, select"), ...side.querySelectorAll("button")]) el.remove();
+  doc.innerHTML = `<section class="pxpage">
+      <p class="pbrand"><img src="/public/brand/tab-icon.svg" alt="">Pricing the Magic</p>
+      <div class="pxhead">${head.innerHTML}</div>
+      <div class="pxside">${side.innerHTML}</div>
+      ${body.innerHTML}
+    </section><p class="pfine">${esc(DISNEY_DISCLAIMER)}</p>`;
+  xDocHeld = true;
+  await printImagesReady(doc);
+  window.print();
+}
+$("#tripSide").addEventListener("click", e => { if(e.target.closest("#xPdf")) printXPage(); });
 function renderXPage(){
   ++detailToken;   // a park trip page still drawing must not paint over this one
   const h = xHash(), it = xItem(h);
@@ -8073,7 +8118,7 @@ function renderTripChrome(item){
     ${costBar(b)}
     <ul class="tslines">${lines.map(([lab, v]) => `<li><span>${lab}</span><b>${v < 0 ? "&minus;" + usd(-v) : usd(v)}</b></li>`).join("")}</ul>
     <button type="button" class="tsbtn primary" id="tsSave">${session.pro ? "Save this trip" : "Save this trip (Pro)"}</button>
-    <button type="button" class="tsbtn" id="tsPdf">${session.pro ? "Download the trip PDF" : "Download the trip PDF (Pro)"}</button>
+    <button type="button" class="tsbtn" id="tsPdf">${session.pro ? "Save PDF" : "Save PDF (Pro)"}</button>
     <button type="button" class="tsbtn link" id="tsBudget">Plan how to pay${session.pro ? "" : " (Pro)"}</button>
     ${next.length ? `<div class="tsnext"><p class="tslab">Next cheapest</p>${next.map(y =>
       `<button type="button" class="tsnextrow" data-open="${results.indexOf(y)}"><span>${esc(y.resort.name)}</span><span>${usd(y.price.total)} &rarr;</span></button>`).join("")}</div>` : ""}`;
