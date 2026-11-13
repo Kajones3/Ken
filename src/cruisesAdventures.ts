@@ -196,6 +196,69 @@ export async function listCruises(db: Db, limit = 1000): Promise<CruiseSighting[
     };
   });
 }
+/**
+ * Corrects one saved price (owner, 2026-11-14: "I need to be able to edit the
+ * cruise sailings"). For a row saved wrong, like Delete: a NEW price seen on
+ * another day is still a new row, so the history stays history. The row is
+ * re-checked as a whole, exactly as when it was first saved.
+ */
+export async function updateCruise(db: Db, id: string, input: CruiseInput, today: string):
+  Promise<{ ok: true } | { ok: false; reason: string; notFound?: boolean }> {
+  const cur = (await listCruises(db, 100000)).find((c) => c.id === id);
+  if (!cur) return { ok: false, reason: "That saved price isn't there any more.", notFound: true };
+  const merged: Record<string, unknown> = {
+    seenOn: cur.seenOn, title: cur.title, nights: cur.nights, departurePort: cur.departurePort ?? "",
+    ports: cur.ports ?? "", ship: cur.ship ?? "", sailDate: cur.sailDate ?? "",
+    cabin: cur.cabin ?? "", price: cur.price, currency: cur.currency, save: cur.save, datesCount: cur.datesCount,
+    theme: cur.theme ?? "", guaranteed: cur.guaranteed, note: cur.note ?? "",
+    sailEnd: cur.sailEnd ?? "", was: cur.was, soldOut: cur.soldOut,
+    partyAdults: cur.partyAdults, partyChildren: cur.partyChildren,
+  };
+  for (const [k, v] of Object.entries(input ?? {})) if (k in merged) merged[k] = v;
+  const v = validateCruise(merged as CruiseInput, today);
+  if (!v.ok) return v;
+  const r = v.value;
+  await db.query(
+    `update cruise_sightings set seen_on=$2, title=$3, nights=$4, departure_port=$5, ports=$6, ship=$7, sail_date=$8,
+       cabin=$9, price=$10, currency=$11, price_usd=$12, save_amount=$13, dates_count=$14, theme=$15, guaranteed=$16,
+       note=$17, sail_end=$18, was_price=$19, sold_out=$20, party_adults=$21, party_children=$22
+     where id=$1`,
+    [id, r.seenOn, r.title, r.nights, r.departurePort, r.ports, r.ship, r.sailDate, r.cabin, r.price, r.currency,
+      r.priceUsd, r.save, r.datesCount, r.theme, r.guaranteed, r.note, r.sailEnd, r.was, r.soldOut,
+      r.partyAdults, r.partyChildren]);
+  return { ok: true };
+}
+
+/**
+ * Facts about a whole cruise, set on every row saved under its name: the
+ * ship, nights, home port and ports of call (the Galveston 7-night had no
+ * ports line, so nothing could price it). Blank = leave as it is; "-" clears.
+ * Optionally renames the cruise (rows under the new name join it).
+ */
+export async function updateCruiseDetails(db: Db, input: {
+  title?: unknown; newTitle?: unknown; ship?: unknown; nights?: unknown; departurePort?: unknown; ports?: unknown;
+}): Promise<{ ok: true; changed: number } | { ok: false; reason: string }> {
+  const title = text(input.title, 160);
+  if (!title) return { ok: false, reason: "Which cruise? Its name is missing." };
+  const sets: string[] = [], vals: unknown[] = [title];
+  const field = (col: string, raw: unknown, max: number) => {
+    if (raw === undefined || raw === null || raw === "") return;
+    vals.push(raw === "-" ? null : text(raw, max)); sets.push(`${col} = $${vals.length}`);
+  };
+  field("ship", input.ship, 80); field("departure_port", input.departurePort, 80); field("ports", input.ports, 300);
+  if (input.nights !== undefined && input.nights !== null && input.nights !== "") {
+    const n = int(input.nights, 1, 60);
+    if (n === "bad" || n === null) return { ok: false, reason: "Nights should be a whole number from 1 to 60." };
+    vals.push(n); sets.push(`nights = $${vals.length}`);
+  }
+  const newTitle = text(input.newTitle, 160);
+  if (newTitle && newTitle !== title) { vals.push(newTitle); sets.push(`title = $${vals.length}`); }
+  if (!sets.length) return { ok: false, reason: "Nothing to change." };
+  const r = await db.query(`update cruise_sightings set ${sets.join(", ")} where title = $1 returning id`, vals);
+  if (!r.rows.length) return { ok: false, reason: "No saved prices under that name." };
+  return { ok: true, changed: r.rows.length };
+}
+
 export async function deleteCruise(db: Db, id: string): Promise<boolean> {
   return (await db.query(`delete from cruise_sightings where id = $1 returning id`, [id])).rows.length > 0;
 }

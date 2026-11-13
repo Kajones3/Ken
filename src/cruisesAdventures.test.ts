@@ -189,3 +189,27 @@ test("the one-time cleanup keeps one of each cruise the owner saved two or three
   assert.deepEqual(left.map((r) => [r.title.slice(0, 6), r.note]), [["4-Nigh", "disneycruise.com"], ["5-Nigh", null]]);
   await db.close();
 });
+
+test("a saved cruise price can be corrected, and a cruise's details set on every row", async () => {
+  const { updateCruise, updateCruiseDetails } = await import("./cruisesAdventures.js");
+  const db = await memoryDb();
+  const today = "2026-11-14";
+  const t = "7-Night Bahamian Cruise from Galveston";
+  await saveCruises(db, [
+    { title: t, sailDate: "2027-04-18", cabin: "inside", price: 1200, partyAdults: 2, partyChildren: 2 },
+    { title: t, sailDate: "2027-04-18", cabin: "verandah", price: 1600, partyAdults: 2, partyChildren: 2 },
+  ], today);
+  const [row] = await listCruises(db);
+  assert.deepEqual(await updateCruise(db, row!.id, { price: 1250, partyChildren: 0 }, today), { ok: true });
+  const fixed = (await listCruises(db)).find((r) => r.id === row!.id)!;
+  assert.equal(fixed.price, 1250);
+  assert.equal(fixed.partyChildren, 0);
+  assert.equal(fixed.sailDate, "2027-04-18", "fields not sent are kept");
+  const bad = await updateCruise(db, row!.id, { price: "abc" }, today);
+  assert.equal(bad.ok, false);
+  const d = await updateCruiseDetails(db, { title: t, ports: "Castaway Cay, Cozumel", ship: "Magic", nights: 7 });
+  assert.deepEqual(d, { ok: true, changed: 2 });
+  assert.ok((await listCruises(db)).every((r) => r.ports === "Castaway Cay, Cozumel" && r.ship === "Magic" && r.nights === 7));
+  assert.equal((await updateCruiseDetails(db, { title: t })).ok, false, "nothing to change");
+  await db.close();
+});

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { memoryDb, type Db } from "./db.js";
 import {
-  issueVerification, verifyEmailToken, isVerified, sendVerification,
+  issueVerification, verifyEmailToken, isVerified, sendVerification, sendVerificationIfQuiet,
   buildVerifyEmail, verifyUrl, requireVerifiedEmail, VERIFY_TOKEN_HOURS,
 } from "./verifyEmail.js";
 import { signUp, signIn, AuthError, createSession, currentUser, accountByPassword } from "./auth.js";
@@ -237,5 +237,22 @@ test("asking for a new link needs the right password, gate or no gate", async ()
   const u = await accountByPassword(db, "Friend@Example.test", "correcthorse");
   assert.equal(u?.email, "friend@example.test");
   assert.equal(u?.emailVerified, false);
+  await db.close();
+});
+
+test("an unconfirmed sign-in gets a fresh link, but not twice in a few minutes", async () => {
+  const db = await memoryDb();
+  const id = await makeUser(db);
+  const { sent, sender } = recorder();
+  assert.equal(await sendVerificationIfQuiet(db, id, "traveler@example.test", sender), "sent");
+  assert.equal(await sendVerificationIfQuiet(db, id, "traveler@example.test", sender), "recent");
+  assert.equal(sent.length, 1);
+  // An old, expired link doesn't count as recent: a new one goes out.
+  await db.query(`update email_verifications set sent_at = now() - interval '3 days', expires_at = now() - interval '1 day'`);
+  assert.equal(await sendVerificationIfQuiet(db, id, "traveler@example.test", sender), "sent");
+  assert.equal(sent.length, 2);
+  const bad = recorder({ throws: true });
+  await db.query(`delete from email_verifications`);
+  assert.equal(await sendVerificationIfQuiet(db, id, "traveler@example.test", bad.sender), "failed");
   await db.close();
 });

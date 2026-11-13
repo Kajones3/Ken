@@ -3001,13 +3001,22 @@ function renderCruises(rows){
     const dated = list.filter(r => r.sailDate).length, sailings = new Set(list.filter(r => r.sailDate).map(r => r.sailDate)).size;
     return `<details class="calcard"><summary style="cursor:pointer">
     <b>${esc(title)}</b> <span class="count">${list.length} price${list.length === 1 ? "" : "s"} kept${sailings ? ` · ${sailings} sailing${sailings === 1 ? "" : "s"}` : ""}${list[0].ship ? " · Disney " + esc(list[0].ship) : ""}${list[0].ports ? " · " + esc(list[0].ports) : ""}</span></summary>
+    <form class="crfacts" data-crfacts="${esc(title)}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin:8px 0">
+      <label>Name<br><input name="newTitle" value="${esc(title)}" size="38"></label>
+      <label>Ship<br><input name="ship" value="${esc(list.find(r => r.ship)?.ship || "")}" size="10"></label>
+      <label>Nights<br><input name="nights" type="number" min="1" max="60" value="${list.find(r => r.nights)?.nights ?? ""}" style="width:5em"></label>
+      <label>Sails from<br><input name="departurePort" value="${esc(list.find(r => r.departurePort)?.departurePort || "")}" size="22"></label>
+      <label style="flex:1 1 260px">Ports of call (as Disney lists them)<br><input name="ports" value="${esc(list.find(r => r.ports)?.ports || "")}" style="width:100%"></label>
+      <button class="btn">Save cruise details</button> <span class="said"></span>
+      <small class="count" style="flex-basis:100%">Applies to every price saved under this cruise. Leave a box blank to keep what's there; type a dash (-) to clear it.</small>
+    </form>
     <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Sails</th><th>Room</th><th>Party</th><th class="n">Per person</th><th class="n" title="Disney's recommended gratuities for one person over the whole sailing">+ Gratuities</th><th class="n">Was / save</th><th class="n">Dates</th><th></th></tr></thead><tbody>
     ${list.slice().sort((a, b) => (b.seenOn > a.seenOn) - (b.seenOn < a.seenOn) || String(a.sailDate || "").localeCompare(String(b.sailDate || "")) || ROOMS.findIndex(([k]) => k === a.cabin) - ROOMS.findIndex(([k]) => k === b.cabin)).map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.sailDate ? esc(fmtD(r.sailDate)) : "from price"}</td>
       <td>${esc((CABINS.find(([v]) => v === (r.cabin || "")) || [, ""])[1])}</td><td>${partyOf(r)}</td>
       <td class="n">${r.soldOut ? '<span class="count">sold out</span>' : cash(r.price, r.currency) + (r.currency !== "USD" ? ` <span class="count">($${num(Math.round(r.priceUsd))})</span>` : "")}</td>
       <td class="n">${r.soldOut ? "" : r.withGratuityUsd === null ? '<span class="count">needs nights</span>' : `$${num(Math.round(r.withGratuityUsd))} <span class="count">(+$${num(Math.round(r.gratuityUsd))})</span>`}</td>
       <td class="n">${r.was !== null && r.was !== undefined ? `<s>${cash(r.was, r.currency)}</s>` : r.save === null ? "" : "save " + cash(r.save, r.currency)}</td><td class="n">${r.datesCount ?? ""}</td>
-      <td class="n"><button class="btn" data-crdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
+      <td class="n" style="white-space:nowrap"><button class="btn" data-credit="${r.id}" title="Fix a price saved wrong">Edit</button> <button class="btn" data-crdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
     </tbody></table></div></details>`; }).join("");
 }
 const pct = v => v === null || v === undefined ? "" : Math.round(v * 100) + "%";
@@ -3141,6 +3150,54 @@ document.addEventListener("click", async e => {
   if(!confirm("Delete this saved price summary? Only if it was saved by mistake.")) return;
   const r = await fetch("/api/admin/cruise-rates/" + d.dataset.crratedel, { method: "DELETE" });
   if(r.ok) renderRates((await r.json()).rates);
+});
+/* Editing (owner, 2026-11-14): a whole cruise's facts, or one saved price. */
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("[data-crfacts]"); if(!f) return;
+  e.preventDefault();
+  const said = f.querySelector(".said"), fd = new FormData(f);
+  const body = { title: f.dataset.crfacts };
+  for(const k of ["newTitle","ship","nights","departurePort","ports"]) body[k] = String(fd.get(k) || "").trim();
+  said.className = "said"; said.textContent = "Saving...";
+  const r = await fetch("/api/admin/cruises/details", { method:"PUT", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save that."; return; }
+  renderCruises(b.cruises); loadCruiseHoles();
+});
+document.addEventListener("click", e => {
+  const d = e.target.closest("[data-credit]"); if(!d) return;
+  const r = crSaved.find(x => x.id === d.dataset.credit); if(!r) return;
+  const tr = d.closest("tr");
+  if(tr.nextElementSibling && tr.nextElementSibling.classList.contains("credrow")){ tr.nextElementSibling.remove(); return; }
+  const v = x => x === null || x === undefined ? "" : esc(String(x));
+  const ed = document.createElement("tr");
+  ed.className = "credrow";
+  ed.innerHTML = `<td colspan="9"><form data-credform="${r.id}" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end">
+    <label>Seen<br><input type="date" name="seenOn" value="${v(r.seenOn)}"></label>
+    <label>Sails<br><input type="date" name="sailDate" value="${v(r.sailDate)}"></label>
+    <label>Last day<br><input type="date" name="sailEnd" value="${v(r.sailEnd)}"></label>
+    <label>Room<br><select name="cabin">${CABINS.map(([k, l]) => `<option value="${k}"${(r.cabin || "") === k ? " selected" : ""}>${esc(l || "(from price)")}</option>`).join("")}</select></label>
+    <label>Adults<br><input type="number" name="partyAdults" min="1" max="8" value="${v(r.partyAdults)}" style="width:4em"></label>
+    <label>Children<br><input type="number" name="partyChildren" min="0" max="8" value="${v(r.partyChildren)}" style="width:4em"></label>
+    <label>Per person<br><input name="price" value="${v(r.price)}" style="width:6em"></label>
+    <label>Was<br><input name="was" value="${v(r.was)}" style="width:6em"></label>
+    <label>Currency<br><select name="currency">${["USD","GBP","EUR"].map(c => `<option${r.currency === c ? " selected" : ""}>${c}</option>`).join("")}</select></label>
+    <label><input type="checkbox" name="soldOut"${r.soldOut ? " checked" : ""}> Sold out</label>
+    <button class="btn">Save</button> <span class="said"></span></form></td>`;
+  tr.after(ed);
+});
+document.addEventListener("submit", async e => {
+  const f = e.target.closest("[data-credform]"); if(!f) return;
+  e.preventDefault();
+  const said = f.querySelector(".said"), fd = new FormData(f);
+  const body = {};
+  for(const k of ["seenOn","sailDate","sailEnd","cabin","partyAdults","partyChildren","price","was","currency"]) body[k] = String(fd.get(k) ?? "").trim();
+  body.soldOut = fd.get("soldOut") === "on";
+  said.className = "said"; said.textContent = "Saving...";
+  const r = await fetch("/api/admin/cruises/" + f.dataset.credform, { method:"PUT", headers:{"content-type":"application/json"}, body: JSON.stringify(body) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save that."; return; }
+  renderCruises(b.cruises); loadCruiseHoles();
 });
 document.addEventListener("click", async e => {
   const d = e.target.closest("[data-crdel]"); if(!d) return;

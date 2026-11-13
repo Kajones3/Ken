@@ -42,8 +42,9 @@ import { loadBook, dateStr } from "./book.js";
 import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COLUMNS as CHECK_COLUMNS } from "./priceChecks.js";
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
-import { priceCruises, countUnder } from "./cruisePricing.js";
-import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles, cruiseDriveLookup } from "./cruiseData.js";
+import { priceCruises, knownSailings } from "./cruisePricing.js";
+import { adventuresInMonth, priceForParty, underPerPerson } from "./adventureSearch.js";
+import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles, cruiseDriveLookup, extraGuestShare } from "./cruiseData.js";
 import { homePortOf, CRUISE_SHIPS } from "./cruiseFacts.js";
 import { listShipItems, saveShipItems, deleteShipItem, shipSummary, SHIP_ITEM_KINDS, SHIP_KIND_LABEL, SHIP_HOME_NOTES } from "./ships.js";
 import { loadScoreboard } from "./fareScoreboard.js";
@@ -53,11 +54,12 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { saveCruises, listCruises, deleteCruise, saveAdventure, saveAdventureDepartures, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
+import { saveCruises, listCruises, deleteCruise, updateCruise, updateCruiseDetails, saveAdventure, saveAdventureDepartures, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
 import { seedTickets, allTierMonths } from "./jobs/refresh.js";
+import { dealEmailsOnHold } from "./jobs/alerts.js";
 import { ensureRoadMiles, osrmMiles, roadMilesLive } from "./roadMiles.js";
 import { haversineMiles } from "./geo.js";
 import { fetchExactFare, limitsFromEnv, remainingForUser } from "./exactFare.js";
@@ -81,7 +83,7 @@ import {
   lockoutMessage,
 } from "./signinThrottle.js";
 import { requestReset, lookupReset, consumeReset, RESET_TOKEN_HOURS } from "./passwordReset.js";
-import { sendVerification, verifyEmailToken, VERIFY_TOKEN_HOURS, requireVerifiedEmail } from "./verifyEmail.js";
+import { sendVerification, sendVerificationIfQuiet, verifyEmailToken, VERIFY_TOKEN_HOURS, requireVerifiedEmail } from "./verifyEmail.js";
 import { loadHotelLearning, hotelLearningLines } from "./hotelLearning.js";
 import { loadAirfareIndexSummary } from "./airfareIndex.js";
 
@@ -648,10 +650,33 @@ function twoShown(quotes: Map<string, MonthQuote[]>, month: string): string[] {
 }
 
 /**
- * Disney cruises beside the park trips (owner, 2026-11-13). Planner Pro gets
- * every priced sailing in the searched month (cruisePricing.ts: a sailing
- * shows only when every line has a real number). Everyone else gets a COUNT
- * only ("N Disney Cruise sailings cost less than this trip"), never which.
+ * Are deal emails on hold (no postal address yet, jobs/alerts.ts)? The
+ * account panel hides its deal-email switch while they are (owner,
+ * 2026-11-14: a switch for emails nobody is sent). The address lives in the
+ * Actions job, so the latest finished alerts run decides; this server's own
+ * MAIL_POSTAL_ADDRESS, if set, means not held.
+ */
+async function dealEmailsHeld(): Promise<boolean> {
+  if (!dealEmailsOnHold()) return false;
+  try {
+    const r = await db.query<{ note: string }>(
+      `select note from fetch_runs where job = 'alerts' and finished_at is not null order by started_at desc limit 1`);
+    return !r.rows[0] || r.rows[0].note.startsWith("deal emails on hold");
+  } catch { return true; }
+}
+
+/**
+ * Disney cruises and Adventures by Disney beside the park trips (owner,
+ * 2026-11-13, reworked 2026-11-14). Every sailing and ABD departure we know of
+ * in the searched month is surfaced, whatever the party:
+ *  - Planner Pro: each sailing priced for THEIR party (Disney's own price when
+ *    the owner saved that exact party, else an estimate that says what it
+ *    assumed: staterooms, 3rd/4th guest share); a sailing we can price only
+ *    as far as the cruise itself comes back as "cruise only"; ABD departures
+ *    with ABD's price for the party.
+ *  - Signed-in free: how many sailings, and "an ABD trip from under $X a
+ *    person". Never which.
+ *  - Guest: only whether there are any (sign up to see how many).
  * A Planner Pro search also records the ports' airports as demand, so
  * tonight's paid flight searches buy those routes.
  */
@@ -661,30 +686,43 @@ async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
   const month = q.get("month") ?? "";
   if (!/^\d{4}-\d{2}$/.test(month)) return { error: "month" as const };
   const today = todayISO();
-  const o = ORIGIN_BY_IATA.get(p.origin);
   const rows = await loadSightings(db);
-  const { priced } = priceCruises({
+  const known = knownSailings(rows, today, month);
+  const deps = adventuresInMonth(await listAdventures(db, 5000), today, month);
+  if (!user) return { pro: false, guest: true, month, anySailings: known.length > 0, anyAdventures: deps.length > 0 };
+  const pro = isPro(user.proUntil);
+  if (!pro) {
+    return { pro: false, month, sailings: known.length,
+      adventures: { count: deps.length, underPerPerson: underPerPerson(deps) } };
+  }
+  const o = ORIGIN_BY_IATA.get(p.origin);
+  const { priced, cruiseOnly } = priceCruises({
     rows, party: { adults: p.adults, childAges: p.childAges },
     origin: o ? { iata: o.iata, lat: o.lat, lon: o.lon } : null,
     today, month, rates: await gratuityRates(db), flight: await cruiseFlightLookup(db, p.origin, today),
     drive: o ? await cruiseDriveLookup(db, { lat: o.lat, lon: o.lon }, { wear: q0.get("driveWearAndTear") !== "0" }) : undefined,
+    extraShare: await extraGuestShare(db),
   });
-  const pro = !!user && isPro(user.proUntil);
-  if (pro) {
-    const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
-    const byOwner = !!ownerEmail && user!.email.trim().toLowerCase() === ownerEmail;
-    const airports = new Set<string>();
-    for (const r of rows) {
-      if (!r.sailDate || r.sailDate.slice(0, 7) !== month) continue;
-      const port = homePortOf(r.departurePort) ?? homePortOf(r.title);
-      if (port) airports.add(port.airport);
-    }
-    if (airports.size) void recordSearch(db, p.origin, [...airports], month, !byOwner);
-    const ship = await listShipItems(db);
-    return { pro: true, month, cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null })) };
+  const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  const byOwner = !!ownerEmail && user.email.trim().toLowerCase() === ownerEmail;
+  const airports = new Set<string>();
+  for (const r of rows) {
+    if (!r.sailDate || r.sailDate.slice(0, 7) !== month) continue;
+    const port = homePortOf(r.departurePort) ?? homePortOf(r.title);
+    if (port) airports.add(port.airport);
   }
-  const under = Number(q0.get("under"));
-  return { pro: false, month, count: under > 0 ? countUnder(priced, under) : priced.length, under: under > 0 ? under : null };
+  if (airports.size) void recordSearch(db, p.origin, [...airports], month, !byOwner);
+  const ship = await listShipItems(db);
+  const shown = new Set([...priced, ...cruiseOnly].map((c) => c.id));
+  return {
+    pro: true, month, sailings: known.length,
+    cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null })),
+    cruiseOnly,
+    // Sailings we know of but hold no recent price for (older than 3 weeks,
+    // sold out, or no adult in the saved party): named, linked, never priced.
+    unpriced: known.filter((k) => !shown.has(`${k.title}|${k.sailDate}`)),
+    adventures: deps.map((d) => ({ ...d, party: priceForParty(d, { adults: p.adults, childAges: p.childAges }) })),
+  };
 }
 
 async function bestMonths(q0: URLSearchParams, user: SessionUser | null) {
@@ -1101,6 +1139,20 @@ const server = createServer(async (req, res) => {
           // address or a weak password is a form mistake, and counting those
           // would lock people out for typing badly rather than for guessing.
           if (!isSignup && e.reason === "bad_credentials") await recordSigninFailure(db, scopes);
+          // Right password, address not confirmed: send a fresh link now (the
+          // first one may have expired, gone to spam, or predate the gate), and
+          // say so. The old message promised "the link we sent" and sent nothing.
+          if (!isSignup && e.reason === "unverified") {
+            const acct = await accountByPassword(db, body.email, password);
+            const sender = pickEmailSender();
+            const how = acct ? await sendVerificationIfQuiet(db, acct.id, acct.email, sender) : "failed";
+            const message = how === "failed" || sender.name === "console"
+              ? "Confirm your email address before signing in. We couldn't send a new link just now: use \"Send a new confirmation link\" below in a minute."
+              : how === "recent"
+                ? `Confirm your email address before signing in. We sent a link to ${acct!.email} a few minutes ago: check your inbox and spam folder.`
+                : `Confirm your email address before signing in. We just sent a new link to ${acct!.email}: check your inbox and spam folder.`;
+            return send(400, { error: "unverified", message, sent: how });
+          }
           // 401 for a credential mismatch, 400 for something the form can
           // fix (bad address, weak password, wrong form entirely).
           return send(e.reason === "bad_credentials" ? 401 : 400,
@@ -1283,6 +1335,7 @@ const server = createServer(async (req, res) => {
         proPass: pro ? user.proPass : null, perks: pro ? passPerks(user.proPass) : null,
         homeAirport: user.homeAirport, emailVerified: user.emailVerified, exactFare,
         dealEmails: await dealEmailsOn(db, user.id),
+        dealEmailsHeld: await dealEmailsHeld(),
         // Only so the masthead can offer the link. Every admin route resolves
         // this again for itself — a client that lied about it would get a page
         // it still cannot save anything from.
@@ -2137,6 +2190,19 @@ const server = createServer(async (req, res) => {
       const r = await saveAdventure(db, body, todayISO());
       if (!r.ok) return send(400, { error: "rejected", message: r.reason });
       return send(200, { ok: true, id: r.id, adventures: await listAdventures(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/cruises/details" && req.method === "PUT") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await updateCruiseDetails(db, await readBody(req) as any);
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, changed: r.changed, cruises: await listCruises(db) }, { cache: "no-store" });
+    }
+    const crEdit = url.pathname.match(/^\/api\/admin\/cruises\/([0-9a-f-]{36})$/);
+    if (crEdit && req.method === "PUT") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await updateCruise(db, crEdit[1]!, await readBody(req) as any, todayISO());
+      if (!r.ok) return send("notFound" in r && r.notFound ? 404 : 400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, cruises: await listCruises(db) }, { cache: "no-store" });
     }
     const sightMatch = url.pathname.match(/^\/api\/admin\/(cruises|adventures|cruise-rates)\/([0-9a-f-]{36})$/);
     if (sightMatch && req.method === "DELETE") {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { priceCruises, pickCruiseFare, countUnder, CRUISE_FRESH_DAYS, type SightingIn } from "./cruisePricing.js";
+import { priceCruises, pickCruiseFare, countUnder, roomsFor, roomWeight, knownSailings, CRUISE_FRESH_DAYS, type SightingIn } from "./cruisePricing.js";
 import { portsOfCall, excursionAt, homePortOf, PORTS_OF_CALL, CRUISE_SHIPS } from "./cruiseFacts.js";
 
 const today = "2026-11-13";
@@ -27,8 +27,54 @@ test("a cruise prices only for the party the price was saved for", () => {
   // two adults + the 8-year-old at the child price; Lookout Cay is $0; the baby free.
   assert.equal(c.lines.excursions, 194 * 2 + 139);
   assert.equal(c.total, 3600 + 256 + 900 + 232 + 527);
-  const couple = priceCruises({ rows: [base], party: { adults: 2, childAges: [] }, origin: ATL, today, rates, flight });
-  assert.equal(couple.priced.length, 0, "a different party never borrows this party's average");
+  assert.equal(c.estimate, null, "Disney's own price for this exact party");
+});
+
+test("another party is ESTIMATED from the saved one, and says how (owner, 2026-11-14)", () => {
+  // Saved: 2 adults + 2 children at $900 avg = $3,600 for one room.
+  // One room of 4 = 2 + 2 x 0.5 = 3 full fares, so a full fare is $1,200.
+  const couple = priceCruises({ rows: [base], party: { adults: 2, childAges: [] }, origin: ATL, today, rates, flight, extraShare: 0.5 });
+  const c = couple.priced[0]!;
+  assert.equal(c.lines.fare, 2400);
+  assert.deepEqual(c.estimate, { fromAdults: 2, fromChildren: 2, rooms: [2], extraShare: 0.5 });
+  // A party of 6: two rooms of 3 = 2 x 2.5 = 5 full fares.
+  const six = priceCruises({ rows: [base], party: { adults: 2, childAges: [10, 8, 6, 4] }, origin: ATL, today, rates, flight, extraShare: 0.5 });
+  assert.equal(six.priced[0]!.lines.fare, 6000);
+  assert.deepEqual(six.priced[0]!.estimate!.rooms, [3, 3]);
+  // One adult alone pays for two.
+  const solo = priceCruises({ rows: [base], party: { adults: 1, childAges: [] }, origin: ATL, today, rates, flight, extraShare: 0.5 });
+  assert.equal(solo.priced[0]!.lines.fare, 2400);
+  // The exact party wins over a closer-sized estimate when both are saved.
+  const both = priceCruises({ rows: [base, { ...base, partyChildren: 0, priceUsd: 1000 }], party: { adults: 2, childAges: [] },
+    origin: ATL, today, rates, flight });
+  assert.equal(both.priced[0]!.lines.fare, 2000);
+  assert.equal(both.priced[0]!.estimate, null);
+});
+
+test("staterooms: up to 4 each, as even as it goes, an adult in each", () => {
+  assert.deepEqual(roomsFor(2, 2), [4]);
+  assert.deepEqual(roomsFor(2, 3), [3, 2]);
+  assert.deepEqual(roomsFor(3, 6), [3, 3, 3]);
+  assert.equal(roomsFor(1, 4), null, "two rooms need two adults");
+  assert.equal(roomWeight(1, 0.5), 2);
+  assert.equal(roomWeight(4, 0.5), 3);
+});
+
+test("a sailing missing travel or port prices comes back as cruise only", () => {
+  const r = priceCruises({ rows: [{ ...base, ports: "Catalina Island, Ensenada" }], party: family, origin: ATL, today, rates, flight });
+  assert.equal(r.priced.length, 0);
+  assert.equal(r.cruiseOnly.length, 1);
+  assert.deepEqual(r.cruiseOnly[0]!.notIncluded, ["port adventures"]);
+  assert.equal(r.cruiseOnly[0]!.total, 3600 + 256);
+  const noFly = priceCruises({ rows: [base], party: family, origin: ATL, today, rates, flight: () => null });
+  assert.deepEqual(noFly.cruiseOnly[0]!.notIncluded, ["getting there"]);
+});
+
+test("every sailing in the month is known, priced or not", () => {
+  const rows = [base, { ...base, title: "7-Night Bahamian Cruise from Galveston", sailDate: "2027-02-20", seenOn: "2026-09-01", ports: null }];
+  const k = knownSailings(rows, today, "2027-02");
+  assert.deepEqual(k.map((x) => x.sailDate), ["2027-02-10", "2027-02-20"]);
+  assert.equal(knownSailings(rows, today, "2027-03").length, 0);
 });
 
 test("stale, past, sold-out and party-less prices fall off", () => {

@@ -135,6 +135,22 @@ export async function sendVerification(
   }
 }
 
+/**
+ * Sends a fresh link unless one went out in the last `quietMinutes`, so an
+ * unconfirmed sign-in (owner's wife, 2026-11-14: "asked to verify her account
+ * but never got an email") gets a link without anyone hunting for a button,
+ * and repeated sign-in attempts don't flood an inbox. Returns what happened.
+ */
+export async function sendVerificationIfQuiet(
+  db: Db, userId: string, email: string, sender: EmailSender, quietMinutes = 5,
+): Promise<"sent" | "recent" | "failed"> {
+  const { rows } = await db.query<{ recent: boolean }>(
+    `select (sent_at > now() - ($2 || ' minutes')::interval) as recent from email_verifications
+      where user_id = $1 and expires_at > now()`, [userId, String(quietMinutes)]);
+  if (rows[0]?.recent) return "recent";
+  return (await sendVerification(db, userId, email, sender)) ? "sent" : "failed";
+}
+
 export type VerifyResult =
   | { ok: true; email: string; alreadyVerified: boolean }
   | { ok: false; reason: "unknown_token" | "expired" };
