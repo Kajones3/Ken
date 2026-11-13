@@ -130,12 +130,13 @@ cruise and ABD trips like we do for the parks trips?"
 - **Everyone else: ONE plain line above the trip cards** (`beyondStripHtml()`,
   `.beyond`, gold left rule, ship icon, no blur): guest "Disney Cruise Line
   sails and Adventures by Disney has trips in April 2027." + "Become a
-  Planner, free, to see how many"; free account "Also in April 2027: three
+  Planner, free, to learn more" (owner: "see how many" promised more than select sailings);; free account "Also in April 2027: three
   Disney Cruise sailings and an Adventures by Disney trip from under $3,000 a
   person. Planner Pro prices them for your party ..." + "See what Planner Pro
   adds" (opens `proPitch("cruises")`). The old dashed teaser card is gone.
-  The blurred LOCKED PARK cards for guests are unchanged (owner may mean
-  those too: ask).
+  The blurred LOCKED PARK cards for guests STAY (owner, 2026-11-14: "signed
+  out guests should still get the blurry boxes"). The sign-up dialog's title
+  is "Become A Planner For Free!" (owner's wording, `syncAuthMode`).
 - **Overview pages** reuse `#tripPage` (same Back, browser back, scroll
   restore): hashes `#cruise=N`, `#only=N`, `#abd=N` (index into
   cruiseState's lists; `xHash()`, `xItem()`, `openXPage()`, `renderXPage()`;
