@@ -14,6 +14,8 @@
  * Touches nothing: select-only, no provider calls, no writes.
  */
 import { unzipBody } from "../rawResponses.js";
+import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseDriveLookup } from "../cruiseData.js";
+import { priceCruises } from "../cruisePricing.js";
 import { loadForecastScores, progressReport } from "../fareForecasts.js";
 import { rawPeek } from "./rawPeek.js";
 import { deepDive } from "./deepDive.js";
@@ -24,7 +26,7 @@ import { loadModelInputs } from "../fareModelDb.js";
 import { fitFareModel, fitLeverModel, isInternational, leaveOneOut, type PlainFit } from "../fareModel.js";
 import { weekdayPattern, WEEKDAYS } from "../dayOfWeek.js";
 import { loadIndicatorStudy } from "../indicatorStudy.js";
-import { ORIGINS, RESORTS, TRIP_BUCKETS } from "../config.js";
+import { ORIGINS, ORIGIN_BY_IATA, RESORTS, TRIP_BUCKETS } from "../config.js";
 import { getDb, type Db } from "../db.js";
 import { addDaysISO, monthKey, todayISO } from "../dates.js";
 import { nationalBtsAverage, basisVerdict, BTS_PUBLISHED_AVG_USD } from "../fareHealth.js";
@@ -64,6 +66,32 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     const av = await db.query<any>(`select trip_name, days, price, trip_type, seen_on::text seen from adventure_sightings order by seen_on, trip_name`);
     for (const r of av.rows) out.push(`- Adventure ${r.trip_name}: ${r.days} days, $${r.price}, ${r.trip_type ?? "type ?"}, seen ${r.seen}`);
   } catch (e) { out.push(`sightings failed: ${(e as Error).message}`); }
+  out.push("");
+  // Why a cruise does or doesn't show for a search (owner, 2026-11-14: an
+  // April 2027 cruise missing for 2 adults from RDU). Read-only: road miles
+  // are read from what's held, never fetched here.
+  try {
+    out.push("## Cruise search check (read-only)");
+    const rows = await loadSightings(db);
+    for (const r of rows.filter((x) => (x.sailDate ?? "").startsWith("2027-0"))) {
+      out.push(`- row: ${r.title} | sail ${r.sailDate ?? "?"}..${r.sailEnd ?? "?"} | ${r.nights ?? "?"}n | ${r.cabin ?? "no room"} | $${r.priceUsd ?? "-"}${r.soldOut ? " SOLD OUT" : ""} | party ${r.partyAdults ?? "?"}+${r.partyChildren ?? "?"} | seen ${r.seenOn} | port "${r.departurePort ?? ""}" | ports "${r.ports ?? ""}"`);
+    }
+    for (const r of rows.filter((x) => !x.sailDate)) out.push(`- undated: ${r.title} | port "${r.departurePort ?? ""}" | ports "${r.ports ?? ""}" | seen ${r.seenOn}`);
+    const prevLive = process.env.ROAD_MILES_LIVE;
+    process.env.ROAD_MILES_LIVE = "false";
+    try {
+      for (const [from, month] of [["RDU", "2027-04"], ["ATL", "2027-04"]] as const) {
+        const o = ORIGIN_BY_IATA.get(from);
+        if (!o) continue;
+        const res = priceCruises({ rows, party: { adults: 2, childAges: [] }, origin: { iata: o.iata, lat: o.lat, lon: o.lon },
+          today, month, rates: await gratuityRates(db), flight: await cruiseFlightLookup(db, from, today),
+          drive: await cruiseDriveLookup(db, { lat: o.lat, lon: o.lon }) });
+        out.push(`${from} ${month}, 2 adults: ${res.priced.length} priced, ${res.holes.length} hole(s)`);
+        for (const c of res.priced) out.push(`  priced ${c.title} ${c.sailDate} $${c.total} (${c.travel.default})`);
+        for (const h of res.holes) out.push(`  hole ${h.title} ${h.sailDate}: ${h.what}`);
+      }
+    } finally { if (prevLive === undefined) delete process.env.ROAD_MILES_LIVE; else process.env.ROAD_MILES_LIVE = prevLive; }
+  } catch (e) { out.push(`cruise check failed: ${(e as Error).message}`); }
   out.push("");
   try { out.push(...await errorBudget(db)); } catch (e) { out.push(`error budget failed: ${(e as Error).message}`); }
   try { out.push(...await deepDive(db)); } catch (e) { out.push(`deep dive failed: ${(e as Error).message}`); }
