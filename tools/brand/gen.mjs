@@ -210,6 +210,40 @@ for (const id of Object.keys(CASTLES)) {
     `<g transform="translate(60,94) scale(${f1(Math.min(1.1, 76 / SIZE[id][1], 92 / SIZE[id][0]) * 100) / 100})">${castle(id, null)}</g></svg>`);
 }
 
+// Badges for what isn't a park (owner, 2026-11-14: the plain line icons were
+// "so inconsistent with the nice castles"): a Disney Cruise ship and an
+// Adventures by Disney trip, drawn the same way as the castles: cream with a
+// shaded right side, gold trim, on the navy circle with the gold ring.
+const CREAM = "#F5EFE0", SHADE = "#ddd7ca", DEEP = "#d3cec1";
+const badgeFrame = (inner) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">` +
+  `<circle cx="60" cy="60" r="58" fill="#16204A"/><circle cx="60" cy="60" r="58" fill="none" stroke="${GOLD}" stroke-width="2.5"/>` +
+  inner + `</svg>`;
+// The ship: hull with a gold band, two decks of portholes, two funnels with
+// gold tops, a mast with a pennant, waves of navy dots under it.
+writeFileSync(`${out}/badge-cruise.svg`, badgeFrame(
+  `<g fill="#26325E">${[[20, 92], [30, 98], [44, 102], [76, 102], [90, 98], [100, 92]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2"/>`).join("")}</g>` +
+  `<path d="M22 74 H98 L90 88 H30 Z" fill="#5a83d7"/><path d="M60 74 H98 L90 88 H60 Z" fill="#3157a3"/>` +
+  `<rect x="24" y="76" width="72" height="2.5" fill="${GOLD}"/>` +
+  `<path d="M14 88 Q60 96 106 88" fill="none" stroke="${GOLD}" stroke-width="1.6" opacity=".55"/>` +
+  `<rect x="32" y="62" width="56" height="12" fill="${CREAM}"/><rect x="60" y="62" width="28" height="12" fill="${DEEP}"/>` +
+  `<rect x="40" y="52" width="40" height="10" fill="${CREAM}"/><rect x="60" y="52" width="20" height="10" fill="${SHADE}"/>` +
+  `<g fill="#16204A">${[36, 42, 48, 54, 64, 70, 76, 82].map((x) => `<circle cx="${x}" cy="68" r="1.6"/>`).join("")}` +
+  `${[45, 51, 57, 63, 69, 75].map((x) => `<rect x="${x - 1.6}" y="55.5" width="3.2" height="3" rx=".6"/>`).join("")}</g>` +
+  `<rect x="47" y="38" width="9" height="14" fill="${CREAM}"/><rect x="47" y="38" width="9" height="4" fill="${GOLD}"/>` +
+  `<rect x="63" y="38" width="9" height="14" fill="${SHADE}"/><rect x="63" y="38" width="9" height="4" fill="${GOLD}"/>` +
+  `<rect x="59" y="24" width="1.6" height="14" fill="${CREAM}"/><path d="M60.6 24 L70 27 L60.6 30 Z" fill="${GOLD}"/>`));
+// An adventure: two mountains (the far one shaded), a gold sun, a winding
+// trail of navy dots to the summit and a small flag on top.
+writeFileSync(`${out}/badge-abd.svg`, badgeFrame(
+  `<circle cx="82" cy="40" r="9" fill="${GOLD}"/>` +
+  `<path d="M54 92 L80 52 L104 92 Z" fill="#5a83d7"/><path d="M80 52 L104 92 H92 Z" fill="#3157a3"/>` +
+  `<path d="M16 92 L50 36 L84 92 Z" fill="${CREAM}"/><path d="M50 36 L84 92 H66 Z" fill="${SHADE}"/>` +
+  `<path d="M50 36 L42 49 L47 47 L50 51 L54 46 L58 49 Z" fill="#FFFFFF"/>` +
+  `<g fill="#16204A">${[[44, 88], [52, 82], [46, 76], [53, 69], [48, 62], [52, 55]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.7"/>`).join("")}</g>` +
+  `<rect x="49.2" y="24" width="1.6" height="13" fill="${CREAM}"/><path d="M50.8 24 L59 27 L50.8 30 Z" fill="${GOLD}"/>` +
+  `<rect x="14" y="92" width="92" height="2.5" rx="1.25" fill="${GOLD}"/>`));
+
 // The mark: a simple three-spire castle on a price tag (tab icon / app icon).
 const mark = (bg, fg, gold) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
   `<rect x="2" y="2" width="60" height="60" rx="14" fill="${bg}"/>` +

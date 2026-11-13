@@ -49,7 +49,15 @@ export async function boughtCruiseFares(db: Db, origin: string, airports: string
 /** The flight lookup for one traveler: bought fares first, then (for a Disney
  *  World airport only) the formula travelers already see for that route. */
 export async function cruiseFlightLookup(db: Db, origin: string, today: string): Promise<FlightLookup> {
-  const bought = await boughtCruiseFares(db, origin, HOME_PORTS.map((p) => p.airport), today);
+  return flightLookupTo(db, origin, HOME_PORTS.map((p) => p.airport), today);
+}
+
+/** The same lookup for any airports (Adventures by Disney's cities too):
+ *  a fare we bought for that route near the date, else that month's bought
+ *  middle, else the formula travelers see for the route (the same one that
+ *  prices Disneyland Paris's flights to CDG). */
+export async function flightLookupTo(db: Db, origin: string, airports: string[], today: string): Promise<FlightLookup> {
+  const bought = await boughtCruiseFares(db, origin, airports, today);
   let model: ((dest: string, date: string) => number | null) | undefined;
   try {
     const m = await loadFareModel(db);

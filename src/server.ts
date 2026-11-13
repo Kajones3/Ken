@@ -44,8 +44,9 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { priceCruises, knownSailings } from "./cruisePricing.js";
 import { adventuresInMonth, priceForParty, underPerPerson } from "./adventureSearch.js";
-import { cruiseWeather } from "./portWeather.js";
-import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles, cruiseDriveLookup, extraGuestShare } from "./cruiseData.js";
+import { cruiseWeather, cruisePorts } from "./portWeather.js";
+import { abdPlaceOf, abdFlight, ABD_AIRPORTS, type AbdFlight } from "./abdFacts.js";
+import { loadSightings, gratuityRates, cruiseFlightLookup, flightLookupTo, cruiseHoles, cruiseDriveLookup, extraGuestShare } from "./cruiseData.js";
 import { homePortOf, CRUISE_SHIPS } from "./cruiseFacts.js";
 import { listShipItems, saveShipItems, deleteShipItem, shipSummary, SHIP_ITEM_KINDS, SHIP_KIND_LABEL, SHIP_HOME_NOTES } from "./ships.js";
 import { loadScoreboard } from "./fareScoreboard.js";
@@ -681,6 +682,39 @@ async function dealEmailsHeld(): Promise<boolean> {
  * A Planner Pro search also records the ports' airports as demand, so
  * tonight's paid flight searches buy those routes.
  */
+/**
+ * Adventures by Disney with the party's price AND the flights to the trip's
+ * city (owner, 2026-11-14: "We had Paris flight information for Disneyland
+ * Paris ... why couldn't we use the same for this?"). Same lookup as cruises
+ * and the parks: a bought fare near the date, that month's bought middle, or
+ * the route formula. A trip we can't place (a touring trip) keeps flights
+ * "not in this price yet".
+ */
+async function adventureFlights(deps: ReturnType<typeof adventuresInMonth>, p: TripParams, origin: string | null, today: string) {
+  const party = { adults: p.adults, childAges: p.childAges };
+  const seats = p.adults + p.childAges.filter((a) => a >= 2).length;
+  const places = deps.map((d) => abdPlaceOf(d));
+  const airports = [...new Set(places.filter((x): x is NonNullable<typeof x> => !!x).map((x) => x.airport))];
+  const lookup = origin && airports.length ? await flightLookupTo(db, origin, airports, today) : null;
+  // The same book the board prices Disneyland Paris's flights from, so a
+  // trip to Paris quotes what the Paris card would for that date.
+  const dates = deps.map((d) => d.departureDate).sort();
+  let book: Awaited<ReturnType<typeof loadBook>> | null = null;
+  if (origin && airports.length && dates.length) {
+    try {
+      book = await loadBook(db, { origin, destinations: airports, resortIds: [],
+        from: addDaysISO(dates[0]!, -1), to: addDaysISO(dates[dates.length - 1]!, 1), tripLength: bucketFor(3) });
+    } catch { book = null; }
+  }
+  return deps.map((d, i) => {
+    const place = places[i];
+    const price = priceForParty(d, party);
+    let flight: AbdFlight | null = null;
+    if (place && origin) flight = abdFlight(place, d, origin, seats, lookup, book);
+    return { ...d, party: price, flight };
+  });
+}
+
 async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
   const q = user ? q0 : guestQuery(q0);
   const p = paramsFrom(q);
@@ -718,13 +752,14 @@ async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
   return {
     pro: true, month, sailings: known.length,
     cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null,
-      weather: cruiseWeather(c.sailDate, c.port.id, c.excursions.map((e) => e.port)) })),
+      weather: cruiseWeather(c.sailDate, c.port.id, c.excursions.map((e) => e.port)),
+      ports: cruisePorts(c.port.id, c.excursions.map((e) => e.port)) })),
     cruiseOnly: cruiseOnly.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null,
       weather: cruiseWeather(c.sailDate, c.port ? homePortOf(c.port)?.id ?? null : null, []) })),
     // Sailings we know of but hold no recent price for (older than 3 weeks,
     // sold out, or no adult in the saved party): named, linked, never priced.
     unpriced: known.filter((k) => !shown.has(`${k.title}|${k.sailDate}`)),
-    adventures: deps.map((d) => ({ ...d, party: priceForParty(d, { adults: p.adults, childAges: p.childAges }) })),
+    adventures: await adventureFlights(deps, p, o ? o.iata : null, today),
   };
 }
 
@@ -1623,6 +1658,29 @@ const server = createServer(async (req, res) => {
       });
       // 200 even on a refusal: "you're out of checks for today" is a normal
       // answer the UI shows inline, not an error condition.
+      return send(200, result, { cache: "no-store" });
+    }
+
+    // --- A live fare for an Adventures by Disney trip (owner, 2026-11-14: "if a
+    // plus user clicks a place that has an ABD, I think it should do an API
+    // search for that right away. That's what they are paying for"). Planner
+    // Pro only; the airport must be one of ours; same caps, cache and record
+    // as the exact-fare route (exactFare.ts), so the fare also lands in the
+    // record and improves everyone's estimate.
+    if (url.pathname === "/api/abd-fare" && req.method === "POST") {
+      const user = await currentUser(db, req);
+      if (!user) return send(401, { error: "sign_in_required" });
+      if (!isPro(user.proUntil)) return send(402, { error: "pro_required" });
+      const b = await readBody(req);
+      const origin = String(b.origin ?? "").toUpperCase();
+      const destination = String(b.airport ?? "").toUpperCase();
+      const departDate = String(b.date ?? "");
+      const tripLength = Number(b.tripLength);
+      if (!ORIGIN_BY_IATA.has(origin)) return send(400, { error: "unknown_origin" });
+      if (!ABD_AIRPORTS.has(destination)) return send(400, { error: "unknown_airport" });
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(departDate) || departDate < todayISO()) return send(400, { error: "bad_date" });
+      if (!Number.isInteger(tripLength) || tripLength < 1 || tripLength > 30) return send(400, { error: "bad_length" });
+      const result = await fetchExactFare(db, { userId: user.id, origin, destination, departDate, tripLength });
       return send(200, result, { cache: "no-store" });
     }
 
