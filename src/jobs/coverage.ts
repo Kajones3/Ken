@@ -54,17 +54,15 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
   // Read-only: what the owner has saved from cruise and Adventures by Disney screenshots.
   try {
     out.push("## Cruise and Adventures by Disney sightings (owner screenshots)");
-    const cr = await db.query<any>(`select * from cruise_sightings order by seen_on, created_at`);
-    out.push(`Cruises: ${cr.rows.length} row(s)`);
-    for (const r of cr.rows) {
-      out.push(`- seen ${String(r.seen_on).slice(0, 15)} | ${r.title} | nights ${r.nights ?? "?"} | from ${r.departure_port ?? "?"} | ports ${r.ports ?? "-"} | ship ${r.ship ?? "-"} | sail ${r.sail_date ?? "-"} | room ${r.cabin ?? "-"} | ${r.currency} ${r.price} ($${r.price_usd}) | save ${r.save_amount ?? "-"} | dates ${r.dates_count ?? "-"} | theme ${r.theme ?? "-"} | note ${r.note ?? "-"}`);
-    }
-    const av = await db.query<any>(`select * from adventure_sightings order by seen_on, created_at`);
-    out.push(`Adventures: ${av.rows.length} row(s)`);
-    for (const r of av.rows) {
-      const { raw_text: _raw, ...rest } = r;
-      out.push(`- ${JSON.stringify(rest)}`);
-    }
+    const cr = await db.query<any>(
+      `select title, count(*) n, count(distinct sail_date) sailings, count(*) filter (where sold_out) sold_out,
+              min(seen_on)::text first_seen, max(seen_on)::text last_seen, min(price) lo, max(price) hi
+         from cruise_sightings group by title order by title`);
+    for (const r of cr.rows) out.push(`- ${r.title}: ${r.n} price(s), ${r.sailings} sailing(s), ${r.sold_out} sold out, $${r.lo}-$${r.hi}, seen ${r.first_seen}..${r.last_seen}`);
+    const rd = await db.query<any>(`select count(*) n from cruise_rate_details`);
+    out.push(`Price summaries: ${rd.rows[0].n}`);
+    const av = await db.query<any>(`select trip_name, days, price, trip_type, seen_on::text seen from adventure_sightings order by seen_on, trip_name`);
+    for (const r of av.rows) out.push(`- Adventure ${r.trip_name}: ${r.days} days, $${r.price}, ${r.trip_type ?? "type ?"}, seen ${r.seen}`);
   } catch (e) { out.push(`sightings failed: ${(e as Error).message}`); }
   out.push("");
   try { out.push(...await errorBudget(db)); } catch (e) { out.push(`error budget failed: ${(e as Error).message}`); }

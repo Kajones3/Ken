@@ -1165,3 +1165,62 @@ create table if not exists adventure_sightings (
   created_at          timestamptz not null default now()
 );
 create index if not exists adventure_sightings_trip on adventure_sightings (trip_name, seen_on);
+
+-- 2026-11-13: one cruise's DATES list (owner's screenshots): a price per
+-- sailing per room, the crossed-out "was" price, "Unavailable" (sold out),
+-- and the party the page was set to, because Disney's per-person price is
+-- an average over that party ("Avg per person based on multiple occupancy").
+-- Disney's prices include taxes, fees and port expenses (its Rate Details
+-- panel says so); gratuities are extra.
+alter table cruise_sightings add column if not exists sail_end date;
+alter table cruise_sightings add column if not exists was_price numeric(10,2);
+alter table cruise_sightings add column if not exists sold_out boolean not null default false;
+alter table cruise_sightings add column if not exists party_adults integer;
+alter table cruise_sightings add column if not exists party_children integer;
+alter table cruise_sightings alter column price drop not null;      -- a sold-out room has none
+alter table cruise_sightings alter column price_usd drop not null;
+alter table cruise_sightings drop constraint if exists cruise_sightings_price_or_sold_out;
+alter table cruise_sightings add constraint cruise_sightings_price_or_sold_out
+  check (sold_out or (price is not null and price_usd is not null));
+
+-- The "Rate & Room Details" panel: one line per guest, the taxes line and
+-- the stateroom price, kept as shown. It teaches what the list can't: how
+-- much less a child (3rd/4th guest) pays than an adult, and the taxes'
+-- share. Disney showed the 2-adult Galveston panel as the whole room
+-- ($1,811.40 = 2 x the list's $905) and the 4-guest Port Canaveral panel
+-- divided by 4 ($715 = the list's per-person price), so `shown_as` says which.
+create table if not exists cruise_rate_details (
+  id              uuid primary key,
+  seen_on         date not null,
+  title           text not null,
+  sail_date       date,
+  cabin           text,
+  adults          integer not null,
+  children        integer not null default 0,
+  guests          text not null,             -- JSON [{label, kind, amount}]
+  taxes           numeric(10,2),
+  total           numeric(10,2),
+  total_was       numeric(10,2),
+  shown_as        text check (shown_as in ('room', 'person')),
+  currency        text not null default 'USD',
+  note            text,
+  raw_text        text,
+  source          text not null default 'owner_screenshot',
+  created_at      timestamptz not null default now()
+);
+create index if not exists cruise_rate_details_title on cruise_rate_details (title, seen_on);
+
+-- ONCE (2026-11-13): the owner's first cruise screenshots were saved two or
+-- three times over (6 rows that were 2). Same day, same cruise, same price
+-- = the same sighting: keep the one with a note (else the first saved).
+-- Saving now skips a repeat, so this never has anything new to do.
+delete from cruise_sightings c
+ using cruise_sightings k
+ where not exists (select 1 from schema_marks where name = 'cruise_sightings_dedupe_2026_11')
+   and c.seen_on = k.seen_on and c.title = k.title and c.price is not distinct from k.price
+   and c.sail_date is not distinct from k.sail_date and c.cabin is not distinct from k.cabin
+   and c.save_amount is not distinct from k.save_amount and c.dates_count is not distinct from k.dates_count
+   and c.id <> k.id
+   and ((k.note is not null and c.note is null)
+     or ((k.note is null) = (c.note is null) and (k.created_at, k.id::text) < (c.created_at, c.id::text)));
+insert into schema_marks (name) values ('cruise_sightings_dedupe_2026_11') on conflict (name) do nothing;

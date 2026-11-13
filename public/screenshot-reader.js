@@ -503,13 +503,278 @@ export function splitCruises(text) {
   return chunks.map(readCruiseCard).filter(c => c.nights || c.price);
 }
 
+/* ------------------ one cruise's dates + Rate Details (2026-11-13) ------------------
+ * After "Show N Dates", Disney lists every sailing: "January 15 - 20, 2027
+ * Friday - Wednesday", "Sailing on <ship logo>", the four room headings
+ * (Inside / Oceanview / Verandah / Concierge), a price under each ("$905",
+ * "Unavailable"), and on a sale a crossed-out "was" price under that. Prices
+ * are the AVERAGE PER PERSON for the party the page was set to, taxes, fees
+ * and port expenses included (owner's screenshots, 2026-11-13).
+ * "Rate & Room Details" opens a side panel: one line per guest ("Adult 1
+ * $755.00 USD", "Child 1 $105 USD"), the taxes line, and "Stateroom Price".
+ * Both are read from WORD POSITIONS (readWords), because a price belongs to
+ * the room heading above it, not to the order OCR happens to list it in. */
+export const CRUISE_SHIPS = ["Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure"];
+export const CRUISE_ROOMS = ["inside", "oceanview", "verandah", "concierge"];
+
+/** Words with centres, grouped into lines by height. */
+function wordLines(words) {
+  const W = (words || []).filter(w => w && String(w.text || "").trim())
+    .map(w => ({ ...w, t: String(w.text).trim(), cx: (w.x0 + w.x1) / 2, cy: (w.y0 + w.y1) / 2, h: Math.max(1, w.y1 - w.y0) }))
+    .sort((a, b) => a.cy - b.cy || a.x0 - b.x0);
+  const lines = [];
+  for (const w of W) {
+    const l = lines.find(l => Math.abs(l.cy - w.cy) < Math.max(6, Math.min(l.h, w.h) * 0.6));
+    if (l) { l.words.push(w); l.cy = (l.cy * (l.words.length - 1) + w.cy) / l.words.length; }
+    else lines.push({ cy: w.cy, h: w.h, words: [w] });
+  }
+  for (const l of lines) { l.words.sort((a, b) => a.x0 - b.x0); l.text = l.words.map(w => w.t).join(" "); }
+  return lines.sort((a, b) => a.cy - b.cy);
+}
+
+/**
+ * One price word to dollars. Disney's green sale tag sits right before a sale
+ * price and the reader often turns tag + "$" into junk: "©$775", "©4$1,035",
+ * and worse, the "$" itself into a digit: "©3905" is $905, "©51,250" is
+ * $1,250, "©9715" is $715. A tag with no "$" left drops one leading digit,
+ * and the price is marked `check` so the owner looks at it.
+ */
+export function cruisePrice(token) {
+  let t = String(token || "").trim();
+  const tag = /^[©®@¢«&#*]+/.test(t);
+  t = t.replace(/^[^\d$£€]+/, "");
+  const sign = /[$£€]/.test(t);
+  if (sign) t = t.slice(Math.max(t.lastIndexOf("$"), t.lastIndexOf("£"), t.lastIndexOf("€")) + 1);
+  else if (!tag) return null;          // no "$" and no tag: not a price we trust
+  const ok = x => /^\d{1,2}(?:,\d{3})+(?:\.\d{2})?$|^\d{2,5}(?:\.\d{2})?$/.test(x);
+  const num = x => Number(x.replace(/,/g, ""));
+  // Readings to choose from, best guess first: as read; without the one or
+  // two leading characters a sale tag turned the "$" into; with a "1" the
+  // reader lost in front (Disney's tight "11", as in "$140" for $1,140).
+  const tries = sign ? [t] : [t.slice(1), t.slice(2)];
+  const alts = [];
+  for (const x of tries) if (x && ok(x)) {
+    const v = num(x); if (v > 0 && !alts.includes(v)) alts.push(v);
+    if (v < 1000 && !alts.includes(1000 + v)) alts.push(1000 + v);
+  }
+  if (!alts.length) return null;
+  return { value: alts[0], check: !sign, tag, alts };
+}
+
+/** Rooms on one sailing sit in a rough ladder: Inside < Oceanview (about
+ *  1.12x) < Verandah (about 1.3x), from the owner's 2026-11 screenshots.
+ *  Used only to pick between a doubtful price's possible readings. */
+const ROOM_STEP = { inside: 1, oceanview: 1.12, verandah: 1.3 };
+function settlePrices(rooms) {
+  const live = Object.entries(rooms).filter(([, r]) => r.price !== null && r.alts);
+  for (const [, r] of live) {
+    // A per-person cruise price is never under $100; a sale price sits under
+    // its crossed-out price and at most about 45% below it.
+    r.alts = r.alts.filter(v => v >= 100 && v <= 50000);
+    const underWas = r.was ? r.alts.filter(v => v < r.was && v >= r.was * 0.55) : [];
+    if (r.was && underWas.length) r.alts = underWas;
+    else if (r.was) r.was = null;          // no reading fits under it: the crossed-out price is the misread
+    if (!r.alts.length) { r.price = null; r.check = true; }
+  }
+  // Rooms with one possible reading anchor the rest.
+  const sure = live.filter(([k, r]) => ROOM_STEP[k] && r.price !== null && (r.alts.length === 1 || !r.check));
+  for (const [k, r] of live) {
+    if (r.price === null || r.alts.length < 2) { if (r.alts && r.alts.length === 1 && r.alts[0] !== r.price) { r.price = r.alts[0]; r.check = true; } continue; }
+    const refs = r.was ? [r.was * 0.85]
+      : ROOM_STEP[k] ? sure.filter(([k2]) => k2 !== k).map(([k2, r2]) => (r2.alts.length === 1 ? r2.alts[0] : r2.price) * ROOM_STEP[k] / ROOM_STEP[k2]) : [];
+    if (!refs.length) continue;
+    const ref = refs.sort((a, b) => a - b)[Math.floor(refs.length / 2)];
+    // Keep the plain reading unless it's well off what the other rooms say.
+    const off = v => Math.abs(Math.log(v / ref));
+    const pick = off(r.alts[0]) <= Math.log(1.3) ? r.alts[0] : r.alts.slice().sort((a, b) => off(a) - off(b))[0];
+    if (Math.abs(Math.log(pick / ref)) > Math.log(1.8)) { r.price = null; r.check = true; continue; }
+    if (pick !== r.price) { r.price = pick; r.check = true; }
+  }
+}
+
+const MONTH_RE = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const monthNo = m => MONTHS.indexOf(m.slice(0, 3).toLowerCase()) + 1;
+const ymdOf = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+/** "January 15 - 20, 2027", "January 28 - February 2, 2028", "December 30 -
+ *  January 3, 2027" (the year belongs to the end), OCR's "17,2027" too. */
+export function sailingDates(line) {
+  const re = new RegExp(`\\b${MONTH_RE}\\s+(\\d{1,2})\\s*[-–]\\s*(?:${MONTH_RE}\\s+)?(\\d{1,2})\\s*,?\\s*(20\\d\\d)\\b`, "i");
+  const m = re.exec(String(line || ""));
+  if (!m) return null;
+  const m1 = monthNo(m[1]), d1 = Number(m[2]), m2 = m[3] ? monthNo(m[3]) : m1, d2 = Number(m[4]), y2 = Number(m[5]);
+  const y1 = m1 > m2 ? y2 - 1 : y2;
+  const start = ymdOf(y1, m1, d1), end = ymdOf(y2, m2, d2);
+  const nights = Math.round((Date.parse(end) - Date.parse(start)) / 86400000);
+  if (!(nights >= 1 && nights <= 60) || d1 > 31 || d2 > 31) return null;
+  return { start, end, nights };
+}
+
+/** Which Disney ship a "Sailing on ..." line names, when the logo reads as
+ *  letters (WISH did; MAGIC read as "Bee GIG"), else null. */
+function shipOf(text) {
+  const t = String(text || "").toLowerCase();
+  return CRUISE_SHIPS.find(s => new RegExp(`\\b${s.toLowerCase()}\\b`).test(t)) || null;
+}
+
+/**
+ * Every sailing in a screenshot of one cruise's dates. Returns
+ * { sailings: [{ start, end, nights, ship, rooms: { inside: { price, was,
+ * soldOut, check } ... } }], ship, title, nights, departurePort, warnings }.
+ * `rightEdge` leaves out words right of it (a Rate Details panel open over
+ * the list); readCruiseScreenshot works that out.
+ */
+export function readCruiseDates(words, { rightEdge = Infinity } = {}) {
+  const lines = wordLines((words || []).filter(w => w && w.x0 < rightEdge));
+  const warnings = [];
+  const sailings = [];
+  for (let i = 0; i < lines.length; i++) {
+    const when = sailingDates(lines[i].text);
+    if (!when) continue;
+    // This sailing's block runs to the next date line.
+    let j = i + 1;
+    while (j < lines.length && !sailingDates(lines[j].text)) j++;
+    const block = lines.slice(i, j);
+    const sailing = { ...when, ship: null, rooms: {} };
+    const on = block.find(l => /sailing\s+on/i.test(l.text)) || lines[i];
+    sailing.ship = shipOf(on.text.replace(/.*sailing\s+on/i, ""));
+    const head = block.find(l => /inside/i.test(l.text) && /verandah/i.test(l.text));
+    if (!head) { warnings.push(`${when.start}: couldn't find the room headings.`); sailings.push(sailing); continue; }
+    const cols = CRUISE_ROOMS.map(r => head.words.find(w => w.t.toLowerCase().startsWith(r.slice(0, 5)))).map(w => w ? w.x0 : null);
+    if (cols.some(x => x === null)) { warnings.push(`${when.start}: a room heading is missing.`); }
+    const colOf = w => {
+      let best = -1;
+      for (let c = 0; c < cols.length; c++) if (cols[c] !== null && w.x0 >= cols[c] - 25) best = c;
+      return best;
+    };
+    // The price lines: under the headings, before "Avg per person".
+    const below = block.filter(l => l.cy > head.cy);
+    const stop = below.findIndex(l => /avg|per\s+person|occupancy|rate\s*&/i.test(l.text));
+    const priceLines = (stop >= 0 ? below.slice(0, stop) : below)
+      .filter(l => l.words.some(w => cruisePrice(w.t) || /unavail/i.test(w.t)));
+    priceLines.forEach((l, k) => {
+      for (const w of l.words) {
+        const c = colOf(w); if (c < 0) continue;
+        const room = CRUISE_ROOMS[c];
+        const r = sailing.rooms[room] || (sailing.rooms[room] = { price: null, was: null, soldOut: false, check: false });
+        if (k === 0) {
+          if (/unavail/i.test(w.t)) { r.soldOut = true; continue; }
+          const p = cruisePrice(w.t); if (!p || r.price !== null) continue;
+          r.price = p.value; r.check = p.check; r.alts = p.alts;
+        } else if (k === 1) {
+          const p = cruisePrice(w.t.startsWith("$") ? w.t : ""); if (!p || r.was !== null) continue;
+          r.was = p.alts[0];
+        }
+      }
+    });
+    // A crossed-out price is the price BEFORE the sale: above it, and a sale
+    // is never more than about 40% off. Anything else is a misread.
+    const wasFits = r => r.was !== null && r.price !== null && r.was > r.price && r.was <= r.price * 1.7;
+    for (const r of Object.values(sailing.rooms)) if (r.was !== null && r.price !== null && !r.check && !wasFits(r)) r.was = null;
+    settlePrices(sailing.rooms);
+    for (const r of Object.values(sailing.rooms)) {
+      if (r.was !== null && !wasFits(r)) r.was = null;
+      if (r.price !== null && (r.price < 50 || r.price > 50000)) { r.price = null; r.check = true; }
+      delete r.alts;
+    }
+    sailings.push(sailing);
+  }
+  // One screenshot is one cruise on one ship: lend a ship read in one block
+  // to the blocks whose logo didn't read.
+  const ship = sailings.map(s => s.ship).find(Boolean) || null;
+  for (const s of sailings) if (!s.ship) s.ship = ship;
+  // The cruise's own name when it's in the picture ("3-Night Bahamian Cruise
+  // from Port Canaveral"), from the lines above the first sailing.
+  const firstY = sailings.length ? lines.find(l => sailingDates(l.text)).cy : Infinity;
+  const top = lines.filter(l => l.cy < firstY).map(l => l.text).join("\n");
+  const card = readCruiseCard(top);
+  return {
+    sailings, ship, title: card.nights ? card.title : null, nights: card.nights || (sailings[0] ? sailings[0].nights : null),
+    departurePort: card.departurePort, warnings,
+  };
+}
+
+/**
+ * The Rate Details panel: { guests: [{ label, kind: adult|child, amount }],
+ * adults, children, taxes, total, totalWas, startingFrom, cabin } where cabin
+ * is guessed from the room's description (Disney's text, e.g. "porthole
+ * mirror (no exterior view)" = Inside) and may be null. Null when there's no
+ * panel. Taxes is the one amount in the summary with no guest beside it.
+ */
+export function readCruiseRates(words) {
+  const all = (words || []).filter(w => w && String(w.text || "").trim());
+  const sum = all.find(w => /^summary$/i.test(String(w.text).trim()));
+  const pw = sum && all.find(w => /^price$/i.test(String(w.text).trim()) && w.x1 <= sum.x0 + 5 && Math.abs(w.y0 - sum.y0) < 15);
+  const anchor = pw || sum || all.find(w => /^adult$/i.test(String(w.text).trim()));
+  if (!anchor) return null;
+  const left = anchor.x0 - 40;
+  const lines = wordLines(all.filter(w => w.x0 >= left));
+  const money = l => {
+    const ws = l.words.filter(w => /\d/.test(w.t));
+    for (let k = ws.length - 1; k >= 0; k--) {
+      const t = ws[k].t.replace(/^[©®@¢«]+/, "");
+      const m = /^\$?(\d{1,3}(?:,\d{3})*(?:\.\d{2})?|\d+(?:\.\d{2})?)$/.exec(t);
+      if (m) return Number(m[1].replace(/,/g, ""));
+    }
+    return null;
+  };
+  const guests = []; let taxes = null, total = null, totalWas = null, startingFrom = null;
+  const summaryY = anchor.cy !== undefined ? anchor.cy : (anchor.y0 + anchor.y1) / 2;
+  for (const l of lines) {
+    const g = /\b(adult|child)\s*(\d{1,2})\b/i.exec(l.text);
+    const v = money(l);
+    if (/starting\s+from/i.test(l.text)) { startingFrom = v; continue; }
+    if (l.cy < summaryY - 5) continue;
+    if (g && v !== null) { guests.push({ label: `${g[1][0].toUpperCase()}${g[1].slice(1).toLowerCase()} ${g[2]}`, kind: g[1].toLowerCase(), amount: v }); continue; }
+    if (/stateroom\s+price/i.test(l.text)) { if (v !== null) total = v; continue; }
+    if (v === null || g) continue;
+    if (/tax|fee|port/i.test(l.text) || (taxes === null && total === null && guests.length)) {
+      if (taxes === null) { taxes = v; continue; }
+    }
+    if (taxes !== null && total === null && v > taxes) totalWas = v;
+  }
+  // The stateroom price can sit a line below its label.
+  if (total === null) {
+    const i = lines.findIndex(l => /stateroom\s+price/i.test(l.text));
+    if (i >= 0) for (const l of lines.slice(i + 1, i + 3)) { const v = money(l); if (v !== null) { total = v; break; } }
+  }
+  const panel = lines.map(l => l.text).join(" ").toLowerCase();
+  // The tabs always say all four rooms, so only the description can tell.
+  const cabin = /no exterior view|porthole mirror/.test(panel) ? "inside"
+    : /porthole window|window (?:view|overlooking)/.test(panel) ? "oceanview"
+    : /private verandah|own verandah|balcony/.test(panel) ? "verandah"
+    : /concierge (?:lounge|level|service|host)/.test(panel) ? "concierge" : null;
+  if (!guests.length && total === null) return null;
+  return {
+    guests, adults: guests.filter(g => g.kind === "adult").length, children: guests.filter(g => g.kind === "child").length,
+    taxes, total, totalWas, startingFrom, cabin,
+  };
+}
+
+/** A whole screenshot: the dates list and, if it's open, the Rate Details
+ *  panel (to the right of "Price Summary", left out of the list). */
+export function readCruiseScreenshot(words) {
+  const ws = (words || []).filter(w => w && String(w.text || "").trim());
+  const sum = ws.find(w => /^summary$/i.test(String(w.text).trim()));
+  const priceWord = sum ? ws.find(w => /^price$/i.test(String(w.text).trim()) && Math.abs(w.y0 - sum.y0) < 15) : null;
+  const rightEdge = priceWord ? priceWord.x0 - 40 : Infinity;
+  const dates = readCruiseDates(ws, { rightEdge });
+  // The panel's header ("Rate Details by Stateroom Type", tabs, "Starting
+  // from") sits above "Price Summary" at the same x.
+  const rates = readCruiseRates(ws);
+  return { ...dates, rates };
+}
+
 /* -------------------- Adventures by Disney (2026-11-12) --------------------
  * A trip page's header: "3 DAYS FROM $2,799 /Person", "Trip Type Escape",
  * "4 Meals 2 Breakfasts, 1 Lunches, 1 Dinners", "Minimum Age: 5 Suggested
  * Age: 6+ Adult Exclusive: 18+", and the highlights ("Visit Neuschwanstein
  * Castle: Step into ..."). The trip's name is usually above the screenshot,
  * so the owner types it. */
-export const ADVENTURE_TYPES = ["Short Escape", "Escape", "Classic", "Expedition", "River Cruise", "Signature"];
+export const ADVENTURE_TYPES = ["Land Adventure", "Short Escape", "Escape", "Classic", "Expedition Cruise",
+  "Expedition", "River Cruise", "Small Ship", "Signature"];
+/** Page buttons OCR glues onto the front of a highlight ("Request Booking
+ *  Velika Planina Visit", owner's Croatia screenshot, 2026-11-13). */
+const PAGE_FURNITURE = /^(?:(?:request booking|view rates (?:&|and) dates|trip (?:highlights|overview)|itinerary|or call(?: us)?|call us(?: at)?|what's included|rates (?:&|and) dates)\s+)+/i;
 
 export function readAdventure(text) {
   const t = String(text || "");
@@ -527,8 +792,8 @@ export function readAdventure(text) {
   const hre = /(?:^|[«•*+·]\s*)([A-Z][A-Za-z'’ ,&-]{3,70}?):\s/gm;
   let h;
   while ((h = hre.exec(t)) && highlights.length < 12) {
-    const x = h[1].trim();
-    if (/\b(?:age|exclusive|call us|trip type|meals?)\b/i.test(x)) continue;
+    const x = h[1].trim().replace(PAGE_FURNITURE, "").trim();
+    if (x.length < 4 || /\b(?:age|exclusive|call us|trip type|meals?)\b/i.test(x)) continue;
     if (!highlights.includes(x)) highlights.push(x);
   }
   return {
@@ -863,6 +1128,13 @@ export async function readImage(image, { langs = "eng", onProgress, columns = fa
 /** Darker than this (0-255) is ink when reading with `ink`. Coloured
  *  calendar cells sit around 150-230; Disney's navy digits well under 100. */
 export const INK_CUTOFF = 110;
+/** How much to enlarge a screenshot before reading it: small text reads far
+ *  better bigger (owner, 2026-11-13: a phone-width cruise list, 674 pixels
+ *  wide, "is too small for me to read"). Aim for at least ~1,600 wide. */
+export function enlargeBy(width) {
+  if (!(width > 0)) return 1;
+  return width < 900 ? 3 : width < 1600 ? 2 : 1;
+}
 export async function readWords(image, { onProgress, ink = false } = {}) {
   const T = await loadTesseract();
   const worker = await T.createWorker("eng", 1, {
@@ -874,7 +1146,7 @@ export async function readWords(image, { onProgress, ink = false } = {}) {
     let src = image;
     try {
       const bmp = await createImageBitmap(image);
-      const k = bmp.width < 1600 ? 2 : 1;
+      const k = enlargeBy(bmp.width);
       const c = document.createElement("canvas");
       c.width = bmp.width * k; c.height = bmp.height * k;
       const g = c.getContext("2d");

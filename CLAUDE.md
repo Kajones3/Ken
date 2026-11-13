@@ -119,6 +119,54 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-13: cruise DATES + Rate Details readers; repeats skipped
+
+Owner sent one cruise's dates list ("Show N Dates") and Rate & Room Details
+panels. What they settled (don't re-derive):
+- **Disney's per-person price INCLUDES taxes, fees and port expenses** (the
+  panel: "Price Including Taxes, Fees & Port Expenses"); gratuities are extra
+  (our + Gratuities column). Earlier /admin text saying "before taxes" is fixed.
+- **It is the AVERAGE PER PERSON for the party the page was set to** ("Avg
+  per person based on multiple occupancy"). Galveston 2 adults: panel total
+  $1,811.40 = 2 x the list's $905. Port Canaveral Wish Jan 29 2027, 2A+2C:
+  list Oceanview $715 avg pp, panel lines $194/$194/$105/$105 + $117 taxes =
+  $715, i.e. Disney showed that panel DIVIDED by 4 (owner confirmed $715 was
+  advertised for that date). So `cruise_rate_details.shown_as` = room/person;
+  the SHARES are what we learn: child ~54% of an adult, taxes ~16%.
+- Price swings by date are huge: Galveston 5-night Inside Jan $905 vs mid-March
+  $1,640; Canaveral 3-night New Year's $1,394 vs Jan 3 $802. A sale can make
+  Verandah cheaper than Inside (Jan 3: $731 vs $802). "Unavailable" = sold out.
+- Reader (screenshot-reader.js): `readCruiseScreenshot(words)` = word positions
+  (readWords, PSM 11): `readCruiseDates` (date line "January 28 - February 2,
+  2028", OCR's "17,2027"; prices assigned to the room heading above by x;
+  first price line = price, second = crossed-out "was"; Disney's green sale
+  tag turns "$905" into "©3905"/"©9715": `cruisePrice()` gives candidate
+  readings, `settlePrices()` picks by the room ladder Inside 1 : Oceanview
+  1.12 : Verandah 1.3 and the was price (sale <= 45% off), marks `check`
+  (amber)) + `readCruiseRates` (the panel right of "Price Summary": Adult N /
+  Child N lines, the unlabeled amount = taxes, Stateroom Price, room guessed
+  from Disney's description text). Ship logos rarely OCR (WISH did, MAGIC read
+  "Bee GIG"): a Ship pick list. `enlargeBy()`: screenshots under 900px wide
+  are read 3x, under 1600 2x (owner: "let the reader enlarge"). Real-OCR
+  fixtures `src/testdata/cruise-dates-*.words.json`, `cruise-rates-*`: the
+  owner's phone list reads 36/36 prices, the two panels fully.
+- Storage: `cruise_sightings` gained sail_end, was_price, sold_out (price may
+  be null only when sold out), party_adults/children; cabin "concierge" added
+  ("suite" kept for old rows, same gratuity rate). New append-only
+  `cruise_rate_details` (guests JSON, taxes, total, total_was, shown_as).
+  POST `/api/admin/cruise-rates`, DELETE `/api/admin/cruise-rates/:id`.
+- **Repeats:** saving the same day + cruise + sailing + room + price + party
+  again is SKIPPED and counted ("N you'd already saved today were skipped");
+  same for an identical price summary. The owner's 6 repeated rows of
+  2026-11-13 are removed ONCE by schema.sql (`cruise_sightings_dedupe_2026_11`,
+  keeps the one with a note). Expect 4 cruise rows left after the redeploy.
+- Adventures by Disney: highlights no longer start with "Request Booking";
+  trip types include Land Adventure. The live Croatia row still has the old
+  "Request Booking Velika Planina Visit" highlight (stored; owner can resave).
+- The coverage report lists cruise/ABD sightings (counts only, read-only).
+- NOTHING reads cruises for travelers yet. Planner Pro cruise plan: proposed
+  in the conversation of 2026-11-13, not built.
+
 ## START HERE — 2026-11-12, last: Cruises + Adventures by Disney readers (history only)
 
 Owner: "Build the screenshot reader for cruises and Adventures by Disney. They
@@ -146,7 +194,7 @@ information so if and when we launch those, we can have historical data."
   taxes/fees/gratuities: blank sail date/room = that. NOTHING reads these for
   travelers. Not yet seen: a cruise's per-date list or ABD "Rates & Dates":
   ask for a screenshot before tuning the readers for them.
-- 942 tests. Needs a Render redeploy.
+- 942 tests then; 948 after 2026-11-13. Needs a Render redeploy.
 - **Then (owner: "Only build 4"): gratuities filled from a known fact.** The
   /admin Cruises history has a "+ Gratuities" column: price + nights x Disney's
   recommended gratuity per person per night (`gratuityPerPerson()`; Suite uses

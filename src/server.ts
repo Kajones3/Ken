@@ -49,7 +49,7 @@ import { loadForecastScores } from "./fareForecasts.js";
 import { loadHotelScoreboard } from "./hotelScoreboard.js";
 import { loadHotelList, rentalLines } from "./hotelList.js";
 import { DEAL_KINDS, listDeals, saveDeal, setDealActive, deleteDeal } from "./adminPromos.js";
-import { saveCruises, listCruises, deleteCruise, saveAdventure, listAdventures, deleteAdventure } from "./cruisesAdventures.js";
+import { saveCruises, listCruises, deleteCruise, saveAdventure, listAdventures, deleteAdventure, saveRates, listRates, deleteRates } from "./cruisesAdventures.js";
 import { currentSale, passesWithSale, listSales, saveSale, setSaleActive, deleteSale } from "./proSales.js";
 import { stripeKey, stripeMode, checkoutFields, createCheckoutSession, retrieveSession, verifyWebhook, grantPaidSession, type GrantOutcome } from "./stripeCheckout.js";
 import { CALENDAR_RESORTS, validateCalendar, saveCalendar, calendarSummary, calendarMonth, DEFAULT_TICKET_CURRENCY, validateUndated, saveUndated, latestUndated } from "./ticketCalendar.js";
@@ -2033,14 +2033,20 @@ const server = createServer(async (req, res) => {
      * screenshots, stored as history only. Nothing a traveler sees reads these. */
     if (url.pathname === "/api/admin/cruises" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
-      return send(200, { cruises: await listCruises(db) }, { cache: "no-store" });
+      return send(200, { cruises: await listCruises(db), rates: await listRates(db) }, { cache: "no-store" });
     }
     if (url.pathname === "/api/admin/cruises" && req.method === "POST") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       const body = await readBody(req);
       const r = await saveCruises(db, Array.isArray(body?.cruises) ? body.cruises : [], todayISO());
       if (!r.ok) return send(400, { error: "rejected", message: r.reason });
-      return send(200, { ok: true, saved: r.saved, cruises: await listCruises(db) }, { cache: "no-store" });
+      return send(200, { ok: true, saved: r.saved, skipped: r.skipped, cruises: await listCruises(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/cruise-rates" && req.method === "POST") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      const r = await saveRates(db, await readBody(req), todayISO());
+      if (!r.ok) return send(400, { error: "rejected", message: r.reason });
+      return send(200, { ok: true, skipped: r.skipped, rates: await listRates(db) }, { cache: "no-store" });
     }
     if (url.pathname === "/api/admin/adventures" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
@@ -2052,9 +2058,13 @@ const server = createServer(async (req, res) => {
       if (!r.ok) return send(400, { error: "rejected", message: r.reason });
       return send(200, { ok: true, id: r.id, adventures: await listAdventures(db) }, { cache: "no-store" });
     }
-    const sightMatch = url.pathname.match(/^\/api\/admin\/(cruises|adventures)\/([0-9a-f-]{36})$/);
+    const sightMatch = url.pathname.match(/^\/api\/admin\/(cruises|adventures|cruise-rates)\/([0-9a-f-]{36})$/);
     if (sightMatch && req.method === "DELETE") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      if (sightMatch[1] === "cruise-rates") {
+        if (!await deleteRates(db, sightMatch[2]!)) return send(404, { error: "not found" });
+        return send(200, { ok: true, rates: await listRates(db) }, { cache: "no-store" });
+      }
       const cruise = sightMatch[1] === "cruises";
       const gone = cruise ? await deleteCruise(db, sightMatch[2]!) : await deleteAdventure(db, sightMatch[2]!);
       if (!gone) return send(404, { error: "not found" });
