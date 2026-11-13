@@ -1355,6 +1355,8 @@ html{scroll-padding-top:76px}
 
 .updatingnote .spinner{border-color:color-mix(in srgb, var(--ink) 25%, transparent); border-top-color:var(--accent-line)}
 body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
+.stoptxt{margin-left:4px; padding:2px 9px; border-radius:999px; border:1.5px solid currentColor; font-size:13px}
+#updatingStop{font-weight:700; text-decoration:underline; background:none; border:0; color:inherit; cursor:pointer; padding:4px}
 </style>
 
 <div class="wrap">
@@ -1930,7 +1932,7 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
     </div>
   </details>
 
-  <p class="updatingnote" id="updatingNote" hidden role="status"><span class="pxslot"></span>Updating prices for your new search…</p>
+  <p class="updatingnote" id="updatingNote" hidden role="status"><span class="pxslot"></span><span style="flex:1">Updating prices for your new search…</span><button type="button" class="linkbtn" id="updatingStop">Stop</button></p>
   <div class="board" id="board"></div>
   <div class="tablewrap" id="tablewrap" hidden></div>
   </div><!-- /searchmain -->
@@ -2208,14 +2210,14 @@ body.updating #board{opacity:.45; pointer-events:none; transition:opacity .15s}
 
 /* ============================ API ============================ */
 
-async function apiGet(path, params){
+async function apiGet(path, params, signal){
   const q = new URLSearchParams();
   for(const k in params){
     const v = params[k];
     if(v !== undefined && v !== null && v !== "") q.set(k, v);
   }
   const qs = q.toString();
-  const res = await fetch(path + (qs ? "?"+qs : ""));
+  const res = await fetch(path + (qs ? "?"+qs : ""), signal ? { signal } : undefined);
   if(!res.ok) throw new Error("API error "+res.status+" on "+path);
   return res.json();
 }
@@ -3015,16 +3017,28 @@ async function hotelAtTier(item, t){
     roomDeal: day.roomDeal || 0 };
 }
 
+/* A search can be stopped (owner, 2026-11-14: "I pressed compare and then
+   wanted to change my party travel size"). While it runs, Compare and
+   "Update prices" become Stop buttons, and the form stays usable. */
+let searchBusy = false, searchAbort = null;
+function cancelSearch(){
+  ++searchToken;
+  if(searchAbort){ try { searchAbort.abort(); } catch {} }
+  searchAbort = null;
+  setSearchBusy(false);
+}
 function setSearchBusy(busy){
+  searchBusy = busy;
   const btn = $("#run"), label = $("#runLabel");
   if(!btn) return;
-  btn.disabled = busy;
-  label.innerHTML = busy ? `${pxSpin()}Comparing…` : "Compare";
+  btn.setAttribute("aria-label", busy ? "Stop this search" : "Compare");
+  label.innerHTML = busy ? `${pxSpin()}Comparing… <span class="stoptxt">Stop</span>` : "Compare";
   // "Update prices" and the results say it too (owner, 2026-10-29: "it
   // looks like it isn't working"): the button spins, the cards dim and a
   // line over them says the prices are being updated.
   const b2 = $("#run2");
-  if(b2){ b2.disabled = busy; b2.innerHTML = busy ? `${pxSpin()}Updating prices…` : "Update prices"; }
+  if(b2){ b2.innerHTML = busy ? `${pxSpin()}Updating… <span class="stoptxt">Stop</span>` : "Update prices";
+    b2.setAttribute("aria-label", busy ? "Stop updating prices" : "Update prices"); }
   document.body.classList.toggle("updating", busy && document.body.classList.contains("has-results"));
   const st = $("#updatingNote");
   if(st) st.hidden = !(busy && document.body.classList.contains("has-results"));
@@ -3041,9 +3055,12 @@ async function runSearch(keepId){
   sampleDocReady = false;   // a new search, so the held sample PDF is done
   params = readParams();
   const token = ++searchToken;
+  if(searchAbort){ try { searchAbort.abort(); } catch {} }
+  const ctl = (typeof AbortController === "function") ? new AbortController() : null;
+  searchAbort = ctl;
   setSearchBusy(true);
   try {
-    const compareData = await apiGet("/api/compare", compareQuery());
+    const compareData = await apiGet("/api/compare", compareQuery(), ctl && ctl.signal);
     if(token !== searchToken) return;
     results = compareData.results.map(x => ({ ...x, resort: RESORT_BY_ID.get(x.resortId) }));
     crowdRanking = compareData.crowdRanking || null;
@@ -3057,11 +3074,12 @@ async function runSearch(keepId){
     // The map stays as the hero (owner, 2026-10-29); the results come into view.
     if(!detailOpen) $("#searchLayout").scrollIntoView({ behavior:"smooth", block:"start" });
   } catch(e){
+    if(token !== searchToken || (e && e.name === "AbortError")) return;   // stopped by the traveler
     console.error(e);
     $("#board").innerHTML = `<div class="boardempty"><div class="rname">Could not load prices</div>
       <div class="rmeta">${esc(String((e && e.message) || e))}</div></div>`;
   } finally {
-    if(token === searchToken) setSearchBusy(false);
+    if(token === searchToken){ setSearchBusy(false); searchAbort = null; }
   }
 }
 
@@ -4929,8 +4947,9 @@ function render(){
 
 /* ============================ events ============================ */
 
-$("#run").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
-$("#run2").addEventListener("click", ()=>{ track("compare"); runSearch(null); });
+$("#run").addEventListener("click", ()=>{ if(searchBusy){ cancelSearch(); return; } track("compare"); runSearch(null); });
+$("#run2").addEventListener("click", ()=>{ if(searchBusy){ cancelSearch(); return; } track("compare"); runSearch(null); });
+$("#updatingStop").addEventListener("click", cancelSearch);
 $("#priceBasis").addEventListener("change", e => setPriceBasis(e.target.value));
 $("#whyCheapest").addEventListener("click", () => { if(needsAccount()) return; setPriceBasis("cheapest"); runSearch(null); });
 
@@ -7582,7 +7601,7 @@ document.addEventListener("click", e => {
 $("#sbBudget").addEventListener("keydown", e => {
   if(e.key !== "Enter") return;
   e.preventDefault();
-  if(!document.body.classList.contains("has-results")){ $("#run").click(); return; }
+  if(!document.body.classList.contains("has-results")){ if(!searchBusy) $("#run").click(); return; }
   if(!session.pro) showFits();
 });
 $("#sbBudget").addEventListener("input", e => {
