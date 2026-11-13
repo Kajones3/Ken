@@ -119,6 +119,49 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, seventh: ABD flights + live fare; ship/ABD badges; port write-ups; "A World of Magic in One Search."
+
+Owner (screenshot of an ABD page from Denver: "This is pitiful ... We had Paris
+flight information for Disneyland Paris ... why couldn't we use the same";
+"if a plus user clicks a place that has an ABD, I think it should do an API
+search for that right away"; "The logo is so inconsistent with the nice
+castles"; "Is there no information we can get on Progreso and Cancun?";
+"we're getting away from our six trips one search promise. ... 'A World of
+Magic in One Search.'").
+- **ABD flights** (`src/abdFacts.ts`): `ABD_PLACES` = one-city ESCAPE trips
+  only (Paris CDG, London LHR, Munich MUC, Barcelona BCN, Rome FCO, Amsterdam,
+  Dublin, Vienna, Prague, Lisbon, Southern California LAX). Touring trips
+  (Croatia & Slovenia, Thailand) get NO airport: flights stay "not in this
+  price yet" until the owner says where they start/end. Abroad = fly the
+  evening before day 1 (`abdFlightDates`). `abdFlight()`: a bought fare near
+  the date (`flightLookupTo`, the cruise lookup generalized) -> else the SAME
+  real-fare-or-estimate the Disneyland Paris card shows (`quotedEstimate` on a
+  `loadBook` for the ABD airports). /api/cruises Pro adventures carry
+  `flight` {airport, depart, back, seats, perSeat, total, how}; card total and
+  page total include flights.
+- **Live fare on opening an ABD page** (Planner Pro): POST `/api/abd-fare`
+  {origin, airport (must be in `ABD_AIRPORTS`), date, tripLength} ->
+  `fetchExactFare` (same per-user 3 / site 6 daily caps, cache, and it writes
+  `flight_observations` + raw answer). Page shows "Checking today's fare on
+  Google Flights..." then the fare, or says why it kept our estimate
+  (`abdLiveFare()`, once per trip per visit). Governing rule #4: when the owner
+  first uses it live, check the coverage report's flight_observations for a
+  serpapi_flights row to CDG.
+- **Badges** `public/brand/badge-cruise.svg` + `badge-abd.svg` (gen.mjs, same
+  navy circle, gold ring, cream + castle-roof blue). `SHIP_SVG`/`ABD_SVG` in
+  prototype.html are now those images.
+- **Port write-ups** `src/portInfo.ts` (`PORT_STORIES`, our own words, facts
+  only, nothing copied) for every home port and port of call;
+  `cruisePorts()` (portWeather.ts) -> cruise `ports`; page card "Where you'll
+  go". Test pins a write-up for every port we price.
+- **Headline:** "A World of Magic / in One Search." + sub line now mentions
+  Disney cruises and Adventures by Disney.
+- **Copy sheet for the owner:** `docs/copy/cruise-and-abd-copy.md` lists every
+  traveler-facing line on the cruise/ABD pages; owner is writing their own.
+- Local dev DB has no international fares (the Paris park card is empty from
+  RDU locally too), so ABD flights were proven by test + mocked browser run,
+  not on live data. 990 tests. Needs a Render redeploy.
+
 ## START HERE — 2026-11-14, sixth: ABD editing; the ABD readers fixed on the owner's real Paris screenshots
 
 Owner: "I need to be able to edit the adventures by Disney. The screen Reader
