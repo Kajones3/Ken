@@ -63,8 +63,8 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
     for (const r of cr.rows) out.push(`- ${r.title}: ${r.n} price(s), ${r.sailings} sailing(s), ${r.sold_out} sold out, $${r.lo}-$${r.hi}, seen ${r.first_seen}..${r.last_seen}`);
     const rd = await db.query<any>(`select count(*) n from cruise_rate_details`);
     out.push(`Price summaries: ${rd.rows[0].n}`);
-    const av = await db.query<any>(`select trip_name, days, price, trip_type, seen_on::text seen from adventure_sightings order by seen_on, trip_name`);
-    for (const r of av.rows) out.push(`- Adventure ${r.trip_name}: ${r.days} days, $${r.price}, ${r.trip_type ?? "type ?"}, seen ${r.seen}`);
+    const av = await db.query<any>(`select trip_name, days, price, trip_type, seen_on::text seen, departure_date::text dep, child_price from adventure_sightings order by seen_on, trip_name`);
+    for (const r of av.rows) out.push(`- Adventure ${r.trip_name}: ${r.days} days, $${r.price}${r.child_price ? ` (child $${r.child_price})` : ""}, departs ${r.dep ?? "UNDATED"}, ${r.trip_type ?? "type ?"}, seen ${r.seen}`);
   } catch (e) { out.push(`sightings failed: ${(e as Error).message}`); }
   out.push("");
   // Why a cruise does or doesn't show for a search (owner, 2026-11-14: an

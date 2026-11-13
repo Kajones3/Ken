@@ -114,25 +114,27 @@ export interface PortOfCall {
   /** Disney's private islands: priced at $0 (our choice: the beach is free). */
   privateIsland?: boolean;
   listings: Listing[];
+  /** Where the ship docks, near enough for typical weather (not navigation). */
+  lat: number; lon: number;
 }
 export const EXCURSION_SOURCE = "Disney Cruise Line port adventure pages (search results read 2026-11-13; undated)";
 export const PORTS_OF_CALL: PortOfCall[] = [
-  { id: "castaway", name: "Castaway Cay", match: /castaway/i, privateIsland: true, listings: [] },
-  { id: "lookout", name: "Disney Lookout Cay", match: /lookout cay/i, privateIsland: true, listings: [] },
-  { id: "nassau", name: "Nassau", match: /nassau/i,
+  { id: "castaway", lat: 26.08, lon: -77.54, name: "Castaway Cay", match: /castaway/i, privateIsland: true, listings: [] },
+  { id: "lookout", lat: 24.61, lon: -76.15, name: "Disney Lookout Cay", match: /lookout cay/i, privateIsland: true, listings: [] },
+  { id: "nassau", lat: 25.08, lon: -77.35, name: "Nassau", match: /nassau/i,
     listings: [{ adult: 239, child: 139 }, { adult: 99, child: 89 }, { adult: 179, child: 179 }, { adult: 209, child: null }] },
-  { id: "cozumel", name: "Cozumel", match: /cozumel/i,
+  { id: "cozumel", lat: 20.51, lon: -86.95, name: "Cozumel", match: /cozumel/i,
     listings: [{ adult: 134, child: 84 }, { adult: 49, child: 39 }, { adult: 139, child: 119 }] },
-  { id: "progreso", name: "Progreso", match: /progreso/i,
+  { id: "progreso", lat: 21.28, lon: -89.66, name: "Progreso", match: /progreso/i,
     listings: [{ adult: 49, child: 34 }, { adult: 134, child: null }, { adult: 159, child: 129 }, { adult: 79, child: 69 }] },
-  { id: "ensenada", name: "Ensenada", match: /ensenada/i,
+  { id: "ensenada", lat: 31.87, lon: -116.62, name: "Ensenada", match: /ensenada/i,
     listings: [{ adult: 99, child: 79 }, { adult: 49, child: null }, { adult: 109, child: 94 }] },
-  { id: "cabo", name: "Cabo San Lucas", match: /cabo/i,
+  { id: "cabo", lat: 22.89, lon: -109.91, name: "Cabo San Lucas", match: /cabo/i,
     listings: [{ adult: 74, child: 54 }, { adult: 99, child: 74 }, { adult: 169, child: 134 }] },
-  { id: "catalina", name: "Catalina Island", match: /catalina/i, listings: [] },
-  { id: "skagway", name: "Skagway", match: /skagway/i, listings: [{ adult: 234, child: 124 }, { adult: 324, child: 204 }] },
-  { id: "juneau", name: "Juneau", match: /juneau/i, listings: [{ adult: 349, child: 229 }] },
-  { id: "ketchikan", name: "Ketchikan", match: /ketchikan/i, listings: [{ adult: 94, child: 54 }] },
+  { id: "catalina", lat: 33.34, lon: -118.33, name: "Catalina Island", match: /catalina/i, listings: [] },
+  { id: "skagway", lat: 59.46, lon: -135.31, name: "Skagway", match: /skagway/i, listings: [{ adult: 234, child: 124 }, { adult: 324, child: 204 }] },
+  { id: "juneau", lat: 58.3, lon: -134.42, name: "Juneau", match: /juneau/i, listings: [{ adult: 349, child: 229 }] },
+  { id: "ketchikan", lat: 55.34, lon: -131.64, name: "Ketchikan", match: /ketchikan/i, listings: [{ adult: 94, child: 54 }] },
 ];
 
 /** Words in a ports line that are not ports of call (countries, states,

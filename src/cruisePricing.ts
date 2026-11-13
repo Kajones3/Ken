@@ -55,6 +55,10 @@ export interface CruiseTravel {
     roundTripMiles: number; fromMap: boolean } | null;
   /** What the card opens on: flying, unless the port is too close to fly. */
   default: "fly" | "drive";
+  /** Why flying isn't offered, when it isn't: "close" = under 100 miles,
+   *  "no_fare" = no fare bought to that airport yet, "no_transfer" = no
+   *  Disney transfer price for that port. */
+  noFly: "close" | "no_fare" | "no_transfer" | null;
 }
 
 export interface PricedCruise {
@@ -321,7 +325,7 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
       sailDate: s.sailDate!, sailEnd, nights, cabin: s.cabin!, seenOn: s.seenOn, guests,
       perPersonFare: fs.estimate ? round2(fareLine / guests) : s.priceUsd!, estimate: fs.estimate, lines, base,
       total: round2(base + (mode === "fly" ? fly!.total : drive!.total)),
-      travel: { fly, drive, default: mode },
+      travel: { fly, drive, default: mode, noFly: fly ? null : tooClose ? "close" : port.transferUsd === null ? "no_transfer" : "no_fare" },
       gratuityPerNight: perNight,
       transfer: { perGuest: port.transferUsd ?? 0, minutes: port.transferMinutes },
       latestArrival: port.latestArrival,
