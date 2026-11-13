@@ -206,7 +206,18 @@ async function getJson(
   const sleep = tuning.sleep ?? nap;
   for (let attempt = 0; ; attempt++) {
     await sleep(pace.pauseMs);
-    const res = await fetchImpl(url);
+    let res: Response;
+    try {
+      res = await fetchImpl(url);
+    } catch (e) {
+      // A dropped or timed-out connection (seen 2026-11-13 right after a
+      // 429) is transient too: wait and try again, up to the same limit.
+      if (attempt >= MAX_RETRIES) throw e;
+      const wait = 5_000 * 2 ** Math.min(attempt, 4);
+      tuning.onWait?.(wait, `connection failed: ${(e as Error).message}`);
+      await sleep(wait);
+      continue;
+    }
     if (res.ok) return res;
 
     const body = await res.text();

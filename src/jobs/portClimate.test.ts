@@ -33,3 +33,17 @@ test("the generator writes a table for every port from a stubbed fetch", async (
   assert.match(r.file, /"cozumel": \[\[80, 65, \d+\]/);
   assert.match(renderPortFile({}, "x"), /PORT_CLIMATE_ROWS/);
 });
+
+test("a dropped connection is waited out and retried, not fatal", async () => {
+  let calls = 0;
+  const ok = (async (url: string) => {
+    calls++;
+    if (calls === 1) throw new TypeError("fetch failed");
+    const y = /start_date=(\d{4})/.exec(String(url))![1];
+    return new Response(JSON.stringify({ daily: { time: [`${y}-01-01`], temperature_2m_max: [80], temperature_2m_min: [60], precipitation_sum: [0] } }), { status: 200 });
+  }) as unknown as typeof fetch;
+  const { fetchDaily } = await import("./climateNormals.js");
+  const d = await fetchDaily(0, 0, 2020, 2020, ok, { sleep: async () => {} });
+  assert.equal(d.length, 1);
+  assert.equal(calls, 2);
+});
