@@ -3275,7 +3275,7 @@ function beyondStripHtml(){
   if(c.guest){
     if(!c.anySailings && !c.anyAdventures) return "";
     what = `${[c.anySailings && "Disney Cruise Line sails", c.anyAdventures && "Adventures by Disney has trips"].filter(Boolean).join(" and ")} in ${month}.`;
-    btn = `<button type="button" class="linkbtn" data-signup>Become a Planner, free, to see how many</button>`;
+    btn = `<button type="button" class="linkbtn" data-signup>Become a Planner, free, to learn more</button>`;
   } else {
     const n = c.sailings || 0, adv = c.adventures?.count || 0;
     if(!n && !adv) return "";
@@ -5107,7 +5107,7 @@ let authMode = "signup";
 
 function syncAuthMode(){
   const up = authMode === "signup";
-  $("#authTitle").textContent = up ? "Become a Planner" : "Sign In";
+  $("#authTitle").textContent = up ? "Become A Planner For Free!" : "Sign In";
   $("#authIntro").textContent = up
     ? "An account is free and takes two fields. It's what Planner Pro attaches to, so use an address you actually read."
     : "Welcome back. Every account needs a password now — if yours predates that, create the account again with the same email to set one.";
