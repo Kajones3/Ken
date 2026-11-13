@@ -102,3 +102,33 @@ test("a free visitor is told how many, not which", () => {
     party: family, origin: ATL, today, rates, flight });
   assert.equal(countUnder(r.priced, 6000), 1);
 });
+
+test("driving: too close to fly = driving only; farther = both, flying first", () => {
+  const drive = (port: any) => port.id === "fll" ? { oneWayMiles: 30, fromMap: true, gasUsd: 7.2, wearUsd: 43.5, parkingPerDay: 25 } : null;
+  const MIA = { iata: "MIA", lat: 25.79, lon: -80.29 };
+  const near = priceCruises({ rows: [base], party: family, origin: MIA, today, rates, flight, drive }).priced[0]!;
+  assert.equal(near.travel.default, "drive");
+  assert.equal(near.travel.fly, null);
+  assert.equal(near.travel.drive!.parking, 25 * 5, "parking for nights + 1 days");
+  assert.equal(near.lines.flights, 0);
+  assert.equal(near.total, near.base + 7.2 + 43.5 + 125);
+  const far = priceCruises({ rows: [base], party: family, origin: ATL, today, rates, flight, drive }).priced[0]!;
+  assert.equal(far.travel.default, "fly");
+  assert.ok(far.travel.drive, "the I'm driving switch has a price");
+  // No fare bought yet but driving is priced: the sailing still shows.
+  const noFare = priceCruises({ rows: [base], party: family, origin: ATL, today, rates, flight: () => null, drive }).priced[0]!;
+  assert.equal(noFare.travel.default, "drive");
+  // Neither = a hole.
+  const none = priceCruises({ rows: [base], party: family, origin: MIA, today, rates, flight, drive: () => null });
+  assert.equal(none.priced.length, 0);
+  assert.match(none.holes[0]!.what, /driving to Fort Lauderdale/);
+});
+
+test("a free visitor's count takes the cheaper way there", () => {
+  const drive = () => ({ oneWayMiles: 300, fromMap: true, gasUsd: 72, wearUsd: 435, parkingPerDay: 25 });
+  const r = priceCruises({ rows: [base], party: family, origin: ATL, today, rates, flight, drive });
+  const c = r.priced[0]!;
+  const cheaper = c.base + Math.min(c.travel.fly!.total, c.travel.drive!.total);
+  assert.equal(countUnder(r.priced, cheaper), 1);
+  assert.equal(countUnder(r.priced, cheaper - 1), 0);
+});

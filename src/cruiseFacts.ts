@@ -37,6 +37,8 @@ export interface HomePort {
   /** The airport Disney's transfers run from. */
   airport: string;
   lat: number; lon: number;
+  /** The cruise terminal itself, where someone driving goes. */
+  terminal: { lat: number; lon: number };
   /** Disney's own airport-to-port transfer, per guest, each way (2026). */
   transferUsd: number | null;
   transferMinutes: string;
@@ -49,39 +51,47 @@ const TRANSFER_SOURCE = "Disney Cruise Line transfer and flight guidelines, 2026
 export { TRANSFER_SOURCE };
 
 export const HOME_PORTS: HomePort[] = [
-  { id: "canaveral", name: "Port Canaveral", match: /canaveral/i, airport: "MCO", lat: 28.43, lon: -81.31,
+  { id: "canaveral", name: "Port Canaveral", match: /canaveral/i, airport: "MCO", lat: 28.43, lon: -81.31, terminal: { lat: 28.41, lon: -80.63 },
     transferUsd: 45, transferMinutes: "1 hr", latestArrival: "11:30 AM",
     parking: { perDayUsd: 20, status: "official", source: "Port Canaveral parking page: $20 a day plus tax, arrival and departure days included (effective 2025-10-01)" } },
-  { id: "fll", name: "Fort Lauderdale (Port Everglades)", match: /lauderdale|everglades/i, airport: "FLL", lat: 26.07, lon: -80.15,
+  { id: "fll", name: "Fort Lauderdale (Port Everglades)", match: /lauderdale|everglades/i, airport: "FLL", lat: 26.07, lon: -80.15, terminal: { lat: 26.09, lon: -80.12 },
     transferUsd: 29, transferMinutes: "15 min", latestArrival: "12:30 PM",
     parking: { perDayUsd: 25, status: "official", source: "porteverglades.net cruise parking: $25 maximum daily rate" } },
-  { id: "galveston", name: "Galveston", match: /galveston/i, airport: "IAH", lat: 29.98, lon: -95.34,
+  { id: "galveston", name: "Galveston", match: /galveston/i, airport: "IAH", lat: 29.98, lon: -95.34, terminal: { lat: 29.31, lon: -94.79 },
     transferUsd: 45, transferMinutes: "90 min", latestArrival: "10:45 AM",
     // The port prices parking only inside its booking flow; travel sites
     // disagree ($20-35 a day). Left empty on purpose.
     parking: null },
-  { id: "sandiego", name: "San Diego", match: /san diego/i, airport: "SAN", lat: 32.73, lon: -117.19,
+  { id: "sandiego", name: "San Diego", match: /san diego/i, airport: "SAN", lat: 32.73, lon: -117.19, terminal: { lat: 32.72, lon: -117.17 },
     transferUsd: 18, transferMinutes: "15 min", latestArrival: "12:15 PM",
     parking: null },
-  { id: "vancouver", name: "Vancouver", match: /vancouver/i, airport: "YVR", lat: 49.19, lon: -123.18,
+  { id: "vancouver", name: "Vancouver", match: /vancouver/i, airport: "YVR", lat: 49.19, lon: -123.18, terminal: { lat: 49.29, lon: -123.11 },
     transferUsd: 28, transferMinutes: "45 min", latestArrival: "11:15 AM",
     parking: null },
   // Disney's other home ports, kept for when they're added. Flights to them
   // aren't bought, so no sailing from them can price yet.
-  { id: "barcelona", name: "Barcelona", match: /barcelona/i, airport: "BCN", lat: 41.3, lon: 2.08,
+  { id: "barcelona", name: "Barcelona", match: /barcelona/i, airport: "BCN", lat: 41.3, lon: 2.08, terminal: { lat: 41.37, lon: 2.18 },
     transferUsd: 35, transferMinutes: "30 min", latestArrival: "12:45 PM", parking: null },
-  { id: "civitavecchia", name: "Civitavecchia (Rome)", match: /civitavecchia|rome/i, airport: "FCO", lat: 41.8, lon: 12.25,
+  { id: "civitavecchia", name: "Civitavecchia (Rome)", match: /civitavecchia|rome/i, airport: "FCO", lat: 41.8, lon: 12.25, terminal: { lat: 42.09, lon: 11.79 },
     transferUsd: 66, transferMinutes: "1 hr", latestArrival: "12:00 PM", parking: null },
-  { id: "sanjuan", name: "San Juan", match: /san juan/i, airport: "SJU", lat: 18.44, lon: -66.0,
+  { id: "sanjuan", name: "San Juan", match: /san juan/i, airport: "SJU", lat: 18.44, lon: -66.0, terminal: { lat: 18.46, lon: -66.11 },
     transferUsd: null, transferMinutes: "20 min", latestArrival: null, parking: null },
-  { id: "singapore", name: "Singapore", match: /singapore/i, airport: "SIN", lat: 1.36, lon: 103.99,
+  { id: "singapore", name: "Singapore", match: /singapore/i, airport: "SIN", lat: 1.36, lon: 103.99, terminal: { lat: 1.26, lon: 103.82 },
     transferUsd: 23, transferMinutes: "20-30 min", latestArrival: null, parking: null },
-  { id: "southampton", name: "Southampton", match: /southampton/i, airport: "LHR", lat: 51.47, lon: -0.45,
+  { id: "southampton", name: "Southampton", match: /southampton/i, airport: "LHR", lat: 51.47, lon: -0.45, terminal: { lat: 50.9, lon: -1.41 },
     transferUsd: 75, transferMinutes: "1 hr 30 min", latestArrival: null, parking: null },
 ];
 
+/** The /admin setting holding a port's parking price per day (0 = not set:
+ *  driving to that port isn't offered until the owner types one). */
+export const parkingKey = (portId: string) => `cruise.parking.${portId}`;
+/** Ports someone might drive to (US and Vancouver). */
+export const DRIVE_PORTS = ["canaveral", "fll", "galveston", "sandiego", "vancouver"] as const;
+/** Furthest one-way road drive offered to a port: one day's driving. */
+export const MAX_PORT_DRIVE_MILES = 500;
+
 /** Second-hand parking figures found 2026-11-13, kept for the owner's
- *  holes list, never priced. */
+ *  holes list, never priced unless the owner types one in /admin. */
 export const PARKING_NOT_USED: Record<string, string> = {
   galveston: "Official rates only inside the port's booking flow; travel sites say $20-35 a day.",
   sandiego: "No parking at the cruise terminal; nearby lots run about $12-25 a day (travel sites, e.g. Park, Shuttle & Fly $24.95).",

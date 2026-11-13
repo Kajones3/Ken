@@ -68,3 +68,10 @@ test("a pasted ship page becomes names and facts, never Disney's sentences", () 
   assert.ok(!got.some((x: any) => /Inside|Oceanview|More to Explore/.test(x.name)), "stops at the staterooms");
   for (const x of got) assert.ok(x.note.length < 60);
 });
+
+test("Disney's menu at the top of the page (Dining ... Deck Plans) is not the end of the page", () => {
+  const menu = "Our Ships\nDining\nEntertainment\nAdult Spaces\nKids Clubs\nStaterooms\nDeck Plans\nView Cruises\nA Wish Come True\n";
+  const got = readShipPage(menu + PAGE);
+  assert.deepEqual(got.map((x) => x.name), readShipPage(PAGE).map((x) => x.name));
+  assert.ok(got.length >= 6);
+});
