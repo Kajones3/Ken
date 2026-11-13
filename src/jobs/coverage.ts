@@ -51,6 +51,22 @@ export async function report(db: Db, origin: string, monthsAhead = 12): Promise<
 
   out.push(`# Cache coverage from ${origin} — generated ${today}`);
   out.push("");
+  // Read-only: what the owner has saved from cruise and Adventures by Disney screenshots.
+  try {
+    out.push("## Cruise and Adventures by Disney sightings (owner screenshots)");
+    const cr = await db.query<any>(`select * from cruise_sightings order by seen_on, created_at`);
+    out.push(`Cruises: ${cr.rows.length} row(s)`);
+    for (const r of cr.rows) {
+      out.push(`- seen ${String(r.seen_on).slice(0, 15)} | ${r.title} | nights ${r.nights ?? "?"} | from ${r.departure_port ?? "?"} | ports ${r.ports ?? "-"} | ship ${r.ship ?? "-"} | sail ${r.sail_date ?? "-"} | room ${r.cabin ?? "-"} | ${r.currency} ${r.price} ($${r.price_usd}) | save ${r.save_amount ?? "-"} | dates ${r.dates_count ?? "-"} | theme ${r.theme ?? "-"} | note ${r.note ?? "-"}`);
+    }
+    const av = await db.query<any>(`select * from adventure_sightings order by seen_on, created_at`);
+    out.push(`Adventures: ${av.rows.length} row(s)`);
+    for (const r of av.rows) {
+      const { raw_text: _raw, ...rest } = r;
+      out.push(`- ${JSON.stringify(rest)}`);
+    }
+  } catch (e) { out.push(`sightings failed: ${(e as Error).message}`); }
+  out.push("");
   try { out.push(...await errorBudget(db)); } catch (e) { out.push(`error budget failed: ${(e as Error).message}`); }
   try { out.push(...await deepDive(db)); } catch (e) { out.push(`deep dive failed: ${(e as Error).message}`); }
   try { out.push(...await rawPeek(db)); } catch (e) { out.push(`raw peek failed: ${(e as Error).message}`); }
