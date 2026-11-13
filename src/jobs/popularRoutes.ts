@@ -32,6 +32,7 @@ import { loadScoreboard, type RouteScore } from "../fareScoreboard.js";
 import { recordFlightObservations, SERPAPI_FLIGHTS } from "../observations.js";
 import { flushRaw } from "../rawResponses.js";
 import { forecastFare, recordForecast, type Forecast } from "../fareForecasts.js";
+import { CRUISE_ONLY_AIRPORTS, cruiseBuysTonight, cruiseSlotsTonight, type CruiseBuy } from "./cruiseFlights.js";
 
 /** The middle of the month the paid job buys in: away from both edges, where
  *  a "month" search is least typical (owner, 2026-10-12). Thanksgiving and
@@ -152,6 +153,9 @@ export interface PopularRoutesOptions {
   rotationSlots?: number;
   /** Slots kept for the routes travelers see furthest off (idea 3). */
   worstSlots?: number;
+  /** Extra searches tonight for the cruise ports' airports (cruiseFlights.ts);
+   *  default ~50 a month. 0 = none. */
+  cruiseSlots?: number;
   provider?: Pick<SerpApiFlightProvider, "quote" | "callsSpent" | "budgetRemaining">;
 }
 
@@ -216,7 +220,9 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
     : Math.max(0, Math.min(limit - worst.length, opts.rotationSlots ?? Number(process.env.POPULAR_ROUTES_ROTATION ?? Math.floor(limit / 3))));
   let routes = opts.routes
     ?? [...worst, ...toMain((await popularRoutes(db, limit * 4))
-      .filter((r) => !worstKeys.has(`${r.origin}|${mainArrivalAirport(r.destination)}`))).slice(0, limit - worst.length - rotationSlots)];
+      .filter((r) => !worstKeys.has(`${r.origin}|${mainArrivalAirport(r.destination)}`))
+      // Cruise ports are bought below, on the exact sailing day.
+      .filter((r) => !CRUISE_ONLY_AIRPORTS.has(r.destination))).slice(0, limit - worst.length - rotationSlots)];
 
   // Fill the rest of tonight's slots by rotation, stalest route first.
   // Demand still wins where it exists — someone actually asking about a
@@ -292,7 +298,20 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
   let calls = 0, rows = 0, errors = 0, misses = 0, forecasts = 0, tooFar = 0;
   const today = todayISO();
 
-  if (routes.length) {
+  // Cruise ports (owner, 2026-11-13): ~50 searches a month on top of the
+  // night's routes, each the exact sailing. A failure here never stops the
+  // park routes.
+  let cruise: CruiseBuy[] = [];
+  if (!opts.routes) {
+    const n = opts.cruiseSlots ?? Number(process.env.POPULAR_ROUTES_CRUISE ?? cruiseSlotsTonight(Math.floor(Date.now() / 86_400_000)));
+    try {
+      cruise = await cruiseBuysTonight(db, n, today, addDaysISO(today, FLIGHT_SEARCH_MAX_DAYS));
+      if (cruise.length) console.log(`popular-routes: ${cruise.length} cruise port search(es): ` +
+        cruise.map((c) => `${c.origin}->${c.destination} ${c.date} (${c.nights} nights, ${c.why})`).join(", "));
+    } catch (e) { console.warn(`popular-routes: cruise ports skipped: ${(e as Error).message}`); }
+  }
+
+  if (routes.length || cruise.length) {
     const provider = opts.provider ?? new SerpApiFlightProvider();
     outer: for (const route of routes) {
       for (const bucket of buckets) {
@@ -350,16 +369,41 @@ export async function runPopularRoutes(db: Db, opts: PopularRoutesOptions = {}) 
         }
       }
     }
+    for (const c of cruise) {
+      if (provider.budgetRemaining <= 0) { console.warn("popular-routes: budget exhausted before the cruise ports"); break; }
+      try {
+        calls++;
+        const q = await provider.quote(c.origin, c.destination, c.date, c.nights);
+        if (!q) { misses++; continue; }
+        await recordFlightObservations(db, [q], SERPAPI_FLIGHTS);
+        await db.query(
+          `insert into flight_prices
+             (origin,destination,depart_date,trip_length,price_usd,carrier,stops,deep_link,source,fetched_at)
+           values ($1,$2,$3,$4,$5,$6,$7,$8,'serpapi_flights',now())
+           on conflict (origin,destination,depart_date,trip_length) do update set
+             price_usd = excluded.price_usd, carrier = excluded.carrier,
+             stops = excluded.stops, deep_link = excluded.deep_link,
+             source = excluded.source, fetched_at = excluded.fetched_at`,
+          [q.origin, q.destination, q.departDate, q.tripLength, q.priceUsd, q.carrier ?? null, q.stops, q.deepLink ?? null],
+        );
+        rows++;
+      } catch (e) {
+        errors++;
+        console.error(`popular cruise ${c.origin}->${c.destination} ${c.date}:`, (e as Error).message);
+      } finally {
+        await flushRaw(db, provider);
+      }
+    }
   }
 
   await db.query(
     `update fetch_runs set finished_at = now(), calls = $2, rows_written = $3, errors = $4,
        note = note || ' · ' || $5 where id = $1`,
-    [runId, calls, rows, errors, `${routes.length} routes, ${misses} with no fare, ${forecasts} forecasts kept`
+    [runId, calls, rows, errors, `${routes.length} routes${cruise.length ? ` + ${cruise.length} cruise port` : ""}, ${misses} with no fare, ${forecasts} forecasts kept`
       + (tooFar ? `, ${tooFar} date(s) too far ahead to search` : "")],
   );
   if (tooFar) console.log(`popular-routes: ${tooFar} date(s) past ${FLIGHT_SEARCH_MAX_DAYS} days out not searched (airlines don't sell them yet)`);
-  return { runId, routes: routes.length, calls, rows, errors, misses, forecasts, tooFar };
+  return { runId, routes: routes.length, cruise: cruise.length, calls, rows, errors, misses, forecasts, tooFar };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

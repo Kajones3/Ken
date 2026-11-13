@@ -1224,3 +1224,17 @@ delete from cruise_sightings c
    and ((k.note is not null and c.note is null)
      or ((k.note is null) = (c.note is null) and (k.created_at, k.id::text) < (c.created_at, c.id::text)));
 insert into schema_marks (name) values ('cruise_sightings_dedupe_2026_11') on conflict (name) do nothing;
+
+-- What's on board each Disney ship (src/ships.ts, 2026-11-13): the owner's
+-- rows laid over the shipped list (replace, hide or add), like
+-- owner_attractions. Empty = the shipped list.
+create table if not exists owner_ship_items (
+  id          text primary key,
+  ship        text not null,
+  kind        text not null,
+  name        text not null,
+  note        text not null default '',
+  hidden      boolean not null default false,
+  updated_by  text not null default '',
+  updated_at  timestamptz not null default now()
+);

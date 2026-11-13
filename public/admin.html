@@ -328,6 +328,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     <a href="#deals">Deals</a>
     <a href="#sales">Planner Pro sales</a>
     <a href="#cruises">Cruises</a>
+    <a href="#ships">Ships</a>
     <a href="#adventures">Adventures by Disney</a>
     <a href="#notes">Good to know</a>
     <a href="#lands">Lands</a>
@@ -962,9 +963,14 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="cruises">
   <section class="sheet" id="cruises">
     <h2>Cruises</h2>
-    <p>Disney Cruise Line prices, kept as <b>history only</b>. Nothing here is priced or shown to travelers yet:
-      it's so that if cruises launch on the site, we already know how prices moved. Every save is kept with the
-      day you saw it, so saving the same cruise again next week adds a new price instead of replacing the old one.</p>
+    <p>Disney Cruise Line prices from your screenshots. Every save is kept with the day you saw it, so saving the
+      same cruise again next week adds a new price instead of replacing the old one. <b>Planner Pro members who tick
+      &ldquo;Consider Disney Cruises too&rdquo; see a sailing</b> when its price was seen in the last 3 weeks for their
+      exact party and every other line (gratuities, flights, transfers, port adventures) has a real number. Anything
+      missing drops the sailing; the list below says what's missing. Travelers never see a hole.</p>
+
+    <h3>Cruise data holes</h3>
+    <div id="crHoles"><p class="count">Loading&hellip;</p></div>
 
     <h3>Read a screenshot</h3>
     <p>Screenshot Disney's cruise list, one cruise's <b>dates</b> (after &ldquo;Show N Dates&rdquo;: every sailing with
@@ -996,7 +1002,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       the picture. Type <b>sold out</b> where Disney says &ldquo;Unavailable&rdquo;.</p>
     <p class="count"><b>+ Gratuities</b> adds Disney's recommended gratuities for one person over the whole sailing
       (nights &times; the rate per night; the higher rate for Concierge), in dollars. The rates are in
-      <a href="#numbers">Rates &amp; settings</a> &rarr; &ldquo;Cruises (history only)&rdquo;; changing them updates every
+      <a href="#numbers">Rates &amp; settings</a> &rarr; &ldquo;Cruises&rdquo;; changing them updates every
       saved cruise. Saving the same price twice on the same day is skipped, so dropping a screenshot again is safe.</p>
     <div class="tools">
       <button class="btn" id="crAdd">Add a cruise by hand</button>
@@ -1011,6 +1017,35 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
       less a child (the 3rd and 4th guest) pays than an adult, and how big the taxes are. Disney sometimes shows the
       whole room's price and sometimes divides it by the guests; <b>Shown as</b> says which.</p>
     <div id="crRates"><p class="count">Nothing kept yet.</p></div>
+  </section>
+  </div>
+
+  <div class="page" data-page="ships">
+  <section class="sheet" id="ships">
+    <h2>Ships</h2>
+    <p>What's on board each Disney ship: restaurants, shows, adult spaces and kids clubs. Planner Pro members see
+      this on each cruise card. Keep the notes to <b>short facts in our own words</b> (ages, adults only, what it is);
+      Disney's own descriptions are copyrighted.</p>
+    <div class="cgrid"><div><label for="shShip">Ship</label><select id="shShip"></select></div></div>
+    <p class="count" id="shHome"></p>
+
+    <h3>Paste Disney's page for this ship</h3>
+    <p>Open the ship's page on Disney's site, select all, copy, and paste it here. We pick out the names and a few
+      facts (ages, adults only) for you to check. Ticked rows are the ones that look like real places;
+      untick taglines and anything you don't want. Nothing saves until you press Save.</p>
+    <textarea id="shPaste" rows="6" style="width:100%" placeholder="Paste the whole page here"></textarea>
+    <p><button class="btn" id="shRead">Read it</button> <span class="count" id="shReadStatus"></span></p>
+    <div id="shProposed"></div>
+
+    <h3>On board</h3>
+    <div id="shList"><p class="count">Loading&hellip;</p></div>
+    <h4>Add one by hand</h4>
+    <div class="cgrid">
+      <div><label for="shKind">Kind</label><select id="shKind"></select></div>
+      <div><label for="shName">Name</label><input type="text" id="shName" maxlength="120"></div>
+      <div><label for="shNote">Short fact (optional)</label><input type="text" id="shNote" maxlength="300" placeholder="Ages 3 to 10"></div>
+    </div>
+    <p><button class="btn" id="shAdd">Add</button> <span class="count" id="shAddStatus"></span></p>
   </section>
   </div>
 
@@ -2745,7 +2780,7 @@ document.addEventListener("click", e => {
  * them check every box, keep each price with the day it was seen. */
 const CABINS = [["", "Cheapest shown"], ["inside", "Inside"], ["oceanview", "Oceanview"], ["verandah", "Verandah"], ["concierge", "Concierge"], ["suite", "Suite (old)"]];
 const ROOMS = [["inside", "Inside"], ["oceanview", "Oceanview"], ["verandah", "Verandah"], ["concierge", "Concierge"]];
-const SHIPS = ["", "Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure"];
+const SHIPS = ["", "Magic", "Wonder", "Dream", "Fantasy", "Wish", "Treasure", "Destiny", "Adventure", "Believe"];
 let crDraft = [];
 const crNum = v => (v === null || v === undefined) ? "" : v;
 function crRowHtml(c, i){
@@ -2987,6 +3022,109 @@ function renderRates(rows){
 async function loadCruises(){
   const r = await fetch("/api/admin/cruises"); if(!r.ok) return;
   const b = await r.json(); renderCruises(b.cruises); renderRates(b.rates);
+  loadCruiseHoles();
+}
+/* What cruises still need before travelers see them (owner, 2026-11-13: "I
+   just need to know where the holes are"). Read-only. */
+/* ---------------- Ships (ships.ts) ---------------- */
+let shipData = null;
+async function loadShips(){
+  const r = await fetch("/api/admin/ships"); if(!r.ok) return;
+  shipData = await r.json();
+  const sel = document.getElementById("shShip");
+  if(!sel.options.length){
+    sel.innerHTML = shipData.ships.map(x => `<option>${esc(x)}</option>`).join("");
+    sel.value = "Disney Wish";
+    document.getElementById("shKind").innerHTML = shipData.kinds.map(k => `<option value="${k}">${esc(shipData.labels[k])}</option>`).join("");
+  }
+  renderShips();
+}
+function kindOptions(cur){ return shipData.kinds.map(k => `<option value="${k}"${k === cur ? " selected" : ""}>${esc(shipData.labels[k])}</option>`).join(""); }
+function renderShips(){
+  const ship = document.getElementById("shShip").value;
+  document.getElementById("shHome").textContent = shipData.homes[ship] || "";
+  const rows = shipData.items.filter(x => x.ship === ship);
+  const box = document.getElementById("shList");
+  if(!rows.length){ box.innerHTML = `<p class="count">Nothing yet for ${esc(ship)}. Paste its page above, or add items by hand.</p>`; return; }
+  box.innerHTML = shipData.kinds.filter(k => rows.some(r => r.kind === k)).map(k => `<h4>${esc(shipData.labels[k])}</h4>
+    <div class="tablewrap"><table><thead><tr><th>Name</th><th>Kind</th><th>Short fact</th><th>Shown</th><th></th></tr></thead><tbody>
+    ${rows.filter(r => r.kind === k).map(r => `<tr data-shrow="${esc(r.id)}">
+      <td><input type="text" class="shN" value="${esc(r.name)}" maxlength="120"></td>
+      <td><select class="shK">${kindOptions(r.kind)}</select></td>
+      <td><input type="text" class="shT" value="${esc(r.note)}" maxlength="300"></td>
+      <td><input type="checkbox" class="shV"${r.hidden ? "" : " checked"} aria-label="Shown on cruise cards"></td>
+      <td><button class="btn" data-shsave="${esc(r.id)}">Save</button>
+        ${r.source === "owner" ? `<button class="btn" data-shdel="${esc(r.id)}">Delete</button>`
+          : r.source === "owner-edit" ? `<button class="btn" data-shdel="${esc(r.id)}">Put back</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>`).join("");
+}
+async function postShips(items, status){
+  const r = await fetch("/api/admin/ships", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) });
+  const b = await r.json().catch(() => ({}));
+  if(!r.ok){ if(status) status.textContent = b.error || "Could not save."; return false; }
+  shipData.items = b.items; renderShips();
+  if(status) status.textContent = `Saved ${b.saved}.`;
+  return true;
+}
+document.getElementById("shShip").addEventListener("change", () => { document.getElementById("shProposed").innerHTML = ""; renderShips(); });
+document.addEventListener("click", async e => {
+  const sv = e.target.closest("[data-shsave]"), dl = e.target.closest("[data-shdel]");
+  if(sv){
+    const tr = sv.closest("tr");
+    await postShips([{ id: sv.dataset.shsave, ship: document.getElementById("shShip").value, kind: tr.querySelector(".shK").value,
+      name: tr.querySelector(".shN").value, note: tr.querySelector(".shT").value, hidden: !tr.querySelector(".shV").checked }]);
+  }
+  if(dl){
+    if(!confirm(dl.textContent.trim() === "Delete" ? "Delete this item?" : "Put back the original words?")) return;
+    const r = await fetch("/api/admin/ships/" + encodeURIComponent(dl.dataset.shdel), { method: "DELETE" });
+    if(r.ok){ shipData.items = (await r.json()).items; renderShips(); }
+  }
+});
+document.getElementById("shAdd").addEventListener("click", async () => {
+  const ok = await postShips([{ ship: document.getElementById("shShip").value, kind: document.getElementById("shKind").value,
+    name: document.getElementById("shName").value, note: document.getElementById("shNote").value }], document.getElementById("shAddStatus"));
+  if(ok){ document.getElementById("shName").value = ""; document.getElementById("shNote").value = ""; }
+});
+document.getElementById("shRead").addEventListener("click", async () => {
+  const { readShipPage } = await getReader();
+  const ship = document.getElementById("shShip").value;
+  const have = new Set(shipData.items.filter(x => x.ship === ship).map(x => x.name.toLowerCase()));
+  const got = readShipPage(document.getElementById("shPaste").value);
+  const st = document.getElementById("shReadStatus"), box = document.getElementById("shProposed");
+  if(!got.length){ st.textContent = "Found nothing. Paste the whole page, from the top."; box.innerHTML = ""; return; }
+  st.textContent = `Found ${got.length}. Check each one, then save.`;
+  box.innerHTML = `<div class="tablewrap"><table><thead><tr><th>Keep</th><th>Name</th><th>Kind</th><th>Short fact</th></tr></thead><tbody>
+    ${got.map(x => `<tr class="shP"><td><input type="checkbox"${x.likely && !have.has(x.name.toLowerCase()) ? " checked" : ""}></td>
+      <td><input type="text" class="shN" value="${esc(x.name)}" maxlength="120">${have.has(x.name.toLowerCase()) ? '<br><span class="count">already listed</span>' : ""}</td>
+      <td><select class="shK">${kindOptions(x.kind)}</select></td>
+      <td><input type="text" class="shT" value="${esc(x.note)}" maxlength="300"></td></tr>`).join("")}
+    </tbody></table></div><p><button class="btn" id="shSaveP">Save the ticked ones to ${esc(ship)}</button> <span class="count" id="shSaveStatus"></span></p>`;
+  document.getElementById("shSaveP").addEventListener("click", async () => {
+    const items = [...box.querySelectorAll("tr.shP")].filter(tr => tr.querySelector("input[type=checkbox]").checked)
+      .map(tr => ({ ship, kind: tr.querySelector(".shK").value, name: tr.querySelector(".shN").value, note: tr.querySelector(".shT").value }));
+    if(!items.length){ document.getElementById("shSaveStatus").textContent = "Nothing ticked."; return; }
+    if(await postShips(items, document.getElementById("shSaveStatus"))) box.innerHTML = "";
+  });
+});
+loadShips();
+
+async function loadCruiseHoles(){
+  const box = document.getElementById("crHoles");
+  const r = await fetch("/api/admin/cruise-holes"); if(!r.ok){ box.innerHTML = '<p class="count">Could not load.</p>'; return; }
+  const h = await r.json();
+  const sail = h.sailings.length ? `<div class="tablewrap"><table><thead><tr><th>Sailing</th><th>Home port</th><th>Parties saved</th>
+      <th>Flights bought that month</th><th>Missing</th></tr></thead><tbody>${h.sailings.map(x => `<tr>
+      <td>${esc(x.title)}<br><span class="count">${esc(x.sailDate)}</span></td><td>${esc(x.port || "?")}</td>
+      <td>${x.parties.map(esc).join("<br>")}</td>
+      <td>${x.flights ? (x.flights.airport === "MCO" ? "MCO: the Disney World flight formula" : `${x.flights.airport}: from ${x.flights.originsWithFare} of ${x.flights.of} airports`) : ""}</td>
+      <td>${x.missing.length ? x.missing.map(esc).join("<br>") : "Nothing (prices for the parties saved)"}</td></tr>`).join("")}</tbody></table></div>`
+    : `<p class="count">No sailing price seen in the last ${h.freshDays} days. Drop a cruise's dates screenshot above.</p>`;
+  box.innerHTML = `<p class="count">Sailings with a price seen in the last ${h.freshDays} days:</p>${sail}
+    <h4>Home ports</h4><div class="tablewrap"><table><thead><tr><th>Port</th><th>Airport</th><th>Transfer</th><th>Parking</th></tr></thead><tbody>
+      ${h.ports.map(p => `<tr><td>${esc(p.name)}</td><td>${esc(p.airport)}</td><td>${esc(p.transfer)}</td><td>${esc(p.parking)}</td></tr>`).join("")}</tbody></table></div>
+    <h4>Port adventures</h4><div class="tablewrap"><table><thead><tr><th>Port</th><th>Typical price</th></tr></thead><tbody>
+      ${h.excursions.map(p => `<tr><td>${esc(p.port)}</td><td>${esc(p.status)}</td></tr>`).join("")}</tbody></table></div>
+    <h4>Always true for now</h4><ul>${h.standing.map(t => `<li>${esc(t)}</li>`).join("")}</ul>`;
 }
 document.addEventListener("click", async e => {
   const d = e.target.closest("[data-crratedel]"); if(!d) return;

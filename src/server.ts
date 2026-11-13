@@ -42,6 +42,10 @@ import { loadBook, dateStr } from "./book.js";
 import { validateCheck, addChecks, listChecks, deleteCheck, describeKey, CSV_COLUMNS as CHECK_COLUMNS } from "./priceChecks.js";
 import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CHECKS_USE_KEY, CHECKS_WEIGHT_KEY, DEFAULT_CHECKS_WEIGHT } from "./checkFactors.js";
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
+import { priceCruises, countUnder } from "./cruisePricing.js";
+import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles } from "./cruiseData.js";
+import { homePortOf, CRUISE_SHIPS } from "./cruiseFacts.js";
+import { listShipItems, saveShipItems, deleteShipItem, shipSummary, SHIP_ITEM_KINDS, SHIP_KIND_LABEL, SHIP_HOME_NOTES } from "./ships.js";
 import { loadScoreboard } from "./fareScoreboard.js";
 import { loadFareSignals } from "./fareSignals.js";
 import { loadIndicatorStudy } from "./indicatorStudy.js";
@@ -641,6 +645,45 @@ function twoShown(quotes: Map<string, MonthQuote[]>, month: string): string[] {
     return { resortId: r.id, name: r.name, iata: r.iata, ok: !!cur, ...(cur ? { price: { total: cur.total! } } : {}) };
   });
   return lockForGuests(rows).filter((r) => !("locked" in r)).map((r) => r.resortId);
+}
+
+/**
+ * Disney cruises beside the park trips (owner, 2026-11-13). Planner Pro gets
+ * every priced sailing in the searched month (cruisePricing.ts: a sailing
+ * shows only when every line has a real number). Everyone else gets a COUNT
+ * only ("N Disney Cruise sailings cost less than this trip"), never which.
+ * A Planner Pro search also records the ports' airports as demand, so
+ * tonight's paid flight searches buy those routes.
+ */
+async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
+  const q = user ? q0 : guestQuery(q0);
+  const p = paramsFrom(q);
+  const month = q.get("month") ?? "";
+  if (!/^\d{4}-\d{2}$/.test(month)) return { error: "month" as const };
+  const today = todayISO();
+  const o = ORIGIN_BY_IATA.get(p.origin);
+  const rows = await loadSightings(db);
+  const { priced } = priceCruises({
+    rows, party: { adults: p.adults, childAges: p.childAges },
+    origin: o ? { iata: o.iata, lat: o.lat, lon: o.lon } : null,
+    today, month, rates: await gratuityRates(db), flight: await cruiseFlightLookup(db, p.origin, today),
+  });
+  const pro = !!user && isPro(user.proUntil);
+  if (pro) {
+    const ownerEmail = (process.env.OWNER_EMAIL ?? "").trim().toLowerCase();
+    const byOwner = !!ownerEmail && user!.email.trim().toLowerCase() === ownerEmail;
+    const airports = new Set<string>();
+    for (const r of rows) {
+      if (!r.sailDate || r.sailDate.slice(0, 7) !== month) continue;
+      const port = homePortOf(r.departurePort) ?? homePortOf(r.title);
+      if (port) airports.add(port.airport);
+    }
+    if (airports.size) void recordSearch(db, p.origin, [...airports], month, !byOwner);
+    const ship = await listShipItems(db);
+    return { pro: true, month, cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null })) };
+  }
+  const under = Number(q0.get("under"));
+  return { pro: false, month, count: under > 0 ? countUnder(priced, under) : priced.length, under: under > 0 ? under : null };
 }
 
 async function bestMonths(q0: URLSearchParams, user: SessionUser | null) {
@@ -1455,6 +1498,10 @@ const server = createServer(async (req, res) => {
       if ("error" in body) return send(401, body, { cache: "no-store" });
       return send(200, body, { cache: "no-store" });
     }
+    if (url.pathname === "/api/cruises") {
+      const body = await cruiseSearch(url.searchParams, await currentUser(db, req));
+      return send("error" in body ? 400 : 200, body, { cache: "no-store" });
+    }
     if (url.pathname === "/api/bestmonths") {
       const body = await bestMonths(url.searchParams, await currentUser(db, req));
       // no-store: a guest's answer (no month) must not linger after signing in.
@@ -2031,6 +2078,31 @@ const server = createServer(async (req, res) => {
 
     /* Cruises and Adventures by Disney (cruisesAdventures.ts): the owner's
      * screenshots, stored as history only. Nothing a traveler sees reads these. */
+    /* What's on board each ship (ships.ts): the owner's rows over the shipped list. */
+    if (url.pathname === "/api/admin/ships" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, { ships: CRUISE_SHIPS, kinds: SHIP_ITEM_KINDS, labels: SHIP_KIND_LABEL, homes: SHIP_HOME_NOTES,
+        items: await listShipItems(db) }, { cache: "no-store" });
+    }
+    if (url.pathname === "/api/admin/ships" && req.method === "POST") {
+      const owner = await ownerOf(db, req);
+      if (!owner) return send(403, { error: "owner_only" });
+      const body = await readBody(req);
+      const items = Array.isArray((body as any)?.items) ? (body as any).items : [];
+      if (!items.length) return send(400, { error: "Nothing to save" });
+      const r = await saveShipItems(db, items, owner.email);
+      if (!r.ok) return send(400, { error: r.reason });
+      return send(200, { saved: r.saved, items: await listShipItems(db) });
+    }
+    if (url.pathname.startsWith("/api/admin/ships/") && req.method === "DELETE") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      await deleteShipItem(db, decodeURIComponent(url.pathname.slice("/api/admin/ships/".length)));
+      return send(200, { items: await listShipItems(db) });
+    }
+    if (url.pathname === "/api/admin/cruise-holes" && req.method === "GET") {
+      if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
+      return send(200, await cruiseHoles(db, todayISO()), { cache: "no-store" });
+    }
     if (url.pathname === "/api/admin/cruises" && req.method === "GET") {
       if (!await ownerOf(db, req)) return send(403, { error: "owner_only" });
       return send(200, { cruises: await listCruises(db), rates: await listRates(db) }, { cache: "no-store" });

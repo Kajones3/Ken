@@ -12,7 +12,9 @@ name: Pricing the Magic popular routes
 # 2026-10-16, when the refresh's hotel searches dropped from 12 to 6 a
 # night (they were re-buying the same nights every ~5 days) and the owner
 # moved the spare to flights. With 6 hotel lookups a night that is
-# ~900/month, ~100 left for manual runs.
+# ~900/month, ~100 left for manual runs. Since 2026-11-13 the budget is 26:
+# the 24 above plus 1-2 searches a night (~50 a month) for the cruise ports'
+# airports (src/jobs/cruiseFlights.ts), leaving ~50 for manual runs.
 #
 # Slots: up to 6 for the routes we read furthest off, a third of the night
 # (8) always kept for rotation (routeDemand.ts's rotationRoutes,
@@ -44,7 +46,7 @@ on:
         description: Hard ceiling on paid lookups for this run
         required: false
         type: string
-        default: "24"
+        default: "26"
       routes:
         description: "Buy ONLY these (e.g. IAD-CDG-2027-03,IAD-NRT-2027-06); blank = a normal night"
         required: false
@@ -72,5 +74,5 @@ jobs:
           SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
           POPULAR_ROUTES_LIMIT: ${{ inputs.limit || '24' }}
           POPULAR_ROUTES_DATES: ${{ inputs.dates || '1' }}
-          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '24' }}
+          SERPAPI_FLIGHTS_BUDGET: ${{ inputs.budget || '26' }}
           POPULAR_ROUTES_ONLY: ${{ inputs.routes || '' }}
