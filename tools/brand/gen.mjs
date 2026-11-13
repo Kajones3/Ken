@@ -155,23 +155,33 @@ const RES = [
   { id: "hkdl", lon: 114.04, lat: 22.31, dx: -86, dy: 96 },
 ];
 
-// The cruise ship, sailing the mid-Atlantic between Africa and South America
-// (owner, 2026-11-14: "add our cruise ship icon in the mid atlantic"). The
-// same ship as badge-cruise.svg, drawn with its keel at 0,0.
+// The cruise ship (owner, 2026-11-14: "add our cruise ship icon in the mid
+// atlantic", then "more stylized like Disney ships, e.g. black smokestacks",
+// "closer to the size of the Disneyland castle", "more central between
+// Africa, South America and the Caribbean", little waves, no wake). A NOD to
+// a Disney liner, not a copy: dark hull with a gold band, white decks, two
+// red funnels with deep black tops, a gold pennant; no logos or ear shapes.
+// Keel at 0,0, drawn upward; about 100 wide and 68 tall at scale 1.
 function ship(line) {
   const L = line ? ` stroke="${line}" stroke-width="1" stroke-linejoin="round"` : "";
-  return `<g transform="translate(-60,-88)">` +
-    `<path d="M22 74 H98 L90 88 H30 Z" fill="#5a83d7"${L}/><path d="M60 74 H98 L90 88 H60 Z" fill="#3157a3"/>` +
-    `<rect x="24" y="76" width="72" height="2.5" fill="${GOLD}"/>` +
-    `<rect x="32" y="62" width="56" height="12" fill="${CREAM}"${L}/><rect x="60" y="62" width="28" height="12" fill="${DEEP}"/>` +
-    `<rect x="40" y="52" width="40" height="10" fill="${CREAM}"${L}/><rect x="60" y="52" width="20" height="10" fill="${SHADE}"/>` +
-    `<g fill="#16204A">${[36, 42, 48, 54, 64, 70, 76, 82].map((x) => `<circle cx="${x}" cy="68" r="1.6"/>`).join("")}` +
-    `${[45, 51, 57, 63, 69, 75].map((x) => `<rect x="${x - 1.6}" y="55.5" width="3.2" height="3" rx=".6"/>`).join("")}</g>` +
-    `<rect x="47" y="38" width="9" height="14" fill="${CREAM}"${L}/><rect x="47" y="38" width="9" height="4" fill="${GOLD}"/>` +
-    `<rect x="63" y="38" width="9" height="14" fill="${SHADE}"${L}/><rect x="63" y="38" width="9" height="4" fill="${GOLD}"/>` +
-    `<rect x="59" y="24" width="1.6" height="14" fill="${CREAM}"/><path d="M60.6 24 L70 27 L60.6 30 Z" fill="${GOLD}"/></g>`;
+  const HULL = "#1E2438", HULL_SHADE = "#141927", RED = "#C8322B", RED_SHADE = "#A42620", BLACK = "#0E0E12";
+  return `<path d="M-52 -18 H52 L42 0 H-40 Z" fill="${HULL}"${L}/><path d="M0 -18 H52 L42 0 H0 Z" fill="${HULL_SHADE}"/>` +
+    `<rect x="-50" y="-15" width="99" height="2.6" fill="${GOLD}"/>` +
+    `<rect x="-42" y="-30" width="84" height="12" fill="${CREAM}"${L}/><rect x="0" y="-30" width="42" height="12" fill="${DEEP}"/>` +
+    `<rect x="-34" y="-40" width="66" height="10" fill="${CREAM}"${L}/><rect x="0" y="-40" width="32" height="10" fill="${SHADE}"/>` +
+    `<rect x="-24" y="-48" width="44" height="8" fill="${CREAM}"${L}/><rect x="0" y="-48" width="20" height="8" fill="${SHADE}"/>` +
+    `<g fill="#16204A">${[-36, -29, -22, -15, -8, 6, 13, 20, 27, 34].map((x) => `<circle cx="${x}" cy="-24" r="1.7"/>`).join("")}` +
+    `${[-28, -21, -14, -7, 6, 13, 20, 27].map((x) => `<rect x="${x - 1.6}" y="-36.5" width="3.2" height="3" rx=".6"/>`).join("")}</g>` +
+    `<path d="M-17 -48 L-15 -66 H-5 L-5 -48 Z" fill="${RED}"${L}/><path d="M-15 -66 H-5 V-60 H-15.7 Z" fill="${BLACK}"/>` +
+    `<path d="M3 -48 L5 -66 H15 L15 -48 Z" fill="${RED_SHADE}"${L}/><path d="M5 -66 H15 V-60 H4.3 Z" fill="${BLACK}"/>` +
+    `<rect x="-29" y="-62" width="1.6" height="14" fill="${CREAM}"/><path d="M-27.4 -62 L-19 -59 L-27.4 -56 Z" fill="${GOLD}"/>`;
 }
-const SHIP_AT = { lon: -22, lat: 4 };
+// Little waves around it (not a wake): short dotted arcs on the water.
+function waves(x, y, color) {
+  return [[-74, 4], [62, 2], [-48, 16], [34, 18], [-6, 26]].map(([dx, dy]) =>
+    `<path d="M${f1(x + dx)},${f1(y + dy)} q4,-4 8,0 t8,0" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round"/>`).join("");
+}
+const SHIP_AT = { lon: -42, lat: 13 };
 
 function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = true, withShip = false }) {
   const o = [`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`];
@@ -207,10 +217,9 @@ function map({ dot, label, pin, route, line, scale = 1, focus = null, labels = t
   }
   if (withShip) {
     const [x, y] = px(SHIP_AT.lon, SHIP_AT.lat);
-    // A dotted wake behind it, in the route's color, then its shadow.
-    o.push(`<path d="M${f1(x + 26)},${f1(y + 2)} q40,10 86,4" fill="none" stroke="${route}" stroke-width="1.6" stroke-dasharray="2 6" stroke-linecap="round"/>`);
-    o.push(`<ellipse cx="${f1(x)}" cy="${f1(y + 1)}" rx="34" ry="4" fill="#000" opacity=".18"/>`);
-    o.push(`<g transform="translate(${f1(x)},${f1(y)}) scale(.78)">${ship(line)}</g>`);
+    o.push(waves(x, y, route));
+    o.push(`<ellipse cx="${f1(x)}" cy="${f1(y + 1)}" rx="50" ry="5" fill="#000" opacity=".18"/>`);
+    o.push(`<g transform="translate(${f1(x)},${f1(y)}) scale(.9)">${ship(line)}</g>`);
   }
   o.push(`</svg>`);
   return o.join("");
@@ -245,20 +254,12 @@ const badgeFrame = (inner) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">` +
   `<circle cx="60" cy="60" r="58" fill="#16204A"/><circle cx="60" cy="60" r="58" fill="none" stroke="${GOLD}" stroke-width="2.5"/>` +
   inner + `</svg>`;
-// The ship: hull with a gold band, two decks of portholes, two funnels with
-// gold tops, a mast with a pennant, waves of navy dots under it.
+// The ship: the same liner as on the map (ship()), with a cream outline so
+// its dark hull reads on the navy circle; waves of navy dots under it.
 writeFileSync(`${out}/badge-cruise.svg`, badgeFrame(
   `<g fill="#26325E">${[[20, 92], [30, 98], [44, 102], [76, 102], [90, 98], [100, 92]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.2"/>`).join("")}</g>` +
-  `<path d="M22 74 H98 L90 88 H30 Z" fill="#5a83d7"/><path d="M60 74 H98 L90 88 H60 Z" fill="#3157a3"/>` +
-  `<rect x="24" y="76" width="72" height="2.5" fill="${GOLD}"/>` +
-  `<path d="M14 88 Q60 96 106 88" fill="none" stroke="${GOLD}" stroke-width="1.6" opacity=".55"/>` +
-  `<rect x="32" y="62" width="56" height="12" fill="${CREAM}"/><rect x="60" y="62" width="28" height="12" fill="${DEEP}"/>` +
-  `<rect x="40" y="52" width="40" height="10" fill="${CREAM}"/><rect x="60" y="52" width="20" height="10" fill="${SHADE}"/>` +
-  `<g fill="#16204A">${[36, 42, 48, 54, 64, 70, 76, 82].map((x) => `<circle cx="${x}" cy="68" r="1.6"/>`).join("")}` +
-  `${[45, 51, 57, 63, 69, 75].map((x) => `<rect x="${x - 1.6}" y="55.5" width="3.2" height="3" rx=".6"/>`).join("")}</g>` +
-  `<rect x="47" y="38" width="9" height="14" fill="${CREAM}"/><rect x="47" y="38" width="9" height="4" fill="${GOLD}"/>` +
-  `<rect x="63" y="38" width="9" height="14" fill="${SHADE}"/><rect x="63" y="38" width="9" height="4" fill="${GOLD}"/>` +
-  `<rect x="59" y="24" width="1.6" height="14" fill="${CREAM}"/><path d="M60.6 24 L70 27 L60.6 30 Z" fill="${GOLD}"/>`));
+  `<path d="M14 92 Q60 99 106 92" fill="none" stroke="${GOLD}" stroke-width="1.6" opacity=".55"/>` +
+  `<g transform="translate(60,90) scale(.86)">${ship("#F5EFE0")}</g>`));
 // An adventure: two mountains (the far one shaded), a gold sun, a winding
 // trail of navy dots to the summit and a small flag on top.
 writeFileSync(`${out}/badge-abd.svg`, badgeFrame(

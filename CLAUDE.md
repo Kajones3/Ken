@@ -124,9 +124,13 @@ fallback for a destination we have never bought.
 Owner: "add our cruise ship icon in the mid atlantic ... between Africa and
 South America", "Put the three buttons ... in the top rail", "put a 'Save
 PDF' button on each page that views the trip".
-- **Hero map:** `ship()` + `SHIP_AT` (lon -22, lat 4) in tools/brand/gen.mjs,
-  hero maps only (`withShip`), same drawing as badge-cruise.svg, dotted wake.
-  prototype.html loads `map-light.svg?v=3` / `map-dark.svg?v=3`.
+- **Hero map:** `ship()` + `SHIP_AT` (lon -42, lat 13: mid-ocean between
+  Africa, South America and the Caribbean) in tools/brand/gen.mjs, hero maps
+  only (`withShip`). Owner's follow-up: a Disney-style liner (dark hull, gold
+  band, white decks, red funnels with deep black tops; a nod, no logos),
+  about the Disneyland castle's size (scale .9), little `waves()` around it,
+  NO wake. badge-cruise.svg draws the same `ship()` (cream outline).
+  prototype.html loads `map-light.svg?v=4` / `map-dark.svg?v=4`; bump on change.
 - **Save Search / Plan Budget / Save PDF live in the sticky masthead**
   (`.mastacts`, same ids, shown once there are results; under 1080px they
   take their own row under the logo). Gone from the results bar.
