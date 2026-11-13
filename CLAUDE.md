@@ -119,6 +119,18 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, eighth: a search can be stopped
+
+Owner: "let the user be able to cancel a search so they can change some
+detail. Like I pressed compare and then wanted to change my party travel
+size." While a search runs, Compare reads "Comparing… Stop" and "Update
+prices" reads "Updating… Stop" (no longer disabled), and the "Updating
+prices" note has a Stop link. `cancelSearch()` bumps `searchToken`, aborts
+the /api/compare fetch (`apiGet(path, params, signal)`), and leaves the old
+board (or the landing page) as it was. Enter in the budget field never stops
+a running search. Checked in Chromium with a slowed /api/compare. Needs a
+Render redeploy.
+
 ## START HERE — 2026-11-14, seventh: ABD flights + live fare; ship/ABD badges; port write-ups; "A World of Magic in One Search."
 
 Owner (screenshot of an ABD page from Denver: "This is pitiful ... We had Paris
