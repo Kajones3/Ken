@@ -119,6 +119,36 @@ ships. The candidate is now the PLAIN formula (`fitPlainModel`: destination
 fares); the lever formula of item 1 is `fitLeverModel`, still learning, the
 fallback for a destination we have never bought.
 
+## START HERE — 2026-11-14, fifth: cruise/ABD pages built like park pages; port weather; "close to home" fixed
+
+Owner: "Why aren't these being built the same visual way the parks ones are?
+... Why aren't we including ship details and weather. Also, my ABD stuff still
+isn't showing."
+- **Cruise and ABD overview pages use the park page's pieces** (`xCard`,
+  `xKpi`, `xLi` in prototype.html; `.card` + icon, "unit x quantity = total"
+  tiles, line items): Cruise fare, Getting to the ship (fly or drive, the
+  other shown as one line), Gratuities, Port adventures, Weather in <month>,
+  On board the <ship>. ABD: Trip price, Not in this price yet, Highlights,
+  Who it's for. Board cards lost their dropdowns and long paragraphs; they
+  carry chips like a park card ("Estimated for your party", "Driving to X").
+- **"Priced driving: Galveston is close to home" was wrong** for RDU (1,200
+  miles): the cause was no RDU->IAH fare bought yet. `CruiseTravel.noFly` =
+  close / no_fare / no_transfer; the page says which (`noFlyLine()`).
+- **Port weather**: `src/portWeather.ts` `cruiseWeather()` (home port + each
+  stop, sailing month) from GENERATED `src/portClimateData.ts` (EMPTY until
+  the "Pricing the Magic port weather" workflow runs; `npm run port-climate`,
+  `src/jobs/portClimate.ts`, same Open-Meteo ERA5 method as the parks).
+  `PortOfCall` gained lat/lon (docking point, general knowledge, weather only).
+  No rows = no weather card, never a guess. ABD has no weather (no
+  destination coordinates).
+- **Ship details**: only what the owner entered in /admin -> Ships shows
+  (`shipSummary`); only Disney Wish was seeded. A ship with nothing entered
+  shows no ship card (holes go to the owner, not travelers).
+- **ABD not showing, answered**: the coverage report now prints each ABD row's
+  departure date ("UNDATED" = the trip-page screenshot, which can't show on a
+  month). Only DATED departures saved on the LIVE /admin show, in the
+  searched month, for Planner Pro, after a redeploy.
+
 ## START HERE — 2026-11-14, fourth: pixie dust everywhere; dark-mode month heading
 
 - The spinning ring is gone from the site: Compare, Update prices and the

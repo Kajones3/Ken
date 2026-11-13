@@ -62,7 +62,7 @@ const DEFAULT_YEARS = 20;
 
 /** Open-Meteo's archive lags real time by about five days, so the window ends
  *  at the last complete calendar year rather than "today". */
-const LAST_COMPLETE_YEAR = new Date().getUTCFullYear() - 1;
+export const LAST_COMPLETE_YEAR = new Date().getUTCFullYear() - 1;
 
 export interface DailyObservation {
   /** ISO date, used only to find the calendar month. */
@@ -165,7 +165,7 @@ export function validateYear(rows: (NormalRow | null)[]): { ok: true; rows: Norm
  *  minute-long waits is longer than any minutely window, and short enough that
  *  a genuinely stuck run still ends. */
 export const MAX_RETRIES = 8;
-const FIRST_PAUSE_MS = 250;
+export const FIRST_PAUSE_MS = 250;
 const MAX_PAUSE_MS = 8_000;
 const MINUTE_MS = 60_000;
 

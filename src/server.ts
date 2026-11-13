@@ -44,6 +44,7 @@ import { computeFactors, countedChecks, summarizeByLead, cheapestRoomPerStay, CH
 import { recordSearch, loadRouteDemand } from "./routeDemand.js";
 import { priceCruises, knownSailings } from "./cruisePricing.js";
 import { adventuresInMonth, priceForParty, underPerPerson } from "./adventureSearch.js";
+import { cruiseWeather } from "./portWeather.js";
 import { loadSightings, gratuityRates, cruiseFlightLookup, cruiseHoles, cruiseDriveLookup, extraGuestShare } from "./cruiseData.js";
 import { homePortOf, CRUISE_SHIPS } from "./cruiseFacts.js";
 import { listShipItems, saveShipItems, deleteShipItem, shipSummary, SHIP_ITEM_KINDS, SHIP_KIND_LABEL, SHIP_HOME_NOTES } from "./ships.js";
@@ -716,8 +717,10 @@ async function cruiseSearch(q0: URLSearchParams, user: SessionUser | null) {
   const shown = new Set([...priced, ...cruiseOnly].map((c) => c.id));
   return {
     pro: true, month, sailings: known.length,
-    cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null })),
-    cruiseOnly,
+    cruises: priced.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null,
+      weather: cruiseWeather(c.sailDate, c.port.id, c.excursions.map((e) => e.port)) })),
+    cruiseOnly: cruiseOnly.map((c) => ({ ...c, onBoard: c.ship ? shipSummary(ship, c.ship) : null,
+      weather: cruiseWeather(c.sailDate, c.port ? homePortOf(c.port)?.id ?? null : null, []) })),
     // Sailings we know of but hold no recent price for (older than 3 weeks,
     // sold out, or no adult in the saved party): named, linked, never priced.
     unpriced: known.filter((k) => !shown.has(`${k.title}|${k.sailDate}`)),
