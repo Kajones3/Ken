@@ -293,6 +293,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
 .calgrid .cell input{width:100%; min-width:0; font-size:16px; padding:2px 3px; border:1px solid var(--rule-strong); border-radius:4px; background:transparent; color:inherit; font-variant-numeric:tabular-nums}
 .calgrid .cell.miss{border-color:var(--bad)}
 .calgrid .cell.check{border-color:var(--warn, #C98A12); border-width:2px}
+input.amber{border-color:var(--warn, #C98A12); border-width:2px}
 .calcard.saved{padding:10px 12px}
 .calsum{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between}
 .calsum b{font-weight:700}
@@ -1052,13 +1053,15 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
   <div class="page" data-page="adventures">
   <section class="sheet" id="adventures">
     <h2>Adventures by Disney</h2>
-    <p>Adventures by Disney trips, kept as <b>history only</b>. Nothing here is priced or shown to travelers yet.
+    <p>Adventures by Disney trips, kept as <b>history only</b> for now: pricing them for Planner Pro comes once
+      each trip's dates, meals and airports are saved.
       Every save is kept with the day you saw it, so the same trip saved again later adds a new price.</p>
 
     <h3>Read a screenshot</h3>
-    <p>Screenshot the top of a trip's page (days, &ldquo;From $&rdquo; price, meals, ages, highlights). Read on this
-      device; it only fills in the form, so check every box before you save. The trip's name is usually above
-      the part you screenshot, so type it in.</p>
+    <p>Screenshot the top of a trip's page (days, &ldquo;From $&rdquo; price, meals, ages, highlights), or its
+      <b>Rates &amp; Dates</b> table (every departure with its child and adult prices). Read on this device; it
+      only fills in the boxes, so check them before you save. The trip's name is usually above the part you
+      screenshot, so type it in.</p>
     <div class="dropzone" data-drop="adventures">
       <span class="dzt"><b>Drop a screenshot here</b>, paste one, or</span>
       <button class="btn" id="avPick">Choose a screenshot</button>
@@ -1066,6 +1069,7 @@ table.ctab td.n{text-align:right; font-variant-numeric:tabular-nums; white-space
     </div>
     <p class="count" id="avStatus">You can also paste a screenshot anywhere on this page.</p>
     <img id="avImg" class="shot hidden" alt="The trip screenshot being read">
+    <div id="avDates"></div>
     <details id="avTextBox" class="hidden" style="margin-top:6px"><summary style="cursor:pointer; font-size:13px">All the text it read</summary>
       <pre class="ocr" id="avText"></pre></details>
 
@@ -3161,8 +3165,16 @@ $("#avFile").addEventListener("change", e => { const f = e.target.files[0]; e.ta
 async function readAdventureShot(file){
   const status = $("#avStatus");
   $("#avImg").src = URL.createObjectURL(file); $("#avImg").classList.remove("hidden");
+  $("#avDates").innerHTML = "";
   status.textContent = "Reading… the first time, the reader downloads itself (a few seconds).";
   let R, text;
+  // A Rates & Dates table first (read by word position); else the trip page.
+  try {
+    R = await getReader();
+    const ww = await R.readWords(file, { onProgress: (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading… ${Math.round(p * 100)}%`; } });
+    const rd = R.readAdventureDates(ww.words);
+    if(rd.departures.length){ showAdventureDates(rd, ww.text); return; }
+  } catch(err){ /* fall through to the trip-page reader */ }
   try {
     R = await getReader();
     text = await R.readImage(file, { onProgress: (p, st) => { if(/recogniz/i.test(st)) status.textContent = `Reading… ${Math.round(p * 100)}%`; } });
@@ -3181,6 +3193,52 @@ async function readAdventureShot(file){
   status.textContent = a.price
     ? "The highlighted boxes are its best guess. Check them against the picture, type the trip's name, then save."
     : "Couldn't find the \"From $\" price in that picture. Fill in what you can see, or try a screenshot that includes the price.";
+}
+/* One trip's departures, as read (owner, 2026-11-14: Paris Escape's Rates &
+   Dates). Each row is checked by eye and saved as its own price. */
+const cleanAmt = v => { const n = Number(String(v || "").replace(/[$,\s]/g, "")); return n > 0 ? n : null; };
+function showAdventureDates(rd, rawText){
+  const box = $("#avDates");
+  const rows = rd.departures.map((d, i) => `<tr data-avd="${i}">
+    <td><input type="checkbox" class="avdKeep" checked></td>
+    <td><input type="date" class="avdStart" value="${esc(d.start)}"></td>
+    <td><input type="date" class="avdEnd" value="${esc(d.end)}"></td>
+    <td><input type="text" class="avdChild${d.child === null && !d.adultOnly ? " amber" : ""}" inputmode="decimal" value="${d.child ?? ""}"${d.adultOnly ? " disabled placeholder=\"Adult Exclusive\"" : ""}></td>
+    <td><input type="text" class="avdAdult${d.adult === null ? " amber" : ""}" inputmode="decimal" value="${d.adult ?? ""}"></td>
+    <td><input type="checkbox" class="avdOnly"${d.adultOnly ? " checked" : ""}></td></tr>`).join("");
+  box.innerHTML = `<h3>Departures to save</h3>
+    <p class="count">Found ${rd.departures.length} departure${rd.departures.length === 1 ? "" : "s"}${rd.occupancy ? ", prices per person, double occupancy" : ""}.
+      Type the trip's name in &ldquo;Trip name&rdquo; below first. Boxes outlined in amber had no price read.</p>
+    <div class="tablewrap"><table><thead><tr><th>Keep</th><th>Departs</th><th>Last day</th>
+      <th class="n">Child${rd.childMaxAge !== null ? " (" + rd.childMaxAge + " and under)" : ""}</th><th class="n">Adult${rd.adultMinAge !== null ? " (" + rd.adultMinAge + "+)" : ""}</th><th>Adult Exclusive</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>
+    <div class="tools"><button class="btn primary" id="avdSave">Save these departures</button></div>
+    <div class="said" id="avdSaid"></div>`;
+  $("#avStatus").textContent = "This is a Rates & Dates table: check each row against the picture, type the trip's name, then save.";
+  box.querySelectorAll(".avdOnly").forEach(c => c.addEventListener("change", () => {
+    const ch = c.closest("tr").querySelector(".avdChild"); ch.disabled = c.checked; if(c.checked) ch.value = "";
+  }));
+  $("#avdSave").addEventListener("click", async () => {
+    const said = $("#avdSaid"); said.className = "said";
+    const tripName = $("#avName").value.trim();
+    if(!tripName){ said.className = "said bad"; said.textContent = "Type the trip's name in \"Trip name\" first."; $("#avName").focus(); return; }
+    const departures = [...box.querySelectorAll("tr[data-avd]")].filter(tr => tr.querySelector(".avdKeep").checked).map(tr => {
+      const start = tr.querySelector(".avdStart").value, end = tr.querySelector(".avdEnd").value;
+      const nights = start && end ? Math.round((Date.parse(end) - Date.parse(start)) / 86400000) : null;
+      return { tripName, destination: $("#avDest").value || null, tripType: $("#avType").value || null,
+        departureDate: start, returnDate: end || null, days: nights === null ? null : nights + 1, nights,
+        price: cleanAmt(tr.querySelector(".avdAdult").value), childPrice: cleanAmt(tr.querySelector(".avdChild").value),
+        adultOnly: tr.querySelector(".avdOnly").checked, childMaxAge: rd.childMaxAge, currency: "USD",
+        seenOn: $("#avSeen").value || todayLocal(), note: $("#avNote").value || null, rawText };
+    });
+    if(!departures.length){ said.className = "said bad"; said.textContent = "Nothing ticked."; return; }
+    const r = await fetch("/api/admin/adventures", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ departures }) });
+    const b = await r.json().catch(() => ({}));
+    if(!r.ok){ said.className = "said bad"; said.textContent = b.message || "Couldn't save those."; return; }
+    said.className = "said ok";
+    said.textContent = `Saved ${b.saved} departure${b.saved === 1 ? "" : "s"} of ${tripName}.` + (b.skipped ? ` ${b.skipped} you'd already saved today were skipped.` : "");
+    renderAdventures(b.adventures);
+  });
 }
 $("#avSave").addEventListener("click", async () => {
   const said = $("#avSaid"); said.className = "said";
@@ -3202,8 +3260,8 @@ function renderAdventures(rows){
       a.meals !== null ? a.meals + " meals" : "", a.minAge !== null ? "ages " + a.minAge + "+" : ""].filter(Boolean).map(esc).join(" · ")}</span>
     ${a.highlights.length ? `<div class="count" style="margin-top:4px">${a.highlights.map(esc).join(" · ")}</div>` : ""}
     <div style="overflow-x:auto"><table class="ctab" style="margin-top:6px"><thead><tr><th>Seen</th><th>Departs</th><th class="n">Per person</th><th class="n">Child</th><th></th></tr></thead><tbody>
-    ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.departureDate ? esc(fmtD(r.departureDate)) : "from price"}</td>
-      <td class="n">${cash(r.price, r.currency)}</td><td class="n">${r.childPrice === null ? "" : cash(r.childPrice, r.currency)}</td>
+    ${list.map(r => `<tr><td>${esc(fmtD(r.seenOn))}</td><td>${r.departureDate ? esc(fmtD(r.departureDate)) + (r.returnDate ? " to " + esc(fmtD(r.returnDate)) : "") : "from price"}</td>
+      <td class="n">${cash(r.price, r.currency)}</td><td class="n">${r.adultOnly ? "Adult Exclusive" : r.childPrice === null ? "" : cash(r.childPrice, r.currency)}</td>
       <td class="n"><button class="btn" data-avdel="${r.id}" title="Only for a price saved by mistake">Delete</button></td></tr>`).join("")}
     </tbody></table></div></div>`; }).join("");
 }

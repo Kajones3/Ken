@@ -1272,3 +1272,65 @@ export function readShipPage(text){
   const seen = new Set();
   return items.filter(x => { const k = x.name.toLowerCase(); if(seen.has(k)) return false; seen.add(k); return true; });
 }
+
+
+/* ------------- Adventures by Disney "Rates & Dates", from word positions ------------- */
+/* Owner, 2026-11-14 (Paris Escape): each departure row is "June 1, 2027 -
+ * June 3, 2027" with the CHILD price under one column heading and the ADULT
+ * price under the other ("Adult Exclusive" where there is no child price).
+ * The prices sit a little above the date line, so each price goes to the
+ * date row nearest it, and to the column whose heading is nearest across.
+ * A single date ("Pair this departure with the June 3, 2027 Rhône River
+ * Cruise") is never a departure: only a range is. Pure. */
+const ABD_MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+export function readAdventureDates(words) {
+  const lines = wordLines(words || []);
+  const join = (ln) => ln.words.map(w => w.text).join(" ").replace(/(\d),(\d{4})/g, "$1, $2");
+  const range = /([A-Za-z]+)\.?\s+(\d{1,2}),?\s*(\d{4})?\s*[-–—]\s*([A-Za-z]+)\.?\s+(\d{1,2}),?\s*(\d{4})/;
+  const iso = (m, d, y) => {
+    const k = ABD_MONTHS.findIndex(x => x.startsWith(String(m).toLowerCase().slice(0, 3)));
+    return k < 0 ? null : `${y}-${String(k + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  };
+  // Column headings: "CHILD (11 AND UNDER) FROM" / "ADULT (12 AND OVER) FROM".
+  let childX = null, adultX = null, childMax = null, adultMin = null;
+  for (const ln of lines) {
+    for (const [i, w] of ln.words.entries()) {
+      const t = w.text.toUpperCase();
+      if (t === "CHILD" && childX === null) { childX = w.x0; const n = Number((ln.words[i + 1]?.text || "").replace(/\D/g, "")); if (n) childMax = n; }
+      if (t === "ADULT" && adultX === null && /\(/.test(ln.words[i + 1]?.text || "")) { adultX = w.x0; const n = Number((ln.words[i + 1]?.text || "").replace(/\D/g, "")); if (n) adultMin = n; }
+    }
+  }
+  const rows = [];
+  for (const ln of lines) {
+    const m = range.exec(join(ln));
+    if (!m) continue;
+    const start = iso(m[1], m[2], m[3] || m[6]), end = iso(m[4], m[5], m[6]);
+    if (!start || !end || end < start) continue;
+    rows.push({ y: ln.cy, start, end, adultOnly: /adult\s+exclusive/i.test(join(ln)), prices: [] });
+  }
+  if (!rows.length) return { departures: [], childMaxAge: childMax, adultMinAge: adultMin, occupancy: null };
+  for (const w of words || []) {
+    const m = /^\$?([\d,]{3,7})(?:\.\d\d)?$/.exec(w.text.replace(/^[©@]/, "$"));
+    if (!m || !/^\$/.test(w.text.replace(/^[©@]/, "$"))) continue;
+    const v = Number(m[1].replace(/,/g, ""));
+    if (!(v >= 100)) continue;
+    const y = (w.y0 + w.y1) / 2;
+    const row = rows.reduce((a, b) => (Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a));
+    if (Math.abs(row.y - y) > 80) continue;
+    row.prices.push({ x: w.x0, v });
+  }
+  const departures = rows.map(r => {
+    const ps = r.prices.sort((a, b) => a.x - b.x);
+    let child = null, adult = null;
+    for (const p of ps) {
+      const col = childX !== null && adultX !== null
+        ? (Math.abs(p.x - childX) < Math.abs(p.x - adultX) ? "child" : "adult")
+        : ps.length > 1 && p === ps[0] ? "child" : "adult";
+      if (col === "child") child = p.v; else adult = p.v;
+    }
+    return { start: r.start, end: r.end, adult, child: r.adultOnly ? null : child, adultOnly: r.adultOnly };
+  });
+  const text = words.map(w => w.text).join(" ");
+  return { departures, childMaxAge: childMax, adultMinAge: adultMin,
+    occupancy: /double\s+occupancy/i.test(text) ? "double" : null };
+}

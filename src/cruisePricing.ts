@@ -175,8 +175,8 @@ export function priceCruises(inp: PriceCruisesInput): { priced: PricedCruise[]; 
         parking, parkingDays, parkingPerDay: d.parkingPerDay, roundTripMiles: Math.round(d.oneWayMiles * 2), fromMap: d.fromMap };
     }
     if (!fly && !drive) {
-      hole(s, tooClose ? `driving to ${port.name} (no parking price set, or too far)` : flyWhy.join("; ")
-        + (inp.drive ? `; driving to ${port.name} not offered (no parking price set, or over one day's drive)` : ""));
+      hole(s, tooClose ? `driving to ${port.name} (its parking is set to 0)` : flyWhy.join("; ")
+        + (inp.drive ? `; driving to ${port.name} not offered (its parking is set to 0)` : ""));
       continue;
     }
     const mode: "fly" | "drive" = fly ? "fly" : "drive";
